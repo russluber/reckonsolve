@@ -1,8 +1,10 @@
 # Reckonsolve
 
-Reckonsolve is a local-first personal forecasting journal. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
+Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve is in its initial scaffold stage and is not yet ready for normal use.
+> Reckonsolve has reached its application-shell milestone, but it cannot create or manage forecasts yet and is not ready for normal use.
+
+The current application opens a native PySide6 window with navigation for the six planned primary screens: Dashboard, New Prediction, Prediction Detail, Predictions, Analytics, and Settings. Those screens are placeholders while forecasting workflows are built in later milestones.
 
 ## Documentation
 
@@ -22,7 +24,17 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-The current entry point is only a placeholder while Milestone 1 is being built.
+Running the application creates or opens its SQLite database, applies any pending schema migrations, and keeps that database available until the application shuts down.
+
+## Runtime data
+
+On Windows, Reckonsolve stores its canonical database outside the repository at:
+
+```text
+%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3
+```
+
+The directory is selected through Qt's per-user local application-data location. Automated tests inject temporary database paths and do not open the real user database. The application is local-only and does not require network access.
 
 ## License
 

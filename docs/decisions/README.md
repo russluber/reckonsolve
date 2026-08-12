@@ -59,4 +59,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 
 ## Records
 
-No architecture decisions have been recorded yet.
+- [0001: Use lightweight transactional SQLite migrations](0001-lightweight-sqlite-migrations.md) — Accepted 2026-08-12

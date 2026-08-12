@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Initial architecture direction; implementation is at the project-scaffold stage  
+Status: Milestone 1 implemented; forecasting workflows remain to be built
 Last reviewed: 2026-08-12
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-The repository currently contains a packaged Python application scaffold, not a functional forecasting journal.
+Milestone 1 provides a working desktop shell and persistence foundation. It does not yet provide forecast creation or any other domain workflow.
 
 | Area | Current state |
 |---|---|
@@ -15,13 +15,17 @@ The repository currently contains a packaged Python application scaffold, not a 
 | Runtime dependency | PySide6 |
 | Development tools | pytest, pytest-qt, and Ruff |
 | Python package | `src/reckonsolve/` |
-| Entry point | `reckonsolve = "reckonsolve:main"` |
-| Application behavior | A placeholder `main()` function prints a greeting |
-| UI, domain, database, analytics | Not implemented yet |
-| Automated tests | One package entry-point smoke test; functional tests are not implemented yet |
+| Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
+| Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`, and closes persistence on shutdown |
+| UI | Native PySide6 main window with persistent navigation for all six primary screens; each screen currently contains an explicit milestone placeholder |
+| Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
+| Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
+| Schema | Version 1 contains only the `schema_migrations` ledger; no forecast-domain tables exist yet |
+| Domain, application operations, analytics | Not implemented yet; they will be introduced by the vertical slices that need them |
+| Automated tests | Milestone 1 tests cover entry points, path resolution, database initialization and validation, restart persistence, runtime cleanup, and Qt navigation |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
-The sections below define the intended v0.1 boundaries. Module names are illustrative until the corresponding milestone creates them. As code is implemented, this section and the package map must be updated to describe reality.
+The sections below distinguish the implemented Milestone 1 foundation from the boundaries still intended for later v0.1 slices.
 
 ## 2. Target v0.1 system context
 
@@ -154,43 +158,43 @@ Key restrictions:
 
 The application may use concrete data-access classes directly while the program remains small. Introduce protocols or interfaces only when they improve testing or allow a real alternative implementation; do not create them mechanically for every class.
 
-## 6. Expected package shape
+## 6. Package shape
 
-The exact modules should emerge milestone by milestone. The expected responsibility map is:
+Milestone 1 implements this package structure:
 
 ```text
 src/reckonsolve/
-  __init__.py          public package surface and current console entry point
-  __main__.py          optional `python -m reckonsolve` entry point
-  app.py               QApplication composition and startup
-  clock.py             centralized time source
-  paths.py             per-user runtime paths
-  domain/              entities, value objects, lifecycle rules, validation
-  application/         user-facing operations and expected errors
-  data/                SQLite connections, migrations, transactions, queries
-  analytics/           scoring, calibration, and performance series
-  ui/                  PySide6 windows, screens, dialogs, models, formatting
+  __init__.py          public `main()` console entry point
+  __main__.py          `python -m reckonsolve` entry point
+  app.py               QApplication composition, runtime ownership, and startup errors
+  paths.py             per-user and explicitly injected database paths
+  data/
+    __init__.py        persistence package surface
+    database.py        connection ownership and transaction boundary
+    migrations.py      ordered schema registry, validation, and migration runner
+  ui/
+    __init__.py        UI package surface
+    main_window.py     six-screen navigation shell and placeholders
 ```
 
-This is a map of responsibilities, not a requirement to create every package before it has code. Empty abstractions should not be added merely to match the diagram.
+Later milestones can add `clock`, `domain`, `application`, and `analytics` modules as their first real behavior requires them. Empty abstractions are not added merely to complete a diagram.
 
 Tests should live under `tests/` and generally mirror the behavior boundary they exercise rather than mirror every source file mechanically.
 
 ## 7. Application composition and startup
 
-The application entry point should remain small. At startup it will:
+The package-level entry point delegates immediately to `app.py`. Startup currently:
 
-1. create or obtain the `QApplication`;
-2. resolve the per-user application-data location;
-3. open the SQLite database and enable required connection settings;
-4. apply pending migrations safely;
-5. construct the clock, data-access objects, and application operations;
-6. construct the main window with those operations; and
-7. enter the Qt event loop.
+1. sets the Qt application name to Reckonsolve and creates or reuses the `QApplication`;
+2. resolves `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3` through Qt's `AppLocalDataLocation`, unless an explicit database path was supplied;
+3. opens one long-lived SQLite connection, enables foreign keys and the busy timeout, and applies pending migrations;
+4. constructs the six-screen `MainWindow`;
+5. returns an `ApplicationRuntime` that owns the Qt application, database, and window; and
+6. shows the window and enters the Qt event loop.
 
-On shutdown, open resources should close cleanly. A migration or database-open failure must produce a clear error and must not fall back to replacing or silently recreating an existing user database.
+The production runner catches expected path, migration, operating-system, and SQLite startup failures and presents a fatal database error. It does not replace or silently recreate an existing database. The runner's `finally` cleanup closes the database after the Qt event loop ends or if showing the window fails; close is idempotent.
 
-Composition belongs at the application edge. Avoid global mutable application state and avoid service-locator access from widgets.
+`create_runtime()` accepts an explicit database path so tests never discover or open the real user database. As later slices add a clock and application operations, they belong in this same composition boundary rather than in global state or widget-side service lookup.
 
 ## 8. Persistence model
 
@@ -203,7 +207,7 @@ The minimum conceptual entities are defined by the product specification:
 - tags; and
 - prediction-tag associations.
 
-Milestone 1 establishes the initial schema and migration mechanism. Later schema additions should arrive with the vertical slice that needs them rather than creating every conceptual v0.1 table in advance. Every schema version must support deterministic ordering where relevant, foreign-key integrity, preservation of existing data, and reopening the database after restart.
+Milestone 1 establishes schema version 1 and the migration mechanism. The baseline creates only the `schema_migrations` ledger, with integer version and unique migration name; it deliberately creates no prediction, revision, or other domain table. Later schema additions arrive with the vertical slice that needs them rather than creating every conceptual v0.1 table in advance. Every schema version must support deterministic ordering where relevant, foreign-key integrity, preservation of existing data, and reopening the database after restart.
 
 ### Canonical and derived data
 
@@ -220,9 +224,17 @@ Derived values should not be stored merely for display convenience unless a demo
 
 ### Runtime location
 
-The real database, backups, exports, and logs must live outside the source tree in an appropriate per-user Windows location or a destination explicitly chosen by the user. Tests always receive temporary paths and must never discover or open the real user database.
+Qt's `AppLocalDataLocation`, after the application name is set to Reckonsolve, provides the production directory. On Windows the canonical database is:
+
+```text
+%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3
+```
+
+The database parent directory is created when needed. Future backups, exports, and logs must likewise live outside the source tree in an appropriate per-user location or a destination explicitly chosen by the user. Tests always inject temporary paths and never discover or open the real user database.
 
 ## 9. Transaction boundaries
+
+`Database` owns one standard-library SQLite connection for the application lifetime. The connection runs in autocommit mode so transaction boundaries are always explicit. Its transaction context rejects nesting, starts with `BEGIN IMMEDIATE`, commits on success, and rolls back on any exception. Foreign-key enforcement is verified when the connection opens, and a five-second busy timeout allows brief external lock contention without waiting indefinitely.
 
 Transactions protect operations that must not leave partial history:
 
@@ -262,6 +274,8 @@ Selection logic and calculation logic require tests independent of chart widgets
 
 ## 12. UI data flow
 
+Milestone 1's `MainWindow` owns only navigation and placeholder presentation. Selecting an item changes the current widget in a `QStackedWidget`; it performs no persistence or domain work. This establishes the six primary destinations without prematurely constructing their workflows.
+
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
 Dialog cancellation has no side effect. In particular, opening and closing a revision dialog cannot create a revision.
@@ -270,9 +284,13 @@ Expected failures—such as attempting a revision after the deadline—are shown
 
 ## 13. Migrations and compatibility
 
-Database evolution uses ordered, testable migrations and a recorded schema version. The precise lightweight mechanism will be selected during Milestone 1; adding a migration framework requires a demonstrated need.
+Database evolution uses the lightweight mechanism recorded in [ADR 0001](decisions/0001-lightweight-sqlite-migrations.md). `data/migrations.py` contains an immutable, contiguous sequence of numbered and uniquely named migrations. The `schema_migrations` table records each applied version and name rather than relying on `PRAGMA user_version`.
 
-Each migration must be tested against the prior schema state, run transactionally where SQLite permits, preserve existing user data, and leave the database reopenable. Application startup must be idempotent when no migration is pending.
+Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled registry and the database's complete recorded history, applies all pending SQL statements in order, checks foreign-key integrity, and commits. Any failure rolls back the whole pending migration set. Running startup again when nothing is pending is idempotent.
+
+An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
+
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
@@ -284,6 +302,8 @@ Backup and CSV export have separate contracts:
 The backup implementation must use a SQLite-safe snapshot approach rather than copying a potentially changing database file blindly. Export code reads through the data boundary and must not mutate canonical state.
 
 ## 15. Testing strategy
+
+The Milestone 1 suite is split across package-entry-point, application-runtime, path, database, and main-window tests. It uses explicit temporary databases for initialization, migration validation, restart, and cleanup scenarios, and pytest-qt only for the navigation shell.
 
 Most behavior should be verified below the GUI:
 

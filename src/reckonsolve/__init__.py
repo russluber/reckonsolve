@@ -1,2 +1,9 @@
+"""Public package entry points for Reckonsolve."""
+
+
 def main() -> None:
-    print("Hello from reckonsolve!")
+    """Run the desktop application from the installed console script."""
+
+    from reckonsolve.app import run
+
+    raise SystemExit(run())
