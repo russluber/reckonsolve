@@ -1,7 +1,15 @@
 from typing import cast
 
 import pytest
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QSpinBox,
+)
 
 import reckonsolve.app
 from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
@@ -16,14 +24,49 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 1
+    assert first_runtime.database.schema_version == 2
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 1
+    assert second_runtime.database.schema_version == 2
+    second_runtime.close()
+
+
+def test_create_close_reopen_displays_persisted_prediction(qtbot, tmp_path) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    first_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(first_runtime.window)
+    first_runtime.window.show()
+    first_runtime.window.navigate_to("New Prediction")
+
+    question_input = first_runtime.window.findChild(QLineEdit, "questionInput")
+    probability_input = first_runtime.window.findChild(QSpinBox, "probabilityInput")
+    create_button = first_runtime.window.findChild(
+        QPushButton, "createPredictionButton"
+    )
+    assert question_input is not None
+    assert probability_input is not None
+    assert create_button is not None
+    question_input.setText("Will this prediction survive restart?")
+    probability_input.setValue(60)
+    qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
+
+    assert first_runtime.window.current_screen_name == "Prediction Detail"
+    first_runtime.close()
+
+    second_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(second_runtime.window)
+    second_runtime.window.show()
+    second_runtime.window.navigate_to("Prediction Detail")
+    question = second_runtime.window.findChild(QLabel, "predictionDetailQuestion")
+    probability = second_runtime.window.findChild(QLabel, "predictionDetailProbability")
+    assert question is not None
+    assert probability is not None
+    assert question.text() == "Will this prediction survive restart?"
+    assert probability.text() == "60%"
     second_runtime.close()
 
 

@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 1 implemented; forecasting workflows remain to be built
+Status: Milestone 2 implemented; later forecasting workflows remain to be built
 Last reviewed: 2026-08-12
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 1 provides a working desktop shell and persistence foundation. It does not yet provide forecast creation or any other domain workflow.
+Milestone 2 provides the first complete forecasting slice: creating a binary prediction and its initial immutable forecast, displaying it, and loading it again after restart. Revision, journal, lifecycle, browser, analytics, backup, and export workflows remain to be built.
 
 | Area | Current state |
 |---|---|
@@ -16,16 +16,17 @@ Milestone 1 provides a working desktop shell and persistence foundation. It does
 | Development tools | pytest, pytest-qt, and Ruff |
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
-| Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`, and closes persistence on shutdown |
-| UI | Native PySide6 main window with persistent navigation for all six primary screens; each screen currently contains an explicit milestone placeholder |
+| Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
+| UI | Native PySide6 navigation plus functional New Prediction and minimal Prediction Detail screens; the other four primary screens remain explicit placeholders |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 1 contains only the `schema_migrations` ledger; no forecast-domain tables exist yet |
-| Domain, application operations, analytics | Not implemented yet; they will be introduced by the vertical slices that need them |
-| Automated tests | Milestone 1 tests cover entry points, path resolution, database initialization and validation, restart persistence, runtime cleanup, and Qt navigation |
+| Schema | Version 2 contains migration history, `predictions`, and append-oriented `forecast_revisions`; later domain tables do not exist yet |
+| Domain and application operations | Question/probability validation, UTC normalization, atomic creation, and current-forecast loading are implemented without Qt dependencies |
+| Analytics | Not implemented yet |
+| Automated tests | Tests cover the Milestone 1 foundation plus validation, UTC serialization, schema constraints, migration from v1, atomic rollback, revision immutability, UI creation, and end-to-end restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
-The sections below distinguish the implemented Milestone 1 foundation from the boundaries still intended for later v0.1 slices.
+The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
 
 ## 2. Target v0.1 system context
 
@@ -160,24 +161,32 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 1 implements this package structure:
+Milestone 2 implements this package structure:
 
 ```text
 src/reckonsolve/
   __init__.py          public `main()` console entry point
   __main__.py          `python -m reckonsolve` entry point
   app.py               QApplication composition, runtime ownership, and startup errors
+  clock.py             injectable clock and canonical UTC instant conversion
   paths.py             per-user and explicitly injected database paths
+  application/
+    errors.py          expected user-presentable operation errors
+    predictions.py     creation and latest-prediction use cases
+  domain/
+    predictions.py     binary prediction values, status, and validation
   data/
     __init__.py        persistence package surface
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
+    predictions.py     purpose-specific prediction writes and current reads
   ui/
     __init__.py        UI package surface
-    main_window.py     six-screen navigation shell and placeholders
+    main_window.py     navigation and screen coordination
+    screens.py         creation form and minimal prediction detail
 ```
 
-Later milestones can add `clock`, `domain`, `application`, and `analytics` modules as their first real behavior requires them. Empty abstractions are not added merely to complete a diagram.
+Later milestones can extend these boundaries and add analytics when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
 
 Tests should live under `tests/` and generally mirror the behavior boundary they exercise rather than mirror every source file mechanically.
 
@@ -188,13 +197,14 @@ The package-level entry point delegates immediately to `app.py`. Startup current
 1. sets the Qt application name to Reckonsolve and creates or reuses the `QApplication`;
 2. resolves `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3` through Qt's `AppLocalDataLocation`, unless an explicit database path was supplied;
 3. opens one long-lived SQLite connection, enables foreign keys and the busy timeout, and applies pending migrations;
-4. constructs the six-screen `MainWindow`;
-5. returns an `ApplicationRuntime` that owns the Qt application, database, and window; and
-6. shows the window and enters the Qt event loop.
+4. composes `PredictionOperations` with that database and a system UTC clock;
+5. constructs the six-screen `MainWindow` with those operations;
+6. returns an `ApplicationRuntime` that owns the Qt application, database, and window; and
+7. shows the window and enters the Qt event loop.
 
 The production runner catches expected path, migration, operating-system, and SQLite startup failures and presents a fatal database error. It does not replace or silently recreate an existing database. The runner's `finally` cleanup closes the database after the Qt event loop ends or if showing the window fails; close is idempotent.
 
-`create_runtime()` accepts an explicit database path so tests never discover or open the real user database. As later slices add a clock and application operations, they belong in this same composition boundary rather than in global state or widget-side service lookup.
+`create_runtime()` accepts an explicit database path so tests never discover or open the real user database. The clock and application operations are composed at this boundary rather than through global state or widget-side service lookup; later operations should follow the same pattern.
 
 ## 8. Persistence model
 
@@ -207,7 +217,7 @@ The minimum conceptual entities are defined by the product specification:
 - tags; and
 - prediction-tag associations.
 
-Milestone 1 establishes schema version 1 and the migration mechanism. The baseline creates only the `schema_migrations` ledger, with integer version and unique migration name; it deliberately creates no prediction, revision, or other domain table. Later schema additions arrive with the vertical slice that needs them rather than creating every conceptual v0.1 table in advance. Every schema version must support deterministic ordering where relevant, foreign-key integrity, preservation of existing data, and reopening the database after restart.
+Milestone 1 established the migration ledger. Milestone 2 migrates the database to version 2 by adding only `predictions` and `forecast_revisions`. A prediction stores identity, question, binary type, persisted lifecycle state (`open`, with terminal states used by later milestones), and UTC creation/update instants; Locked remains derived. It does not store probability. Every forecast revision stores its own 0–100 whole-number probability, UTC creation instant, and per-prediction sequence. A uniqueness constraint makes sequence deterministic, a foreign key protects ownership, and a trigger prevents in-place revision updates. Deliberate future parent deletion can still cascade to its revisions transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
 
@@ -254,7 +264,7 @@ Terminal states—Resolved and Invalid—are persisted decisions. Locked is norm
 
 Needs Attention and Ready to Resolve are derived classifications, not stored lifecycle states. They may overlap and must not mutate probability.
 
-All time-dependent functions accept or obtain time through the centralized clock. The local-time-versus-UTC storage and display policy remains an open product implementation decision and must be documented when the relevant milestone resolves it.
+System-generated instants follow [ADR 0002](decisions/0002-canonical-utc-instants.md): application operations obtain one aware instant from an injectable clock, normalize it to UTC, and the data layer stores canonical RFC 3339 text ending in `Z`. When a screen displays an instant in a later milestone, presentation will convert it to the computer's local time. Date-only values retain calendar semantics and are not converted between time zones.
 
 ## 11. Analytics flow
 
@@ -274,7 +284,7 @@ Selection logic and calculation logic require tests independent of chart widgets
 
 ## 12. UI data flow
 
-Milestone 1's `MainWindow` owns only navigation and placeholder presentation. Selecting an item changes the current widget in a `QStackedWidget`; it performs no persistence or domain work. This establishes the six primary destinations without prematurely constructing their workflows.
+`MainWindow` owns navigation and screen coordination. The New Prediction screen collects a question and whole-number probability, invokes `PredictionOperations`, and shows only expected application errors inline. On success it passes the returned immutable detail value to Prediction Detail and navigates there. Prediction Detail loads the latest persisted prediction on construction; this is intentionally the minimal M2 display, not the complete M3 screen. Widgets perform no SQL and own no transactions.
 
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
@@ -303,7 +313,7 @@ The backup implementation must use a SQLite-safe snapshot approach rather than c
 
 ## 15. Testing strategy
 
-The Milestone 1 suite is split across package-entry-point, application-runtime, path, database, and main-window tests. It uses explicit temporary databases for initialization, migration validation, restart, and cleanup scenarios, and pytest-qt only for the navigation shell.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. The M2 acceptance path creates a 60% prediction through the UI, closes the runtime, reopens the same temporary database, and verifies the question and probability are displayed.
 
 Most behavior should be verified below the GUI:
 
@@ -332,9 +342,7 @@ Unexpected exceptions should not be converted into false success or empty data. 
 The product specification lists choices that must be made at their relevant milestones. Architecture must not settle them indirectly. They include:
 
 - visual design details;
-- exact probability range and input increments;
 - stale threshold default;
-- time storage and display strategy;
 - calibration bins;
 - cumulative versus windowed Brier trend;
 - deletion restrictions after meaningful history;

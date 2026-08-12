@@ -48,6 +48,99 @@ MIGRATIONS = (
         name="initialize migration tracking",
         statements=(MIGRATION_TABLE_SQL,),
     ),
+    Migration(
+        version=2,
+        name="add binary predictions and forecast revisions",
+        statements=(
+            """
+            CREATE TABLE predictions (
+                id INTEGER PRIMARY KEY,
+                question TEXT NOT NULL
+                    CHECK (length(question) > 0 AND question = trim(question)),
+                prediction_type TEXT NOT NULL DEFAULT 'binary'
+                    CHECK (prediction_type = 'binary'),
+                status TEXT NOT NULL DEFAULT 'open'
+                    CHECK (status IN ('open', 'resolved', 'invalid')),
+                created_at TEXT NOT NULL
+                    CHECK (
+                        length(created_at) = 27
+                        AND created_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(created_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(created_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(created_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(created_at, 1, 10),
+                            0
+                        )
+                    ),
+                updated_at TEXT NOT NULL
+                    CHECK (
+                        length(updated_at) = 27
+                        AND updated_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(updated_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(updated_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(updated_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(updated_at, 1, 10),
+                            0
+                        )
+                    )
+            ) STRICT
+            """,
+            """
+            CREATE TABLE forecast_revisions (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                probability_percent INTEGER NOT NULL
+                    CHECK (
+                        typeof(probability_percent) = 'integer'
+                        AND probability_percent BETWEEN 0 AND 100
+                ),
+                created_at TEXT NOT NULL
+                    CHECK (
+                        length(created_at) = 27
+                        AND created_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(created_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(created_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(created_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(created_at, 1, 10),
+                            0
+                        )
+                    ),
+                sequence INTEGER NOT NULL CHECK (sequence >= 1),
+                UNIQUE (prediction_id, sequence)
+            ) STRICT
+            """,
+            """
+            CREATE INDEX forecast_revisions_latest_by_prediction
+            ON forecast_revisions (prediction_id, sequence DESC)
+            """,
+            """
+            CREATE TRIGGER forecast_revisions_are_immutable
+            BEFORE UPDATE ON forecast_revisions
+            BEGIN
+                SELECT RAISE(ABORT, 'saved forecast revisions are immutable');
+            END
+            """,
+        ),
+    ),
 )
 
 

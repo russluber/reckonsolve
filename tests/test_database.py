@@ -17,7 +17,7 @@ def test_fresh_database_initializes_and_reopens(tmp_path) -> None:
 
     first_database = Database.open(database_path)
     assert first_database.path == database_path
-    assert first_database.schema_version == 1
+    assert first_database.schema_version == len(MIGRATIONS)
     assert first_database.foreign_keys_enabled
     with first_database.transaction() as connection:
         connection.execute("CREATE TABLE sentinel (value TEXT NOT NULL)")
@@ -25,7 +25,7 @@ def test_fresh_database_initializes_and_reopens(tmp_path) -> None:
     first_database.close()
 
     second_database = Database.open(database_path)
-    assert second_database.schema_version == 1
+    assert second_database.schema_version == len(MIGRATIONS)
     with second_database.transaction() as connection:
         row = connection.execute("SELECT value FROM sentinel").fetchone()
     assert row["value"] == "preserved"
@@ -72,14 +72,14 @@ def test_pending_migration_preserves_existing_data(tmp_path) -> None:
     migrations = (
         *MIGRATIONS,
         Migration(
-            version=2,
+            version=len(MIGRATIONS) + 1,
             name="add example table",
             statements=("CREATE TABLE example (identifier INTEGER PRIMARY KEY)",),
         ),
     )
     upgraded_database = Database.open(database_path, migrations=migrations)
 
-    assert upgraded_database.schema_version == 2
+    assert upgraded_database.schema_version == len(migrations)
     with upgraded_database.transaction() as connection:
         value = connection.execute("SELECT value FROM sentinel").fetchone()[0]
     assert value == "preserved"
@@ -92,7 +92,7 @@ def test_failing_migration_rolls_back_entire_upgrade(tmp_path) -> None:
     failing_migrations = (
         *MIGRATIONS,
         Migration(
-            version=2,
+            version=len(MIGRATIONS) + 1,
             name="failing example",
             statements=(
                 "CREATE TABLE should_be_rolled_back (value TEXT)",
@@ -114,7 +114,7 @@ def test_failing_migration_rolls_back_entire_upgrade(tmp_path) -> None:
         ).fetchone()
     finally:
         connection.close()
-    assert versions == [(1,)]
+    assert versions == [(migration.version,) for migration in MIGRATIONS]
     assert table is None
 
 
@@ -122,7 +122,11 @@ def test_database_from_newer_application_is_rejected(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     migrations = (
         *MIGRATIONS,
-        Migration(version=2, name="future schema", statements=()),
+        Migration(
+            version=len(MIGRATIONS) + 1,
+            name="future schema",
+            statements=(),
+        ),
     )
     Database.open(database_path, migrations=migrations).close()
 
@@ -180,7 +184,7 @@ def test_schema_version_reader_does_not_require_row_factory(tmp_path) -> None:
     try:
         from reckonsolve.data.migrations import current_schema_version
 
-        assert current_schema_version(connection) == 1
+        assert current_schema_version(connection) == len(MIGRATIONS)
     finally:
         connection.close()
 

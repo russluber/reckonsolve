@@ -9,6 +9,7 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.paths import ApplicationDataPathError, resolve_database_path
@@ -45,7 +46,8 @@ def create_runtime(
     resolved_database_path = resolve_database_path(database_path)
     database = Database.open(resolved_database_path)
     try:
-        window = MainWindow()
+        operations = PredictionOperations(database)
+        window = MainWindow(operations)
     except BaseException:
         database.close()
         raise

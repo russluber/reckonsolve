@@ -14,7 +14,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-_SCREEN_DEFINITIONS: tuple[tuple[str, str, str], ...] = (
+from reckonsolve.ui.screens import (
+    NewPredictionScreen,
+    PredictionDetailScreen,
+    PredictionOperations,
+    PredictionSnapshot,
+)
+
+_SCREEN_DEFINITIONS: tuple[tuple[str, str, str | None], ...] = (
     (
         "Dashboard",
         "dashboard",
@@ -23,12 +30,12 @@ _SCREEN_DEFINITIONS: tuple[tuple[str, str, str], ...] = (
     (
         "New Prediction",
         "newPrediction",
-        "Prediction creation is coming in the next milestone.",
+        None,
     ),
     (
         "Prediction Detail",
         "predictionDetail",
-        "Prediction details will appear here after creation is implemented.",
+        None,
     ),
     (
         "Predictions",
@@ -51,7 +58,11 @@ _SCREEN_DEFINITIONS: tuple[tuple[str, str, str], ...] = (
 class MainWindow(QMainWindow):
     """Display the primary navigation shell for the desktop application."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("mainWindow")
         self.setWindowTitle("Reckonsolve")
@@ -65,17 +76,26 @@ class MainWindow(QMainWindow):
         self._screen_stack = QStackedWidget(self)
         self._screen_stack.setObjectName("screenStack")
 
+        self._new_prediction_screen = NewPredictionScreen(operations)
+        self._prediction_detail_screen = PredictionDetailScreen(operations)
+
         for screen_name, object_name, placeholder_text in _SCREEN_DEFINITIONS:
             navigation_item = QListWidgetItem(screen_name)
             navigation_item.setData(Qt.ItemDataRole.UserRole, screen_name)
             self._navigation.addItem(navigation_item)
-            self._screen_stack.addWidget(
-                self._create_placeholder_screen(
+            if screen_name == "New Prediction":
+                screen = self._new_prediction_screen
+            elif screen_name == "Prediction Detail":
+                screen = self._prediction_detail_screen
+            else:
+                if placeholder_text is None:
+                    raise AssertionError(f"Missing placeholder text for {screen_name}")
+                screen = self._create_placeholder_screen(
                     screen_name,
                     object_name,
                     placeholder_text,
                 )
-            )
+            self._screen_stack.addWidget(screen)
 
         content = QWidget(self)
         content.setObjectName("mainContent")
@@ -84,7 +104,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._screen_stack, 1)
         self.setCentralWidget(content)
 
-        self._navigation.currentRowChanged.connect(self._screen_stack.setCurrentIndex)
+        self._navigation.currentRowChanged.connect(self._show_screen)
+        self._new_prediction_screen.prediction_created.connect(
+            self._show_created_prediction
+        )
         self._navigation.setCurrentRow(0)
 
     @property
@@ -106,6 +129,15 @@ class MainWindow(QMainWindow):
             raise ValueError(message) from None
 
         self._navigation.setCurrentRow(screen_index)
+
+    def _show_screen(self, screen_index: int) -> None:
+        self._screen_stack.setCurrentIndex(screen_index)
+        if self.current_screen_name == "New Prediction":
+            self._new_prediction_screen.focus_question()
+
+    def _show_created_prediction(self, prediction: PredictionSnapshot) -> None:
+        self._prediction_detail_screen.show_prediction(prediction)
+        self.navigate_to("Prediction Detail")
 
     @staticmethod
     def _create_placeholder_screen(

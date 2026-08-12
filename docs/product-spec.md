@@ -371,13 +371,15 @@ Optional details are hidden behind a clear affordance such as "More details":
 
 ### 9.2 Probability input
 
+The application accepts any whole-number probability from 0% through 100%, inclusive. Values such as 37% are valid; fractional percentages are not part of v0.1.
+
 The initial design should make 10-point probabilities fast to enter:
 
 ```text
 10  20  30  40  50  60  70  80  90
 ```
 
-Do not infer that this product preference requires a database constraint to multiples of ten. Input validation and the permitted range must be defined deliberately during implementation. Do not add false precision merely for visual sophistication.
+These controls are shortcuts, not constraints. The user must remain able to enter any permitted whole-number probability directly. At 0% and 100%, the interface may plainly note that the forecast expresses absolute certainty, but it must not block submission or require confirmation solely because an endpoint was chosen.
 
 ### 9.3 Creation behavior
 
@@ -814,7 +816,8 @@ Required boundaries:
 - Creating a prediction plus its first revision is atomic.
 - Creating a revision is append-only in normal application logic.
 - Resolution and invalidation are transactional.
-- Time handling must be consistent and testable.
+- System-generated instants are stored in UTC and displayed in the computer's local time.
+- Date-only values retain their calendar-date meaning and are not converted between time zones.
 - Analytics queries must use the final eligible revision exactly once per resolved prediction.
 - The application must reopen existing data correctly after restart.
 
@@ -975,12 +978,10 @@ Use representative edge cases such as a single revision, several revisions at th
 
 ## 29. Open implementation decisions
 
-The application and project name is resolved as **Reckonsolve**. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
+The application and project name is resolved as **Reckonsolve**. Probability input and time handling are resolved in Sections 9.2 and 24. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
 
 - precise visual design system;
-- exact allowed probability range and whether non-10-point values are accepted;
 - default stale threshold;
-- local time versus UTC storage/display strategy;
 - exact calibration binning scheme;
 - cumulative versus windowed Brier trend for the first implementation;
 - precise deletion restrictions after meaningful history exists;
