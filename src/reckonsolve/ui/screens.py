@@ -37,6 +37,7 @@ from reckonsolve.domain.predictions import (
     DefinitionChange,
     PredictionStatus,
 )
+from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 
 class PredictionSnapshot(Protocol):
@@ -60,7 +61,7 @@ class PredictionSnapshot(Protocol):
 
 
 class ForecastRevisionSnapshot(Protocol):
-    """Read-only revision data needed by the forecast timeline."""
+    """Read-only revision data needed by the probability-history chart."""
 
     revision_id: int
     prediction_id: int
@@ -1140,6 +1141,7 @@ class PredictionDetailScreen(QWidget):
         self._revision_dialog: ReviseForecastDialog | None = None
         self._journal_dialog: AddJournalEntryDialog | None = None
         self._journal_correction_dialog: CorrectJournalEntryDialog | None = None
+        self._chart_prediction_id: int | None = None
 
         title = QLabel("Prediction Detail", self)
         title.setObjectName("predictionDetailScreenTitle")
@@ -1280,12 +1282,17 @@ class PredictionDetailScreen(QWidget):
 
         chart_label = QLabel("PROBABILITY HISTORY", self.detail_content)
         chart_label.setObjectName("probabilityHistoryHeading")
+        self.probability_history_chart = ProbabilityHistoryChart(self.detail_content)
+        self.probability_history_chart.setObjectName("probabilityHistoryChart")
+        self.probability_history_chart.setHidden(True)
         self.chart_placeholder = QLabel(
-            "Probability history visualization is coming in a later milestone.",
+            "No forecast revisions are available to chart.",
             self.detail_content,
         )
         self.chart_placeholder.setObjectName("probabilityHistoryPlaceholder")
+        self.chart_placeholder.setTextFormat(Qt.TextFormat.PlainText)
         self.chart_placeholder.setWordWrap(True)
+        self.chart_placeholder.setHidden(True)
 
         detail_layout.addWidget(self.question)
         detail_layout.addWidget(self.tags)
@@ -1307,6 +1314,7 @@ class PredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.timeline_placeholder)
         detail_layout.addSpacing(12)
         detail_layout.addWidget(chart_label)
+        detail_layout.addWidget(self.probability_history_chart)
         detail_layout.addWidget(self.chart_placeholder)
         detail_layout.addStretch()
 
@@ -1339,6 +1347,14 @@ class PredictionDetailScreen(QWidget):
             self.status.clear()
             self.probability.clear()
             self.tags.clear()
+            self.probability_history_chart.clear()
+            self.probability_history_chart.set_timeline_available(True)
+            self.probability_history_chart.setHidden(True)
+            self.chart_placeholder.setText(
+                "No forecast revisions are available to chart."
+            )
+            self.chart_placeholder.setHidden(True)
+            self._chart_prediction_id = None
             self.detail_content.setHidden(True)
             self.empty_state.setHidden(False)
             self.definition_history.setHidden(True)
@@ -1378,7 +1394,9 @@ class PredictionDetailScreen(QWidget):
         self.empty_state.setHidden(True)
         self.detail_content.setHidden(False)
         self._load_definition_history(prediction.prediction_id)
-        self._load_timeline(prediction.prediction_id)
+        timeline_available = self._load_timeline(prediction.prediction_id)
+        self.probability_history_chart.set_timeline_available(timeline_available)
+        self._load_probability_history(prediction.prediction_id)
 
     def refresh(self) -> None:
         """Reload the displayed prediction while retaining data on a read failure."""
@@ -1534,7 +1552,7 @@ class PredictionDetailScreen(QWidget):
         self.definition_history_content.setHidden(True)
         self.definition_history.setHidden(not changes)
 
-    def _load_timeline(self, prediction_id: int) -> None:
+    def _load_timeline(self, prediction_id: int) -> bool:
         try:
             events = self._operations.list_timeline(prediction_id)
         except ApplicationError as error:
@@ -1542,7 +1560,7 @@ class PredictionDetailScreen(QWidget):
             self.timeline_placeholder.setText("Timeline could not be loaded.")
             self.timeline_placeholder.setHidden(False)
             self._show_error(str(error))
-            return
+            return False
 
         _clear_widget_layout(self.forecast_timeline_layout)
         for event in events:
@@ -1561,6 +1579,45 @@ class PredictionDetailScreen(QWidget):
         self.forecast_timeline.setHidden(not events)
         self.timeline_placeholder.setText("No timeline entries are available.")
         self.timeline_placeholder.setHidden(bool(events))
+        return True
+
+    def _load_probability_history(self, prediction_id: int) -> None:
+        """Reload chart revisions without turning a read failure into emptiness."""
+
+        try:
+            revisions = self._operations.list_forecast_revisions(prediction_id)
+        except ApplicationError as error:
+            has_matching_history = (
+                self._chart_prediction_id == prediction_id
+                and self.probability_history_chart.revision_count > 0
+            )
+            if has_matching_history:
+                self.probability_history_chart.setHidden(False)
+                self.chart_placeholder.setText(
+                    "Probability history could not be refreshed. The last loaded "
+                    "chart remains visible."
+                )
+                failure_action = "refreshed"
+            else:
+                self.probability_history_chart.clear()
+                self.probability_history_chart.setHidden(True)
+                self._chart_prediction_id = None
+                self.chart_placeholder.setText(
+                    "Probability history could not be loaded."
+                )
+                failure_action = "loaded"
+            self.chart_placeholder.setHidden(False)
+            self._show_error(
+                f"Probability history could not be {failure_action}. {error}"
+            )
+            return
+
+        self.probability_history_chart.set_revisions(revisions)
+        self._chart_prediction_id = prediction_id
+        has_revisions = self.probability_history_chart.revision_count > 0
+        self.probability_history_chart.setHidden(not has_revisions)
+        self.chart_placeholder.setText("No forecast revisions are available to chart.")
+        self.chart_placeholder.setHidden(has_revisions)
 
     def _show_error(self, message: str) -> None:
         self.detail_error.setText(message)

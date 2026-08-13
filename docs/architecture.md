@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 5 implemented; later forecasting workflows remain to be built
-Last reviewed: 2026-08-12
+Status: Milestone 6 implemented; later forecasting workflows remain to be built
+Last reviewed: 2026-08-13
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 5 adds Journal entries, transparent body corrections, and the unified Prediction timeline to the complete creation and immutable-revision workflows. New Journal entries capture the exact current ForecastRevision without changing probability; an audited correction changes the displayed body while preserving the original and every earlier version. Prediction Detail interleaves Forecast and Journal events in deterministic causal order and displays each Journal entry's forecast-at-the-time context. The probability-history chart, terminal lifecycle actions, browser, analytics, backup, and export workflows remain to be built.
+Milestone 6 adds a native probability-history chart to the complete creation, immutable-revision, Journal, and unified-timeline workflows. Prediction Detail now plots every immutable ForecastRevision on a fixed 0% through 100% scale against actual stored time. A sequence-ordered step line represents the probability held between revisions without turning Journal events into probability observations. Terminal lifecycle actions, browser, scoring analytics, backup, and export workflows remain to be built.
 
 | Area | Current state |
 |---|---|
@@ -17,13 +17,13 @@ Milestone 5 adds Journal entries, transparent body corrections, and the unified 
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | Native PySide6 navigation plus functional New Prediction and Prediction Detail screens; optional initial details, metadata editing, revision entry, Journal capture and correction, Definition history, and a unified timeline are implemented, while the other four primary screens remain explicit placeholders |
+| UI | Native PySide6 navigation plus functional New Prediction and Prediction Detail screens; optional initial details, metadata editing, revision entry, Journal capture and correction, Definition history, a unified timeline, and native probability-history rendering are implemented, while the other four primary screens remain explicit placeholders |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
 | Schema | Version 5 adds immutable Journal entries and append-only correction versions, building on protected forecast revisions, prediction metadata, tags, and definition snapshots |
-| Domain and application operations | Complete atomic creation, append-only forecast revisions, Journal capture and correction, deterministic unified-timeline reads, validation, derived deadline status, lifecycle enforcement, stale-context rejection, and safe metadata editing are implemented without Qt dependencies |
-| Analytics | Not implemented yet |
-| Automated tests | Tests cover the persistence foundation plus complete creation, immutable revisions and Journal history, causal timeline ordering, lifecycle and date boundaries, concurrent submissions and corrections, metadata safety, migrations through v5, transaction rollback, Qt behavior, and restart persistence |
+| Domain and application operations | Complete atomic creation, append-only forecast revisions, ordered forecast-history reads, Journal capture and correction, deterministic unified-timeline reads, validation, derived deadline status, lifecycle enforcement, stale-context rejection, and safe metadata editing are implemented without Qt dependencies |
+| Analytics | Scoring analytics are not implemented; the Prediction Detail chart is a presentation of all revisions, not an analytics aggregate |
+| Automated tests | Tests cover the persistence foundation plus complete creation, immutable revisions and Journal history, causal timeline ordering, probability-history projection and rendering, lifecycle and date boundaries, concurrent submissions and corrections, metadata safety, migrations through v5, transaction rollback, Qt behavior, and restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
@@ -80,6 +80,8 @@ The PySide6 layer owns windows, screens, dialogs, Qt models, presentation format
 
 The six primary screens are Dashboard, New Prediction, Prediction Detail, Predictions, Analytics, and Settings. Revision, journal, resolution, invalidation, deletion, and metadata editing can remain focused dialogs or secondary views.
 
+The Prediction Detail probability-history widget is presentation code. It projects immutable revisions onto elapsed stored time, paints the fixed probability scale and sequence-ordered step geometry, and supplies an accessibility summary. It does not select scoring observations, infer probabilities, or persist chart state. [ADR 0004](decisions/0004-native-probability-history-chart.md) records the native rendering approach.
+
 ### Application operations
 
 This layer coordinates complete user actions. An operation validates a request, applies domain rules, opens the required transaction through the data-access boundary, and returns either a result suitable for presentation or an expected application error.
@@ -90,6 +92,7 @@ Representative operations include:
 - appending a forecast revision;
 - adding a journal entry tied to the current revision;
 - appending a transparent correction to an existing journal entry;
+- reading immutable forecast revisions in sequence order;
 - reading a unified causal timeline;
 - editing permitted prediction metadata;
 - resolving or invalidating a prediction;
@@ -132,7 +135,7 @@ The analytics boundary will contain:
 - calibration bin assignment and aggregation; and
 - the explicitly labeled Brier-over-time series.
 
-UI chart code consumes analytics results; it does not decide which forecasts count.
+Analytics chart code consumes analytics results; it does not decide which forecasts count. The Prediction Detail probability-history chart is separate: it consumes every immutable revision for one Prediction through the existing application query and performs presentation-only projection.
 
 ### Platform support
 
@@ -163,7 +166,7 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 5 implements this package structure:
+Milestone 6 implements this package structure:
 
 ```text
 src/reckonsolve/
@@ -185,7 +188,9 @@ src/reckonsolve/
   ui/
     __init__.py        UI package surface
     main_window.py     navigation and screen coordination
-    screens.py         creation, Prediction Detail, revision, Journal, and metadata-edit UI
+    probability_history_chart.py
+                       native probability-history projection and painting
+    screens.py         creation, Prediction Detail, revision, Journal, chart, and metadata-edit UI
 ```
 
 Later milestones can extend these boundaries and add analytics when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
@@ -231,6 +236,8 @@ Milestone 5 migrates the database to version 5 with `journal_entries` and `journ
 Journal corrections are separate immutable rows with a per-entry contiguous sequence, normalized replacement body, and UTC correction timestamp. The latest correction supplies the displayed body; the base entry and all correction rows supply the complete edit history. Database triggers reject unchanged correction bodies, sequence gaps, direct updates, direct child deletion while the parent exists, and replacement of saved entry or correction identities. Corrections do not change the entry's original timestamp or forecast anchor and remain possible after a terminal lifecycle decision. A deliberate parent-Prediction deletion can still cascade through entries and corrections.
 
 The unified timeline is a derived read model rather than another persisted event table. Forecasts are ordered by revision sequence. Each Journal entry is placed after its anchored revision and before the next revision; multiple entries sharing one anchor retain insertion order by stable entry identifier. This causal ordering remains deterministic even when stored timestamps tie or the system clock moves backward. Stored event timestamps are still shown to the user in local time, and correcting an entry never moves it in the timeline.
+
+Milestone 6 requires no schema change. Probability history is another derived presentation of the existing `forecast_revisions` rows returned in immutable sequence order. Each row contributes one chart marker. Stored UTC instants determine horizontal position and render in local time, while sequence determines connection order and which marker is current. Journal rows never enter this read product.
 
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
@@ -316,7 +323,9 @@ For an Open or Locked prediction, **Add Journal Entry** opens a side-effect-free
 
 Prediction Detail displays Forecast and Journal events in one causal timeline. Journal entries show their original local timestamp, current body, and **Forecast at the time**. **Correct Entry** is available in every lifecycle state and opens the latest body in a transparent correction dialog. After a changed save, the entry remains at its original timeline position, gains an **Edited** timestamp, and exposes the original plus superseded versions in a collapsed **Edit history**. No individual Journal Delete action exists. Timeline text uses plain-text rendering.
 
-Resolve and Mark Invalid remain visibly disabled, and the probability-history area remains a Milestone 6 placeholder. Widgets perform no SQL and own no transactions.
+Below the timeline, Prediction Detail reuses `list_forecast_revisions` to populate a native, theme-aware probability-history widget. The chart paints exactly one marker per revision on a fixed 0% through 100% vertical scale. Actual stored instants determine elapsed horizontal position and display in local time. Revisions connect in immutable sequence order using step-after geometry, so a probability stays level until the next revision; equal instants share one horizontal position, and a regressing system clock may cause the line to travel backward rather than trigger timestamp re-sorting or synthetic offsets. A single marker receives symmetric horizontal padding. The widget's accessible summary and the exact textual Forecast entries in the timeline make the same history available without relying on the visual plot. Journal events never enter the chart.
+
+The chart is implemented with a dedicated `QPainter` widget and the active Qt palette as recorded in [ADR 0004](decisions/0004-native-probability-history-chart.md). It introduces no external chart library, schema state, or analytics calculation. Resolve and Mark Invalid remain visibly disabled. Widgets perform no SQL and own no transactions.
 
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
@@ -345,11 +354,11 @@ The backup implementation must use a SQLite-safe snapshot approach rather than c
 
 ## 15. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 5, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 coverage remains for optional-value normalization, calendar-date validation, inclusive deadline derivation, case-insensitive tag reuse, confirmation and no-op behavior, full immutable snapshots, transaction rollback, concurrency rejection, collapsed local-time history rendering, and metadata persistence. M4 adds complete-creation rollback and restart tests, initial-deadline boundaries, rationale persistence and normalization, unchanged and nonconsecutive probability behavior, immutable append and replacement protection, lifecycle enforcement, stale revision/metadata context rejection, sequence-ordered local-time history, and revision-dialog cancellation. M5 adds Journal normalization and atomic forecast capture, lifecycle boundaries, immutable correction sequences, terminal corrections, no-op and stale-form behavior, database immutability guards, causal ordering under equal or regressing clocks, unified Qt rendering, dialog cancellation, and full timeline persistence across restart.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 5, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 coverage remains for optional-value normalization, calendar-date validation, inclusive deadline derivation, case-insensitive tag reuse, confirmation and no-op behavior, full immutable snapshots, transaction rollback, concurrency rejection, collapsed local-time history rendering, and metadata persistence. M4 adds complete-creation rollback and restart tests, initial-deadline boundaries, rationale persistence and normalization, unchanged and nonconsecutive probability behavior, immutable append and replacement protection, lifecycle enforcement, stale revision/metadata context rejection, sequence-ordered local-time history, and revision-dialog cancellation. M5 adds Journal normalization and atomic forecast capture, lifecycle boundaries, immutable correction sequences, terminal corrections, no-op and stale-form behavior, database immutability guards, causal ordering under equal or regressing clocks, unified Qt rendering, dialog cancellation, and full timeline persistence across restart. M6 adds native chart tests for one-revision layout, fixed probability endpoints, actual elapsed-time projection, sequence-ordered step geometry, equal and regressing timestamps, nonconsecutive repeated probabilities, revision-only marker selection, accessibility text, refresh behavior, and restart-backed history.
 
 Most behavior should be verified below the GUI:
 
-- pure unit tests for probability, lifecycle, attention, revision selection, and scoring rules;
+- pure unit tests for probability, lifecycle, attention, revision selection, probability-history projection, and scoring rules;
 - temporary-SQLite integration tests for transactions, constraints, queries, migrations, restart persistence, and backup consistency;
 - pytest-qt tests only for behavior that genuinely depends on Qt signals, widgets, navigation, or dialog cancellation; and
 - a small application smoke test for startup against a temporary data directory.

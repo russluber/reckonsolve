@@ -22,6 +22,7 @@ import reckonsolve.app
 from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
+from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 
 def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
@@ -290,6 +291,10 @@ def test_complete_creation_and_forecast_revision_survive_restart(
         QLabel,
         "predictionDetailProbability",
     )
+    probability_history = first_runtime.window.findChild(
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
     revise_button = first_runtime.window.findChild(
         QPushButton,
         "reviseForecastButton",
@@ -299,9 +304,11 @@ def test_complete_creation_and_forecast_revision_survive_restart(
         "forecastRevisionRationale1",
     )
     assert current_probability is not None
+    assert probability_history is not None
     assert revise_button is not None
     assert initial_rationale is not None
     assert current_probability.text() == "60%"
+    assert probability_history.revision_count == 1
     assert initial_rationale.text() == "This is the initial evidence."
 
     with first_runtime.database.transaction() as connection:
@@ -339,6 +346,7 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     qtbot.mouseClick(save_revision, Qt.MouseButton.LeftButton)
 
     qtbot.waitUntil(lambda: current_probability.text() == "75%")
+    assert probability_history.revision_count == 2
     revised_rationale = first_runtime.window.findChild(
         QLabel,
         "forecastRevisionRationale2",
@@ -357,6 +365,11 @@ def test_complete_creation_and_forecast_revision_survive_restart(
         (1, 60, "This is the initial evidence."),
         (2, 75, "New evidence moved the forecast upward."),
     ]
+    expected_chart_samples = probability_history.samples
+    assert [sample.probability_percent for sample in expected_chart_samples] == [
+        60,
+        75,
+    ]
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
@@ -371,6 +384,10 @@ def test_complete_creation_and_forecast_revision_survive_restart(
         QLabel,
         "predictionDetailProbability",
     )
+    reopened_probability_history = second_runtime.window.findChild(
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
     reopened_initial_rationale = second_runtime.window.findChild(
         QLabel,
         "forecastRevisionRationale1",
@@ -381,10 +398,13 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     )
     assert reopened_question is not None
     assert reopened_probability is not None
+    assert reopened_probability_history is not None
     assert reopened_initial_rationale is not None
     assert reopened_revised_rationale is not None
     assert reopened_question.text() == "Will the complete M4 forecast survive restart?"
     assert reopened_probability.text() == "75%"
+    assert reopened_probability_history.revision_count == 2
+    assert reopened_probability_history.samples == expected_chart_samples
     assert reopened_initial_rationale.text() == "This is the initial evidence."
     assert (
         reopened_revised_rationale.text() == "New evidence moved the forecast upward."
@@ -423,8 +443,14 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
         QLabel,
         "predictionDetailProbability",
     )
+    probability_history = first_runtime.window.findChild(
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
     assert add_journal is not None
     assert current_probability is not None
+    assert probability_history is not None
+    assert probability_history.revision_count == 1
     qtbot.mouseClick(add_journal, Qt.MouseButton.LeftButton)
     journal_dialog = first_runtime.window.findChild(
         QDialog,
@@ -446,6 +472,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     qtbot.mouseClick(save_journal, Qt.MouseButton.LeftButton)
 
     assert current_probability.text() == "60%"
+    assert probability_history.revision_count == 1
     journal_context = first_runtime.window.findChild(
         QLabel,
         "journalEntryForecastAtTime1",
@@ -482,6 +509,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     assert save_correction is not None
     corrected_body.setPlainText("The evidence supports 60%.")
     qtbot.mouseClick(save_correction, Qt.MouseButton.LeftButton)
+    assert probability_history.revision_count == 1
 
     displayed_body = first_runtime.window.findChild(QLabel, "journalEntryBody1")
     original_body = first_runtime.window.findChild(
@@ -515,6 +543,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     revised_probability.setValue(75)
     qtbot.mouseClick(save_revision, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: current_probability.text() == "75%")
+    assert probability_history.revision_count == 2
 
     with first_runtime.database.transaction() as connection:
         journal_row = connection.execute(
@@ -529,6 +558,11 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     assert tuple(journal_row) == ("The evidence teh supports 60%.", 1)
     assert tuple(correction_row) == ("The evidence supports 60%.",)
     assert revision_count == 2
+    expected_chart_samples = probability_history.samples
+    assert [sample.probability_percent for sample in expected_chart_samples] == [
+        60,
+        75,
+    ]
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
@@ -539,6 +573,10 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     reopened_probability = second_runtime.window.findChild(
         QLabel,
         "predictionDetailProbability",
+    )
+    reopened_probability_history = second_runtime.window.findChild(
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
     )
     reopened_body = second_runtime.window.findChild(QLabel, "journalEntryBody1")
     reopened_original = second_runtime.window.findChild(
@@ -556,6 +594,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     )
     timeline = second_runtime.window.findChild(QWidget, "forecastTimeline")
     assert reopened_probability is not None
+    assert reopened_probability_history is not None
     assert reopened_body is not None
     assert reopened_original is not None
     assert reopened_context is not None
@@ -563,6 +602,8 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     assert edit_history is not None
     assert timeline is not None
     assert reopened_probability.text() == "75%"
+    assert reopened_probability_history.revision_count == 2
+    assert reopened_probability_history.samples == expected_chart_samples
     assert reopened_body.text() == "The evidence supports 60%."
     assert reopened_original.text() == "The evidence teh supports 60%."
     assert reopened_context.text() == "Forecast at the time: 60%"

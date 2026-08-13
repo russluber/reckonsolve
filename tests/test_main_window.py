@@ -32,6 +32,7 @@ from reckonsolve.domain.predictions import (
     PredictionStatus,
 )
 from reckonsolve.ui import MainWindow
+from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 EXPECTED_SCREEN_NAMES = (
     "Dashboard",
@@ -162,6 +163,8 @@ class FakePredictionOperations:
         self.revise_calls: list[ReviseForecastCall] = []
         self.revise_error: ApplicationError | None = None
         self.revisions: list[FakeForecastRevision] = []
+        self.revision_read_calls: list[int] = []
+        self.revision_read_error: ApplicationError | None = None
         if latest is not None:
             self.revisions.append(
                 FakeForecastRevision(
@@ -286,6 +289,9 @@ class FakePredictionOperations:
         self,
         prediction_id: int,
     ) -> tuple[FakeForecastRevision, ...]:
+        self.revision_read_calls.append(prediction_id)
+        if self.revision_read_error is not None:
+            raise self.revision_read_error
         return tuple(
             revision
             for revision in self.revisions
@@ -955,10 +961,23 @@ def test_returning_to_prediction_detail_refreshes_external_changes(
     operations.latest = replace(
         original,
         question="Externally refreshed question",
+        probability_percent=45,
         status=PredictionStatus.LOCKED,
         background="Fresh context",
         metadata_version=2,
+        current_revision_id=2,
+        current_revision_sequence=2,
     )
+    operations.revisions.append(
+        FakeForecastRevision(
+            revision_id=2,
+            prediction_id=42,
+            probability_percent=45,
+            sequence=2,
+            created_at=datetime(2026, 8, 13, 19, 30, tzinfo=UTC),
+        )
+    )
+    operations.revision_read_calls.clear()
 
     window.navigate_to("Dashboard")
     window.navigate_to("Prediction Detail")
@@ -971,6 +990,14 @@ def test_returning_to_prediction_detail_refreshes_external_changes(
     assert _required_child(window, QLabel, "predictionDetailBackground").text() == (
         "Fresh context"
     )
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 2
+    assert [sample.probability_percent for sample in chart.samples] == [60, 45]
+    assert operations.revision_read_calls == [42]
 
 
 def test_prediction_detail_refresh_failure_retains_last_visible_data(
@@ -1077,14 +1104,119 @@ def test_prediction_detail_enables_current_actions_and_keeps_later_ones_disabled
         assert not button.isEnabled()
         assert "later milestone" in button.toolTip()
     assert _required_child(window, QLabel, "timelinePlaceholder").isHidden()
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 1
+    assert not chart.isHidden()
+    assert _required_child(
+        window,
+        QLabel,
+        "probabilityHistoryPlaceholder",
+    ).isHidden()
+
+
+def test_probability_history_empty_and_load_failure_states_are_honest(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will a missing chart read be described honestly?", 60)
+    )
+    operations.revisions.clear()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    placeholder = _required_child(
+        window,
+        QLabel,
+        "probabilityHistoryPlaceholder",
+    )
+    assert chart.revision_count == 0
+    assert chart.samples == ()
+    assert chart.isHidden()
+    assert not placeholder.isHidden()
+    assert "No forecast revisions" in placeholder.text()
+
+    operations.revision_read_error = ApplicationError("Revision read failed.")
+    window.navigate_to("Prediction Detail")
+
+    assert chart.revision_count == 0
+    assert chart.isHidden()
+    assert not placeholder.isHidden()
+    assert "could not be loaded" in placeholder.text()
+    error = _required_child(window, QLabel, "predictionDetailError")
+    assert "Revision read failed" in error.text()
+    assert not error.isHidden()
+
+
+def test_probability_history_refresh_failure_retains_matching_loaded_chart(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will a transient read preserve visible history?", 60)
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 1
+    retained_samples = chart.samples
+
+    operations.revision_read_error = ApplicationError("Temporary read failure.")
+    window.navigate_to("Prediction Detail")
+
+    placeholder = _required_child(
+        window,
+        QLabel,
+        "probabilityHistoryPlaceholder",
+    )
+    assert chart.revision_count == 1
+    assert chart.samples == retained_samples
+    assert not chart.isHidden()
+    assert not placeholder.isHidden()
+    assert "last loaded chart remains visible" in placeholder.text()
     assert (
-        "later milestone"
+        "Temporary read failure"
         in _required_child(
             window,
             QLabel,
-            "probabilityHistoryPlaceholder",
+            "predictionDetailError",
         ).text()
     )
+
+
+def test_probability_history_accessibility_reports_timeline_read_failure(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will the nonvisual equivalent stay truthful?", 60)
+    )
+    operations.timeline_error = ApplicationError("Timeline read failed.")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+
+    assert chart.revision_count == 1
+    assert "currently unavailable" in chart.accessibleDescription()
+
+    operations.timeline_error = None
+    window.navigate_to("Prediction Detail")
+
+    assert "listed in the Timeline" in chart.accessibleDescription()
 
 
 @pytest.mark.parametrize(
@@ -1275,6 +1407,12 @@ def test_revision_appends_with_tokens_and_refreshes_forecast_history(
     operations = FakePredictionOperations(original)
     window = MainWindow(operations)
     qtbot.addWidget(window)
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 1
     dialog = _open_revision_dialog(qtbot, window)
     _required_child(dialog, QSpinBox, "revisionProbabilityInput").setValue(
         new_probability
@@ -1307,6 +1445,12 @@ def test_revision_appends_with_tokens_and_refreshes_forecast_history(
     rationale = _required_child(window, QLabel, "forecastRevisionRationale12")
     assert rationale.text() == "New <i>evidence</i>"
     assert rationale.textFormat() is Qt.TextFormat.PlainText
+    assert chart.revision_count == 2
+    assert [sample.sequence for sample in chart.samples] == [3, 4]
+    assert [sample.probability_percent for sample in chart.samples] == [
+        60,
+        new_probability,
+    ]
 
 
 def test_forecast_history_uses_previous_revision_for_nonconsecutive_return(
@@ -1448,6 +1592,13 @@ def test_enter_adds_newline_and_ctrl_enter_saves_journal_with_tokens(
     operations = FakePredictionOperations(latest)
     window = MainWindow(operations)
     qtbot.addWidget(window)
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 1
+    original_samples = chart.samples
     dialog = _open_journal_dialog(qtbot, window)
     body = _required_child(dialog, QPlainTextEdit, "journalEntryBodyInput")
 
@@ -1484,6 +1635,8 @@ def test_enter_adds_newline_and_ctrl_enter_saves_journal_with_tokens(
         _required_child(window, QLabel, "journalEntryForecastAtTime1").text()
         == "Forecast at the time: 65%"
     )
+    assert chart.revision_count == 1
+    assert chart.samples == original_samples
 
 
 @pytest.mark.parametrize("status", [PredictionStatus.OPEN, PredictionStatus.LOCKED])
@@ -1600,6 +1753,13 @@ def test_correction_cancel_and_expected_error_preserve_current_body(
     ]
     window = MainWindow(operations)
     qtbot.addWidget(window)
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 1
+    original_samples = chart.samples
     dialog = _open_correction_dialog(qtbot, window, entry_id=4)
     body = _required_child(dialog, QPlainTextEdit, "correctJournalEntryBodyInput")
     assert body.toPlainText() == "Latest text"
@@ -1626,6 +1786,8 @@ def test_correction_cancel_and_expected_error_preserve_current_body(
             "correctJournalEntryError",
         ).text()
     )
+    assert chart.revision_count == 1
+    assert chart.samples == original_samples
 
 
 def test_correction_dialog_refreshes_external_edits_and_recovers_after_stale_save(
@@ -1818,6 +1980,12 @@ def test_correction_displays_edited_marker_and_collapsed_plain_text_history(
     ]
     window = MainWindow(operations)
     qtbot.addWidget(window)
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 1
     dialog = _open_correction_dialog(qtbot, window, entry_id=4)
     body = _required_child(dialog, QPlainTextEdit, "correctJournalEntryBodyInput")
     body.setPlainText("<i>Corrected body</i>")
@@ -1859,6 +2027,7 @@ def test_correction_displays_edited_marker_and_collapsed_plain_text_history(
     assert correction.text() == "First corrected body"
     assert original.textFormat() is Qt.TextFormat.PlainText
     assert correction.textFormat() is Qt.TextFormat.PlainText
+    assert chart.revision_count == 1
     assert (
         _required_child(window, QLabel, "journalCorrectionHeading1")
         .text()
@@ -2512,6 +2681,13 @@ def test_prediction_detail_has_helpful_empty_state(window: MainWindow) -> None:
     assert not empty_state.isHidden()
     assert "Create one" in empty_state.text()
     assert _required_child(window, QWidget, "predictionDetailContent").isHidden()
+    chart = _required_child(
+        window,
+        ProbabilityHistoryChart,
+        "probabilityHistoryChart",
+    )
+    assert chart.revision_count == 0
+    assert chart.isHidden()
 
 
 def test_main_window_can_be_shown_and_closed(

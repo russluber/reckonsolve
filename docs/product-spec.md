@@ -501,7 +501,7 @@ After saving:
 
 - the new revision appears in the forecast-only timeline/history introduced in Milestone 4;
 - Current Forecast changes to the new probability; and
-- the probability-history chart gains a point.
+- the probability-history chart gains a marker.
 
 Milestone 5 merges Journal entries into this forecast history to produce the unified chronological timeline specified for Prediction Detail.
 
@@ -546,19 +546,22 @@ The last rule changes in v0.2 when explicit Forecast Reviews exist.
 
 ## 13. Probability-history chart
 
-Every point corresponds to an immutable forecast revision.
+Every marker corresponds to exactly one immutable ForecastRevision. Journal entries and Journal corrections are never probability observations and must not add markers.
 
 Minimum requirements:
 
-- probability on the vertical axis;
-- time on the horizontal axis;
-- revisions shown in chronological order;
+- a fixed 0% through 100% probability scale on the vertical axis;
+- actual elapsed stored time on the horizontal axis, with timestamps displayed in the computer's local time;
+- revisions connected in immutable revision-sequence order without re-sorting them by timestamp;
+- a step-after, piecewise-constant line: a saved probability remains in force until the next revision, when the line changes vertically to the new value;
 - current and historical probabilities represented accurately; and
-- sensible rendering when only one revision exists.
+- sensible, nondegenerate rendering when only one revision exists. A lone marker should be centered using axis padding; the padding does not imply additional observations or a forecast before creation.
 
-Hovering or selecting a point may show timestamp, transition, and rationale if the chosen UI toolkit makes this inexpensive. Rich interaction is not required for the first usable slice.
+Revisions with the same stored instant share one horizontal position, so a change between them is vertical. If the system clock moved backward between saves, the sequence-ordered line may travel backward on the time axis rather than falsifying either the stored timestamp or revision order. The chart must not spread revisions at artificial equal intervals or invent timestamp offsets merely to avoid overlap.
 
-The chart must not treat journal entries as probability observations.
+Hovering or selecting a marker may show timestamp, transition, and rationale if the chosen UI toolkit makes this inexpensive. Rich interaction is not required for the first usable slice.
+
+The chart must have an accessible summary of its revision sequence. The existing textual Forecast entries in the unified timeline remain the exact nonvisual equivalent; the chart must not become the only way to recover a revision's probability, order, timestamp, transition, or rationale.
 
 ---
 
@@ -935,8 +938,10 @@ Acceptance demonstration:
 
 ### Milestone 6: Probability-history chart
 
-- Plot revision probability over time.
-- Handle one or many revisions accurately.
+- Plot exactly one marker per immutable revision using a fixed 0% through 100% vertical scale and actual stored time on the horizontal scale.
+- Connect revisions in sequence order with a step-after line that represents the probability held between revisions.
+- Handle one revision, multiple revisions, equal timestamps, repeated nonconsecutive probabilities, and clock regression without inventing observations or timestamps.
+- Exclude Journal events and retain the unified timeline as the chart's exact nonvisual equivalent.
 
 ### Milestone 7: Lifecycle and resolution
 
@@ -1008,6 +1013,8 @@ Highest-risk behavior should receive automated tests before visual polish:
 - immutable journal correction history, retained original context, and rejection of individual deletion;
 - deterministic unified-timeline ordering, including equal stored timestamps;
 - verification that journal creation and correction do not create revisions, change probability, or reset Needs Attention;
+- probability-history marker selection and step geometry for one or many revisions, including 0%, 100%, equal timestamps, a nonconsecutive return to an earlier probability, and a regressing clock;
+- verification that Journal entries and corrections never appear as probability-history observations;
 - atomic creation of a Prediction, optional initial metadata and tags, and its first revision with optional rationale;
 - atomic protected-field metadata edits and definition-change records;
 - current-revision selection;
