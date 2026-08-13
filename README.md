@@ -2,13 +2,15 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its immutable forecast-revision milestone, but several forecasting workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its journal-and-timeline milestone, but several forecasting workflows are still being built and it is not ready for normal use.
 
-The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts. Saved revisions appear in a chronological Forecast history and persist across restarts.
+The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
-Question, Resolution Criteria, and Forecast Deadline edits require tailored confirmation and remain visible in a collapsed Definition history. A Forecast Deadline is inclusive, and normal revisions are unavailable once it has passed. Unchanged probabilities are not recorded as revisions; journal entries for reasoning that does not change the probability arrive in the next milestone.
+Journal entries record evidence or reasoning without changing the forecast. Each entry preserves the forecast that was current when it was written, and revisions and Journal entries appear together in one timeline. Saved Journal text can be transparently corrected: the timeline marks it **Edited** and retains the original and every prior version in a collapsed edit history. Individual Journal entries cannot be deleted.
 
-The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. Journal entries, the unified timeline, probability-history chart, resolution, and invalidation are reserved for later milestones.
+Question, Resolution Criteria, and Forecast Deadline edits require tailored confirmation and remain visible in a collapsed Definition history. A Forecast Deadline is inclusive, so normal revisions stop after it passes while new Journal entries remain available. Resolved and Invalid predictions reject new entries, but existing entries can still receive audited corrections. Unchanged probabilities are not recorded as revisions; reasoning that leaves the probability unchanged belongs in the Journal. All of this history persists across restarts.
+
+The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. The probability-history chart, resolution, invalidation, browsing, analytics, backup, export, and Windows packaging are reserved for later milestones.
 
 ## Documentation
 

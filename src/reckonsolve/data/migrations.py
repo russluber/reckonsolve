@@ -381,6 +381,232 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=5,
+        name="add journal entries and transparent corrections",
+        statements=(
+            """
+            CREATE UNIQUE INDEX forecast_revisions_prediction_identity
+            ON forecast_revisions (prediction_id, id)
+            """,
+            """
+            CREATE TABLE journal_entries (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                forecast_revision_id INTEGER NOT NULL,
+                body TEXT NOT NULL
+                    CHECK (
+                        length(body) > 0
+                        AND body = trim(
+                            body,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(body, char(0)) = 0
+                    ),
+                created_at TEXT NOT NULL
+                    CHECK (
+                        length(created_at) = 27
+                        AND created_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(created_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(created_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(created_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(created_at, 1, 10),
+                            0
+                        )
+                    ),
+                UNIQUE (prediction_id, id),
+                FOREIGN KEY (prediction_id, forecast_revision_id)
+                    REFERENCES forecast_revisions(prediction_id, id)
+                    ON DELETE CASCADE
+            ) STRICT
+            """,
+            """
+            CREATE INDEX journal_entries_by_prediction_anchor
+            ON journal_entries (prediction_id, forecast_revision_id, created_at, id)
+            """,
+            """
+            CREATE TRIGGER journal_entries_require_current_revision
+            BEFORE INSERT ON journal_entries
+            WHEN NEW.forecast_revision_id IS NOT (
+                SELECT id
+                FROM forecast_revisions
+                WHERE prediction_id = NEW.prediction_id
+                ORDER BY sequence DESC
+                LIMIT 1
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'journal entries must reference the current forecast revision'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entries_require_open_prediction
+            BEFORE INSERT ON journal_entries
+            WHEN (
+                SELECT status FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'open'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'new journal entries require an open or locked prediction'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entries_are_immutable
+            BEFORE UPDATE ON journal_entries
+            BEGIN
+                SELECT RAISE(ABORT, 'saved journal entries are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entries_reject_history_replacement
+            BEFORE INSERT ON journal_entries
+            WHEN EXISTS (
+                SELECT 1 FROM journal_entries WHERE id = NEW.id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved journal entries are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entries_reject_direct_delete
+            BEFORE DELETE ON journal_entries
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved journal entries are immutable');
+            END
+            """,
+            """
+            CREATE TABLE journal_entry_corrections (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL,
+                journal_entry_id INTEGER NOT NULL,
+                sequence INTEGER NOT NULL
+                    CHECK (typeof(sequence) = 'integer' AND sequence >= 1),
+                body TEXT NOT NULL
+                    CHECK (
+                        length(body) > 0
+                        AND body = trim(
+                            body,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(body, char(0)) = 0
+                    ),
+                corrected_at TEXT NOT NULL
+                    CHECK (
+                        length(corrected_at) = 27
+                        AND corrected_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(corrected_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(corrected_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(corrected_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(corrected_at, 1, 10),
+                            0
+                        )
+                    ),
+                FOREIGN KEY (prediction_id, journal_entry_id)
+                    REFERENCES journal_entries(prediction_id, id)
+                    ON DELETE CASCADE,
+                UNIQUE (journal_entry_id, sequence)
+            ) STRICT
+            """,
+            """
+            CREATE INDEX journal_entry_corrections_by_entry
+            ON journal_entry_corrections (journal_entry_id, sequence)
+            """,
+            """
+            CREATE TRIGGER journal_entry_corrections_require_changed_body
+            BEFORE INSERT ON journal_entry_corrections
+            WHEN NEW.body = COALESCE(
+                (
+                    SELECT body
+                    FROM journal_entry_corrections
+                    WHERE journal_entry_id = NEW.journal_entry_id
+                    ORDER BY sequence DESC
+                    LIMIT 1
+                ),
+                (
+                    SELECT body
+                    FROM journal_entries
+                    WHERE id = NEW.journal_entry_id
+                )
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'a journal correction must change the text');
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entry_corrections_require_next_sequence
+            BEFORE INSERT ON journal_entry_corrections
+            WHEN NEW.sequence != COALESCE(
+                (
+                    SELECT MAX(sequence)
+                    FROM journal_entry_corrections
+                    WHERE journal_entry_id = NEW.journal_entry_id
+                ),
+                0
+            ) + 1
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'journal correction sequence must be contiguous'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entry_corrections_are_immutable
+            BEFORE UPDATE ON journal_entry_corrections
+            BEGIN
+                SELECT RAISE(ABORT, 'saved journal corrections are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entry_corrections_reject_history_replacement
+            BEFORE INSERT ON journal_entry_corrections
+            WHEN EXISTS (
+                SELECT 1 FROM journal_entry_corrections WHERE id = NEW.id
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM journal_entry_corrections
+                WHERE journal_entry_id = NEW.journal_entry_id
+                    AND sequence = NEW.sequence
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved journal corrections are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER journal_entry_corrections_reject_direct_delete
+            BEFORE DELETE ON journal_entry_corrections
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved journal corrections are immutable');
+            END
+            """,
+        ),
+    ),
 )
 
 

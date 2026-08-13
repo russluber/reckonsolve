@@ -7,11 +7,17 @@ from reckonsolve.clock import format_utc, parse_utc
 from reckonsolve.domain.predictions import (
     DefinitionChange,
     ForecastRevision,
+    ForecastTimelineEvent,
+    JournalCorrection,
+    JournalTimelineEvent,
     NewForecastRevision,
+    NewJournalCorrection,
+    NewJournalEntry,
     NewPrediction,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
+    TimelineEvent,
     changed_definition_fields,
     display_status,
     metadata_would_change,
@@ -38,6 +44,22 @@ class ForecastRevisionDisallowedError(RuntimeError):
     def __init__(self, status: PredictionStatus) -> None:
         super().__init__(status.value)
         self.status = status
+
+
+class JournalContextChangedError(RuntimeError):
+    """Raised when a Journal form no longer matches current prediction state."""
+
+
+class JournalEntryDisallowedError(RuntimeError):
+    """Raised when lifecycle state rejects a new Journal entry."""
+
+    def __init__(self, status: PredictionStatus) -> None:
+        super().__init__(status.value)
+        self.status = status
+
+
+class JournalCorrectionContextChangedError(RuntimeError):
+    """Raised when a Journal correction no longer matches current edit history."""
 
 
 class PredictionRepository:
@@ -217,6 +239,217 @@ class PredictionRepository:
             ).fetchall()
 
         return tuple(_map_forecast_revision(row) for row in rows)
+
+    def add_journal_entry(
+        self,
+        prediction_id: int,
+        new_entry: NewJournalEntry,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        created_at: datetime,
+    ) -> JournalTimelineEvent | None:
+        """Capture the transaction-current revision and append one Journal entry."""
+
+        timestamp = format_utc(created_at)
+        with self._database.transaction() as connection:
+            row = _select_prediction_detail(connection, prediction_id)
+            if row is None:
+                return None
+            current = _map_prediction_detail(row)
+            if (
+                current.current_revision_id != expected_revision_id
+                or current.metadata_version != expected_metadata_version
+            ):
+                raise JournalContextChangedError
+            if current.status is not PredictionStatus.OPEN:
+                raise JournalEntryDisallowedError(current.status)
+
+            cursor = connection.execute(
+                """
+                INSERT INTO journal_entries (
+                    prediction_id,
+                    forecast_revision_id,
+                    body,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    prediction_id,
+                    current.current_revision_id,
+                    new_entry.body,
+                    timestamp,
+                ),
+            )
+            entry_id = cursor.lastrowid
+            if entry_id is None:
+                raise sqlite3.DatabaseError("SQLite did not return a Journal entry ID.")
+            entry = _select_journal_event(connection, prediction_id, entry_id)
+            if entry is None:
+                raise sqlite3.DatabaseError(
+                    "The created Journal entry could not be loaded."
+                )
+
+        return entry
+
+    def get_journal_entry(
+        self,
+        prediction_id: int,
+        entry_id: int,
+    ) -> JournalTimelineEvent | None:
+        """Load one Journal entry with all immutable correction versions."""
+
+        with self._database.transaction() as connection:
+            return _select_journal_event(connection, prediction_id, entry_id)
+
+    def append_journal_correction(
+        self,
+        prediction_id: int,
+        entry_id: int,
+        correction: NewJournalCorrection,
+        *,
+        expected_correction_id: int | None,
+        corrected_at: datetime | None,
+    ) -> JournalTimelineEvent | None:
+        """Recheck correction history and append a new body version."""
+
+        with self._database.transaction() as connection:
+            current = _select_journal_event(connection, prediction_id, entry_id)
+            if current is None:
+                return None
+            if current.current_correction_id != expected_correction_id:
+                raise JournalCorrectionContextChangedError
+            if current.body == correction.body:
+                return current
+            if corrected_at is None:
+                raise sqlite3.DatabaseError(
+                    "A changed Journal correction requires a timestamp."
+                )
+
+            cursor = connection.execute(
+                """
+                INSERT INTO journal_entry_corrections (
+                    prediction_id,
+                    journal_entry_id,
+                    sequence,
+                    body,
+                    corrected_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    prediction_id,
+                    entry_id,
+                    len(current.corrections) + 1,
+                    correction.body,
+                    format_utc(corrected_at),
+                ),
+            )
+            if cursor.lastrowid is None:
+                raise sqlite3.DatabaseError(
+                    "SQLite did not return a Journal correction ID."
+                )
+            updated = _select_journal_event(connection, prediction_id, entry_id)
+            if updated is None:
+                raise sqlite3.DatabaseError(
+                    "The corrected Journal entry could not be loaded."
+                )
+
+        return updated
+
+    def list_timeline(
+        self,
+        prediction_id: int,
+    ) -> tuple[TimelineEvent, ...] | None:
+        """Load forecast and Journal events in deterministic causal order."""
+
+        with self._database.transaction() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM predictions WHERE id = ?",
+                (prediction_id,),
+            ).fetchone()
+            if exists is None:
+                return None
+            revision_rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    prediction_id,
+                    probability_percent,
+                    sequence,
+                    created_at,
+                    rationale
+                FROM forecast_revisions
+                WHERE prediction_id = ?
+                ORDER BY sequence
+                """,
+                (prediction_id,),
+            ).fetchall()
+            journal_rows = connection.execute(
+                """
+                SELECT
+                    journal.id AS entry_id,
+                    journal.prediction_id,
+                    journal.created_at,
+                    journal.body AS original_body,
+                    revision.id AS forecast_revision_id,
+                    revision.sequence AS forecast_revision_sequence,
+                    revision.probability_percent AS forecast_probability_percent
+                FROM journal_entries AS journal
+                JOIN forecast_revisions AS revision
+                    ON revision.id = journal.forecast_revision_id
+                    AND revision.prediction_id = journal.prediction_id
+                WHERE journal.prediction_id = ?
+                """,
+                (prediction_id,),
+            ).fetchall()
+            correction_rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    journal_entry_id,
+                    body,
+                    corrected_at
+                FROM journal_entry_corrections
+                WHERE prediction_id = ?
+                ORDER BY journal_entry_id, sequence
+                """,
+                (prediction_id,),
+            ).fetchall()
+
+        corrections_by_entry: dict[int, list[JournalCorrection]] = {}
+        for row in correction_rows:
+            corrections_by_entry.setdefault(int(row["journal_entry_id"]), []).append(
+                _map_journal_correction(row)
+            )
+
+        events: list[TimelineEvent] = []
+        previous_probability: int | None = None
+        for row in revision_rows:
+            probability = int(row["probability_percent"])
+            events.append(
+                ForecastTimelineEvent(
+                    revision_id=int(row["id"]),
+                    prediction_id=int(row["prediction_id"]),
+                    created_at=parse_utc(str(row["created_at"])),
+                    sequence=int(row["sequence"]),
+                    probability_percent=probability,
+                    previous_probability_percent=previous_probability,
+                    rationale=_optional_string(row["rationale"]),
+                )
+            )
+            previous_probability = probability
+        for row in journal_rows:
+            entry_id = int(row["entry_id"])
+            events.append(
+                _map_journal_event(
+                    row,
+                    tuple(corrections_by_entry.get(entry_id, ())),
+                )
+            )
+
+        return tuple(sorted(events, key=_timeline_sort_key))
 
     def get_latest_prediction(self) -> PredictionDetail | None:
         """Load the newest prediction and derive its current revision."""
@@ -459,6 +692,84 @@ def _map_forecast_revision(row: sqlite3.Row) -> ForecastRevision:
         sequence=int(row["sequence"]),
         created_at=parse_utc(str(row["created_at"])),
         rationale=_optional_string(row["rationale"]),
+    )
+
+
+def _select_journal_event(
+    connection: sqlite3.Connection,
+    prediction_id: int,
+    entry_id: int,
+) -> JournalTimelineEvent | None:
+    row = connection.execute(
+        """
+        SELECT
+            journal.id AS entry_id,
+            journal.prediction_id,
+            journal.created_at,
+            journal.body AS original_body,
+            revision.id AS forecast_revision_id,
+            revision.sequence AS forecast_revision_sequence,
+            revision.probability_percent AS forecast_probability_percent
+        FROM journal_entries AS journal
+        JOIN forecast_revisions AS revision
+            ON revision.id = journal.forecast_revision_id
+            AND revision.prediction_id = journal.prediction_id
+        WHERE journal.prediction_id = ? AND journal.id = ?
+        """,
+        (prediction_id, entry_id),
+    ).fetchone()
+    if row is None:
+        return None
+    correction_rows = connection.execute(
+        """
+        SELECT id, journal_entry_id, body, corrected_at
+        FROM journal_entry_corrections
+        WHERE prediction_id = ? AND journal_entry_id = ?
+        ORDER BY sequence
+        """,
+        (prediction_id, entry_id),
+    ).fetchall()
+    return _map_journal_event(
+        row,
+        tuple(_map_journal_correction(item) for item in correction_rows),
+    )
+
+
+def _map_journal_correction(row: sqlite3.Row) -> JournalCorrection:
+    return JournalCorrection(
+        correction_id=int(row["id"]),
+        body=str(row["body"]),
+        corrected_at=parse_utc(str(row["corrected_at"])),
+    )
+
+
+def _map_journal_event(
+    row: sqlite3.Row,
+    corrections: tuple[JournalCorrection, ...],
+) -> JournalTimelineEvent:
+    original_body = str(row["original_body"])
+    current = corrections[-1] if corrections else None
+    return JournalTimelineEvent(
+        entry_id=int(row["entry_id"]),
+        prediction_id=int(row["prediction_id"]),
+        created_at=parse_utc(str(row["created_at"])),
+        body=original_body if current is None else current.body,
+        original_body=original_body,
+        forecast_revision_id=int(row["forecast_revision_id"]),
+        forecast_revision_sequence=int(row["forecast_revision_sequence"]),
+        forecast_probability_percent=int(row["forecast_probability_percent"]),
+        current_correction_id=(None if current is None else current.correction_id),
+        corrections=corrections,
+    )
+
+
+def _timeline_sort_key(event: TimelineEvent) -> tuple[object, ...]:
+    if isinstance(event, ForecastTimelineEvent):
+        return (event.sequence, 0, event.revision_id)
+    return (
+        event.forecast_revision_sequence,
+        1,
+        event.entry_id,
     )
 
 

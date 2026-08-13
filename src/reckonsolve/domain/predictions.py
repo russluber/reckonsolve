@@ -71,6 +71,26 @@ class NewForecastRevision:
 
 
 @dataclass(frozen=True, slots=True)
+class NewJournalEntry:
+    """Validated reasoning that leaves the current forecast unchanged."""
+
+    body: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "body", _journal_body(self.body))
+
+
+@dataclass(frozen=True, slots=True)
+class NewJournalCorrection:
+    """Validated replacement text preserved as an audited correction."""
+
+    body: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "body", _journal_body(self.body))
+
+
+@dataclass(frozen=True, slots=True)
 class Prediction:
     """The stable identity and lifecycle facts of a binary prediction."""
 
@@ -91,6 +111,47 @@ class ForecastRevision:
     sequence: int
     created_at: datetime
     rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class JournalCorrection:
+    """One immutable correction to a Journal entry's displayed text."""
+
+    correction_id: int
+    body: str
+    corrected_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastTimelineEvent:
+    """One immutable forecast revision prepared for unified history display."""
+
+    revision_id: int
+    prediction_id: int
+    created_at: datetime
+    sequence: int
+    probability_percent: int
+    previous_probability_percent: int | None
+    rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class JournalTimelineEvent:
+    """One Journal event with its forecast anchor and complete edit history."""
+
+    entry_id: int
+    prediction_id: int
+    created_at: datetime
+    body: str
+    original_body: str
+    forecast_revision_id: int
+    forecast_revision_sequence: int
+    forecast_probability_percent: int
+    current_correction_id: int | None = None
+    corrections: tuple[JournalCorrection, ...] = ()
+
+
+type TimelineEvent = ForecastTimelineEvent | JournalTimelineEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +320,20 @@ def _optional_text(value: object, field: str) -> str | None:
             field=field,
         )
     return normalized or None
+
+
+def _journal_body(value: object) -> str:
+    if not isinstance(value, str) or not (normalized := value.strip()):
+        raise PredictionValidationError(
+            "Journal entry text is required.",
+            field="body",
+        )
+    if "\x00" in normalized:
+        raise PredictionValidationError(
+            "Journal entry text cannot contain the NUL control character.",
+            field="body",
+        )
+    return normalized
 
 
 def _validate_date_only(value: object, field: str) -> None:

@@ -86,8 +86,7 @@ class ForecastUnchangedError(ApplicationError):
         super().__init__(
             f"The current forecast is already {probability_percent}%. "
             "Change the probability to save a revision. To record reasoning without "
-            "changing the forecast, use a Journal entry when that feature arrives "
-            "in the next milestone."
+            "changing the forecast, add a Journal entry."
         )
         self.probability_percent = probability_percent
 
@@ -103,3 +102,46 @@ class ForecastRevisionNotAllowedError(ApplicationError):
             reason = f"Its status is {status_label}."
         super().__init__(f"This forecast cannot be revised. {reason}")
         self.status = status
+
+
+class ConcurrentJournalUpdateError(ApplicationError):
+    """The prediction changed after a new Journal form was opened."""
+
+    def __init__(self, prediction_id: int) -> None:
+        super().__init__(
+            "This prediction changed before the Journal entry could be saved. "
+            "Close this editor, reopen Add Journal Entry to review the latest "
+            "forecast and details, and try again."
+        )
+        self.prediction_id = prediction_id
+
+
+class JournalEntryNotAllowedError(ApplicationError):
+    """Lifecycle state does not permit a new Journal assertion."""
+
+    def __init__(self, status: PredictionStatus) -> None:
+        super().__init__(
+            "A new Journal entry cannot be added after a prediction is "
+            f"{status.value.capitalize()}."
+        )
+        self.status = status
+
+
+class JournalEntryNotFoundError(ApplicationError):
+    """The requested Journal entry does not exist under the prediction."""
+
+    def __init__(self, entry_id: int) -> None:
+        super().__init__(f"Journal entry {entry_id} was not found.")
+        self.entry_id = entry_id
+
+
+class ConcurrentJournalCorrectionError(ApplicationError):
+    """A Journal entry received another correction after review."""
+
+    def __init__(self, entry_id: int) -> None:
+        super().__init__(
+            "This Journal entry changed before the correction could be saved. "
+            "Close this editor, reopen Correct Entry to review the latest text, "
+            "and try again."
+        )
+        self.entry_id = entry_id

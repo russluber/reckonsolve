@@ -8,18 +8,25 @@ from reckonsolve.data.predictions import (
     ForecastContextChangedError,
     ForecastRevisionDisallowedError,
     ForecastRevisionUnchangedError,
+    JournalContextChangedError,
+    JournalCorrectionContextChangedError,
+    JournalEntryDisallowedError,
     PredictionChangedError,
     PredictionRepository,
 )
 from reckonsolve.domain.predictions import (
     DefinitionChange,
     ForecastRevision,
+    JournalTimelineEvent,
     NewForecastRevision,
+    NewJournalCorrection,
+    NewJournalEntry,
     NewPrediction,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
     PredictionValidationError,
+    TimelineEvent,
     changed_definition_fields,
     display_status,
     metadata_would_change,
@@ -27,9 +34,13 @@ from reckonsolve.domain.predictions import (
 
 from .errors import (
     ConcurrentForecastUpdateError,
+    ConcurrentJournalCorrectionError,
+    ConcurrentJournalUpdateError,
     ConcurrentPredictionUpdateError,
     ForecastRevisionNotAllowedError,
     ForecastUnchangedError,
+    JournalEntryNotAllowedError,
+    JournalEntryNotFoundError,
     MeaningChangeConfirmationRequired,
     PredictionNotFoundError,
     ValidationError,
@@ -164,6 +175,108 @@ class PredictionOperations:
         if revisions is None:
             raise PredictionNotFoundError(prediction_id)
         return revisions
+
+    def add_journal_entry(
+        self,
+        prediction_id: int,
+        body: str,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> JournalTimelineEvent:
+        """Append reasoning tied to the exact forecast and definition reviewed."""
+
+        try:
+            new_entry = NewJournalEntry(body)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+
+        current = self._repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentJournalUpdateError(prediction_id)
+        if current.status is not PredictionStatus.OPEN:
+            raise JournalEntryNotAllowedError(current.status)
+
+        created_at = as_utc(self._clock.now())
+        try:
+            entry = self._repository.add_journal_entry(
+                prediction_id,
+                new_entry,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                created_at=created_at,
+            )
+        except JournalContextChangedError as error:
+            raise ConcurrentJournalUpdateError(prediction_id) from error
+        except JournalEntryDisallowedError as error:
+            raise JournalEntryNotAllowedError(error.status) from error
+        if entry is None:
+            raise PredictionNotFoundError(prediction_id)
+        return entry
+
+    def correct_journal_entry(
+        self,
+        prediction_id: int,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> JournalTimelineEvent:
+        """Append an audited body correction without changing entry context."""
+
+        try:
+            correction = NewJournalCorrection(body)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(entry_id, "entry_id")
+        if expected_correction_id is not None:
+            self._validate_positive_token(
+                expected_correction_id,
+                "expected_correction_id",
+            )
+
+        if self._repository.get_prediction(prediction_id) is None:
+            raise PredictionNotFoundError(prediction_id)
+        current = self._repository.get_journal_entry(prediction_id, entry_id)
+        if current is None:
+            raise JournalEntryNotFoundError(entry_id)
+        if current.current_correction_id != expected_correction_id:
+            raise ConcurrentJournalCorrectionError(entry_id)
+
+        corrected_at = None
+        if current.body != correction.body:
+            corrected_at = as_utc(self._clock.now())
+        try:
+            updated = self._repository.append_journal_correction(
+                prediction_id,
+                entry_id,
+                correction,
+                expected_correction_id=expected_correction_id,
+                corrected_at=corrected_at,
+            )
+        except JournalCorrectionContextChangedError as error:
+            raise ConcurrentJournalCorrectionError(entry_id) from error
+        if updated is None:
+            raise JournalEntryNotFoundError(entry_id)
+        return updated
+
+    def list_timeline(self, prediction_id: int) -> tuple[TimelineEvent, ...]:
+        """Return Forecast and Journal events in deterministic causal order."""
+
+        events = self._repository.list_timeline(prediction_id)
+        if events is None:
+            raise PredictionNotFoundError(prediction_id)
+        return events
 
     def get_latest_prediction(self) -> PredictionDetail | None:
         """Return the most recently created prediction with its current forecast."""

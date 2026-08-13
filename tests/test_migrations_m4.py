@@ -38,7 +38,7 @@ def test_migration_four_preserves_v3_predictions_and_revisions(tmp_path) -> None
     prediction_id, revision_id = _insert_v3_prediction(v3)
     v3.close()
 
-    upgraded = Database.open(database_path)
+    upgraded = Database.open(database_path, migrations=MIGRATIONS[:4])
 
     assert upgraded.schema_version == 4
     with upgraded.transaction() as connection:

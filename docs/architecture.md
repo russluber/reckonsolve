@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 4 implemented; later forecasting workflows remain to be built
+Status: Milestone 5 implemented; later forecasting workflows remain to be built
 Last reviewed: 2026-08-12
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 4 completes initial prediction capture and adds the immutable forecast-revision workflow. New Prediction can still be submitted with only Question and Probability, while a collapsed **More details** section accepts optional initial rationale, metadata, dates, and tags. Prediction Detail can append eligible probability changes with optional rationale and shows every saved revision in a forecast-only history. Journal entries, the unified timeline, probability-history chart, terminal lifecycle actions, browser, analytics, backup, and export workflows remain to be built.
+Milestone 5 adds Journal entries, transparent body corrections, and the unified Prediction timeline to the complete creation and immutable-revision workflows. New Journal entries capture the exact current ForecastRevision without changing probability; an audited correction changes the displayed body while preserving the original and every earlier version. Prediction Detail interleaves Forecast and Journal events in deterministic causal order and displays each Journal entry's forecast-at-the-time context. The probability-history chart, terminal lifecycle actions, browser, analytics, backup, and export workflows remain to be built.
 
 | Area | Current state |
 |---|---|
@@ -17,13 +17,13 @@ Milestone 4 completes initial prediction capture and adds the immutable forecast
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | Native PySide6 navigation plus functional New Prediction and Prediction Detail screens; optional initial details, metadata editing, revision entry, Definition history, and forecast-only history are implemented, while the other four primary screens remain explicit placeholders |
+| UI | Native PySide6 navigation plus functional New Prediction and Prediction Detail screens; optional initial details, metadata editing, revision entry, Journal capture and correction, Definition history, and a unified timeline are implemented, while the other four primary screens remain explicit placeholders |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 4 adds optional rationale and complete immutability protection to forecast revisions, building on prediction metadata, tags, and definition snapshots from version 3 |
-| Domain and application operations | Complete atomic creation, append-only revisions, rationale/metadata/date/tag validation, derived deadline status, lifecycle enforcement, stale-context rejection, safe metadata editing, and history reads are implemented without Qt dependencies |
+| Schema | Version 5 adds immutable Journal entries and append-only correction versions, building on protected forecast revisions, prediction metadata, tags, and definition snapshots |
+| Domain and application operations | Complete atomic creation, append-only forecast revisions, Journal capture and correction, deterministic unified-timeline reads, validation, derived deadline status, lifecycle enforcement, stale-context rejection, and safe metadata editing are implemented without Qt dependencies |
 | Analytics | Not implemented yet |
-| Automated tests | Tests cover the persistence foundation plus complete creation, immutable revisions, rationale normalization, lifecycle and date boundaries, concurrent submissions, metadata safety, migrations through v4, transaction rollback, Qt behavior, and restart persistence |
+| Automated tests | Tests cover the persistence foundation plus complete creation, immutable revisions and Journal history, causal timeline ordering, lifecycle and date boundaries, concurrent submissions and corrections, metadata safety, migrations through v5, transaction rollback, Qt behavior, and restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
@@ -54,7 +54,7 @@ SQLite is the canonical store. Backup files and CSV exports are outputs derived 
 
 ### Historical integrity first
 
-The architecture must make the honest path the easy path. Forecast changes append immutable revisions. Current state, lifecycle classifications, and analytics are derived from preserved records rather than maintained through destructive updates.
+The architecture must make the honest path the easy path. Forecast changes append immutable revisions, and Journal corrections append immutable body versions while retaining the original entry context. Current state, lifecycle classifications, timelines, and analytics are derived from preserved records rather than maintained through destructive updates.
 
 ### Thin UI, testable core
 
@@ -89,6 +89,8 @@ Representative operations include:
 - creating a prediction and its first revision;
 - appending a forecast revision;
 - adding a journal entry tied to the current revision;
+- appending a transparent correction to an existing journal entry;
+- reading a unified causal timeline;
 - editing permitted prediction metadata;
 - resolving or invalidating a prediction;
 - listing and filtering predictions;
@@ -116,7 +118,7 @@ Domain code must not import PySide6 or open database connections.
 
 The data layer owns connections, schema creation, migrations, SQL, row mapping, foreign-key behavior, and transactions. It provides purpose-specific reads and writes needed by application operations.
 
-No normal data-access operation may update or delete a saved forecast revision. Migration code is the exceptional maintenance path and must preserve legitimate history.
+No normal data-access operation may update or delete a saved forecast revision, Journal entry, or Journal correction. Migration code is the exceptional maintenance path and must preserve legitimate history. A deliberate future deletion of a parent Prediction may cascade to its complete child history transactionally.
 
 ### Analytics
 
@@ -161,7 +163,7 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 4 implements this package structure:
+Milestone 5 implements this package structure:
 
 ```text
 src/reckonsolve/
@@ -171,19 +173,19 @@ src/reckonsolve/
   clock.py             injectable clock and canonical UTC instant conversion
   paths.py             per-user and explicitly injected database paths
   application/
-    errors.py          expected user-presentable operation errors
-    predictions.py     creation, revision, detail, metadata-edit, and history use cases
+    errors.py          expected user-presentable operation and concurrency errors
+    predictions.py     creation, revision, Journal, timeline, detail, and metadata use cases
   domain/
-    predictions.py     binary prediction and revision values, metadata, status, and validation
+    predictions.py     prediction, revision, Journal/timeline, metadata, status, and validation values
   data/
     __init__.py        persistence package surface
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
-    predictions.py     purpose-specific prediction, revision, tag, and history persistence
+    predictions.py     purpose-specific prediction, revision, Journal, tag, and history persistence
   ui/
     __init__.py        UI package surface
     main_window.py     navigation and screen coordination
-    screens.py         creation, Prediction Detail, revision, and metadata-edit UI
+    screens.py         creation, Prediction Detail, revision, Journal, and metadata-edit UI
 ```
 
 Later milestones can extend these boundaries and add analytics when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
@@ -224,13 +226,20 @@ Milestone 3 migrates the database to version 3. Nullable Background and Resoluti
 
 Milestone 4 migrates the database to version 4 by adding a nullable normalized rationale to every forecast revision. Existing revisions receive no invented rationale. Revision identity and per-prediction sequence remain deterministic; database triggers reject direct updates, direct child deletion while the parent exists, and replacement through either an existing revision identifier or sequence. A deliberate parent-prediction deletion can still cascade transactionally. The application derives the current forecast from the highest revision sequence and reads forecast history in sequence order, even if two revisions share the same stored instant.
 
+Milestone 5 migrates the database to version 5 with `journal_entries` and `journal_entry_corrections`. A Journal entry stores its original normalized body, original UTC timestamp, and a composite foreign-key reference to a ForecastRevision owned by the same Prediction. Insert-time guards require that reference to be the current revision and reject new entries after a persisted terminal status. Derived Locked predictions remain eligible because Locked is represented by an otherwise-open Prediction whose inclusive deadline has passed.
+
+Journal corrections are separate immutable rows with a per-entry contiguous sequence, normalized replacement body, and UTC correction timestamp. The latest correction supplies the displayed body; the base entry and all correction rows supply the complete edit history. Database triggers reject unchanged correction bodies, sequence gaps, direct updates, direct child deletion while the parent exists, and replacement of saved entry or correction identities. Corrections do not change the entry's original timestamp or forecast anchor and remain possible after a terminal lifecycle decision. A deliberate parent-Prediction deletion can still cascade through entries and corrections.
+
+The unified timeline is a derived read model rather than another persisted event table. Forecasts are ordered by revision sequence. Each Journal entry is placed after its anchored revision and before the next revision; multiple entries sharing one anchor retain insertion order by stable entry identifier. This causal ordering remains deterministic even when stored timestamps tie or the system clock moves backward. Stored event timestamps are still shown to the user in local time, and correcting an entry never moves it in the timeline.
+
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
 
-Canonical facts include the prediction, every saved forecast revision, every definition-change snapshot, every journal entry, terminal decisions, resolutions, and tag relationships. Derived values normally include:
+Canonical facts include the prediction, every saved forecast revision, every definition-change snapshot, every Journal entry and correction version, terminal decisions, resolutions, and tag relationships. Derived values normally include:
 
 - current forecast;
+- current displayed Journal body and unified timeline ordering;
 - time-dependent Locked status;
 - Needs Attention;
 - Ready to Resolve;
@@ -258,7 +267,8 @@ Transactions protect operations that must not leave partial history:
 - Creating a prediction, all supplied initial metadata and tag associations, and its first forecast revision with optional rationale is one transaction. Initial values do not append Definition history.
 - Editing metadata and tag associations, plus the definition snapshot when required, is one transaction.
 - Appending a revision rechecks the reviewed current-revision and metadata-version tokens, lifecycle eligibility, deadline, and changed probability inside one immediate transaction, then inserts exactly one new row without editing prior rows.
-- Adding a journal entry captures the revision that is current within the same consistent operation.
+- Adding a Journal entry rechecks the reviewed current-revision and metadata-version tokens plus persisted lifecycle eligibility inside one immediate transaction, then captures that transaction-current revision without changing forecast or prediction state.
+- Correcting a Journal entry rechecks its reviewed latest-correction token inside one immediate transaction and appends one changed body version. An effective no-op returns the existing entry without acquiring a new timestamp or writing.
 - Resolution records the outcome and unambiguous scoring revision atomically.
 - Invalidation records terminal state, timestamp, and optional reason atomically.
 - Deletion removes or rejects all related records as one deliberate operation and cannot leave orphans.
@@ -270,9 +280,11 @@ Expected domain or validation failures roll back the operation and are translate
 
 Terminal states—Resolved and Invalid—are persisted decisions. Locked is derived from the Forecast Deadline and the computer's local calendar date, so it remains correct after the application has been closed across the boundary. The deadline date is inclusive: an otherwise Open prediction becomes Locked only when the local date is later than its Forecast Deadline. Open predictions without a deadline remain Open until a terminal decision.
 
-Needs Attention and Ready to Resolve are derived classifications, not stored lifecycle states. They may overlap and must not mutate probability.
+Open and derived Locked predictions accept new Journal entries; Resolved and Invalid predictions reject them. Transparent corrections to existing entries remain allowed in every lifecycle state because they preserve the original assertion rather than create a backdated one.
 
-System-generated instants follow [ADR 0002](decisions/0002-canonical-utc-instants.md): application operations obtain one aware instant from an injectable clock, normalize it to UTC, and the data layer stores canonical RFC 3339 text ending in `Z`. Definition history renders its stored instants in the computer's local time. Date-only values retain calendar semantics and are not converted between time zones.
+Needs Attention and Ready to Resolve are derived classifications, not stored lifecycle states. They may overlap and must not mutate probability. In v0.1, neither adding nor correcting a Journal entry resets Needs Attention; freshness continues to use the latest ForecastRevision timestamp.
+
+System-generated instants follow [ADR 0002](decisions/0002-canonical-utc-instants.md): application operations obtain one aware instant from an injectable clock, normalize it to UTC, and the data layer stores canonical RFC 3339 text ending in `Z`. Definition, Forecast, Journal, and correction history render stored instants in the computer's local time. Date-only values retain calendar semantics and are not converted between time zones.
 
 ## 11. Analytics flow
 
@@ -298,13 +310,17 @@ Prediction Detail displays the question, current forecast, derived status, tags,
 
 Definition history is hidden when empty and collapsed by default when present. It shows only the protected fields that changed in each snapshot and renders the UTC change instant in local time.
 
-For an Open prediction, **Revise Forecast** opens a side-effect-free dialog showing the reviewed current probability, a whole-number replacement probability, and optional **What changed?** rationale. The new value must differ from the current revision; returning to an older, non-current probability is valid. A successful save refreshes Current Forecast and the sequence-ordered Forecast history, whose local-time entries show each probability transition and any rationale as plain text. The dialog carries both the reviewed revision identifier and prediction metadata version, and the application rechecks both plus lifecycle eligibility inside the append transaction. A stale form is rejected rather than appending against a forecast or definition the user did not review. The action is disabled for derived Locked and persisted terminal states, with the application operation remaining authoritative if state changes while the dialog is open.
+For an Open prediction, **Revise Forecast** opens a side-effect-free dialog showing the reviewed current probability, a whole-number replacement probability, and optional **What changed?** rationale. The new value must differ from the current revision; returning to an older, non-current probability is valid. A successful save refreshes Current Forecast and the unified timeline, whose Forecast entries show each probability transition and any rationale as plain text. The dialog carries both the reviewed revision identifier and prediction metadata version, and the application rechecks both plus lifecycle eligibility inside the append transaction. A stale form is rejected rather than appending against a forecast or definition the user did not review. The action is disabled for derived Locked and persisted terminal states, with the application operation remaining authoritative if state changes while the dialog is open.
 
-Add Journal Entry, Resolve, and Mark Invalid remain visibly disabled. Milestone 5 will merge Journal entries with the forecast-only history to form the unified timeline; the probability-history area remains a Milestone 6 placeholder. Widgets perform no SQL and own no transactions.
+For an Open or Locked prediction, **Add Journal Entry** opens a side-effect-free dialog showing the reviewed forecast and accepting a required multiline body; ordinary Enter inserts a newline and Ctrl+Enter saves. It carries the reviewed current-revision and metadata-version tokens, and stale context is rejected rather than attaching reasoning to a forecast or definition the user did not review. The action is disabled for Resolved and Invalid predictions, with the application operation remaining authoritative.
+
+Prediction Detail displays Forecast and Journal events in one causal timeline. Journal entries show their original local timestamp, current body, and **Forecast at the time**. **Correct Entry** is available in every lifecycle state and opens the latest body in a transparent correction dialog. After a changed save, the entry remains at its original timeline position, gains an **Edited** timestamp, and exposes the original plus superseded versions in a collapsed **Edit history**. No individual Journal Delete action exists. Timeline text uses plain-text rendering.
+
+Resolve and Mark Invalid remain visibly disabled, and the probability-history area remains a Milestone 6 placeholder. Widgets perform no SQL and own no transactions.
 
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
-Dialog cancellation has no side effect. In particular, opening and closing a revision dialog cannot create a revision.
+Dialog cancellation has no side effect. In particular, opening and closing a revision, Journal, or correction dialog cannot create history.
 
 Expected failures—such as attempting a revision after the deadline—are shown in plain language. Unexpected exceptions should remain visible to the application error boundary during development rather than being suppressed in individual signal handlers.
 
@@ -316,7 +332,7 @@ Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled r
 
 An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
 
-Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 5 upgrade is tested from version 4 and rolls back completely if any Journal schema statement fails. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
@@ -329,7 +345,7 @@ The backup implementation must use a SQLite-safe snapshot approach rather than c
 
 ## 15. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 4, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 coverage remains for optional-value normalization, calendar-date validation, inclusive deadline derivation, case-insensitive tag reuse, confirmation and no-op behavior, full immutable snapshots, transaction rollback, concurrency rejection, collapsed local-time history rendering, and metadata persistence. M4 adds complete-creation rollback and restart tests, initial-deadline boundaries, rationale persistence and normalization, unchanged and nonconsecutive probability behavior, immutable append and replacement protection, lifecycle enforcement, stale revision/metadata context rejection, sequence-ordered local-time history, and revision-dialog cancellation.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 5, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 coverage remains for optional-value normalization, calendar-date validation, inclusive deadline derivation, case-insensitive tag reuse, confirmation and no-op behavior, full immutable snapshots, transaction rollback, concurrency rejection, collapsed local-time history rendering, and metadata persistence. M4 adds complete-creation rollback and restart tests, initial-deadline boundaries, rationale persistence and normalization, unchanged and nonconsecutive probability behavior, immutable append and replacement protection, lifecycle enforcement, stale revision/metadata context rejection, sequence-ordered local-time history, and revision-dialog cancellation. M5 adds Journal normalization and atomic forecast capture, lifecycle boundaries, immutable correction sequences, terminal corrections, no-op and stale-form behavior, database immutability guards, causal ordering under equal or regressing clocks, unified Qt rendering, dialog cancellation, and full timeline persistence across restart.
 
 Most behavior should be verified below the GUI:
 
@@ -349,7 +365,7 @@ uv run ruff format --check .
 
 ## 16. Error handling
 
-Expected errors should use explicit application or domain error types that the UI can present without a traceback. Examples include invalid probability, missing question text, revision disallowed by lifecycle, and resolution of an already terminal prediction.
+Expected errors should use explicit application or domain error types that the UI can present without a traceback. Examples include invalid probability, missing question or Journal text, an action disallowed by lifecycle, stale forecast or metadata context, and a concurrently corrected Journal entry.
 
 Unexpected exceptions should not be converted into false success or empty data. Database failures must preserve the original database and provide enough context for diagnosis without exposing unrelated local information.
 

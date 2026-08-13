@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
+    QWidget,
 )
 
 import reckonsolve.app
@@ -30,14 +31,14 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 4
+    assert first_runtime.database.schema_version == 5
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 4
+    assert second_runtime.database.schema_version == 5
     second_runtime.close()
 
 
@@ -388,6 +389,189 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     assert (
         reopened_revised_rationale.text() == "New evidence moved the forecast upward."
     )
+    second_runtime.close()
+
+
+def test_journal_correction_timeline_and_forecast_context_survive_restart(
+    qtbot,
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    first_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(first_runtime.window)
+    first_runtime.window.show()
+    first_runtime.window.navigate_to("New Prediction")
+
+    question = first_runtime.window.findChild(QLineEdit, "questionInput")
+    probability = first_runtime.window.findChild(QSpinBox, "probabilityInput")
+    create_button = first_runtime.window.findChild(
+        QPushButton,
+        "createPredictionButton",
+    )
+    assert question is not None
+    assert probability is not None
+    assert create_button is not None
+    question.setText("Will the M5 Journal remain historically honest?")
+    probability.setValue(60)
+    qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
+
+    add_journal = first_runtime.window.findChild(
+        QPushButton,
+        "addJournalEntryButton",
+    )
+    current_probability = first_runtime.window.findChild(
+        QLabel,
+        "predictionDetailProbability",
+    )
+    assert add_journal is not None
+    assert current_probability is not None
+    qtbot.mouseClick(add_journal, Qt.MouseButton.LeftButton)
+    journal_dialog = first_runtime.window.findChild(
+        QDialog,
+        "addJournalEntryDialog",
+    )
+    assert journal_dialog is not None
+    qtbot.waitUntil(journal_dialog.isVisible)
+    journal_body = journal_dialog.findChild(
+        QPlainTextEdit,
+        "journalEntryBodyInput",
+    )
+    save_journal = journal_dialog.findChild(
+        QPushButton,
+        "saveJournalEntryButton",
+    )
+    assert journal_body is not None
+    assert save_journal is not None
+    journal_body.setPlainText("The evidence teh supports 60%.")
+    qtbot.mouseClick(save_journal, Qt.MouseButton.LeftButton)
+
+    assert current_probability.text() == "60%"
+    journal_context = first_runtime.window.findChild(
+        QLabel,
+        "journalEntryForecastAtTime1",
+    )
+    correct_journal = first_runtime.window.findChild(
+        QPushButton,
+        "correctJournalEntryButton1",
+    )
+    assert journal_context is not None
+    assert correct_journal is not None
+    assert journal_context.text() == "Forecast at the time: 60%"
+    with first_runtime.database.transaction() as connection:
+        assert (
+            connection.execute("SELECT COUNT(*) FROM forecast_revisions").fetchone()[0]
+            == 1
+        )
+
+    qtbot.mouseClick(correct_journal, Qt.MouseButton.LeftButton)
+    correction_dialog = first_runtime.window.findChild(
+        QDialog,
+        "correctJournalEntryDialog",
+    )
+    assert correction_dialog is not None
+    qtbot.waitUntil(correction_dialog.isVisible)
+    corrected_body = correction_dialog.findChild(
+        QPlainTextEdit,
+        "correctJournalEntryBodyInput",
+    )
+    save_correction = correction_dialog.findChild(
+        QPushButton,
+        "saveJournalCorrectionButton",
+    )
+    assert corrected_body is not None
+    assert save_correction is not None
+    corrected_body.setPlainText("The evidence supports 60%.")
+    qtbot.mouseClick(save_correction, Qt.MouseButton.LeftButton)
+
+    displayed_body = first_runtime.window.findChild(QLabel, "journalEntryBody1")
+    original_body = first_runtime.window.findChild(
+        QLabel,
+        "journalEntryOriginalBody1",
+    )
+    assert displayed_body is not None
+    assert original_body is not None
+    assert displayed_body.text() == "The evidence supports 60%."
+    assert original_body.text() == "The evidence teh supports 60%."
+
+    revise = first_runtime.window.findChild(QPushButton, "reviseForecastButton")
+    assert revise is not None
+    qtbot.mouseClick(revise, Qt.MouseButton.LeftButton)
+    revision_dialog = first_runtime.window.findChild(
+        QDialog,
+        "reviseForecastDialog",
+    )
+    assert revision_dialog is not None
+    qtbot.waitUntil(revision_dialog.isVisible)
+    revised_probability = revision_dialog.findChild(
+        QSpinBox,
+        "revisionProbabilityInput",
+    )
+    save_revision = revision_dialog.findChild(
+        QPushButton,
+        "saveForecastRevisionButton",
+    )
+    assert revised_probability is not None
+    assert save_revision is not None
+    revised_probability.setValue(75)
+    qtbot.mouseClick(save_revision, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: current_probability.text() == "75%")
+
+    with first_runtime.database.transaction() as connection:
+        journal_row = connection.execute(
+            "SELECT body, forecast_revision_id FROM journal_entries"
+        ).fetchone()
+        correction_row = connection.execute(
+            "SELECT body FROM journal_entry_corrections"
+        ).fetchone()
+        revision_count = connection.execute(
+            "SELECT COUNT(*) FROM forecast_revisions"
+        ).fetchone()[0]
+    assert tuple(journal_row) == ("The evidence teh supports 60%.", 1)
+    assert tuple(correction_row) == ("The evidence supports 60%.",)
+    assert revision_count == 2
+    first_runtime.close()
+
+    second_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(second_runtime.window)
+    second_runtime.window.show()
+    second_runtime.window.navigate_to("Prediction Detail")
+
+    reopened_probability = second_runtime.window.findChild(
+        QLabel,
+        "predictionDetailProbability",
+    )
+    reopened_body = second_runtime.window.findChild(QLabel, "journalEntryBody1")
+    reopened_original = second_runtime.window.findChild(
+        QLabel,
+        "journalEntryOriginalBody1",
+    )
+    reopened_context = second_runtime.window.findChild(
+        QLabel,
+        "journalEntryForecastAtTime1",
+    )
+    edited = second_runtime.window.findChild(QLabel, "journalEntryEdited1")
+    edit_history = second_runtime.window.findChild(
+        QGroupBox,
+        "journalEntryEditHistory1",
+    )
+    timeline = second_runtime.window.findChild(QWidget, "forecastTimeline")
+    assert reopened_probability is not None
+    assert reopened_body is not None
+    assert reopened_original is not None
+    assert reopened_context is not None
+    assert edited is not None
+    assert edit_history is not None
+    assert timeline is not None
+    assert reopened_probability.text() == "75%"
+    assert reopened_body.text() == "The evidence supports 60%."
+    assert reopened_original.text() == "The evidence teh supports 60%."
+    assert reopened_context.text() == "Forecast at the time: 60%"
+    assert edited.text().startswith("Edited ")
+    assert not edit_history.isChecked()
+    assert [
+        timeline.layout().itemAt(index).widget().objectName()
+        for index in range(timeline.layout().count())
+    ] == ["forecastRevision1", "journalEntry1", "forecastRevision2"]
     second_runtime.close()
 
 

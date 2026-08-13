@@ -73,6 +73,38 @@ class FakeForecastRevision:
 
 
 @dataclass(frozen=True, slots=True)
+class FakeJournalCorrection:
+    correction_id: int
+    body: str
+    corrected_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class FakeForecastTimelineEvent:
+    revision_id: int
+    prediction_id: int
+    created_at: datetime
+    sequence: int
+    probability_percent: int
+    previous_probability_percent: int | None
+    rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FakeJournalTimelineEvent:
+    entry_id: int
+    prediction_id: int
+    created_at: datetime
+    body: str
+    original_body: str
+    forecast_revision_id: int
+    forecast_revision_sequence: int
+    forecast_probability_percent: int
+    current_correction_id: int | None = None
+    corrections: tuple[FakeJournalCorrection, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class CreatePredictionCall:
     question: str
     probability_percent: int
@@ -91,6 +123,22 @@ class ReviseForecastCall:
     rationale: str | None
     expected_revision_id: int
     expected_metadata_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class AddJournalEntryCall:
+    prediction_id: int
+    body: str
+    expected_revision_id: int
+    expected_metadata_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class CorrectJournalEntryCall:
+    prediction_id: int
+    entry_id: int
+    body: str
+    expected_correction_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +173,12 @@ class FakePredictionOperations:
                     rationale=latest.current_rationale,
                 )
             )
+        self.journal_calls: list[AddJournalEntryCall] = []
+        self.journal_error: ApplicationError | None = None
+        self.journal_entries: list[FakeJournalTimelineEvent] = []
+        self.correction_calls: list[CorrectJournalEntryCall] = []
+        self.correction_error: ApplicationError | None = None
+        self.timeline_error: ApplicationError | None = None
         self.get_calls: list[int] = []
         self.update_calls: list[MetadataUpdateCall] = []
         self.update_error: ApplicationError | None = None
@@ -236,6 +290,129 @@ class FakePredictionOperations:
             revision
             for revision in self.revisions
             if revision.prediction_id == prediction_id
+        )
+
+    def add_journal_entry(
+        self,
+        prediction_id: int,
+        body: str,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakeJournalTimelineEvent:
+        self.journal_calls.append(
+            AddJournalEntryCall(
+                prediction_id=prediction_id,
+                body=body,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
+        )
+        if self.journal_error is not None:
+            raise self.journal_error
+        if self.latest is None or self.latest.prediction_id != prediction_id:
+            raise ApplicationError("Prediction not found.")
+        entry = FakeJournalTimelineEvent(
+            entry_id=len(self.journal_entries) + 1,
+            prediction_id=prediction_id,
+            created_at=datetime(2026, 8, 14, 19, 30, tzinfo=UTC),
+            body=body.strip(),
+            original_body=body.strip(),
+            forecast_revision_id=self.latest.current_revision_id,
+            forecast_revision_sequence=self.latest.current_revision_sequence,
+            forecast_probability_percent=self.latest.probability_percent,
+        )
+        self.journal_entries.append(entry)
+        return entry
+
+    def correct_journal_entry(
+        self,
+        prediction_id: int,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> FakeJournalTimelineEvent:
+        self.correction_calls.append(
+            CorrectJournalEntryCall(
+                prediction_id=prediction_id,
+                entry_id=entry_id,
+                body=body,
+                expected_correction_id=expected_correction_id,
+            )
+        )
+        if self.correction_error is not None:
+            raise self.correction_error
+        for index, entry in enumerate(self.journal_entries):
+            if entry.prediction_id == prediction_id and entry.entry_id == entry_id:
+                correction_id = (
+                    sum(len(existing.corrections) for existing in self.journal_entries)
+                    + 1
+                )
+                correction = FakeJournalCorrection(
+                    correction_id=correction_id,
+                    body=body.strip(),
+                    corrected_at=datetime(2026, 8, 15, 19, 30, tzinfo=UTC),
+                )
+                updated = replace(
+                    entry,
+                    body=correction.body,
+                    current_correction_id=correction_id,
+                    corrections=(*entry.corrections, correction),
+                )
+                self.journal_entries[index] = updated
+                return updated
+        raise ApplicationError("Journal entry not found.")
+
+    def list_timeline(
+        self,
+        prediction_id: int,
+    ) -> tuple[FakeForecastTimelineEvent | FakeJournalTimelineEvent, ...]:
+        if self.timeline_error is not None:
+            raise self.timeline_error
+        revisions = [
+            revision
+            for revision in self.revisions
+            if revision.prediction_id == prediction_id
+        ]
+        forecast_events: list[FakeForecastTimelineEvent] = []
+        previous_probability: int | None = None
+        for revision in revisions:
+            forecast_events.append(
+                FakeForecastTimelineEvent(
+                    revision_id=revision.revision_id,
+                    prediction_id=revision.prediction_id,
+                    created_at=revision.created_at,
+                    sequence=revision.sequence,
+                    probability_percent=revision.probability_percent,
+                    previous_probability_percent=previous_probability,
+                    rationale=revision.rationale,
+                )
+            )
+            previous_probability = revision.probability_percent
+        journal_events = [
+            entry
+            for entry in self.journal_entries
+            if entry.prediction_id == prediction_id
+        ]
+        events: list[FakeForecastTimelineEvent | FakeJournalTimelineEvent] = [
+            *forecast_events,
+            *journal_events,
+        ]
+        return tuple(
+            sorted(
+                events,
+                key=lambda event: (
+                    event.forecast_revision_sequence
+                    if isinstance(event, FakeJournalTimelineEvent)
+                    else event.sequence,
+                    1 if isinstance(event, FakeJournalTimelineEvent) else 0,
+                    event.created_at,
+                    event.entry_id
+                    if isinstance(event, FakeJournalTimelineEvent)
+                    else event.revision_id,
+                ),
+            )
         )
 
     def get_latest_prediction(self) -> FakePrediction | None:
@@ -878,7 +1055,7 @@ def test_prediction_detail_hides_all_empty_optional_metadata(qtbot: QtBot) -> No
         assert _required_child(window, QWidget, object_name).isHidden()
 
 
-def test_prediction_detail_enables_revision_but_keeps_later_actions_disabled(
+def test_prediction_detail_enables_current_actions_and_keeps_later_ones_disabled(
     qtbot: QtBot,
 ) -> None:
     operations = FakePredictionOperations(
@@ -891,11 +1068,11 @@ def test_prediction_detail_enables_revision_but_keeps_later_actions_disabled(
     assert revise.isEnabled()
     assert "preserving" in revise.toolTip()
 
-    for object_name in (
-        "addJournalEntryButton",
-        "resolvePredictionButton",
-        "markInvalidButton",
-    ):
+    journal = _required_child(window, QPushButton, "addJournalEntryButton")
+    assert journal.isEnabled()
+    assert "without changing" in journal.toolTip()
+
+    for object_name in ("resolvePredictionButton", "markInvalidButton"):
         button = _required_child(window, QPushButton, object_name)
         assert not button.isEnabled()
         assert "later milestone" in button.toolTip()
@@ -1054,6 +1231,33 @@ def test_same_probability_revision_error_stays_inline_and_open(
     assert len(operations.revisions) == 1
 
 
+def test_revision_rationale_helper_explains_when_to_use_journal(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will revision guidance clarify the Journal?", 60)
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    dialog = _open_revision_dialog(qtbot, window)
+
+    helper = _required_child(dialog, QLabel, "revisionRationaleHelper")
+    assert helper.text() == (
+        "This explanation stays attached to the new forecast. To record a thought "
+        "without changing probability, add a Journal entry."
+    )
+    assert helper.textFormat() is Qt.TextFormat.PlainText
+    assert helper.wordWrap()
+    rationale = _required_child(dialog, QPlainTextEdit, "revisionRationaleInput")
+    assert rationale.accessibleDescription() == helper.text()
+    layout = dialog.layout()
+    assert layout.indexOf(rationale) < layout.indexOf(helper)
+    assert layout.indexOf(helper) < layout.indexOf(
+        _required_child(dialog, QLabel, "reviseForecastError")
+    )
+
+
 @pytest.mark.parametrize("new_probability", [0, 37, 100])
 def test_revision_appends_with_tokens_and_refreshes_forecast_history(
     qtbot: QtBot,
@@ -1131,6 +1335,534 @@ def test_forecast_history_uses_previous_revision_for_nonconsecutive_return(
             "forecastRevisionProbability3",
         ).text()
         == "FORECAST  40% \N{RIGHTWARDS ARROW} 60%"
+    )
+
+
+def test_add_journal_entry_refreshes_context_and_cancel_has_no_effect(
+    qtbot: QtBot,
+) -> None:
+    original = FakePrediction(
+        7,
+        "Will a cancelled Journal form leave history alone?",
+        60,
+        metadata_version=1,
+        current_revision_id=11,
+        current_revision_sequence=1,
+    )
+    operations = FakePredictionOperations(original)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    operations.latest = replace(
+        original,
+        probability_percent=70,
+        metadata_version=2,
+        current_revision_id=12,
+        current_revision_sequence=2,
+    )
+    operations.revisions.append(
+        FakeForecastRevision(
+            revision_id=12,
+            prediction_id=7,
+            probability_percent=70,
+            sequence=2,
+            created_at=datetime(2026, 8, 13, tzinfo=UTC),
+        )
+    )
+
+    dialog = _open_journal_dialog(qtbot, window)
+    assert _required_child(dialog, QLabel, "journalForecastAtTime").text() == "70%"
+    assert dialog.focusWidget() is _required_child(
+        dialog,
+        QPlainTextEdit,
+        "journalEntryBodyInput",
+    )
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "cancelJournalEntryButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.journal_calls == []
+    assert operations.journal_entries == []
+
+
+def test_blank_journal_entry_stays_inline_without_calling_operation(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will blank Journal entries be rejected?", 60)
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_journal_dialog(qtbot, window)
+    body = _required_child(dialog, QPlainTextEdit, "journalEntryBodyInput")
+    body.setPlainText("  \n ")
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "saveJournalEntryButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert dialog.isVisible()
+    error = _required_child(dialog, QLabel, "addJournalEntryError")
+    assert "Write a journal entry" in error.text()
+    assert not error.isHidden()
+    assert operations.journal_calls == []
+
+
+def test_journal_expected_error_keeps_multiline_body_and_dialog_open(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will stale Journal context be rejected?", 60)
+    )
+    operations.journal_error = ApplicationError(
+        "This prediction changed before the Journal entry could be saved."
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_journal_dialog(qtbot, window)
+    body = _required_child(dialog, QPlainTextEdit, "journalEntryBodyInput")
+    body.setPlainText("First line\nSecond line")
+
+    qtbot.keyPress(body, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+
+    assert dialog.isVisible()
+    assert body.toPlainText() == "First line\nSecond line"
+    error = _required_child(dialog, QLabel, "addJournalEntryError")
+    assert "changed before" in error.text()
+    assert not error.isHidden()
+    assert len(operations.journal_calls) == 1
+
+
+def test_enter_adds_newline_and_ctrl_enter_saves_journal_with_tokens(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(
+        7,
+        "Will keyboard entry remain comfortable?",
+        65,
+        metadata_version=4,
+        current_revision_id=11,
+        current_revision_sequence=3,
+    )
+    operations = FakePredictionOperations(latest)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_journal_dialog(qtbot, window)
+    body = _required_child(dialog, QPlainTextEdit, "journalEntryBodyInput")
+
+    qtbot.keyClicks(body, "Evidence one")
+    qtbot.keyPress(body, Qt.Key.Key_Return)
+    qtbot.keyClicks(body, "Evidence two")
+    assert body.toPlainText() == "Evidence one\nEvidence two"
+    qtbot.keyPress(body, Qt.Key.Key_Tab)
+    assert dialog.focusWidget() is _required_child(
+        dialog,
+        QPushButton,
+        "saveJournalEntryButton",
+    )
+    body.setFocus()
+    qtbot.keyPress(body, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+
+    assert operations.journal_calls == [
+        AddJournalEntryCall(
+            prediction_id=7,
+            body="Evidence one\nEvidence two",
+            expected_revision_id=11,
+            expected_metadata_version=4,
+        )
+    ]
+    assert not dialog.isVisible()
+    assert _required_child(window, QLabel, "predictionDetailProbability").text() == (
+        "65%"
+    )
+    assert (
+        _required_child(window, QLabel, "journalEntryBody1").text()
+        == "Evidence one\nEvidence two"
+    )
+    assert (
+        _required_child(window, QLabel, "journalEntryForecastAtTime1").text()
+        == "Forecast at the time: 65%"
+    )
+
+
+@pytest.mark.parametrize("status", [PredictionStatus.OPEN, PredictionStatus.LOCKED])
+def test_journal_creation_is_enabled_for_nonterminal_statuses(
+    qtbot: QtBot,
+    status: PredictionStatus,
+) -> None:
+    window = MainWindow(
+        FakePredictionOperations(
+            FakePrediction(7, "Can this accept a Journal entry?", 60, status=status)
+        )
+    )
+    qtbot.addWidget(window)
+
+    assert _required_child(window, QPushButton, "addJournalEntryButton").isEnabled()
+
+
+@pytest.mark.parametrize(
+    "status",
+    [PredictionStatus.RESOLVED, PredictionStatus.INVALID],
+)
+def test_terminal_predictions_disable_new_journals_but_allow_corrections(
+    qtbot: QtBot,
+    status: PredictionStatus,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Can terminal history be corrected?", 60, status=status)
+    )
+    operations.journal_entries = [
+        FakeJournalTimelineEvent(
+            entry_id=4,
+            prediction_id=7,
+            created_at=datetime(2026, 8, 12, tzinfo=UTC),
+            body="Original Journal text",
+            original_body="Original Journal text",
+            forecast_revision_id=1,
+            forecast_revision_sequence=1,
+            forecast_probability_percent=60,
+        )
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    add_button = _required_child(window, QPushButton, "addJournalEntryButton")
+    assert not add_button.isEnabled()
+    correct_button = _required_child(
+        window,
+        QPushButton,
+        "correctJournalEntryButton4",
+    )
+    assert correct_button.isEnabled()
+
+
+def test_unified_timeline_renders_forecasts_and_journals_as_plain_text(
+    qtbot: QtBot,
+) -> None:
+    markup = "<b>Literal Journal evidence</b>"
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will the timeline be historically honest?", 40)
+    )
+    operations.journal_entries = [
+        FakeJournalTimelineEvent(
+            entry_id=8,
+            prediction_id=7,
+            created_at=datetime(2026, 8, 13, 19, 30, tzinfo=UTC),
+            body=markup,
+            original_body=markup,
+            forecast_revision_id=1,
+            forecast_revision_sequence=1,
+            forecast_probability_percent=40,
+        )
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    assert _required_child(window, QLabel, "timelineHeading").text() == "TIMELINE"
+    body = _required_child(window, QLabel, "journalEntryBody8")
+    assert body.text() == markup
+    assert body.textFormat() is Qt.TextFormat.PlainText
+    timestamp = _required_child(window, QLabel, "journalEntryTimestamp8")
+    assert timestamp.text() == (
+        datetime(2026, 8, 13, 19, 30, tzinfo=UTC)
+        .astimezone()
+        .strftime("%b %d, %Y at %H:%M %Z")
+        .strip()
+    )
+
+
+def test_correction_cancel_and_expected_error_preserve_current_body(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will correction failures remain safe?", 60)
+    )
+    operations.journal_entries = [
+        FakeJournalTimelineEvent(
+            entry_id=4,
+            prediction_id=7,
+            created_at=datetime(2026, 8, 12, tzinfo=UTC),
+            body="Latest text",
+            original_body="Original text",
+            forecast_revision_id=1,
+            forecast_revision_sequence=1,
+            forecast_probability_percent=60,
+            current_correction_id=3,
+            corrections=(
+                FakeJournalCorrection(
+                    3,
+                    "Latest text",
+                    datetime(2026, 8, 13, tzinfo=UTC),
+                ),
+            ),
+        )
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_correction_dialog(qtbot, window, entry_id=4)
+    body = _required_child(dialog, QPlainTextEdit, "correctJournalEntryBodyInput")
+    assert body.toPlainText() == "Latest text"
+    qtbot.keyPress(dialog, Qt.Key.Key_Escape)
+    assert operations.correction_calls == []
+
+    operations.correction_error = ApplicationError(
+        "This Journal entry changed before the correction could be saved."
+    )
+    dialog = _open_correction_dialog(qtbot, window, entry_id=4)
+    body = _required_child(dialog, QPlainTextEdit, "correctJournalEntryBodyInput")
+    body.setPlainText("Corrected text")
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "saveJournalCorrectionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert dialog.isVisible()
+    assert body.toPlainText() == "Corrected text"
+    assert (
+        "changed before"
+        in _required_child(
+            dialog,
+            QLabel,
+            "correctJournalEntryError",
+        ).text()
+    )
+
+
+def test_correction_dialog_refreshes_external_edits_and_recovers_after_stale_save(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will correction retries use the latest text?", 60)
+    )
+    original = FakeJournalTimelineEvent(
+        entry_id=4,
+        prediction_id=7,
+        created_at=datetime(2026, 8, 12, tzinfo=UTC),
+        body="Original text",
+        original_body="Original text",
+        forecast_revision_id=1,
+        forecast_revision_sequence=1,
+        forecast_probability_percent=60,
+    )
+    operations.journal_entries = [original]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    window.navigate_to("Prediction Detail")
+
+    first_external_correction = FakeJournalCorrection(
+        1,
+        "First external correction",
+        datetime(2026, 8, 13, tzinfo=UTC),
+    )
+    operations.journal_entries[0] = replace(
+        original,
+        body=first_external_correction.body,
+        current_correction_id=first_external_correction.correction_id,
+        corrections=(first_external_correction,),
+    )
+
+    dialog = _click_correction_button(qtbot, window, entry_id=4)
+    body = _required_child(dialog, QPlainTextEdit, "correctJournalEntryBodyInput")
+    assert body.toPlainText() == "First external correction"
+
+    second_external_correction = FakeJournalCorrection(
+        2,
+        "Second external correction",
+        datetime(2026, 8, 14, tzinfo=UTC),
+    )
+    operations.journal_entries[0] = replace(
+        operations.journal_entries[0],
+        body=second_external_correction.body,
+        current_correction_id=second_external_correction.correction_id,
+        corrections=(first_external_correction, second_external_correction),
+    )
+    operations.correction_error = ApplicationError(
+        "This Journal entry changed before the correction could be saved."
+    )
+    body.setPlainText("Correction from the stale dialog")
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "saveJournalCorrectionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert dialog.isVisible()
+    assert operations.correction_calls[-1].expected_correction_id == 1
+    qtbot.keyPress(dialog, Qt.Key.Key_Escape)
+    operations.correction_error = None
+
+    retry_dialog = _click_correction_button(qtbot, window, entry_id=4)
+    retry_body = _required_child(
+        retry_dialog,
+        QPlainTextEdit,
+        "correctJournalEntryBodyInput",
+    )
+    assert retry_body.toPlainText() == "Second external correction"
+    retry_body.setPlainText("Recovered correction")
+    qtbot.mouseClick(
+        _required_child(retry_dialog, QPushButton, "saveJournalCorrectionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.correction_calls[-1] == CorrectJournalEntryCall(
+        prediction_id=7,
+        entry_id=4,
+        body="Recovered correction",
+        expected_correction_id=2,
+    )
+
+
+def test_correction_refresh_error_is_visible_and_does_not_open_dialog(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will a failed refresh stay safe?", 60)
+    )
+    operations.journal_entries = [
+        FakeJournalTimelineEvent(
+            entry_id=4,
+            prediction_id=7,
+            created_at=datetime(2026, 8, 12, tzinfo=UTC),
+            body="Journal text",
+            original_body="Journal text",
+            forecast_revision_id=1,
+            forecast_revision_sequence=1,
+            forecast_probability_percent=60,
+        )
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    window.navigate_to("Prediction Detail")
+    operations.timeline_error = ApplicationError("The timeline is temporarily busy.")
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "correctJournalEntryButton4"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert not any(
+        dialog.isVisible()
+        for dialog in window.findChildren(QDialog, "correctJournalEntryDialog")
+    )
+    error = _required_child(window, QLabel, "predictionDetailError")
+    assert "could not be refreshed" in error.text()
+    assert "temporarily busy" in error.text()
+    assert not error.isHidden()
+
+
+def test_missing_journal_during_correction_refresh_is_reported_safely(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will a missing entry stay safe?", 60)
+    )
+    operations.journal_entries = [
+        FakeJournalTimelineEvent(
+            entry_id=4,
+            prediction_id=7,
+            created_at=datetime(2026, 8, 12, tzinfo=UTC),
+            body="Journal text",
+            original_body="Journal text",
+            forecast_revision_id=1,
+            forecast_revision_sequence=1,
+            forecast_probability_percent=60,
+        )
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    window.navigate_to("Prediction Detail")
+    operations.journal_entries.clear()
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "correctJournalEntryButton4"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert not any(
+        dialog.isVisible()
+        for dialog in window.findChildren(QDialog, "correctJournalEntryDialog")
+    )
+    error = _required_child(window, QLabel, "predictionDetailError")
+    assert "could not be found" in error.text()
+    assert not error.isHidden()
+
+
+def test_correction_displays_edited_marker_and_collapsed_plain_text_history(
+    qtbot: QtBot,
+) -> None:
+    original_time = datetime(2026, 8, 12, 19, 30, tzinfo=UTC)
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will corrections retain every prior body?", 60)
+    )
+    operations.journal_entries = [
+        FakeJournalTimelineEvent(
+            entry_id=4,
+            prediction_id=7,
+            created_at=original_time,
+            body="First corrected body",
+            original_body="<b>Original body</b>",
+            forecast_revision_id=1,
+            forecast_revision_sequence=1,
+            forecast_probability_percent=60,
+            current_correction_id=1,
+            corrections=(
+                FakeJournalCorrection(
+                    correction_id=1,
+                    body="First corrected body",
+                    corrected_at=datetime(2026, 8, 13, 19, 30, tzinfo=UTC),
+                ),
+            ),
+        )
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_correction_dialog(qtbot, window, entry_id=4)
+    body = _required_child(dialog, QPlainTextEdit, "correctJournalEntryBodyInput")
+    body.setPlainText("<i>Corrected body</i>")
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "saveJournalCorrectionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.correction_calls == [
+        CorrectJournalEntryCall(
+            prediction_id=7,
+            entry_id=4,
+            body="<i>Corrected body</i>",
+            expected_correction_id=1,
+        )
+    ]
+    assert (
+        _required_child(
+            window,
+            QLabel,
+            "journalEntryEdited4",
+        )
+        .text()
+        .startswith("Edited ")
+    )
+    assert (
+        _required_child(window, QLabel, "journalEntryBody4").text()
+        == "<i>Corrected body</i>"
+    )
+    history = _required_child(window, QGroupBox, "journalEntryEditHistory4")
+    content = _required_child(window, QWidget, "journalEntryEditHistoryContent4")
+    assert not history.isChecked()
+    assert content.isHidden()
+    history.setChecked(True)
+    assert not content.isHidden()
+    original = _required_child(window, QLabel, "journalEntryOriginalBody4")
+    correction = _required_child(window, QLabel, "journalCorrectionBody1")
+    assert original.text() == "<b>Original body</b>"
+    assert correction.text() == "First corrected body"
+    assert original.textFormat() is Qt.TextFormat.PlainText
+    assert correction.textFormat() is Qt.TextFormat.PlainText
+    assert (
+        _required_child(window, QLabel, "journalCorrectionHeading1")
+        .text()
+        .startswith("Correction 1 ·")
     )
 
 
@@ -1824,6 +2556,52 @@ def _open_revision_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
     )
     dialog = _required_child(window, QDialog, "reviseForecastDialog")
     qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def _open_journal_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
+    window.show()
+    window.navigate_to("Prediction Detail")
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "addJournalEntryButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    dialog = _required_child(window, QDialog, "addJournalEntryDialog")
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def _open_correction_dialog(
+    qtbot: QtBot,
+    window: MainWindow,
+    *,
+    entry_id: int,
+) -> QDialog:
+    window.show()
+    window.navigate_to("Prediction Detail")
+    return _click_correction_button(qtbot, window, entry_id=entry_id)
+
+
+def _click_correction_button(
+    qtbot: QtBot,
+    window: MainWindow,
+    *,
+    entry_id: int,
+) -> QDialog:
+    qtbot.mouseClick(
+        _required_child(
+            window,
+            QPushButton,
+            f"correctJournalEntryButton{entry_id}",
+        ),
+        Qt.MouseButton.LeftButton,
+    )
+    dialogs = window.findChildren(QDialog, "correctJournalEntryDialog")
+    dialog = next(
+        (candidate for candidate in reversed(dialogs) if candidate.isVisible()),
+        None,
+    )
+    assert dialog is not None
     return dialog
 
 

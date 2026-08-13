@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Protocol
 
-from PySide6.QtCore import QDate, Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QDate, QEvent, QObject, Qt, Signal
+from PySide6.QtGui import QFont, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QDateEdit,
@@ -69,6 +70,44 @@ class ForecastRevisionSnapshot(Protocol):
     rationale: str | None
 
 
+class JournalCorrectionSnapshot(Protocol):
+    """Read-only correction data shown in a Journal entry's edit history."""
+
+    correction_id: int
+    body: str
+    corrected_at: datetime
+
+
+class ForecastTimelineSnapshot(Protocol):
+    """A forecast event prepared for the unified Prediction timeline."""
+
+    revision_id: int
+    prediction_id: int
+    created_at: datetime
+    sequence: int
+    probability_percent: int
+    previous_probability_percent: int | None
+    rationale: str | None
+
+
+class JournalTimelineSnapshot(Protocol):
+    """A Journal event prepared with its exact forecast-at-the-time context."""
+
+    entry_id: int
+    prediction_id: int
+    created_at: datetime
+    body: str
+    original_body: str
+    forecast_revision_id: int
+    forecast_revision_sequence: int
+    forecast_probability_percent: int
+    current_correction_id: int | None
+    corrections: tuple[JournalCorrectionSnapshot, ...]
+
+
+TimelineSnapshot = ForecastTimelineSnapshot | JournalTimelineSnapshot
+
+
 class PredictionOperations(Protocol):
     """Complete prediction use cases invoked by the UI."""
 
@@ -102,6 +141,32 @@ class PredictionOperations(Protocol):
         prediction_id: int,
     ) -> tuple[ForecastRevisionSnapshot, ...]:
         """Return immutable forecast revisions in sequence order."""
+
+    def add_journal_entry(
+        self,
+        prediction_id: int,
+        body: str,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> JournalTimelineSnapshot:
+        """Append reasoning tied to the exact forecast the user reviewed."""
+
+    def correct_journal_entry(
+        self,
+        prediction_id: int,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> JournalTimelineSnapshot:
+        """Append a transparent correction without replacing earlier text."""
+
+    def list_timeline(
+        self,
+        prediction_id: int,
+    ) -> tuple[TimelineSnapshot, ...]:
+        """Return Forecast and Journal events in deterministic causal order."""
 
     def get_latest_prediction(self) -> PredictionSnapshot | None:
         """Return the most recently created prediction, if one exists."""
@@ -727,9 +792,18 @@ class ReviseForecastDialog(QDialog):
         self.endpoint_note.setWordWrap(True)
 
         rationale_label = QLabel("What changed? (optional)", self)
+        rationale_helper_text = (
+            "This explanation stays attached to the new forecast. To record a "
+            "thought without changing probability, add a Journal entry."
+        )
+        rationale_helper = QLabel(rationale_helper_text, self)
+        rationale_helper.setObjectName("revisionRationaleHelper")
+        rationale_helper.setTextFormat(Qt.TextFormat.PlainText)
+        rationale_helper.setWordWrap(True)
         self.rationale_input = QPlainTextEdit(self)
         self.rationale_input.setObjectName("revisionRationaleInput")
         self.rationale_input.setAccessibleName("What changed")
+        self.rationale_input.setAccessibleDescription(rationale_helper_text)
         self.rationale_input.setMaximumHeight(110)
         self.rationale_input.setTabChangesFocus(True)
         rationale_label.setBuddy(self.rationale_input)
@@ -765,6 +839,7 @@ class ReviseForecastDialog(QDialog):
         layout.addWidget(self.endpoint_note)
         layout.addWidget(rationale_label)
         layout.addWidget(self.rationale_input)
+        layout.addWidget(rationale_helper)
         layout.addWidget(self.form_error)
         layout.addWidget(self.buttons)
 
@@ -806,6 +881,249 @@ class ReviseForecastDialog(QDialog):
         self.form_error.setHidden(True)
 
 
+class AddJournalEntryDialog(QDialog):
+    """Append reasoning without changing the current forecast."""
+
+    journal_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: PredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("addJournalEntryDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Add Journal Entry")
+        self.setModal(True)
+        self.resize(560, 390)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision_id
+        self._expected_metadata_version = prediction.metadata_version
+
+        title = QLabel("Add Journal Entry", self)
+        title.setObjectName("addJournalEntryTitle")
+
+        context_heading = QLabel("Forecast at the time", self)
+        self.forecast_probability = QLabel(
+            f"{prediction.probability_percent}%",
+            self,
+        )
+        self.forecast_probability.setObjectName("journalForecastAtTime")
+        self.forecast_probability.setAccessibleName("Forecast at the time")
+        context_font = QFont(self.forecast_probability.font())
+        context_font.setBold(True)
+        context_font.setPointSize(context_font.pointSize() + 2)
+        self.forecast_probability.setFont(context_font)
+
+        body_label = QLabel("Journal entry", self)
+        self.body_input = QPlainTextEdit(self)
+        self.body_input.setObjectName("journalEntryBodyInput")
+        self.body_input.setAccessibleName("Journal entry")
+        self.body_input.setPlaceholderText(
+            "Record new evidence, reasoning, or a thought that does not change "
+            "the forecast."
+        )
+        self.body_input.setTabChangesFocus(True)
+        body_label.setBuddy(self.body_input)
+
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("addJournalEntryError")
+        self.form_error.setAccessibleName("Add journal entry error")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        self.buttons.setObjectName("addJournalEntryButtons")
+        save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        save_button.setObjectName("saveJournalEntryButton")
+        save_button.setText("Save Journal Entry")
+        save_button.setDefault(True)
+        cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel_button.setObjectName("cancelJournalEntryButton")
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(context_heading)
+        layout.addWidget(self.forecast_probability)
+        layout.addSpacing(8)
+        layout.addWidget(body_label)
+        layout.addWidget(self.body_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self.setTabOrder(self.body_input, save_button)
+        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
+        self.body_input.installEventFilter(self._submit_key_filter)
+        self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """Put keyboard focus in the entry body after the modal is shown."""
+        super().showEvent(event)
+        self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def submit(self) -> None:
+        """Append one entry; expected failures remain editable in the dialog."""
+        self._hide_error()
+        body = self.body_input.toPlainText()
+        if not body.strip():
+            self._show_error("Write a journal entry before saving.")
+            self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+            return
+        try:
+            journal_entry = self._operations.add_journal_entry(
+                self._prediction_id,
+                body,
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.journal_saved.emit(journal_entry)
+        self.accept()
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
+
+
+class CorrectJournalEntryDialog(QDialog):
+    """Append a visible correction while retaining every prior Journal body."""
+
+    correction_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        entry: JournalTimelineSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("correctJournalEntryDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Correct Journal Entry")
+        self.setModal(True)
+        self.resize(560, 420)
+        self._operations = operations
+        self._prediction_id = entry.prediction_id
+        self._entry_id = entry.entry_id
+        self._expected_correction_id = entry.current_correction_id
+
+        title = QLabel("Edit / Correct Journal Entry", self)
+        title.setObjectName("correctJournalEntryTitle")
+
+        explanation = QLabel(
+            "Saving records a transparent correction. The original and every "
+            "earlier version remain in Edit history.",
+            self,
+        )
+        explanation.setObjectName("journalCorrectionExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+
+        context = QLabel(
+            f"Forecast at the time: {entry.forecast_probability_percent}%",
+            self,
+        )
+        context.setObjectName("correctionForecastAtTime")
+        context.setTextFormat(Qt.TextFormat.PlainText)
+
+        body_label = QLabel("Corrected journal entry", self)
+        self.body_input = QPlainTextEdit(self)
+        self.body_input.setObjectName("correctJournalEntryBodyInput")
+        self.body_input.setAccessibleName("Corrected journal entry")
+        self.body_input.setPlainText(entry.body)
+        self.body_input.setTabChangesFocus(True)
+        body_label.setBuddy(self.body_input)
+
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("correctJournalEntryError")
+        self.form_error.setAccessibleName("Correct journal entry error")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        self.buttons.setObjectName("correctJournalEntryButtons")
+        save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        save_button.setObjectName("saveJournalCorrectionButton")
+        save_button.setText("Save Correction")
+        save_button.setDefault(True)
+        cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel_button.setObjectName("cancelJournalCorrectionButton")
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addWidget(context)
+        layout.addSpacing(8)
+        layout.addWidget(body_label)
+        layout.addWidget(self.body_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self.setTabOrder(self.body_input, save_button)
+        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
+        self.body_input.installEventFilter(self._submit_key_filter)
+        self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.body_input.selectAll()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """Focus and select the displayed latest body when shown."""
+        super().showEvent(event)
+        self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.body_input.selectAll()
+
+    def submit(self) -> None:
+        """Append one correction; never replace the displayed entry in place."""
+        self._hide_error()
+        body = self.body_input.toPlainText()
+        if not body.strip():
+            self._show_error("Write the corrected journal entry before saving.")
+            self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+            return
+        try:
+            correction = self._operations.correct_journal_entry(
+                self._prediction_id,
+                self._entry_id,
+                body,
+                expected_correction_id=self._expected_correction_id,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.correction_saved.emit(correction)
+        self.accept()
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
+
+
 class PredictionDetailScreen(QWidget):
     """Display the current prediction definition and safe metadata editing."""
 
@@ -820,6 +1138,8 @@ class PredictionDetailScreen(QWidget):
         self._prediction: PredictionSnapshot | None = None
         self._edit_dialog: EditPredictionDetailsDialog | None = None
         self._revision_dialog: ReviseForecastDialog | None = None
+        self._journal_dialog: AddJournalEntryDialog | None = None
+        self._journal_correction_dialog: CorrectJournalEntryDialog | None = None
 
         title = QLabel("Prediction Detail", self)
         title.setObjectName("predictionDetailScreenTitle")
@@ -886,8 +1206,14 @@ class PredictionDetailScreen(QWidget):
         self.revise_forecast_button.setObjectName("reviseForecastButton")
         self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
         action_layout.addWidget(self.revise_forecast_button)
+        self.add_journal_entry_button = QPushButton(
+            "Add Journal Entry",
+            action_row,
+        )
+        self.add_journal_entry_button.setObjectName("addJournalEntryButton")
+        self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
+        action_layout.addWidget(self.add_journal_entry_button)
         for label, object_name in (
-            ("Add Journal Entry", "addJournalEntryButton"),
             ("Resolve", "resolvePredictionButton"),
             ("Mark Invalid", "markInvalidButton"),
         ):
@@ -939,7 +1265,7 @@ class PredictionDetailScreen(QWidget):
         )
         self.definition_history_content.setHidden(True)
 
-        timeline_label = QLabel("FORECAST HISTORY", self.detail_content)
+        timeline_label = QLabel("TIMELINE", self.detail_content)
         timeline_label.setObjectName("timelineHeading")
         self.forecast_timeline = QWidget(self.detail_content)
         self.forecast_timeline.setObjectName("forecastTimeline")
@@ -1032,13 +1358,27 @@ class PredictionDetailScreen(QWidget):
                 f"Forecast revisions are not allowed while this prediction is "
                 f"{prediction.status.value}."
             )
+        journal_allowed = prediction.status in (
+            PredictionStatus.OPEN,
+            PredictionStatus.LOCKED,
+        )
+        self.add_journal_entry_button.setEnabled(journal_allowed)
+        if journal_allowed:
+            self.add_journal_entry_button.setToolTip(
+                "Record evidence or reasoning without changing the forecast."
+            )
+        else:
+            self.add_journal_entry_button.setToolTip(
+                f"New Journal entries are not allowed while this prediction is "
+                f"{prediction.status.value}. Existing entries can still be corrected."
+            )
         self.tags.setText("  ".join(f"#{tag}" for tag in prediction.tags))
         self.tags.setHidden(not prediction.tags)
         self._show_optional_metadata(prediction)
         self.empty_state.setHidden(True)
         self.detail_content.setHidden(False)
         self._load_definition_history(prediction.prediction_id)
-        self._load_forecast_timeline(prediction.prediction_id)
+        self._load_timeline(prediction.prediction_id)
 
     def refresh(self) -> None:
         """Reload the displayed prediction while retaining data on a read failure."""
@@ -1096,11 +1436,76 @@ class PredictionDetailScreen(QWidget):
         dialog.finished.connect(self._revision_dialog_finished)
         dialog.open()
 
+    def open_add_journal_entry(self) -> None:
+        """Refresh context, then open a side-effect-free Journal dialog."""
+        if self._prediction is None:
+            return
+        try:
+            prediction = self._operations.get_prediction(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(prediction)
+        if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
+            self._show_error(
+                f"New Journal entries are not allowed while this prediction is "
+                f"{prediction.status.value}."
+            )
+            return
+        dialog = AddJournalEntryDialog(self._operations, prediction, self)
+        self._journal_dialog = dialog
+        dialog.journal_saved.connect(self._journal_saved)
+        dialog.finished.connect(self._journal_dialog_finished)
+        dialog.open()
+
+    def open_correct_journal_entry(self, entry: JournalTimelineSnapshot) -> None:
+        """Refresh the Journal entry before opening its correction form."""
+        try:
+            events = self._operations.list_timeline(entry.prediction_id)
+        except ApplicationError as error:
+            self._show_error(f"Journal entry could not be refreshed. {error}")
+            return
+        current_entry = next(
+            (
+                event
+                for event in events
+                if hasattr(event, "entry_id") and event.entry_id == entry.entry_id
+            ),
+            None,
+        )
+        if current_entry is None:
+            self._show_error(
+                "This Journal entry could not be found. Refresh Prediction Detail "
+                "and try again."
+            )
+            return
+        self._hide_error()
+        dialog = CorrectJournalEntryDialog(self._operations, current_entry, self)
+        self._journal_correction_dialog = dialog
+        dialog.correction_saved.connect(self._journal_correction_saved)
+        dialog.finished.connect(self._journal_correction_dialog_finished)
+        dialog.open()
+
     def _edit_dialog_finished(self, _result: int) -> None:
         self._edit_dialog = None
 
     def _revision_dialog_finished(self, _result: int) -> None:
         self._revision_dialog = None
+
+    def _journal_dialog_finished(self, _result: int) -> None:
+        self._journal_dialog = None
+
+    def _journal_correction_dialog_finished(self, _result: int) -> None:
+        self._journal_correction_dialog = None
+
+    def _journal_saved(self, _result: object) -> None:
+        if self._prediction is not None:
+            self.show_prediction(self._prediction)
+
+    def _journal_correction_saved(self, _corrected: object) -> None:
+        if self._prediction is None:
+            return
+        self.show_prediction(self._prediction)
 
     def _show_optional_metadata(self, prediction: PredictionSnapshot) -> None:
         self.forecast_deadline.setText(_format_date(prediction.forecast_deadline))
@@ -1129,30 +1534,33 @@ class PredictionDetailScreen(QWidget):
         self.definition_history_content.setHidden(True)
         self.definition_history.setHidden(not changes)
 
-    def _load_forecast_timeline(self, prediction_id: int) -> None:
+    def _load_timeline(self, prediction_id: int) -> None:
         try:
-            revisions = self._operations.list_forecast_revisions(prediction_id)
+            events = self._operations.list_timeline(prediction_id)
         except ApplicationError as error:
             self.forecast_timeline.setHidden(True)
-            self.timeline_placeholder.setText("Forecast history could not be loaded.")
+            self.timeline_placeholder.setText("Timeline could not be loaded.")
             self.timeline_placeholder.setHidden(False)
             self._show_error(str(error))
             return
 
         _clear_widget_layout(self.forecast_timeline_layout)
-        previous_probability: int | None = None
-        for revision in revisions:
-            self.forecast_timeline_layout.addWidget(
-                _forecast_revision_widget(
-                    revision,
-                    previous_probability,
-                    self.forecast_timeline,
+        for event in events:
+            if hasattr(event, "entry_id"):
+                self.forecast_timeline_layout.addWidget(
+                    _journal_entry_widget(
+                        event,
+                        self.forecast_timeline,
+                        self.open_correct_journal_entry,
+                    )
                 )
-            )
-            previous_probability = revision.probability_percent
-        self.forecast_timeline.setHidden(not revisions)
-        self.timeline_placeholder.setText("No forecast revisions are available.")
-        self.timeline_placeholder.setHidden(bool(revisions))
+            else:
+                self.forecast_timeline_layout.addWidget(
+                    _forecast_timeline_widget(event, self.forecast_timeline)
+                )
+        self.forecast_timeline.setHidden(not events)
+        self.timeline_placeholder.setText("No timeline entries are available.")
+        self.timeline_placeholder.setHidden(bool(events))
 
     def _show_error(self, message: str) -> None:
         self.detail_error.setText(message)
@@ -1299,9 +1707,8 @@ def _definition_change_widget(
     return frame
 
 
-def _forecast_revision_widget(
-    revision: ForecastRevisionSnapshot,
-    previous_probability: int | None,
+def _forecast_timeline_widget(
+    revision: ForecastTimelineSnapshot,
     parent: QWidget,
 ) -> QWidget:
     frame = QFrame(parent)
@@ -1314,11 +1721,11 @@ def _forecast_revision_widget(
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
     layout.addWidget(timestamp)
 
-    if previous_probability is None:
+    if revision.previous_probability_percent is None:
         probability_text = f"FORECAST  {revision.probability_percent}%"
     else:
         probability_text = (
-            f"FORECAST  {previous_probability}% "
+            f"FORECAST  {revision.previous_probability_percent}% "
             f"\N{RIGHTWARDS ARROW} {revision.probability_percent}%"
         )
     probability = QLabel(probability_text, frame)
@@ -1336,11 +1743,159 @@ def _forecast_revision_widget(
     return frame
 
 
+def _journal_entry_widget(
+    entry: JournalTimelineSnapshot,
+    parent: QWidget,
+    correct_entry: Callable[[JournalTimelineSnapshot], None],
+) -> QWidget:
+    frame = QFrame(parent)
+    frame.setObjectName(f"journalEntry{entry.entry_id}")
+    frame.setFrameShape(QFrame.Shape.StyledPanel)
+    layout = QVBoxLayout(frame)
+
+    timestamp = QLabel(_format_local_timestamp(entry.created_at), frame)
+    timestamp.setObjectName(f"journalEntryTimestamp{entry.entry_id}")
+    timestamp.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(timestamp)
+
+    heading_row = QWidget(frame)
+    heading_layout = QHBoxLayout(heading_row)
+    heading_layout.setContentsMargins(0, 0, 0, 0)
+    kind = QLabel("JOURNAL", heading_row)
+    kind.setObjectName(f"journalEntryKind{entry.entry_id}")
+    kind.setTextFormat(Qt.TextFormat.PlainText)
+    heading_layout.addWidget(kind)
+    if entry.current_correction_id is not None:
+        latest_correction = entry.corrections[-1]
+        edited = QLabel(
+            f"Edited {_format_local_timestamp(latest_correction.corrected_at)}",
+            heading_row,
+        )
+        edited.setObjectName(f"journalEntryEdited{entry.entry_id}")
+        edited.setTextFormat(Qt.TextFormat.PlainText)
+        heading_layout.addWidget(edited)
+    heading_layout.addStretch()
+    correct_button = QPushButton("Correct Entry", heading_row)
+    correct_button.setObjectName(f"correctJournalEntryButton{entry.entry_id}")
+    correct_button.setToolTip(
+        "Save a correction while preserving the original and prior versions."
+    )
+    correct_button.clicked.connect(
+        lambda _checked=False, current=entry: correct_entry(current)
+    )
+    heading_layout.addWidget(correct_button)
+    layout.addWidget(heading_row)
+
+    body = QLabel(entry.body, frame)
+    body.setObjectName(f"journalEntryBody{entry.entry_id}")
+    body.setTextFormat(Qt.TextFormat.PlainText)
+    body.setWordWrap(True)
+    body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    layout.addWidget(body)
+
+    forecast_context = QLabel(
+        f"Forecast at the time: {entry.forecast_probability_percent}%",
+        frame,
+    )
+    forecast_context.setObjectName(f"journalEntryForecastAtTime{entry.entry_id}")
+    forecast_context.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(forecast_context)
+
+    if entry.corrections:
+        layout.addWidget(_journal_edit_history_widget(entry, frame))
+    return frame
+
+
+def _journal_edit_history_widget(
+    entry: JournalTimelineSnapshot,
+    parent: QWidget,
+) -> QGroupBox:
+    prior_version_count = len(entry.corrections)
+    suffix = "version" if prior_version_count == 1 else "versions"
+    history = QGroupBox(
+        f"Edit history ({prior_version_count} prior {suffix})",
+        parent,
+    )
+    history.setObjectName(f"journalEntryEditHistory{entry.entry_id}")
+    history.setCheckable(True)
+    history.setChecked(False)
+
+    content = QWidget(history)
+    content.setObjectName(f"journalEntryEditHistoryContent{entry.entry_id}")
+    content_layout = QVBoxLayout(content)
+    content_layout.setContentsMargins(4, 4, 4, 4)
+
+    original_heading = QLabel(
+        f"Original · {_format_local_timestamp(entry.created_at)}",
+        content,
+    )
+    original_heading.setObjectName(f"journalEntryOriginalHeading{entry.entry_id}")
+    original_heading.setTextFormat(Qt.TextFormat.PlainText)
+    original_body = QLabel(entry.original_body, content)
+    original_body.setObjectName(f"journalEntryOriginalBody{entry.entry_id}")
+    original_body.setTextFormat(Qt.TextFormat.PlainText)
+    original_body.setWordWrap(True)
+    original_body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    content_layout.addWidget(original_heading)
+    content_layout.addWidget(original_body)
+
+    for index, correction in enumerate(entry.corrections[:-1], start=1):
+        correction_heading = QLabel(
+            f"Correction {index} · {_format_local_timestamp(correction.corrected_at)}",
+            content,
+        )
+        correction_heading.setObjectName(
+            f"journalCorrectionHeading{correction.correction_id}"
+        )
+        correction_heading.setTextFormat(Qt.TextFormat.PlainText)
+        correction_body = QLabel(correction.body, content)
+        correction_body.setObjectName(
+            f"journalCorrectionBody{correction.correction_id}"
+        )
+        correction_body.setTextFormat(Qt.TextFormat.PlainText)
+        correction_body.setWordWrap(True)
+        correction_body.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        content_layout.addWidget(correction_heading)
+        content_layout.addWidget(correction_body)
+
+    history_layout = QVBoxLayout(history)
+    history_layout.addWidget(content)
+    history.toggled.connect(content.setVisible)
+    content.setHidden(True)
+    return history
+
+
+class _MultilineSubmitKeyFilter(QObject):
+    """Make Ctrl+Enter submit while an ordinary Enter remains a newline."""
+
+    def __init__(
+        self,
+        submit: Callable[[], None],
+        parent: QObject,
+    ) -> None:
+        super().__init__(parent)
+        self._submit = submit
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
+            key = event.key()
+            modifiers = event.modifiers()
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and (
+                modifiers & Qt.KeyboardModifier.ControlModifier
+            ):
+                self._submit()
+                return True
+        return super().eventFilter(watched, event)
+
+
 def _clear_widget_layout(layout: QVBoxLayout) -> None:
     while layout.count():
         item = layout.takeAt(0)
         widget = item.widget()
         if widget is not None:
+            widget.setParent(None)
             widget.deleteLater()
 
 

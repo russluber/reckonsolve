@@ -254,15 +254,17 @@ Invariant:
 
 ### 7.3 JournalEntry
 
-Required fields:
+Required creation facts:
 
 - stable identifier;
 - prediction identifier;
-- body;
-- created timestamp; and
+- original body;
+- original created timestamp; and
 - reference to the forecast revision that was current when the entry was created.
 
 The revision reference lets the app accurately show the probability held at the time without treating the journal entry as a forecast revision.
+
+The displayed body may be corrected, but the entry's identity, original created timestamp, and forecast-revision reference remain immutable. The original body and every superseded body must remain available in a deterministic correction history. Each correction records its own timestamp; the latest body is the one shown in the main timeline entry.
 
 ### 7.4 Resolution
 
@@ -342,7 +344,13 @@ Optional date controls must distinguish an unset value from a saved date. When a
 
 ### 8.3 Journal entries
 
-Journal entries belong to the historical timeline. Prefer append-only behavior. If v0.1 permits correcting a journal-entry typo, it must not affect forecast scoring or disguise a probability change.
+Journal entries belong to the historical timeline. New journal entries are allowed only while a prediction is Open or Locked.
+
+v0.1 permits transparent, body-only corrections to a saved journal entry. A correction must append immutable edit history rather than overwrite the saved body. The timeline continues to place the entry at its original created timestamp, marks its current body **Edited**, and offers an expandable edit history containing the original body and every superseded version in correction order.
+
+A correction must not change the entry's original timestamp or forecast-at-the-time revision reference, create a ForecastRevision, change probability, affect forecast scoring, or reset the Needs Attention clock. Corrections remain allowed after a prediction becomes Resolved or Invalid because an audited correction is not a new journal assertion; this flow is for correcting existing text, not backdating new reasoning.
+
+v0.1 provides no operation or normal UI action to delete an individual journal entry. A later deliberate deletion of its parent Prediction may still remove the entry and its correction history transactionally under the rules in Section 19.
 
 ### 8.4 Resolved predictions
 
@@ -518,11 +526,19 @@ original arguments, but not enough for me to move away from 60%.
 Forecast at the time: 60%
 ```
 
+The Add Journal Entry flow accepts a required body and is available for Open and Locked predictions. Saving captures the current ForecastRevision reference atomically with the new entry. Resolved and Invalid predictions reject new journal entries.
+
+Forecast revisions and journal entries appear together in one oldest-to-newest timeline. Journal entries show their original local timestamp, the body, and **Forecast at the time: N%** derived from the captured revision. Timeline order must remain deterministic when events have the same stored instant. Correcting an entry does not move it to the correction time.
+
+An existing journal entry exposes a deliberate **Correct Entry** action. The correction form starts with the current body. After a correction, the timeline shows the latest body with an **Edited** marker and provides an expandable edit history with the original and all prior bodies. Corrections are allowed in every lifecycle state, including Resolved and Invalid, but no individual Delete action is available.
+
 Adding a journal entry must not:
 
 - create a forecast revision;
 - change the current probability; or
 - reset the v0.1 Needs Attention clock, which is based on the latest forecast revision.
+
+Correcting a journal entry has the same three non-effects and must also leave the original timestamp and forecast-at-the-time revision reference unchanged.
 
 The last rule changes in v0.2 when explicit Forecast Reviews exist.
 
@@ -551,7 +567,7 @@ The chart must not treat journal entries as probability observations.
 ### 14.1 Open
 
 - Forecast revisions allowed.
-- Journal entries allowed.
+- New journal entries and transparent corrections to existing entries are allowed.
 - Can be resolved or marked invalid.
 
 ### 14.2 Locked
@@ -561,7 +577,7 @@ The forecast deadline has passed.
 Because Forecast Deadline is a date-only value, its stored calendar date is inclusive. An otherwise Open prediction becomes Locked when the computer's local calendar date is later than its Forecast Deadline, not at the start of the deadline date.
 
 - Normal forecast revisions are not allowed.
-- Journal entries remain allowed.
+- New journal entries and transparent corrections to existing entries remain allowed.
 - The prediction awaits an outcome.
 - It can be resolved or marked invalid.
 
@@ -571,6 +587,7 @@ An Open prediction with no forecast deadline remains Open until resolved or inva
 
 - Outcome is recorded as Yes or No.
 - No further forecast revisions are allowed.
+- No new journal entries are allowed, but transparent corrections to existing entries remain allowed.
 - The prediction is eligible for scoring.
 - Resolution notes and a postmortem may be recorded.
 
@@ -578,6 +595,7 @@ An Open prediction with no forecast deadline remains Open until resolved or inva
 
 - The prediction is preserved.
 - No further forecast revisions are allowed.
+- No new journal entries are allowed, but transparent corrections to existing entries remain allowed.
 - It is excluded from all scoring and calibration analytics.
 - An optional invalidation reason should be supported.
 
@@ -909,9 +927,11 @@ Acceptance demonstration:
 
 ### Milestone 5: Timeline and journal
 
-- Add journal entries.
-- Show revisions and journal entries in one chronological timeline.
-- Preserve which revision was current for each journal entry.
+- Add journal entries for Open and Locked predictions and reject new entries for Resolved and Invalid predictions.
+- Show revisions and journal entries in one deterministic chronological timeline.
+- Preserve which revision was current for each journal entry and show its probability as **Forecast at the time**.
+- Support transparent body corrections in every lifecycle state while preserving the original body, every superseded body, original timestamp, and forecast-revision reference.
+- Mark corrected entries **Edited**, expose their correction history, and provide no individual journal-entry deletion.
 
 ### Milestone 6: Probability-history chart
 
@@ -963,9 +983,9 @@ v0.1 is not complete unless all of the following are true:
 3. Restarting the app preserves all data.
 4. Revising a forecast creates a new historical record.
 5. No normal UI path silently rewrites an earlier revision.
-6. A journal entry can be added without changing probability.
+6. A journal entry can be added while Open or Locked without changing probability or creating a ForecastRevision.
 7. Forecast Deadline and Expected Resolution behave as separate concepts.
-8. Locked predictions reject normal revisions but accept journal entries.
+8. Locked predictions reject normal revisions but accept new journal entries; Resolved and Invalid predictions reject new entries.
 9. A prediction can resolve Yes or No and be scored.
 10. Invalid predictions remain visible and are excluded from scoring.
 11. Each resolved prediction contributes one final eligible forecast to ordinary Brier and calibration analytics.
@@ -983,6 +1003,11 @@ v0.1 is not complete unless all of the following are true:
 Highest-risk behavior should receive automated tests before visual polish:
 
 - immutable revision append behavior;
+- atomic journal-entry creation with the current ForecastRevision reference;
+- journal lifecycle boundaries, including terminal rejection of new entries and terminal permission for audited corrections;
+- immutable journal correction history, retained original context, and rejection of individual deletion;
+- deterministic unified-timeline ordering, including equal stored timestamps;
+- verification that journal creation and correction do not create revisions, change probability, or reset Needs Attention;
 - atomic creation of a Prediction, optional initial metadata and tags, and its first revision with optional rationale;
 - atomic protected-field metadata edits and definition-change records;
 - current-revision selection;
