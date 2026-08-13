@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 3 implemented; later forecasting workflows remain to be built
+Status: Milestone 4 implemented; later forecasting workflows remain to be built
 Last reviewed: 2026-08-12
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 3 adds complete display and safe editing of prediction metadata to the binary-creation slice. Prediction Detail now shows the current forecast, derived status, optional dates and text, tags, and immutable Definition history. Forecast revision, journal, terminal lifecycle, browser, analytics, backup, and export workflows remain to be built.
+Milestone 4 completes initial prediction capture and adds the immutable forecast-revision workflow. New Prediction can still be submitted with only Question and Probability, while a collapsed **More details** section accepts optional initial rationale, metadata, dates, and tags. Prediction Detail can append eligible probability changes with optional rationale and shows every saved revision in a forecast-only history. Journal entries, the unified timeline, probability-history chart, terminal lifecycle actions, browser, analytics, backup, and export workflows remain to be built.
 
 | Area | Current state |
 |---|---|
@@ -17,13 +17,13 @@ Milestone 3 adds complete display and safe editing of prediction metadata to the
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | Native PySide6 navigation plus functional New Prediction and Prediction Detail screens; metadata editing uses a focused dialog, while the other four primary screens remain explicit placeholders |
+| UI | Native PySide6 navigation plus functional New Prediction and Prediction Detail screens; optional initial details, metadata editing, revision entry, Definition history, and forecast-only history are implemented, while the other four primary screens remain explicit placeholders |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 3 adds prediction metadata, reusable tags and associations, and immutable definition-change snapshots to the existing prediction and forecast-revision schema |
-| Domain and application operations | Creation, metadata/date/tag validation, derived deadline status, protected-edit confirmation, concurrency checks, atomic metadata editing, and detail/history reads are implemented without Qt dependencies |
+| Schema | Version 4 adds optional rationale and complete immutability protection to forecast revisions, building on prediction metadata, tags, and definition snapshots from version 3 |
+| Domain and application operations | Complete atomic creation, append-only revisions, rationale/metadata/date/tag validation, derived deadline status, lifecycle enforcement, stale-context rejection, safe metadata editing, and history reads are implemented without Qt dependencies |
 | Analytics | Not implemented yet |
-| Automated tests | Tests cover the persistence foundation plus creation, metadata normalization, dates, tags, derived status, protected-edit confirmation, immutable history, migration through v3, transaction rollback, Qt behavior, and restart persistence |
+| Automated tests | Tests cover the persistence foundation plus complete creation, immutable revisions, rationale normalization, lifecycle and date boundaries, concurrent submissions, metadata safety, migrations through v4, transaction rollback, Qt behavior, and restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
@@ -161,7 +161,7 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 3 implements this package structure:
+Milestone 4 implements this package structure:
 
 ```text
 src/reckonsolve/
@@ -172,18 +172,18 @@ src/reckonsolve/
   paths.py             per-user and explicitly injected database paths
   application/
     errors.py          expected user-presentable operation errors
-    predictions.py     creation, detail, metadata-edit, and history use cases
+    predictions.py     creation, revision, detail, metadata-edit, and history use cases
   domain/
-    predictions.py     binary prediction values, metadata, status, and validation
+    predictions.py     binary prediction and revision values, metadata, status, and validation
   data/
     __init__.py        persistence package surface
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
-    predictions.py     purpose-specific prediction, tag, and history persistence
+    predictions.py     purpose-specific prediction, revision, tag, and history persistence
   ui/
     __init__.py        UI package surface
     main_window.py     navigation and screen coordination
-    screens.py         creation, Prediction Detail, and metadata-edit UI
+    screens.py         creation, Prediction Detail, revision, and metadata-edit UI
 ```
 
 Later milestones can extend these boundaries and add analytics when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
@@ -222,6 +222,8 @@ Milestone 1 established the migration ledger. Milestone 2 added `predictions` an
 
 Milestone 3 migrates the database to version 3. Nullable Background and Resolution Criteria are normalized text, while Forecast Deadline and Expected Resolution are ISO calendar dates rather than instants. The supported metadata-date range is `1752-09-14` through `9999-12-31`, matching the native Qt editor; these fields model current and future forecasting workflow dates rather than historical chronology. Reusable `tags` connect through `prediction_tags`. Python `casefold()` values provide case-insensitive identity, and the first stored display spelling is retained even when a tag temporarily has no prediction associations. Commas and line breaks are excluded from labels because the v0.1 editor uses a comma-separated entry field. A constrained metadata version on each prediction provides optimistic concurrency control for whole-form edits.
 
+Milestone 4 migrates the database to version 4 by adding a nullable normalized rationale to every forecast revision. Existing revisions receive no invented rationale. Revision identity and per-prediction sequence remain deterministic; database triggers reject direct updates, direct child deletion while the parent exists, and replacement through either an existing revision identifier or sequence. A deliberate parent-prediction deletion can still cascade transactionally. The application derives the current forecast from the highest revision sequence and reads forecast history in sequence order, even if two revisions share the same stored instant.
+
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
@@ -253,10 +255,9 @@ The database parent directory is created when needed. Future backups, exports, a
 
 Transactions protect operations that must not leave partial history:
 
-- Creating a prediction and its first forecast revision is one transaction.
-- Milestone 4 extends that creation transaction to any initial metadata, tag associations, and first-revision rationale; initial values do not append definition history.
+- Creating a prediction, all supplied initial metadata and tag associations, and its first forecast revision with optional rationale is one transaction. Initial values do not append Definition history.
 - Editing metadata and tag associations, plus the definition snapshot when required, is one transaction.
-- Appending a revision validates eligibility and inserts exactly one new row without editing prior rows.
+- Appending a revision rechecks the reviewed current-revision and metadata-version tokens, lifecycle eligibility, deadline, and changed probability inside one immediate transaction, then inserts exactly one new row without editing prior rows.
 - Adding a journal entry captures the revision that is current within the same consistent operation.
 - Resolution records the outcome and unambiguous scoring revision atomically.
 - Invalidation records terminal state, timestamp, and optional reason atomically.
@@ -291,11 +292,15 @@ Selection logic and calculation logic require tests independent of chart widgets
 
 ## 12. UI data flow
 
-`MainWindow` owns navigation and screen coordination. The New Prediction screen currently collects a question and whole-number probability, invokes `PredictionOperations`, and shows only expected application errors inline. On success it passes the returned immutable detail value to Prediction Detail and navigates there. Milestone 4 deliberately adds a collapsed **More details** section for optional initial rationale, metadata, and tags alongside the immutable-revision workflow. The operation will save all supplied initial state atomically; because these values establish the initial definition rather than edit an existing one, they require no metadata confirmation and append no definition-change record.
+`MainWindow` owns navigation and screen coordination. New Prediction keeps Question and whole-number Probability primary and places optional initial rationale, metadata, dates, and tags in a collapsed, scrollable **More details** section. One operation saves all supplied initial state atomically and navigates to Prediction Detail. Because these values establish the initial definition rather than edit an existing one, they require no metadata confirmation and append no definition-change record. An initial Forecast Deadline earlier than the current local calendar date is rejected; today is valid because the deadline is inclusive. Expected Resolution is independent and may be in the past or on either side of the deadline.
 
 Prediction Detail displays the question, current forecast, derived status, tags, and nonempty optional metadata. It refreshes when entered so date-derived status and external edits do not remain stale across navigation. Its edit dialog refreshes the prediction before opening, accepts optional text, date-only fields, and comma-separated tags, and carries that refreshed metadata version through any confirmation prompt. An unset date is shown as blank or **Not set**, never as though today's date were stored; enabling it may seed today's date as the editable choice. Background, Expected Resolution, and tags save normally without confirmation or history. Question and Resolution Criteria changes prompt about proposition meaning and advise creating a new Prediction when the proposition changed materially. Forecast Deadline additions, changes, and removals receive tailored confirmation about the cutoff and Locked behavior, without characterizing the edit as a proposition change. A confirmed protected-field save updates metadata and tags, advances the metadata version, and appends exactly one complete definition snapshot atomically. Effective no-ops and cancelled dialogs perform no write, do not advance the version, and create no history. A version mismatch before or during the transaction rejects a stale edit for review rather than overwriting newer values.
 
-Definition history is hidden when empty and collapsed by default when present. It shows only the protected fields that changed in each snapshot and renders the UTC change instant in local time. Revise Forecast, Add Journal Entry, Resolve, and Mark Invalid remain visibly disabled, and the timeline and probability-history areas remain explicit placeholders for their later milestones. Widgets perform no SQL and own no transactions.
+Definition history is hidden when empty and collapsed by default when present. It shows only the protected fields that changed in each snapshot and renders the UTC change instant in local time.
+
+For an Open prediction, **Revise Forecast** opens a side-effect-free dialog showing the reviewed current probability, a whole-number replacement probability, and optional **What changed?** rationale. The new value must differ from the current revision; returning to an older, non-current probability is valid. A successful save refreshes Current Forecast and the sequence-ordered Forecast history, whose local-time entries show each probability transition and any rationale as plain text. The dialog carries both the reviewed revision identifier and prediction metadata version, and the application rechecks both plus lifecycle eligibility inside the append transaction. A stale form is rejected rather than appending against a forecast or definition the user did not review. The action is disabled for derived Locked and persisted terminal states, with the application operation remaining authoritative if state changes while the dialog is open.
+
+Add Journal Entry, Resolve, and Mark Invalid remain visibly disabled. Milestone 5 will merge Journal entries with the forecast-only history to form the unified timeline; the probability-history area remains a Milestone 6 placeholder. Widgets perform no SQL and own no transactions.
 
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
@@ -324,7 +329,7 @@ The backup implementation must use a SQLite-safe snapshot approach rather than c
 
 ## 15. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 3, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. In addition to the M2 creation/restart path, M3 tests cover optional-value normalization, calendar-date validation, inclusive deadline derivation, case-insensitive tag reuse, confirmation and no-op behavior, full immutable snapshots, transaction rollback, concurrency rejection, collapsed local-time history rendering, and metadata persistence after restart.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 4, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 coverage remains for optional-value normalization, calendar-date validation, inclusive deadline derivation, case-insensitive tag reuse, confirmation and no-op behavior, full immutable snapshots, transaction rollback, concurrency rejection, collapsed local-time history rendering, and metadata persistence. M4 adds complete-creation rollback and restart tests, initial-deadline boundaries, rationale persistence and normalization, unchanged and nonconsecutive probability behavior, immutable append and replacement protection, lifecycle enforcement, stale revision/metadata context rejection, sequence-ordered local-time history, and revision-dialog cancellation.
 
 Most behavior should be verified below the GUI:
 

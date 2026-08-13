@@ -30,14 +30,14 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 3
+    assert first_runtime.database.schema_version == 4
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 3
+    assert second_runtime.database.schema_version == 4
     second_runtime.close()
 
 
@@ -201,6 +201,193 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert "2099" in reopened_expected.text()
     assert not history.isHidden()
     assert not history.isChecked()
+    second_runtime.close()
+
+
+def test_complete_creation_and_forecast_revision_survive_restart(
+    qtbot,
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    first_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(first_runtime.window)
+    first_runtime.window.show()
+    first_runtime.window.navigate_to("New Prediction")
+
+    question = first_runtime.window.findChild(QLineEdit, "questionInput")
+    probability = first_runtime.window.findChild(QSpinBox, "probabilityInput")
+    more_details = first_runtime.window.findChild(
+        QGroupBox,
+        "newPredictionMoreDetailsGroup",
+    )
+    rationale = first_runtime.window.findChild(
+        QPlainTextEdit,
+        "initialRationaleInput",
+    )
+    background = first_runtime.window.findChild(
+        QPlainTextEdit,
+        "initialBackgroundInput",
+    )
+    criteria = first_runtime.window.findChild(
+        QPlainTextEdit,
+        "initialResolutionCriteriaInput",
+    )
+    deadline_toggle = first_runtime.window.findChild(
+        QCheckBox,
+        "initialForecastDeadlineToggle",
+    )
+    deadline = first_runtime.window.findChild(
+        QDateEdit,
+        "initialForecastDeadlineInput",
+    )
+    expected_toggle = first_runtime.window.findChild(
+        QCheckBox,
+        "initialExpectedResolutionToggle",
+    )
+    expected = first_runtime.window.findChild(
+        QDateEdit,
+        "initialExpectedResolutionInput",
+    )
+    tags = first_runtime.window.findChild(QLineEdit, "initialTagsInput")
+    create_button = first_runtime.window.findChild(
+        QPushButton,
+        "createPredictionButton",
+    )
+    assert all(
+        widget is not None
+        for widget in (
+            question,
+            probability,
+            more_details,
+            rationale,
+            background,
+            criteria,
+            deadline_toggle,
+            deadline,
+            expected_toggle,
+            expected,
+            tags,
+            create_button,
+        )
+    )
+
+    question.setText("Will the complete M4 forecast survive restart?")
+    probability.setValue(60)
+    more_details.setChecked(True)
+    rationale.setPlainText("This is the initial evidence.")
+    background.setPlainText("A complete creation workflow.")
+    criteria.setPlainText("Yes if all values and revisions reopen from SQLite.")
+    deadline_toggle.setChecked(True)
+    deadline.setDate(QDate(2099, 12, 30))
+    expected_toggle.setChecked(True)
+    expected.setDate(QDate(2099, 12, 31))
+    tags.setText("m4, persistence")
+    qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
+
+    assert first_runtime.window.current_screen_name == "Prediction Detail"
+    current_probability = first_runtime.window.findChild(
+        QLabel,
+        "predictionDetailProbability",
+    )
+    revise_button = first_runtime.window.findChild(
+        QPushButton,
+        "reviseForecastButton",
+    )
+    initial_rationale = first_runtime.window.findChild(
+        QLabel,
+        "forecastRevisionRationale1",
+    )
+    assert current_probability is not None
+    assert revise_button is not None
+    assert initial_rationale is not None
+    assert current_probability.text() == "60%"
+    assert initial_rationale.text() == "This is the initial evidence."
+
+    with first_runtime.database.transaction() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM prediction_definition_changes"
+            ).fetchone()[0]
+            == 0
+        )
+
+    qtbot.mouseClick(revise_button, Qt.MouseButton.LeftButton)
+    revision_dialog = first_runtime.window.findChild(
+        QDialog,
+        "reviseForecastDialog",
+    )
+    assert revision_dialog is not None
+    qtbot.waitUntil(revision_dialog.isVisible)
+    revision_probability = revision_dialog.findChild(
+        QSpinBox,
+        "revisionProbabilityInput",
+    )
+    revision_rationale = revision_dialog.findChild(
+        QPlainTextEdit,
+        "revisionRationaleInput",
+    )
+    save_revision = revision_dialog.findChild(
+        QPushButton,
+        "saveForecastRevisionButton",
+    )
+    assert revision_probability is not None
+    assert revision_rationale is not None
+    assert save_revision is not None
+    revision_probability.setValue(75)
+    revision_rationale.setPlainText("New evidence moved the forecast upward.")
+    qtbot.mouseClick(save_revision, Qt.MouseButton.LeftButton)
+
+    qtbot.waitUntil(lambda: current_probability.text() == "75%")
+    revised_rationale = first_runtime.window.findChild(
+        QLabel,
+        "forecastRevisionRationale2",
+    )
+    assert revised_rationale is not None
+    assert revised_rationale.text() == "New evidence moved the forecast upward."
+    with first_runtime.database.transaction() as connection:
+        revisions = connection.execute(
+            """
+            SELECT sequence, probability_percent, rationale
+            FROM forecast_revisions
+            ORDER BY sequence
+            """
+        ).fetchall()
+    assert [tuple(row) for row in revisions] == [
+        (1, 60, "This is the initial evidence."),
+        (2, 75, "New evidence moved the forecast upward."),
+    ]
+    first_runtime.close()
+
+    second_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(second_runtime.window)
+    second_runtime.window.show()
+    second_runtime.window.navigate_to("Prediction Detail")
+    reopened_question = second_runtime.window.findChild(
+        QLabel,
+        "predictionDetailQuestion",
+    )
+    reopened_probability = second_runtime.window.findChild(
+        QLabel,
+        "predictionDetailProbability",
+    )
+    reopened_initial_rationale = second_runtime.window.findChild(
+        QLabel,
+        "forecastRevisionRationale1",
+    )
+    reopened_revised_rationale = second_runtime.window.findChild(
+        QLabel,
+        "forecastRevisionRationale2",
+    )
+    assert reopened_question is not None
+    assert reopened_probability is not None
+    assert reopened_initial_rationale is not None
+    assert reopened_revised_rationale is not None
+    assert reopened_question.text() == "Will the complete M4 forecast survive restart?"
+    assert reopened_probability.text() == "75%"
+    assert reopened_initial_rationale.text() == "This is the initial evidence."
+    assert (
+        reopened_revised_rationale.text() == "New evidence moved the forecast upward."
+    )
     second_runtime.close()
 
 

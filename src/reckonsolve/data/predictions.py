@@ -6,11 +6,14 @@ from datetime import date, datetime
 from reckonsolve.clock import format_utc, parse_utc
 from reckonsolve.domain.predictions import (
     DefinitionChange,
+    ForecastRevision,
+    NewForecastRevision,
     NewPrediction,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
     changed_definition_fields,
+    display_status,
     metadata_would_change,
 )
 
@@ -19,6 +22,22 @@ from .database import Database
 
 class PredictionChangedError(RuntimeError):
     """Raised when metadata changed after the application reviewed it."""
+
+
+class ForecastContextChangedError(RuntimeError):
+    """Raised when a revision form no longer matches current prediction state."""
+
+
+class ForecastRevisionUnchangedError(RuntimeError):
+    """Raised when a normal revision repeats the current probability."""
+
+
+class ForecastRevisionDisallowedError(RuntimeError):
+    """Raised when lifecycle state rejects a normal forecast revision."""
+
+    def __init__(self, status: PredictionStatus) -> None:
+        super().__init__(status.value)
+        self.status = status
 
 
 class PredictionRepository:
@@ -43,35 +62,46 @@ class PredictionRepository:
                     prediction_type,
                     status,
                     created_at,
-                    updated_at
+                    updated_at,
+                    background,
+                    resolution_criteria,
+                    forecast_deadline,
+                    expected_resolution
                 )
-                VALUES (?, 'binary', ?, ?, ?)
+                VALUES (?, 'binary', ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     new_prediction.question,
                     PredictionStatus.OPEN.value,
                     timestamp,
                     timestamp,
+                    new_prediction.background,
+                    new_prediction.resolution_criteria,
+                    _format_date(new_prediction.forecast_deadline),
+                    _format_date(new_prediction.expected_resolution),
                 ),
             )
             prediction_id = prediction_cursor.lastrowid
             if prediction_id is None:
                 raise sqlite3.DatabaseError("SQLite did not return a prediction ID.")
 
+            _replace_tags(connection, prediction_id, new_prediction.tags)
             connection.execute(
                 """
                 INSERT INTO forecast_revisions (
                     prediction_id,
                     probability_percent,
                     created_at,
-                    sequence
+                    sequence,
+                    rationale
                 )
-                VALUES (?, ?, ?, 1)
+                VALUES (?, ?, ?, 1, ?)
                 """,
                 (
                     prediction_id,
                     new_prediction.probability_percent,
                     timestamp,
+                    new_prediction.rationale,
                 ),
             )
             row = _select_prediction_detail(connection, prediction_id)
@@ -79,9 +109,114 @@ class PredictionRepository:
                 raise sqlite3.DatabaseError(
                     "The created prediction could not be loaded."
                 )
-            detail = _map_prediction_detail(row)
+            detail = _map_prediction_detail(
+                row,
+                _select_tags(connection, prediction_id),
+            )
 
         return detail
+
+    def append_forecast_revision(
+        self,
+        prediction_id: int,
+        new_revision: NewForecastRevision,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        created_at: datetime,
+        current_date: date,
+    ) -> PredictionDetail | None:
+        """Recheck reviewed state and append exactly one immutable revision."""
+
+        timestamp = format_utc(created_at)
+        with self._database.transaction() as connection:
+            row = _select_prediction_detail(connection, prediction_id)
+            if row is None:
+                return None
+            current = _map_prediction_detail(
+                row,
+                _select_tags(connection, prediction_id),
+            )
+            if (
+                current.current_revision_id != expected_revision_id
+                or current.metadata_version != expected_metadata_version
+            ):
+                raise ForecastContextChangedError
+
+            effective_status = display_status(
+                current.status,
+                current.forecast_deadline,
+                current_date,
+            )
+            if effective_status is not PredictionStatus.OPEN:
+                raise ForecastRevisionDisallowedError(effective_status)
+            if current.probability_percent == new_revision.probability_percent:
+                raise ForecastRevisionUnchangedError
+
+            revision_cursor = connection.execute(
+                """
+                INSERT INTO forecast_revisions (
+                    prediction_id,
+                    probability_percent,
+                    created_at,
+                    sequence,
+                    rationale
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    prediction_id,
+                    new_revision.probability_percent,
+                    timestamp,
+                    current.current_revision_sequence + 1,
+                    new_revision.rationale,
+                ),
+            )
+            if revision_cursor.lastrowid is None:
+                raise sqlite3.DatabaseError("SQLite did not return a revision ID.")
+
+            updated_row = _select_prediction_detail(connection, prediction_id)
+            if updated_row is None:
+                raise sqlite3.DatabaseError(
+                    "The revised prediction could not be loaded."
+                )
+            detail = _map_prediction_detail(
+                updated_row,
+                _select_tags(connection, prediction_id),
+            )
+
+        return detail
+
+    def list_forecast_revisions(
+        self,
+        prediction_id: int,
+    ) -> tuple[ForecastRevision, ...] | None:
+        """Load immutable forecast revisions in sequence order."""
+
+        with self._database.transaction() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM predictions WHERE id = ?",
+                (prediction_id,),
+            ).fetchone()
+            if exists is None:
+                return None
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    prediction_id,
+                    probability_percent,
+                    sequence,
+                    created_at,
+                    rationale
+                FROM forecast_revisions
+                WHERE prediction_id = ?
+                ORDER BY sequence
+                """,
+                (prediction_id,),
+            ).fetchall()
+
+        return tuple(_map_forecast_revision(row) for row in rows)
 
     def get_latest_prediction(self) -> PredictionDetail | None:
         """Load the newest prediction and derive its current revision."""
@@ -263,7 +398,10 @@ SELECT
     prediction.resolution_criteria,
     prediction.forecast_deadline,
     prediction.expected_resolution,
-    current_revision.probability_percent
+    current_revision.id AS current_revision_id,
+    current_revision.probability_percent,
+    current_revision.sequence AS current_revision_sequence,
+    current_revision.rationale AS current_rationale
 FROM predictions AS prediction
 JOIN forecast_revisions AS current_revision
     ON current_revision.id = (
@@ -300,6 +438,9 @@ def _map_prediction_detail(
         probability_percent=int(row["probability_percent"]),
         status=status,
         created_at=parse_utc(str(row["created_at"])),
+        current_revision_id=int(row["current_revision_id"]),
+        current_revision_sequence=int(row["current_revision_sequence"]),
+        current_rationale=_optional_string(row["current_rationale"]),
         background=_optional_string(row["background"]),
         resolution_criteria=_optional_string(row["resolution_criteria"]),
         forecast_deadline=_parse_date(row["forecast_deadline"]),
@@ -307,6 +448,17 @@ def _map_prediction_detail(
         tags=tags,
         updated_at=parse_utc(str(row["updated_at"])),
         metadata_version=int(row["metadata_version"]),
+    )
+
+
+def _map_forecast_revision(row: sqlite3.Row) -> ForecastRevision:
+    return ForecastRevision(
+        revision_id=int(row["id"]),
+        prediction_id=int(row["prediction_id"]),
+        probability_percent=int(row["probability_percent"]),
+        sequence=int(row["sequence"]),
+        created_at=parse_utc(str(row["created_at"])),
+        rationale=_optional_string(row["rationale"]),
     )
 
 

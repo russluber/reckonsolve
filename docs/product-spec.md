@@ -312,6 +312,8 @@ Do not create a forecast-reviews entity in v0.1. Reviews are a v0.2 feature.
 
 After a revision is saved, the normal application must not edit or delete it in place. A new probability creates a new row/event.
 
+In v0.1, a normal revision must change the current probability. Submitting the same probability with new reasoning would falsely imply that the forecast changed; reasoning that leaves the probability unchanged belongs in a Journal entry once Milestone 5 adds that workflow. The dedicated **Still at 60%** Review remains deferred to v0.2. This rule compares against the current revision only: returning later to a probability used by an older, non-current revision remains a valid change and creates a new revision.
+
 Example:
 
 ```text
@@ -379,6 +381,8 @@ Milestone 4 adds optional initial details behind a clear affordance such as "Mor
 - Tags
 
 These values establish the Prediction and first ForecastRevision; they are not later metadata edits. Initial Question, Resolution Criteria, and Forecast Deadline values therefore require no edit confirmation and create no definition-change record. Rationale belongs to the first ForecastRevision, while Background, Resolution Criteria, dates, and tags belong to the initial Prediction state.
+
+An initial Forecast Deadline may be the computer's current local calendar date or a later date, but it must not already have passed when the prediction is submitted. The deadline date is inclusive, so choosing today leaves the prediction Open through today. Expected Resolution may be in the past, and v0.1 imposes no required ordering between Expected Resolution and Forecast Deadline; they describe distinct concepts rather than a validated date range.
 
 ### 9.2 Probability input
 
@@ -483,11 +487,15 @@ What changed? (optional)
 [ Save Revision ]
 ```
 
+The new probability must differ from the current forecast. If the user's reasoning changed but their probability did not, v0.1 directs that thought to a Journal entry rather than creating a forecast revision; before Milestone 5, the interface may explain that this workflow is coming next. Returning to a probability used by an older, non-current revision is valid because it still represents a change from the current forecast.
+
 After saving:
 
-- the new revision appears in the timeline;
+- the new revision appears in the forecast-only timeline/history introduced in Milestone 4;
 - Current Forecast changes to the new probability; and
 - the probability-history chart gains a point.
+
+Milestone 5 merges Journal entries into this forecast history to produce the unified chronological timeline specified for Prediction Detail.
 
 Do not create a new revision when the user merely opens and closes the form.
 
@@ -897,6 +905,7 @@ Acceptance demonstration:
 - Revise probability with optional rationale.
 - Preserve every earlier revision.
 - Enforce revision restrictions after lock or terminal state.
+- Show saved forecast revisions in a forecast-only timeline/history that Milestone 5 will extend with Journal entries.
 
 ### Milestone 5: Timeline and journal
 
@@ -990,6 +999,8 @@ Highest-risk behavior should receive automated tests before visual polish:
 - reopen-after-restart persistence.
 
 Use representative edge cases such as a single revision, several revisions at the same displayed probability, resolution before Expected Resolution, a missing Forecast Deadline, and time-boundary transitions.
+
+For repeated displayed probabilities, cover a valid nonconsecutive return such as `60% -> 40% -> 60%`; normal v0.1 revision submission must reject an unchanged current probability such as `60% -> 60%`.
 
 ---
 

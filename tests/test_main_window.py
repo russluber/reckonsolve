@@ -57,6 +57,40 @@ class FakePrediction:
     tags: tuple[str, ...] = ()
     updated_at: datetime | None = datetime(2026, 8, 12, 19, 30, tzinfo=UTC)
     metadata_version: int = 1
+    current_revision_id: int = 1
+    current_revision_sequence: int = 1
+    current_rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FakeForecastRevision:
+    revision_id: int
+    prediction_id: int
+    probability_percent: int
+    sequence: int
+    created_at: datetime
+    rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CreatePredictionCall:
+    question: str
+    probability_percent: int
+    rationale: str | None
+    background: str | None
+    resolution_criteria: str | None
+    forecast_deadline: date | None
+    expected_resolution: date | None
+    tags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ReviseForecastCall:
+    prediction_id: int
+    probability_percent: int
+    rationale: str | None
+    expected_revision_id: int
+    expected_metadata_version: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,8 +109,22 @@ class MetadataUpdateCall:
 class FakePredictionOperations:
     def __init__(self, latest: FakePrediction | None = None) -> None:
         self.latest = latest
-        self.create_calls: list[tuple[str, int]] = []
+        self.create_calls: list[CreatePredictionCall] = []
         self.create_error: ApplicationError | None = None
+        self.revise_calls: list[ReviseForecastCall] = []
+        self.revise_error: ApplicationError | None = None
+        self.revisions: list[FakeForecastRevision] = []
+        if latest is not None:
+            self.revisions.append(
+                FakeForecastRevision(
+                    revision_id=latest.current_revision_id,
+                    prediction_id=latest.prediction_id,
+                    probability_percent=latest.probability_percent,
+                    sequence=latest.current_revision_sequence,
+                    created_at=latest.created_at,
+                    rationale=latest.current_rationale,
+                )
+            )
         self.get_calls: list[int] = []
         self.update_calls: list[MetadataUpdateCall] = []
         self.update_error: ApplicationError | None = None
@@ -90,17 +138,105 @@ class FakePredictionOperations:
         self,
         question: str,
         probability_percent: int,
+        *,
+        rationale: str | None = None,
+        background: str | None = None,
+        resolution_criteria: str | None = None,
+        forecast_deadline: date | None = None,
+        expected_resolution: date | None = None,
+        tags: tuple[str, ...] = (),
     ) -> FakePrediction:
-        self.create_calls.append((question, probability_percent))
+        self.create_calls.append(
+            CreatePredictionCall(
+                question=question,
+                probability_percent=probability_percent,
+                rationale=rationale,
+                background=background,
+                resolution_criteria=resolution_criteria,
+                forecast_deadline=forecast_deadline,
+                expected_resolution=expected_resolution,
+                tags=tags,
+            )
+        )
         if self.create_error is not None:
             raise self.create_error
         prediction = FakePrediction(
             prediction_id=1,
             question=question,
             probability_percent=probability_percent,
+            current_rationale=(rationale or "").strip() or None,
+            background=(background or "").strip() or None,
+            resolution_criteria=(resolution_criteria or "").strip() or None,
+            forecast_deadline=forecast_deadline,
+            expected_resolution=expected_resolution,
+            tags=tags,
         )
         self.latest = prediction
+        self.revisions = [
+            FakeForecastRevision(
+                revision_id=1,
+                prediction_id=1,
+                probability_percent=probability_percent,
+                sequence=1,
+                created_at=prediction.created_at,
+                rationale=prediction.current_rationale,
+            )
+        ]
         return prediction
+
+    def revise_forecast(
+        self,
+        prediction_id: int,
+        probability_percent: int,
+        *,
+        rationale: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakePrediction:
+        self.revise_calls.append(
+            ReviseForecastCall(
+                prediction_id=prediction_id,
+                probability_percent=probability_percent,
+                rationale=rationale,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
+        )
+        if self.revise_error is not None:
+            raise self.revise_error
+        if self.latest is None or self.latest.prediction_id != prediction_id:
+            raise ApplicationError("Prediction not found.")
+        new_revision_id = self.latest.current_revision_id + 1
+        new_sequence = self.latest.current_revision_sequence + 1
+        normalized_rationale = (rationale or "").strip() or None
+        self.latest = replace(
+            self.latest,
+            probability_percent=probability_percent,
+            current_revision_id=new_revision_id,
+            current_revision_sequence=new_sequence,
+            current_rationale=normalized_rationale,
+        )
+        self.revisions.append(
+            FakeForecastRevision(
+                revision_id=new_revision_id,
+                prediction_id=prediction_id,
+                probability_percent=probability_percent,
+                sequence=new_sequence,
+                created_at=datetime(2026, 8, 13, 19, 30, tzinfo=UTC),
+                rationale=normalized_rationale,
+            )
+        )
+        return self.latest
+
+    def list_forecast_revisions(
+        self,
+        prediction_id: int,
+    ) -> tuple[FakeForecastRevision, ...]:
+        return tuple(
+            revision
+            for revision in self.revisions
+            if revision.prediction_id == prediction_id
+        )
 
     def get_latest_prediction(self) -> FakePrediction | None:
         return self.latest
@@ -244,6 +380,216 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
     assert probability.value() == 50
     assert probability.suffix() == "%"
 
+    more_details = _required_child(
+        window,
+        QGroupBox,
+        "newPredictionMoreDetailsGroup",
+    )
+    more_details_content = _required_child(
+        window,
+        QWidget,
+        "newPredictionMoreDetailsContent",
+    )
+    assert not more_details.isChecked()
+    assert more_details_content.isHidden()
+
+
+def test_more_details_date_controls_are_visually_unset_until_enabled(
+    qtbot: QtBot,
+    window: MainWindow,
+) -> None:
+    window.show()
+    window.navigate_to("New Prediction")
+    _required_child(
+        window,
+        QGroupBox,
+        "newPredictionMoreDetailsGroup",
+    ).setChecked(True)
+    deadline_toggle = _required_child(
+        window,
+        QCheckBox,
+        "initialForecastDeadlineToggle",
+    )
+    deadline = _required_child(
+        window,
+        QDateEdit,
+        "initialForecastDeadlineInput",
+    )
+
+    assert not deadline_toggle.isChecked()
+    assert deadline.isHidden()
+    qtbot.mouseClick(deadline_toggle, Qt.MouseButton.LeftButton)
+    assert deadline.isVisible()
+    assert deadline.date() == QDate.currentDate()
+
+
+def test_complete_creation_submits_all_optional_details_once_and_resets(
+    qtbot: QtBot,
+    window: MainWindow,
+    operations: FakePredictionOperations,
+) -> None:
+    window.show()
+    window.navigate_to("New Prediction")
+    _required_child(
+        window,
+        QGroupBox,
+        "newPredictionMoreDetailsGroup",
+    ).setChecked(True)
+    _required_child(window, QLineEdit, "questionInput").setText(
+        "Will all initial details persist?"
+    )
+    _required_child(window, QSpinBox, "probabilityInput").setValue(73)
+    _required_child(window, QPlainTextEdit, "initialRationaleInput").setPlainText(
+        "Initial evidence"
+    )
+    _required_child(window, QPlainTextEdit, "initialBackgroundInput").setPlainText(
+        "Relevant background"
+    )
+    _required_child(
+        window,
+        QPlainTextEdit,
+        "initialResolutionCriteriaInput",
+    ).setPlainText("A published result counts.")
+    deadline_toggle = _required_child(
+        window,
+        QCheckBox,
+        "initialForecastDeadlineToggle",
+    )
+    deadline_toggle.setChecked(True)
+    _required_child(window, QDateEdit, "initialForecastDeadlineInput").setDate(
+        QDate(2026, 9, 1)
+    )
+    expected_toggle = _required_child(
+        window,
+        QCheckBox,
+        "initialExpectedResolutionToggle",
+    )
+    expected_toggle.setChecked(True)
+    _required_child(window, QDateEdit, "initialExpectedResolutionInput").setDate(
+        QDate(2026, 9, 15)
+    )
+    _required_child(window, QLineEdit, "initialTagsInput").setText(" release, desktop ")
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "createPredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.create_calls == [
+        CreatePredictionCall(
+            question="Will all initial details persist?",
+            probability_percent=73,
+            rationale="Initial evidence",
+            background="Relevant background",
+            resolution_criteria="A published result counts.",
+            forecast_deadline=date(2026, 9, 1),
+            expected_resolution=date(2026, 9, 15),
+            tags=("release", "desktop"),
+        )
+    ]
+    assert window.current_screen_name == "Prediction Detail"
+    assert (
+        _required_child(window, QLabel, "forecastRevisionRationale1").text()
+        == "Initial evidence"
+    )
+
+    window.navigate_to("New Prediction")
+    assert _required_child(window, QLineEdit, "questionInput").text() == ""
+    assert _required_child(window, QSpinBox, "probabilityInput").value() == 50
+    assert (
+        _required_child(window, QPlainTextEdit, "initialRationaleInput").toPlainText()
+        == ""
+    )
+    assert not deadline_toggle.isChecked()
+    assert _required_child(
+        window,
+        QDateEdit,
+        "initialForecastDeadlineInput",
+    ).isHidden()
+    assert not expected_toggle.isChecked()
+    assert _required_child(window, QLineEdit, "initialTagsInput").text() == ""
+    assert not _required_child(
+        window,
+        QGroupBox,
+        "newPredictionMoreDetailsGroup",
+    ).isChecked()
+
+
+def test_collapsing_more_details_preserves_entered_values_for_creation(
+    qtbot: QtBot,
+    window: MainWindow,
+    operations: FakePredictionOperations,
+) -> None:
+    window.navigate_to("New Prediction")
+    more_details = _required_child(
+        window,
+        QGroupBox,
+        "newPredictionMoreDetailsGroup",
+    )
+    more_details.setChecked(True)
+    _required_child(window, QLineEdit, "questionInput").setText(
+        "Will collapsed details remain part of the prediction?"
+    )
+    _required_child(window, QPlainTextEdit, "initialBackgroundInput").setPlainText(
+        "Keep this context"
+    )
+    more_details.setChecked(False)
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "createPredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.create_calls[0].background == "Keep this context"
+
+
+def test_creation_failure_keeps_optional_details_for_correction(
+    qtbot: QtBot,
+    window: MainWindow,
+    operations: FakePredictionOperations,
+) -> None:
+    operations.create_error = ApplicationError(
+        "Forecast Deadline cannot be before today."
+    )
+    window.navigate_to("New Prediction")
+    more_details = _required_child(
+        window,
+        QGroupBox,
+        "newPredictionMoreDetailsGroup",
+    )
+    more_details.setChecked(True)
+    _required_child(window, QLineEdit, "questionInput").setText(
+        "Will this invalid deadline remain editable?"
+    )
+    _required_child(window, QPlainTextEdit, "initialRationaleInput").setPlainText(
+        "Keep me"
+    )
+    deadline_toggle = _required_child(
+        window,
+        QCheckBox,
+        "initialForecastDeadlineToggle",
+    )
+    deadline_toggle.setChecked(True)
+    _required_child(window, QDateEdit, "initialForecastDeadlineInput").setDate(
+        QDate(2020, 1, 1)
+    )
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "createPredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert window.current_screen_name == "New Prediction"
+    assert more_details.isChecked()
+    assert deadline_toggle.isChecked()
+    assert (
+        _required_child(window, QPlainTextEdit, "initialRationaleInput").toPlainText()
+        == "Keep me"
+    )
+    error = _required_child(window, QLabel, "predictionFormError")
+    assert "before today" in error.text()
+    assert not error.isHidden()
+
 
 def test_probability_shortcuts_are_exactly_ten_through_ninety(
     qtbot: QtBot,
@@ -332,7 +678,16 @@ def test_successful_creation_accepts_probability_bounds_and_opens_detail(
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     assert operations.create_calls == [
-        ("Will the UI preserve history?", probability_percent)
+        CreatePredictionCall(
+            question="Will the UI preserve history?",
+            probability_percent=probability_percent,
+            rationale="",
+            background="",
+            resolution_criteria="",
+            forecast_deadline=None,
+            expected_resolution=None,
+            tags=(),
+        )
     ]
     assert window.current_screen_name == "Prediction Detail"
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
@@ -358,7 +713,18 @@ def test_enter_submits_new_prediction(
 
     qtbot.keyPress(question, Qt.Key.Key_Return)
 
-    assert operations.create_calls == [("Will Enter submit this prediction?", 50)]
+    assert operations.create_calls == [
+        CreatePredictionCall(
+            question="Will Enter submit this prediction?",
+            probability_percent=50,
+            rationale="",
+            background="",
+            resolution_criteria="",
+            forecast_deadline=None,
+            expected_resolution=None,
+            tags=(),
+        )
+    ]
     assert window.current_screen_name == "Prediction Detail"
 
 
@@ -512,7 +878,7 @@ def test_prediction_detail_hides_all_empty_optional_metadata(qtbot: QtBot) -> No
         assert _required_child(window, QWidget, object_name).isHidden()
 
 
-def test_prediction_detail_keeps_later_actions_as_disabled_placeholders(
+def test_prediction_detail_enables_revision_but_keeps_later_actions_disabled(
     qtbot: QtBot,
 ) -> None:
     operations = FakePredictionOperations(
@@ -521,8 +887,11 @@ def test_prediction_detail_keeps_later_actions_as_disabled_placeholders(
     window = MainWindow(operations)
     qtbot.addWidget(window)
 
+    revise = _required_child(window, QPushButton, "reviseForecastButton")
+    assert revise.isEnabled()
+    assert "preserving" in revise.toolTip()
+
     for object_name in (
-        "reviseForecastButton",
         "addJournalEntryButton",
         "resolvePredictionButton",
         "markInvalidButton",
@@ -530,14 +899,7 @@ def test_prediction_detail_keeps_later_actions_as_disabled_placeholders(
         button = _required_child(window, QPushButton, object_name)
         assert not button.isEnabled()
         assert "later milestone" in button.toolTip()
-    assert (
-        "later milestone"
-        in _required_child(
-            window,
-            QLabel,
-            "timelinePlaceholder",
-        ).text()
-    )
+    assert _required_child(window, QLabel, "timelinePlaceholder").isHidden()
     assert (
         "later milestone"
         in _required_child(
@@ -545,6 +907,230 @@ def test_prediction_detail_keeps_later_actions_as_disabled_placeholders(
             QLabel,
             "probabilityHistoryPlaceholder",
         ).text()
+    )
+
+
+@pytest.mark.parametrize(
+    "status",
+    [PredictionStatus.LOCKED, PredictionStatus.RESOLVED, PredictionStatus.INVALID],
+)
+def test_prediction_detail_disables_revision_for_ineligible_lifecycle(
+    qtbot: QtBot,
+    status: PredictionStatus,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Can this forecast be revised?", 60, status=status)
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    button = _required_child(window, QPushButton, "reviseForecastButton")
+    assert not button.isEnabled()
+    assert status.value in button.toolTip()
+
+
+def test_opening_and_cancelling_revision_dialog_appends_nothing(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(
+            7,
+            "Will opening the editor preserve history?",
+            60,
+            current_revision_id=11,
+            current_revision_sequence=3,
+        )
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_revision_dialog(qtbot, window)
+
+    assert _required_child(dialog, QLabel, "reviseCurrentProbability").text() == "60%"
+    assert _required_child(dialog, QSpinBox, "revisionProbabilityInput").value() == 60
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "cancelForecastRevisionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.revise_calls == []
+    assert len(operations.revisions) == 1
+
+
+def test_opening_revision_refreshes_probability_and_concurrency_tokens(
+    qtbot: QtBot,
+) -> None:
+    original = FakePrediction(
+        7,
+        "Will the revision editor use fresh state?",
+        60,
+        metadata_version=1,
+        current_revision_id=11,
+        current_revision_sequence=1,
+    )
+    operations = FakePredictionOperations(original)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    operations.latest = replace(
+        original,
+        probability_percent=70,
+        metadata_version=2,
+        current_revision_id=12,
+        current_revision_sequence=2,
+    )
+    operations.revisions.append(
+        FakeForecastRevision(
+            12,
+            7,
+            70,
+            2,
+            datetime(2026, 8, 13, tzinfo=UTC),
+        )
+    )
+
+    dialog = _open_revision_dialog(qtbot, window)
+    assert _required_child(dialog, QLabel, "reviseCurrentProbability").text() == "70%"
+    _required_child(dialog, QSpinBox, "revisionProbabilityInput").setValue(45)
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "saveForecastRevisionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.revise_calls == [
+        ReviseForecastCall(
+            prediction_id=7,
+            probability_percent=45,
+            rationale="",
+            expected_revision_id=12,
+            expected_metadata_version=2,
+        )
+    ]
+
+
+def test_revision_refresh_that_finds_locked_state_opens_no_dialog(
+    qtbot: QtBot,
+) -> None:
+    original = FakePrediction(7, "Will this lock before the dialog opens?", 60)
+    operations = FakePredictionOperations(original)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    operations.latest = replace(original, status=PredictionStatus.LOCKED)
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "reviseForecastButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert window.findChild(QDialog, "reviseForecastDialog") is None
+    assert operations.revise_calls == []
+    assert not _required_child(window, QPushButton, "reviseForecastButton").isEnabled()
+    error = _required_child(window, QLabel, "predictionDetailError")
+    assert "locked" in error.text()
+    assert not error.isHidden()
+
+
+def test_same_probability_revision_error_stays_inline_and_open(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Will an unchanged forecast be rejected?", 60)
+    )
+    operations.revise_error = ApplicationError(
+        "The new forecast matches the current 60%. Add a journal entry instead."
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_revision_dialog(qtbot, window)
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "saveForecastRevisionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert dialog.isVisible()
+    error = _required_child(dialog, QLabel, "reviseForecastError")
+    assert "matches the current" in error.text()
+    assert not error.isHidden()
+    assert len(operations.revisions) == 1
+
+
+@pytest.mark.parametrize("new_probability", [0, 37, 100])
+def test_revision_appends_with_tokens_and_refreshes_forecast_history(
+    qtbot: QtBot,
+    new_probability: int,
+) -> None:
+    original = FakePrediction(
+        7,
+        "Will a revision append honestly?",
+        60,
+        metadata_version=4,
+        current_revision_id=11,
+        current_revision_sequence=3,
+        current_rationale="Initial <b>reason</b>",
+    )
+    operations = FakePredictionOperations(original)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_revision_dialog(qtbot, window)
+    _required_child(dialog, QSpinBox, "revisionProbabilityInput").setValue(
+        new_probability
+    )
+    _required_child(dialog, QPlainTextEdit, "revisionRationaleInput").setPlainText(
+        "New <i>evidence</i>"
+    )
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "saveForecastRevisionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.revise_calls == [
+        ReviseForecastCall(
+            prediction_id=7,
+            probability_percent=new_probability,
+            rationale="New <i>evidence</i>",
+            expected_revision_id=11,
+            expected_metadata_version=4,
+        )
+    ]
+    assert _required_child(window, QLabel, "predictionDetailProbability").text() == (
+        f"{new_probability}%"
+    )
+    assert (
+        _required_child(window, QLabel, "forecastRevisionProbability12").text()
+        == f"FORECAST  60% \N{RIGHTWARDS ARROW} {new_probability}%"
+    )
+    rationale = _required_child(window, QLabel, "forecastRevisionRationale12")
+    assert rationale.text() == "New <i>evidence</i>"
+    assert rationale.textFormat() is Qt.TextFormat.PlainText
+
+
+def test_forecast_history_uses_previous_revision_for_nonconsecutive_return(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(
+        7,
+        "Will the forecast return to its starting value?",
+        60,
+        current_revision_id=3,
+        current_revision_sequence=3,
+    )
+    operations = FakePredictionOperations(latest)
+    operations.revisions = [
+        FakeForecastRevision(1, 7, 60, 1, datetime(2026, 8, 10, tzinfo=UTC)),
+        FakeForecastRevision(2, 7, 40, 2, datetime(2026, 8, 11, tzinfo=UTC)),
+        FakeForecastRevision(3, 7, 60, 3, datetime(2026, 8, 12, tzinfo=UTC)),
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    assert (
+        _required_child(
+            window,
+            QLabel,
+            "forecastRevisionProbability3",
+        ).text()
+        == "FORECAST  40% \N{RIGHTWARDS ARROW} 60%"
     )
 
 
@@ -1225,6 +1811,18 @@ def _open_edit_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
         Qt.MouseButton.LeftButton,
     )
     dialog = _required_child(window, QDialog, "editPredictionDetailsDialog")
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def _open_revision_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
+    window.show()
+    window.navigate_to("Prediction Detail")
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "reviseForecastButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    dialog = _required_child(window, QDialog, "reviseForecastDialog")
     qtbot.waitUntil(dialog.isVisible)
     return dialog
 

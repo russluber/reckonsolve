@@ -29,7 +29,7 @@ def test_migration_three_preserves_v2_prediction_and_revision(tmp_path) -> None:
         )
     v2.close()
 
-    upgraded = Database.open(database_path)
+    upgraded = Database.open(database_path, migrations=MIGRATIONS[:3])
 
     assert upgraded.schema_version == 3
     with upgraded.transaction() as connection:

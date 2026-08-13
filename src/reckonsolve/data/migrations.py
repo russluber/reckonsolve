@@ -341,6 +341,46 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=4,
+        name="add forecast revision rationale and immutability guards",
+        statements=(
+            """
+            ALTER TABLE forecast_revisions ADD COLUMN rationale TEXT
+                CHECK (rationale IS NULL OR (
+                    length(rationale) > 0
+                    AND rationale = trim(rationale)
+                    AND instr(rationale, char(0)) = 0
+                ))
+            """,
+            """
+            CREATE TRIGGER forecast_revisions_reject_history_replacement
+            BEFORE INSERT ON forecast_revisions
+            WHEN EXISTS (
+                SELECT 1 FROM forecast_revisions WHERE id = NEW.id
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM forecast_revisions
+                WHERE prediction_id = NEW.prediction_id
+                    AND sequence = NEW.sequence
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved forecast revisions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER forecast_revisions_reject_direct_delete
+            BEFORE DELETE ON forecast_revisions
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved forecast revisions are immutable');
+            END
+            """,
+        ),
+    ),
 )
 
 

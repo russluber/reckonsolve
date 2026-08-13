@@ -2,11 +2,13 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its Prediction Detail and metadata-editing milestone, but most forecasting workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its immutable forecast-revision milestone, but several forecasting workflows are still being built and it is not ready for normal use.
 
-The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. Prediction Detail displays its current forecast, status, tags, dates, Background, and Resolution Criteria. These details can be edited; changes to the Question, Resolution Criteria, or Forecast Deadline require confirmation and remain visible in a collapsed Definition history. Data persists across restarts.
+The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts. Saved revisions appear in a chronological Forecast history and persist across restarts.
 
-The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. Revising a forecast, adding journal entries, resolving, and invalidating are also reserved for later milestones.
+Question, Resolution Criteria, and Forecast Deadline edits require tailored confirmation and remain visible in a collapsed Definition history. A Forecast Deadline is inclusive, and normal revisions are unavailable once it has passed. Unchanged probabilities are not recorded as revisions; journal entries for reasoning that does not change the probability arrive in the next milestone.
+
+The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. Journal entries, the unified timeline, probability-history chart, resolution, and invalidation are reserved for later milestones.
 
 ## Documentation
 

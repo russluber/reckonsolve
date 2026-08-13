@@ -24,25 +24,50 @@ class PredictionStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class NewPrediction:
-    """Validated input for a binary prediction and its initial forecast."""
+    """Validated initial prediction state and its sequence-one forecast."""
 
     question: str
     probability_percent: int
+    rationale: str | None = None
+    background: str | None = None
+    resolution_criteria: str | None = None
+    forecast_deadline: date | None = None
+    expected_resolution: date | None = None
+    tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "question", _required_text(self.question, "question"))
+        _validate_probability(self.probability_percent)
+        object.__setattr__(
+            self, "rationale", _optional_text(self.rationale, "rationale")
+        )
+        object.__setattr__(
+            self,
+            "background",
+            _optional_text(self.background, "background"),
+        )
+        object.__setattr__(
+            self,
+            "resolution_criteria",
+            _optional_text(self.resolution_criteria, "resolution_criteria"),
+        )
+        _validate_date_only(self.forecast_deadline, "forecast_deadline")
+        _validate_date_only(self.expected_resolution, "expected_resolution")
+        object.__setattr__(self, "tags", _normalize_tags(self.tags))
 
-        probability = self.probability_percent
-        if isinstance(probability, bool) or not isinstance(probability, int):
-            raise PredictionValidationError(
-                "Probability must be a whole percentage from 0 to 100.",
-                field="probability_percent",
-            )
-        if not 0 <= probability <= 100:
-            raise PredictionValidationError(
-                "Probability must be between 0 and 100.",
-                field="probability_percent",
-            )
+
+@dataclass(frozen=True, slots=True)
+class NewForecastRevision:
+    """Validated input for an append-only forecast change."""
+
+    probability_percent: int
+    rationale: str | None = None
+
+    def __post_init__(self) -> None:
+        _validate_probability(self.probability_percent)
+        object.__setattr__(
+            self, "rationale", _optional_text(self.rationale, "rationale")
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +90,7 @@ class ForecastRevision:
     probability_percent: int
     sequence: int
     created_at: datetime
+    rationale: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +102,9 @@ class PredictionDetail:
     probability_percent: int
     status: PredictionStatus
     created_at: datetime
+    current_revision_id: int
+    current_revision_sequence: int
+    current_rationale: str | None = None
     background: str | None = None
     resolution_criteria: str | None = None
     forecast_deadline: date | None = None
@@ -189,6 +218,19 @@ def display_status(
     ):
         return PredictionStatus.LOCKED
     return persisted_status
+
+
+def _validate_probability(probability: object) -> None:
+    if isinstance(probability, bool) or not isinstance(probability, int):
+        raise PredictionValidationError(
+            "Probability must be a whole percentage from 0 to 100.",
+            field="probability_percent",
+        )
+    if not 0 <= probability <= 100:
+        raise PredictionValidationError(
+            "Probability must be between 0 and 100.",
+            field="probability_percent",
+        )
 
 
 def _required_text(value: object, field: str) -> str:

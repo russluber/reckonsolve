@@ -53,6 +53,20 @@ class PredictionSnapshot(Protocol):
     tags: tuple[str, ...]
     updated_at: datetime | None
     metadata_version: int
+    current_revision_id: int
+    current_revision_sequence: int
+    current_rationale: str | None
+
+
+class ForecastRevisionSnapshot(Protocol):
+    """Read-only revision data needed by the forecast timeline."""
+
+    revision_id: int
+    prediction_id: int
+    probability_percent: int
+    sequence: int
+    created_at: datetime
+    rationale: str | None
 
 
 class PredictionOperations(Protocol):
@@ -62,8 +76,32 @@ class PredictionOperations(Protocol):
         self,
         question: str,
         probability_percent: int,
+        *,
+        rationale: str | None = None,
+        background: str | None = None,
+        resolution_criteria: str | None = None,
+        forecast_deadline: date | None = None,
+        expected_resolution: date | None = None,
+        tags: tuple[str, ...] = (),
     ) -> PredictionSnapshot:
         """Create a prediction and its initial revision atomically."""
+
+    def revise_forecast(
+        self,
+        prediction_id: int,
+        probability_percent: int,
+        *,
+        rationale: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> PredictionSnapshot:
+        """Append an eligible immutable forecast revision."""
+
+    def list_forecast_revisions(
+        self,
+        prediction_id: int,
+    ) -> tuple[ForecastRevisionSnapshot, ...]:
+        """Return immutable forecast revisions in sequence order."""
 
     def get_latest_prediction(self) -> PredictionSnapshot | None:
         """Return the most recently created prediction, if one exists."""
@@ -158,6 +196,100 @@ class NewPredictionScreen(QWidget):
         self.endpoint_note.setObjectName("probabilityEndpointNote")
         self.endpoint_note.setWordWrap(True)
 
+        self.more_details = QGroupBox("More details", self)
+        self.more_details.setObjectName("newPredictionMoreDetailsGroup")
+        self.more_details.setCheckable(True)
+        self.more_details.setChecked(False)
+
+        self.more_details_content = QWidget(self.more_details)
+        self.more_details_content.setObjectName("newPredictionMoreDetailsContent")
+        more_details_layout = QVBoxLayout(self.more_details_content)
+        more_details_layout.setContentsMargins(4, 8, 4, 4)
+
+        rationale_label = QLabel(
+            "Initial rationale (optional)", self.more_details_content
+        )
+        self.rationale_input = QPlainTextEdit(self.more_details_content)
+        self.rationale_input.setObjectName("initialRationaleInput")
+        self.rationale_input.setAccessibleName("Initial rationale")
+        self.rationale_input.setPlaceholderText("Why is this your initial forecast?")
+        self.rationale_input.setMaximumHeight(100)
+        self.rationale_input.setTabChangesFocus(True)
+        rationale_label.setBuddy(self.rationale_input)
+
+        background_label = QLabel("Background (optional)", self.more_details_content)
+        self.background_input = QPlainTextEdit(self.more_details_content)
+        self.background_input.setObjectName("initialBackgroundInput")
+        self.background_input.setAccessibleName("Background")
+        self.background_input.setMaximumHeight(100)
+        self.background_input.setTabChangesFocus(True)
+        background_label.setBuddy(self.background_input)
+
+        criteria_label = QLabel(
+            "Resolution Criteria (optional)",
+            self.more_details_content,
+        )
+        self.resolution_criteria_input = QPlainTextEdit(self.more_details_content)
+        self.resolution_criteria_input.setObjectName("initialResolutionCriteriaInput")
+        self.resolution_criteria_input.setAccessibleName("Resolution criteria")
+        self.resolution_criteria_input.setMaximumHeight(100)
+        self.resolution_criteria_input.setTabChangesFocus(True)
+        criteria_label.setBuddy(self.resolution_criteria_input)
+
+        self.forecast_deadline_toggle, self.forecast_deadline_input = (
+            _create_optional_date_controls(
+                self.more_details_content,
+                "Forecast deadline",
+                "initialForecastDeadlineToggle",
+                "initialForecastDeadlineInput",
+                None,
+            )
+        )
+        self.expected_resolution_toggle, self.expected_resolution_input = (
+            _create_optional_date_controls(
+                self.more_details_content,
+                "Expected resolution",
+                "initialExpectedResolutionToggle",
+                "initialExpectedResolutionInput",
+                None,
+            )
+        )
+
+        tags_label = QLabel(
+            "Tags (optional, comma-separated)",
+            self.more_details_content,
+        )
+        self.tags_input = QLineEdit(self.more_details_content)
+        self.tags_input.setObjectName("initialTagsInput")
+        self.tags_input.setAccessibleName("Tags")
+        tags_label.setBuddy(self.tags_input)
+
+        more_details_layout.addWidget(rationale_label)
+        more_details_layout.addWidget(self.rationale_input)
+        more_details_layout.addWidget(background_label)
+        more_details_layout.addWidget(self.background_input)
+        more_details_layout.addWidget(criteria_label)
+        more_details_layout.addWidget(self.resolution_criteria_input)
+        more_details_layout.addWidget(
+            _date_input_row(
+                self.forecast_deadline_toggle,
+                self.forecast_deadline_input,
+            )
+        )
+        more_details_layout.addWidget(
+            _date_input_row(
+                self.expected_resolution_toggle,
+                self.expected_resolution_input,
+            )
+        )
+        more_details_layout.addWidget(tags_label)
+        more_details_layout.addWidget(self.tags_input)
+
+        more_details_group_layout = QVBoxLayout(self.more_details)
+        more_details_group_layout.addWidget(self.more_details_content)
+        self.more_details.toggled.connect(self.more_details_content.setVisible)
+        self.more_details_content.setHidden(True)
+
         self.form_error = QLabel("", self)
         self.form_error.setObjectName("predictionFormError")
         self.form_error.setAccessibleName("Prediction form error")
@@ -169,7 +301,9 @@ class NewPredictionScreen(QWidget):
         self.create_button.setObjectName("createPredictionButton")
         self.create_button.setAccessibleName("Create prediction")
 
-        layout = QVBoxLayout(self)
+        form_content = QWidget(self)
+        form_content.setObjectName("newPredictionFormContent")
+        layout = QVBoxLayout(form_content)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(title)
         layout.addSpacing(18)
@@ -181,12 +315,43 @@ class NewPredictionScreen(QWidget):
         layout.addWidget(shortcuts)
         layout.addWidget(self.endpoint_note)
         layout.addSpacing(10)
+        layout.addWidget(self.more_details)
         layout.addWidget(self.form_error)
         layout.addWidget(self.create_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch()
 
+        scroll_area = QScrollArea(self)
+        scroll_area.setObjectName("newPredictionScrollArea")
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setWidget(form_content)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.addWidget(scroll_area)
+
         self.setTabOrder(self.question_input, self.probability_input)
-        self.setTabOrder(self.probability_input, self.create_button)
+        self.setTabOrder(self.probability_input, self.more_details)
+        self.setTabOrder(self.more_details, self.rationale_input)
+        self.setTabOrder(self.rationale_input, self.background_input)
+        self.setTabOrder(self.background_input, self.resolution_criteria_input)
+        self.setTabOrder(
+            self.resolution_criteria_input,
+            self.forecast_deadline_toggle,
+        )
+        self.setTabOrder(
+            self.forecast_deadline_toggle,
+            self.forecast_deadline_input,
+        )
+        self.setTabOrder(
+            self.forecast_deadline_input,
+            self.expected_resolution_toggle,
+        )
+        self.setTabOrder(
+            self.expected_resolution_toggle,
+            self.expected_resolution_input,
+        )
+        self.setTabOrder(self.expected_resolution_input, self.tags_input)
+        self.setTabOrder(self.tags_input, self.create_button)
 
         self.probability_input.valueChanged.connect(self._update_endpoint_note)
         self.question_input.returnPressed.connect(self.submit)
@@ -210,14 +375,39 @@ class NewPredictionScreen(QWidget):
             prediction = self._operations.create_prediction(
                 question=question,
                 probability_percent=self.probability_input.value(),
+                rationale=self.rationale_input.toPlainText(),
+                background=self.background_input.toPlainText(),
+                resolution_criteria=self.resolution_criteria_input.toPlainText(),
+                forecast_deadline=_optional_date(
+                    self.forecast_deadline_toggle,
+                    self.forecast_deadline_input,
+                ),
+                expected_resolution=_optional_date(
+                    self.expected_resolution_toggle,
+                    self.expected_resolution_input,
+                ),
+                tags=_parse_tags(self.tags_input.text()),
             )
         except ApplicationError as error:
             self._show_error(str(error))
             return
 
+        self._reset_form()
+        self.prediction_created.emit(prediction)
+
+    def _reset_form(self) -> None:
         self.question_input.clear()
         self.probability_input.setValue(50)
-        self.prediction_created.emit(prediction)
+        self.rationale_input.clear()
+        self.background_input.clear()
+        self.resolution_criteria_input.clear()
+        self.forecast_deadline_toggle.setChecked(False)
+        self.forecast_deadline_input.setDate(QDate.currentDate())
+        self.expected_resolution_toggle.setChecked(False)
+        self.expected_resolution_input.setDate(QDate.currentDate())
+        self.tags_input.clear()
+        self.more_details.setChecked(False)
+        self._hide_error()
 
     @staticmethod
     def _make_primary_label(label: QLabel) -> None:
@@ -412,9 +602,7 @@ class EditPredictionDetailsDialog(QDialog):
                 self.expected_resolution_toggle,
                 self.expected_resolution_input,
             ),
-            tags=tuple(
-                tag.strip() for tag in self.tags_input.text().split(",") if tag.strip()
-            ),
+            tags=_parse_tags(self.tags_input.text()),
             expected_metadata_version=self._baseline_metadata_version,
             confirm_meaning_change=confirm_meaning_change,
         )
@@ -459,25 +647,163 @@ class EditPredictionDetailsDialog(QDialog):
         input_name: str,
         value: date | None,
     ) -> tuple[QCheckBox, QDateEdit]:
-        toggle = QCheckBox(f"Set {label.lower()}", self)
-        toggle.setObjectName(toggle_name)
-        date_input = QDateEdit(self)
-        date_input.setObjectName(input_name)
-        date_input.setAccessibleName(label)
-        date_input.setCalendarPopup(True)
-        date_input.setDisplayFormat("yyyy-MM-dd")
-        date_input.setDateRange(
-            _to_qdate(MIN_METADATA_DATE),
-            _to_qdate(MAX_METADATA_DATE),
+        return _create_optional_date_controls(
+            self,
+            label,
+            toggle_name,
+            input_name,
+            value,
         )
-        initial_date = QDate.currentDate() if value is None else _to_qdate(value)
-        date_input.setDate(initial_date)
-        toggle.setChecked(value is not None)
-        date_input.setEnabled(toggle.isChecked())
-        date_input.setVisible(toggle.isChecked())
-        toggle.toggled.connect(date_input.setEnabled)
-        toggle.toggled.connect(date_input.setVisible)
-        return toggle, date_input
+
+
+class ReviseForecastDialog(QDialog):
+    """Collect a new probability and append exactly one forecast revision."""
+
+    revision_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: PredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("reviseForecastDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Revise Forecast")
+        self.setModal(True)
+        self.resize(520, 390)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision_id
+        self._expected_metadata_version = prediction.metadata_version
+
+        title = QLabel("Revise Forecast", self)
+        title.setObjectName("reviseForecastTitle")
+
+        current_heading = QLabel("Current forecast", self)
+        self.current_probability = QLabel(
+            f"{prediction.probability_percent}%",
+            self,
+        )
+        self.current_probability.setObjectName("reviseCurrentProbability")
+        self.current_probability.setAccessibleName("Current forecast")
+        current_font = QFont(self.current_probability.font())
+        current_font.setBold(True)
+        current_font.setPointSize(current_font.pointSize() + 3)
+        self.current_probability.setFont(current_font)
+
+        probability_label = QLabel("New forecast", self)
+        self.probability_input = QSpinBox(self)
+        self.probability_input.setObjectName("revisionProbabilityInput")
+        self.probability_input.setAccessibleName("New forecast probability")
+        self.probability_input.setRange(0, 100)
+        self.probability_input.setSuffix("%")
+        self.probability_input.setValue(prediction.probability_percent)
+        probability_label.setBuddy(self.probability_input)
+
+        shortcuts = QWidget(self)
+        shortcuts.setObjectName("revisionProbabilityShortcuts")
+        shortcuts_layout = QHBoxLayout(shortcuts)
+        shortcuts_layout.setContentsMargins(0, 0, 0, 0)
+        shortcuts_layout.setSpacing(6)
+        for probability in range(10, 100, 10):
+            shortcut = QPushButton(str(probability), shortcuts)
+            shortcut.setObjectName(f"revisionProbabilityShortcut{probability}")
+            shortcut.setAccessibleName(f"Set new probability to {probability}%")
+            shortcut.clicked.connect(
+                lambda _checked=False, value=probability: (
+                    self.probability_input.setValue(value)
+                )
+            )
+            shortcuts_layout.addWidget(shortcut)
+        shortcuts_layout.addStretch()
+
+        self.endpoint_note = QLabel(
+            "0% and 100% express absolute certainty.",
+            self,
+        )
+        self.endpoint_note.setObjectName("revisionProbabilityEndpointNote")
+        self.endpoint_note.setWordWrap(True)
+
+        rationale_label = QLabel("What changed? (optional)", self)
+        self.rationale_input = QPlainTextEdit(self)
+        self.rationale_input.setObjectName("revisionRationaleInput")
+        self.rationale_input.setAccessibleName("What changed")
+        self.rationale_input.setMaximumHeight(110)
+        self.rationale_input.setTabChangesFocus(True)
+        rationale_label.setBuddy(self.rationale_input)
+
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("reviseForecastError")
+        self.form_error.setAccessibleName("Revise forecast error")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        self.buttons.setObjectName("reviseForecastButtons")
+        save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        save_button.setObjectName("saveForecastRevisionButton")
+        save_button.setText("Save Revision")
+        save_button.setDefault(True)
+        cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel_button.setObjectName("cancelForecastRevisionButton")
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(current_heading)
+        layout.addWidget(self.current_probability)
+        layout.addSpacing(8)
+        layout.addWidget(probability_label)
+        layout.addWidget(self.probability_input)
+        layout.addWidget(shortcuts)
+        layout.addWidget(self.endpoint_note)
+        layout.addWidget(rationale_label)
+        layout.addWidget(self.rationale_input)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.setTabOrder(self.probability_input, self.rationale_input)
+        self.setTabOrder(self.rationale_input, save_button)
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self.probability_input.valueChanged.connect(self._update_endpoint_note)
+        self._update_endpoint_note(self.probability_input.value())
+        self.probability_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.probability_input.selectAll()
+
+    def submit(self) -> None:
+        """Invoke the append operation; expected failures remain in the dialog."""
+        self._hide_error()
+        try:
+            prediction = self._operations.revise_forecast(
+                self._prediction_id,
+                self.probability_input.value(),
+                rationale=self.rationale_input.toPlainText(),
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.revision_saved.emit(prediction)
+        self.accept()
+
+    def _update_endpoint_note(self, probability: int) -> None:
+        self.endpoint_note.setHidden(probability not in (0, 100))
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
 
 
 class PredictionDetailScreen(QWidget):
@@ -493,6 +819,7 @@ class PredictionDetailScreen(QWidget):
         self._operations = operations
         self._prediction: PredictionSnapshot | None = None
         self._edit_dialog: EditPredictionDetailsDialog | None = None
+        self._revision_dialog: ReviseForecastDialog | None = None
 
         title = QLabel("Prediction Detail", self)
         title.setObjectName("predictionDetailScreenTitle")
@@ -555,8 +882,11 @@ class PredictionDetailScreen(QWidget):
         action_row.setObjectName("futurePredictionActions")
         action_layout = QHBoxLayout(action_row)
         action_layout.setContentsMargins(0, 0, 0, 0)
+        self.revise_forecast_button = QPushButton("Revise Forecast", action_row)
+        self.revise_forecast_button.setObjectName("reviseForecastButton")
+        self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
+        action_layout.addWidget(self.revise_forecast_button)
         for label, object_name in (
-            ("Revise Forecast", "reviseForecastButton"),
             ("Add Journal Entry", "addJournalEntryButton"),
             ("Resolve", "resolvePredictionButton"),
             ("Mark Invalid", "markInvalidButton"),
@@ -609,10 +939,14 @@ class PredictionDetailScreen(QWidget):
         )
         self.definition_history_content.setHidden(True)
 
-        timeline_label = QLabel("TIMELINE", self.detail_content)
+        timeline_label = QLabel("FORECAST HISTORY", self.detail_content)
         timeline_label.setObjectName("timelineHeading")
+        self.forecast_timeline = QWidget(self.detail_content)
+        self.forecast_timeline.setObjectName("forecastTimeline")
+        self.forecast_timeline_layout = QVBoxLayout(self.forecast_timeline)
+        self.forecast_timeline_layout.setContentsMargins(0, 0, 0, 0)
         self.timeline_placeholder = QLabel(
-            "Forecast revisions and journal entries will appear here in a later milestone.",
+            "No forecast revisions are available.",
             self.detail_content,
         )
         self.timeline_placeholder.setObjectName("timelinePlaceholder")
@@ -643,6 +977,7 @@ class PredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.definition_history)
         detail_layout.addSpacing(16)
         detail_layout.addWidget(timeline_label)
+        detail_layout.addWidget(self.forecast_timeline)
         detail_layout.addWidget(self.timeline_placeholder)
         detail_layout.addSpacing(12)
         detail_layout.addWidget(chart_label)
@@ -686,12 +1021,24 @@ class PredictionDetailScreen(QWidget):
         self.question.setText(prediction.question)
         self.status.setText(prediction.status.value.upper())
         self.probability.setText(f"{prediction.probability_percent}%")
+        revision_allowed = prediction.status is PredictionStatus.OPEN
+        self.revise_forecast_button.setEnabled(revision_allowed)
+        if revision_allowed:
+            self.revise_forecast_button.setToolTip(
+                "Append a new probability while preserving this forecast."
+            )
+        else:
+            self.revise_forecast_button.setToolTip(
+                f"Forecast revisions are not allowed while this prediction is "
+                f"{prediction.status.value}."
+            )
         self.tags.setText("  ".join(f"#{tag}" for tag in prediction.tags))
         self.tags.setHidden(not prediction.tags)
         self._show_optional_metadata(prediction)
         self.empty_state.setHidden(True)
         self.detail_content.setHidden(False)
         self._load_definition_history(prediction.prediction_id)
+        self._load_forecast_timeline(prediction.prediction_id)
 
     def refresh(self) -> None:
         """Reload the displayed prediction while retaining data on a read failure."""
@@ -727,8 +1074,33 @@ class PredictionDetailScreen(QWidget):
         dialog.finished.connect(self._edit_dialog_finished)
         dialog.open()
 
+    def open_revise_forecast(self) -> None:
+        """Refresh eligibility, then open a side-effect-free revision dialog."""
+        if self._prediction is None:
+            return
+        try:
+            prediction = self._operations.get_prediction(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(prediction)
+        if prediction.status is not PredictionStatus.OPEN:
+            self._show_error(
+                f"Forecast revisions are not allowed while this prediction is "
+                f"{prediction.status.value}."
+            )
+            return
+        dialog = ReviseForecastDialog(self._operations, prediction, self)
+        self._revision_dialog = dialog
+        dialog.revision_saved.connect(self.show_prediction)
+        dialog.finished.connect(self._revision_dialog_finished)
+        dialog.open()
+
     def _edit_dialog_finished(self, _result: int) -> None:
         self._edit_dialog = None
+
+    def _revision_dialog_finished(self, _result: int) -> None:
+        self._revision_dialog = None
 
     def _show_optional_metadata(self, prediction: PredictionSnapshot) -> None:
         self.forecast_deadline.setText(_format_date(prediction.forecast_deadline))
@@ -757,6 +1129,31 @@ class PredictionDetailScreen(QWidget):
         self.definition_history_content.setHidden(True)
         self.definition_history.setHidden(not changes)
 
+    def _load_forecast_timeline(self, prediction_id: int) -> None:
+        try:
+            revisions = self._operations.list_forecast_revisions(prediction_id)
+        except ApplicationError as error:
+            self.forecast_timeline.setHidden(True)
+            self.timeline_placeholder.setText("Forecast history could not be loaded.")
+            self.timeline_placeholder.setHidden(False)
+            self._show_error(str(error))
+            return
+
+        _clear_widget_layout(self.forecast_timeline_layout)
+        previous_probability: int | None = None
+        for revision in revisions:
+            self.forecast_timeline_layout.addWidget(
+                _forecast_revision_widget(
+                    revision,
+                    previous_probability,
+                    self.forecast_timeline,
+                )
+            )
+            previous_probability = revision.probability_percent
+        self.forecast_timeline.setHidden(not revisions)
+        self.timeline_placeholder.setText("No forecast revisions are available.")
+        self.timeline_placeholder.setHidden(bool(revisions))
+
     def _show_error(self, message: str) -> None:
         self.detail_error.setText(message)
         self.detail_error.setHidden(False)
@@ -776,11 +1173,43 @@ def _date_input_row(toggle: QCheckBox, date_input: QDateEdit) -> QWidget:
     return row
 
 
+def _create_optional_date_controls(
+    parent: QWidget,
+    label: str,
+    toggle_name: str,
+    input_name: str,
+    value: date | None,
+) -> tuple[QCheckBox, QDateEdit]:
+    toggle = QCheckBox(f"Set {label.lower()}", parent)
+    toggle.setObjectName(toggle_name)
+    date_input = QDateEdit(parent)
+    date_input.setObjectName(input_name)
+    date_input.setAccessibleName(label)
+    date_input.setCalendarPopup(True)
+    date_input.setDisplayFormat("yyyy-MM-dd")
+    date_input.setDateRange(
+        _to_qdate(MIN_METADATA_DATE),
+        _to_qdate(MAX_METADATA_DATE),
+    )
+    initial_date = QDate.currentDate() if value is None else _to_qdate(value)
+    date_input.setDate(initial_date)
+    toggle.setChecked(value is not None)
+    date_input.setEnabled(toggle.isChecked())
+    date_input.setVisible(toggle.isChecked())
+    toggle.toggled.connect(date_input.setEnabled)
+    toggle.toggled.connect(date_input.setVisible)
+    return toggle, date_input
+
+
 def _optional_date(toggle: QCheckBox, date_input: QDateEdit) -> date | None:
     if not toggle.isChecked():
         return None
     value = date_input.date()
     return date(value.year(), value.month(), value.day())
+
+
+def _parse_tags(value: str) -> tuple[str, ...]:
+    return tuple(tag.strip() for tag in value.split(",") if tag.strip())
 
 
 def _to_qdate(value: date) -> QDate:
@@ -867,6 +1296,43 @@ def _definition_change_widget(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         layout.addWidget(field_change)
+    return frame
+
+
+def _forecast_revision_widget(
+    revision: ForecastRevisionSnapshot,
+    previous_probability: int | None,
+    parent: QWidget,
+) -> QWidget:
+    frame = QFrame(parent)
+    frame.setObjectName(f"forecastRevision{revision.revision_id}")
+    frame.setFrameShape(QFrame.Shape.StyledPanel)
+    layout = QVBoxLayout(frame)
+
+    timestamp = QLabel(_format_local_timestamp(revision.created_at), frame)
+    timestamp.setObjectName(f"forecastRevisionTimestamp{revision.revision_id}")
+    timestamp.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(timestamp)
+
+    if previous_probability is None:
+        probability_text = f"FORECAST  {revision.probability_percent}%"
+    else:
+        probability_text = (
+            f"FORECAST  {previous_probability}% "
+            f"\N{RIGHTWARDS ARROW} {revision.probability_percent}%"
+        )
+    probability = QLabel(probability_text, frame)
+    probability.setObjectName(f"forecastRevisionProbability{revision.revision_id}")
+    probability.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(probability)
+
+    if revision.rationale:
+        rationale = QLabel(revision.rationale, frame)
+        rationale.setObjectName(f"forecastRevisionRationale{revision.revision_id}")
+        rationale.setTextFormat(Qt.TextFormat.PlainText)
+        rationale.setWordWrap(True)
+        rationale.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(rationale)
     return frame
 
 

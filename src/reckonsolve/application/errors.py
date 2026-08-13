@@ -1,5 +1,7 @@
 """Expected errors that presentation code may show without a traceback."""
 
+from reckonsolve.domain.predictions import PredictionStatus
+
 
 class ApplicationError(Exception):
     """Base class for expected, user-presentable application failures."""
@@ -63,3 +65,41 @@ class ConcurrentPredictionUpdateError(ApplicationError):
             "and try again."
         )
         self.prediction_id = prediction_id
+
+
+class ConcurrentForecastUpdateError(ApplicationError):
+    """The prediction changed after a revision form was opened."""
+
+    def __init__(self, prediction_id: int) -> None:
+        super().__init__(
+            "This prediction changed before the forecast could be revised. "
+            "Close this editor, reopen Revise Forecast to review the latest "
+            "forecast and details, and try again."
+        )
+        self.prediction_id = prediction_id
+
+
+class ForecastUnchangedError(ApplicationError):
+    """A normal forecast revision must change the current probability."""
+
+    def __init__(self, probability_percent: int) -> None:
+        super().__init__(
+            f"The current forecast is already {probability_percent}%. "
+            "Change the probability to save a revision. To record reasoning without "
+            "changing the forecast, use a Journal entry when that feature arrives "
+            "in the next milestone."
+        )
+        self.probability_percent = probability_percent
+
+
+class ForecastRevisionNotAllowedError(ApplicationError):
+    """Lifecycle state does not permit another normal forecast revision."""
+
+    def __init__(self, status: PredictionStatus) -> None:
+        status_label = status.value.capitalize()
+        if status_label == "Locked":
+            reason = "Its Forecast Deadline has passed."
+        else:
+            reason = f"Its status is {status_label}."
+        super().__init__(f"This forecast cannot be revised. {reason}")
+        self.status = status
