@@ -1,12 +1,18 @@
 from typing import cast
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QDateEdit,
+    QDialog,
+    QGroupBox,
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSpinBox,
 )
@@ -24,14 +30,14 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 2
+    assert first_runtime.database.schema_version == 3
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 2
+    assert second_runtime.database.schema_version == 3
     second_runtime.close()
 
 
@@ -67,6 +73,134 @@ def test_create_close_reopen_displays_persisted_prediction(qtbot, tmp_path) -> N
     assert probability is not None
     assert question.text() == "Will this prediction survive restart?"
     assert probability.text() == "60%"
+    second_runtime.close()
+
+
+def test_edit_confirm_close_reopen_displays_metadata_and_history(
+    qtbot,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    first_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(first_runtime.window)
+    first_runtime.window.show()
+    first_runtime.window.navigate_to("New Prediction")
+
+    question_input = first_runtime.window.findChild(QLineEdit, "questionInput")
+    create_button = first_runtime.window.findChild(
+        QPushButton,
+        "createPredictionButton",
+    )
+    assert question_input is not None
+    assert create_button is not None
+    question_input.setText("Will the M3 workflow persist?")
+    qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
+
+    edit_button = first_runtime.window.findChild(
+        QPushButton,
+        "editPredictionDetailsButton",
+    )
+    assert edit_button is not None
+    qtbot.mouseClick(edit_button, Qt.MouseButton.LeftButton)
+    dialog = first_runtime.window.findChild(QDialog, "editPredictionDetailsDialog")
+    assert dialog is not None
+    qtbot.waitUntil(dialog.isVisible)
+
+    edited_question = dialog.findChild(QLineEdit, "editQuestionInput")
+    background = dialog.findChild(QPlainTextEdit, "editBackgroundInput")
+    criteria = dialog.findChild(QPlainTextEdit, "editResolutionCriteriaInput")
+    deadline_toggle = dialog.findChild(QCheckBox, "editForecastDeadlineToggle")
+    deadline = dialog.findChild(QDateEdit, "editForecastDeadlineInput")
+    expected_toggle = dialog.findChild(QCheckBox, "editExpectedResolutionToggle")
+    expected = dialog.findChild(QDateEdit, "editExpectedResolutionInput")
+    tags = dialog.findChild(QLineEdit, "editTagsInput")
+    save_button = dialog.findChild(QPushButton, "savePredictionDetailsButton")
+    assert all(
+        widget is not None
+        for widget in (
+            edited_question,
+            background,
+            criteria,
+            deadline_toggle,
+            deadline,
+            expected_toggle,
+            expected,
+            tags,
+            save_button,
+        )
+    )
+    edited_question.setText("Will the M3 workflow persist after restart?")
+    background.setPlainText("End-to-end metadata context.")
+    criteria.setPlainText("Yes if the same details reopen from SQLite.")
+    deadline_toggle.setChecked(True)
+    deadline.setDate(QDate(2099, 12, 30))
+    expected_toggle.setChecked(True)
+    expected.setDate(QDate(2099, 12, 31))
+    tags.setText("m3, persistence")
+    warning_messages: list[str] = []
+
+    def confirm_definition_change(
+        _parent,
+        _title,
+        message,
+        _buttons,
+        _default,
+    ) -> QMessageBox.StandardButton:
+        warning_messages.append(message)
+        return QMessageBox.StandardButton.Save
+
+    monkeypatch.setattr(QMessageBox, "warning", confirm_definition_change)
+    qtbot.mouseClick(save_button, Qt.MouseButton.LeftButton)
+
+    assert warning_messages
+    assert not dialog.isVisible()
+    with first_runtime.database.transaction() as connection:
+        history_count = connection.execute(
+            "SELECT COUNT(*) FROM prediction_definition_changes"
+        ).fetchone()[0]
+    assert history_count == 1
+    first_runtime.close()
+
+    second_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(second_runtime.window)
+    second_runtime.window.show()
+    second_runtime.window.navigate_to("Prediction Detail")
+
+    question = second_runtime.window.findChild(QLabel, "predictionDetailQuestion")
+    reopened_background = second_runtime.window.findChild(
+        QLabel,
+        "predictionDetailBackground",
+    )
+    reopened_criteria = second_runtime.window.findChild(
+        QLabel,
+        "predictionDetailResolutionCriteria",
+    )
+    reopened_tags = second_runtime.window.findChild(QLabel, "predictionDetailTags")
+    reopened_deadline = second_runtime.window.findChild(
+        QLabel,
+        "predictionDetailForecastDeadline",
+    )
+    reopened_expected = second_runtime.window.findChild(
+        QLabel,
+        "predictionDetailExpectedResolution",
+    )
+    history = second_runtime.window.findChild(QGroupBox, "definitionHistoryGroup")
+    assert question is not None
+    assert reopened_background is not None
+    assert reopened_criteria is not None
+    assert reopened_tags is not None
+    assert reopened_deadline is not None
+    assert reopened_expected is not None
+    assert history is not None
+    assert question.text() == "Will the M3 workflow persist after restart?"
+    assert reopened_background.text() == "End-to-end metadata context."
+    assert reopened_criteria.text() == ("Yes if the same details reopen from SQLite.")
+    assert reopened_tags.text() == "#m3  #persistence"
+    assert "2099" in reopened_deadline.text()
+    assert "2099" in reopened_expected.text()
+    assert not history.isHidden()
+    assert not history.isChecked()
     second_runtime.close()
 
 

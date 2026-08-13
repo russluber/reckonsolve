@@ -189,11 +189,11 @@ A timestamped note about evidence or reasoning that does not itself change the f
 
 ### Forecast deadline
 
-The last time at which ordinary forecast revisions are allowed. It is optional.
+The last calendar date on which ordinary forecast revisions are allowed. It is optional.
 
 ### Expected resolution
 
-The date or time by which the user expects the outcome to be knowable. It is optional and distinct from the forecast deadline.
+The calendar date by which the user expects the outcome to be knowable. It is optional and distinct from the forecast deadline. Time-of-day precision is not part of v0.1.
 
 ### Resolution
 
@@ -296,6 +296,7 @@ It remains visible and is excluded from scoring.
 
 - `predictions`
 - `forecast_revisions`
+- `prediction_definition_changes`
 - `journal_entries`
 - `resolutions`
 - `tags`
@@ -323,11 +324,19 @@ The Aug 12 record must never become "Aug 12 — 70%."
 
 ### 8.2 Prediction metadata
 
-Background and tags may be edited normally.
+Background, Expected Resolution, and tags may be edited normally.
 
-Question wording, Resolution Criteria, and Forecast Deadline can affect what historical forecasts mean. v0.1 should at minimum warn before potentially meaning-changing edits. The data model must not assume that silent semantic rewriting is harmless.
+Question wording and Resolution Criteria define the proposition being forecast. Before saving a change to either field, v0.1 must show a confirmation explaining that the edit may change the proposition's meaning. If the proposition has changed materially rather than merely being clarified or corrected, the interface should guide the user to create a new Prediction instead.
 
-A complete metadata-edit audit trail is a Later refinement, not a prerequisite for v0.1.
+Adding, changing, or removing a Forecast Deadline also requires confirmation and history because it changes the forecast cutoff, derived Locked behavior, and potentially which revisions are eligible. Its confirmation must describe those scheduling consequences rather than claim that the proposition itself changed. Changing a Forecast Deadline alone does not require creating a new Prediction. If one save changes both a proposition field and the Forecast Deadline, one confirmation must explain both consequences and one definition-change record captures the save.
+
+Each confirmed save that changes one or more protected fields—Question, Resolution Criteria, or Forecast Deadline—creates one immutable lightweight definition-change record. The record contains before and after snapshots of all three protected fields and a UTC timestamp. The metadata update and its definition-change record must be atomic: either both persist or neither does. Cancelling the form or submitting values that make no effective change must not create a record. Expected Resolution remains ordinary editable metadata and never triggers this confirmation or definition history by itself.
+
+Prediction Detail exposes these records in a collapsed **Definition history** section so historical forecasts can be interpreted against the definition in effect at the time without overwhelming the primary view.
+
+This is a focused v0.1 safeguard, not a comprehensive generic audit system. A complete audit trail for all metadata edits remains Later.
+
+Optional date controls must distinguish an unset value from a saved date. When a Forecast Deadline or Expected Resolution is unset, the interface must present it as blank or **Not set**; it must not display today's date in a way that suggests today is stored. Enabling an unset date control may use today as the initial editable choice.
 
 ### 8.3 Journal entries
 
@@ -360,7 +369,7 @@ Required:
 - Question
 - Probability
 
-Optional details are hidden behind a clear affordance such as "More details":
+Milestone 4 adds optional initial details behind a clear affordance such as "More details":
 
 - Rationale
 - Background
@@ -368,6 +377,8 @@ Optional details are hidden behind a clear affordance such as "More details":
 - Forecast Deadline
 - Expected Resolution
 - Tags
+
+These values establish the Prediction and first ForecastRevision; they are not later metadata edits. Initial Question, Resolution Criteria, and Forecast Deadline values therefore require no edit confirmation and create no definition-change record. Rationale belongs to the first ForecastRevision, while Background, Resolution Criteria, dates, and tags belong to the initial Prediction state.
 
 ### 9.2 Probability input
 
@@ -383,7 +394,7 @@ These controls are shortcuts, not constraints. The user must remain able to ente
 
 ### 9.3 Creation behavior
 
-Creating a prediction and its first revision must be atomic: either both persist or neither does.
+Creating a prediction must be atomic. Once Milestone 4 adds optional initial details, the Prediction, its metadata and tag associations, and its first ForecastRevision with any rationale must either all persist or all roll back.
 
 After successful creation, navigate to the Prediction Detail screen.
 
@@ -412,6 +423,7 @@ Minimum content:
 - Resolve or Mark Invalid actions where appropriate;
 - forecast deadline and expected resolution when present;
 - Background and Resolution Criteria when present;
+- collapsed Definition history when protected metadata has changed;
 - unified chronological timeline; and
 - probability-history chart.
 
@@ -537,6 +549,8 @@ The chart must not treat journal entries as probability observations.
 ### 14.2 Locked
 
 The forecast deadline has passed.
+
+Because Forecast Deadline is a date-only value, its stored calendar date is inclusive. An otherwise Open prediction becomes Locked when the computer's local calendar date is later than its Forecast Deadline, not at the start of the deadline date.
 
 - Normal forecast revisions are not allowed.
 - Journal entries remain allowed.
@@ -876,8 +890,10 @@ Acceptance demonstration:
 - Display question, current forecast, status, dates, optional metadata, and tags.
 - Support safe metadata editing.
 
-### Milestone 4: Immutable revisions
+### Milestone 4: Immutable revisions and complete creation details
 
+- Add the optional **More details** creation section for initial rationale, metadata, and tags.
+- Persist all supplied initial state atomically without an edit warning or definition-change record.
 - Revise probability with optional rationale.
 - Preserve every earlier revision.
 - Enforce revision restrictions after lock or terminal state.
@@ -958,7 +974,8 @@ v0.1 is not complete unless all of the following are true:
 Highest-risk behavior should receive automated tests before visual polish:
 
 - immutable revision append behavior;
-- atomic prediction plus initial revision creation;
+- atomic creation of a Prediction, optional initial metadata and tags, and its first revision with optional rationale;
+- atomic protected-field metadata edits and definition-change records;
 - current-revision selection;
 - lock-boundary behavior;
 - resolution and invalidation transitions;
@@ -978,14 +995,13 @@ Use representative edge cases such as a single revision, several revisions at th
 
 ## 29. Open implementation decisions
 
-The application and project name is resolved as **Reckonsolve**. Probability input and time handling are resolved in Sections 9.2 and 24. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
+The application and project name is resolved as **Reckonsolve**. Metadata-edit safety, probability input, and time handling are resolved in Sections 8.2, 9.2, and 24. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
 
 - precise visual design system;
 - default stale threshold;
 - exact calibration binning scheme;
 - cumulative versus windowed Brier trend for the first implementation;
 - precise deletion restrictions after meaningful history exists;
-- whether meaning-changing metadata edits receive a lightweight audit event in v0.1;
 - exact CSV export layout; and
 - installer/packaging format.
 

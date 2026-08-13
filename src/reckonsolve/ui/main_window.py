@@ -134,6 +134,8 @@ class MainWindow(QMainWindow):
         self._screen_stack.setCurrentIndex(screen_index)
         if self.current_screen_name == "New Prediction":
             self._new_prediction_screen.focus_question()
+        elif self.current_screen_name == "Prediction Detail":
+            self._prediction_detail_screen.refresh()
 
     def _show_created_prediction(self, prediction: PredictionSnapshot) -> None:
         self._prediction_detail_screen.show_prediction(prediction)

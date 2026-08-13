@@ -2,9 +2,11 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its binary-creation milestone, but most forecasting workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its Prediction Detail and metadata-editing milestone, but most forecasting workflows are still being built and it is not ready for normal use.
 
-The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. It saves the prediction and initial forecast together, displays the result, and restores it from the local database after restart. The other four primary screens and later prediction workflows remain placeholders.
+The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. Prediction Detail displays its current forecast, status, tags, dates, Background, and Resolution Criteria. These details can be edited; changes to the Question, Resolution Criteria, or Forecast Deadline require confirmation and remain visible in a collapsed Definition history. Data persists across restarts.
+
+The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. Revising a forecast, adding journal entries, resolving, and invalidating are also reserved for later milestones.
 
 ## Documentation
 

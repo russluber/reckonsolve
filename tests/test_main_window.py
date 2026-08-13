@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QDateEdit,
+    QDialog,
+    QGroupBox,
     QLabel,
     QLineEdit,
     QListWidget,
+    QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSpinBox,
     QStackedWidget,
@@ -16,8 +22,15 @@ from PySide6.QtWidgets import (
 )
 from pytestqt.qtbot import QtBot
 
-from reckonsolve.application.errors import ApplicationError
-from reckonsolve.domain.predictions import PredictionStatus
+from reckonsolve.application.errors import (
+    ApplicationError,
+    ConcurrentPredictionUpdateError,
+    MeaningChangeConfirmationRequired,
+)
+from reckonsolve.domain.predictions import (
+    DefinitionChange,
+    PredictionStatus,
+)
 from reckonsolve.ui import MainWindow
 
 EXPECTED_SCREEN_NAMES = (
@@ -37,6 +50,26 @@ class FakePrediction:
     probability_percent: int
     status: PredictionStatus = PredictionStatus.OPEN
     created_at: datetime = datetime(2026, 8, 12, 19, 30, tzinfo=UTC)
+    background: str | None = None
+    resolution_criteria: str | None = None
+    forecast_deadline: date | None = None
+    expected_resolution: date | None = None
+    tags: tuple[str, ...] = ()
+    updated_at: datetime | None = datetime(2026, 8, 12, 19, 30, tzinfo=UTC)
+    metadata_version: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class MetadataUpdateCall:
+    prediction_id: int
+    question: str
+    background: str | None
+    resolution_criteria: str | None
+    forecast_deadline: date | None
+    expected_resolution: date | None
+    tags: tuple[str, ...]
+    expected_metadata_version: int
+    confirm_meaning_change: bool
 
 
 class FakePredictionOperations:
@@ -44,6 +77,14 @@ class FakePredictionOperations:
         self.latest = latest
         self.create_calls: list[tuple[str, int]] = []
         self.create_error: ApplicationError | None = None
+        self.get_calls: list[int] = []
+        self.update_calls: list[MetadataUpdateCall] = []
+        self.update_error: ApplicationError | None = None
+        self.confirmation_fields: tuple[str, ...] | None = None
+        self.definition_changes: tuple[DefinitionChange, ...] = ()
+        self.definition_change_error: ApplicationError | None = None
+        self.definition_change_calls: list[int] = []
+        self.mutation_count = 0
 
     def create_prediction(
         self,
@@ -63,6 +104,73 @@ class FakePredictionOperations:
 
     def get_latest_prediction(self) -> FakePrediction | None:
         return self.latest
+
+    def get_prediction(self, prediction_id: int) -> FakePrediction:
+        self.get_calls.append(prediction_id)
+        if self.latest is None or self.latest.prediction_id != prediction_id:
+            raise ApplicationError("Prediction not found.")
+        return self.latest
+
+    def update_metadata(
+        self,
+        prediction_id: int,
+        *,
+        question: str,
+        background: str | None,
+        resolution_criteria: str | None,
+        forecast_deadline: date | None,
+        expected_resolution: date | None,
+        tags: tuple[str, ...],
+        expected_metadata_version: int,
+        confirm_meaning_change: bool = False,
+    ) -> FakePrediction:
+        self.update_calls.append(
+            MetadataUpdateCall(
+                prediction_id=prediction_id,
+                question=question,
+                background=background,
+                resolution_criteria=resolution_criteria,
+                forecast_deadline=forecast_deadline,
+                expected_resolution=expected_resolution,
+                tags=tags,
+                expected_metadata_version=expected_metadata_version,
+                confirm_meaning_change=confirm_meaning_change,
+            )
+        )
+        if self.update_error is not None:
+            raise self.update_error
+        if self.confirmation_fields is not None and not confirm_meaning_change:
+            raise MeaningChangeConfirmationRequired(self.confirmation_fields)
+        if self.latest is None or self.latest.prediction_id != prediction_id:
+            raise ApplicationError("Prediction not found.")
+        if self.latest.metadata_version != expected_metadata_version:
+            raise ConcurrentPredictionUpdateError(prediction_id)
+        updated = replace(
+            self.latest,
+            question=question.strip(),
+            background=(background or "").strip() or None,
+            resolution_criteria=(resolution_criteria or "").strip() or None,
+            forecast_deadline=forecast_deadline,
+            expected_resolution=expected_resolution,
+            tags=tags,
+        )
+        if updated != self.latest:
+            self.mutation_count += 1
+            updated = replace(
+                updated,
+                metadata_version=self.latest.metadata_version + 1,
+            )
+        self.latest = updated
+        return self.latest
+
+    def list_definition_changes(
+        self,
+        prediction_id: int,
+    ) -> tuple[DefinitionChange, ...]:
+        self.definition_change_calls.append(prediction_id)
+        if self.definition_change_error is not None:
+            raise self.definition_change_error
+        return self.definition_changes
 
 
 @pytest.fixture
@@ -279,6 +387,806 @@ def test_prediction_detail_loads_latest_prediction_at_construction(
     assert _required_child(window, QLabel, "predictionDetailEmptyState").isHidden()
 
 
+def test_prediction_detail_renders_locked_status(qtbot: QtBot) -> None:
+    latest = FakePrediction(
+        prediction_id=42,
+        question="Has this prediction passed its forecast deadline?",
+        probability_percent=60,
+        status=PredictionStatus.LOCKED,
+    )
+    window = MainWindow(FakePredictionOperations(latest))
+    qtbot.addWidget(window)
+
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "LOCKED"
+
+
+def test_returning_to_prediction_detail_refreshes_external_changes(
+    qtbot: QtBot,
+) -> None:
+    original = FakePrediction(42, "Original question", 60)
+    operations = FakePredictionOperations(original)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Prediction Detail")
+    operations.get_calls.clear()
+    operations.latest = replace(
+        original,
+        question="Externally refreshed question",
+        status=PredictionStatus.LOCKED,
+        background="Fresh context",
+        metadata_version=2,
+    )
+
+    window.navigate_to("Dashboard")
+    window.navigate_to("Prediction Detail")
+
+    assert operations.get_calls == [42]
+    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
+        "Externally refreshed question"
+    )
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "LOCKED"
+    assert _required_child(window, QLabel, "predictionDetailBackground").text() == (
+        "Fresh context"
+    )
+
+
+def test_prediction_detail_refresh_failure_retains_last_visible_data(
+    qtbot: QtBot,
+) -> None:
+    original = FakePrediction(42, "Still-visible question", 60)
+    operations = FakePredictionOperations(original)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Prediction Detail")
+    operations.latest = None
+
+    window.navigate_to("Dashboard")
+    window.navigate_to("Prediction Detail")
+
+    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
+        "Still-visible question"
+    )
+    error = _required_child(window, QLabel, "predictionDetailError")
+    assert "could not be refreshed" in error.text()
+    assert not error.isHidden()
+
+
+def test_prediction_detail_shows_present_metadata_and_hides_missing_sections(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(
+        prediction_id=42,
+        question="Will the release ship?",
+        probability_percent=65,
+        background="The implementation is nearly complete.",
+        resolution_criteria="Yes if the installer is published.",
+        forecast_deadline=date(2026, 9, 1),
+        expected_resolution=None,
+        tags=("release", "desktop"),
+    )
+    window = MainWindow(FakePredictionOperations(latest))
+    qtbot.addWidget(window)
+
+    assert _required_child(window, QLabel, "predictionDetailTags").text() == (
+        "#release  #desktop"
+    )
+    deadline = _required_child(window, QLabel, "predictionDetailForecastDeadline")
+    assert "2026" in deadline.text()
+    assert not _required_child(
+        window,
+        QWidget,
+        "predictionDetailForecastDeadlineRow",
+    ).isHidden()
+    assert _required_child(
+        window,
+        QWidget,
+        "predictionDetailExpectedResolutionRow",
+    ).isHidden()
+    assert _required_child(window, QLabel, "predictionDetailBackground").text() == (
+        latest.background
+    )
+    assert (
+        _required_child(
+            window,
+            QLabel,
+            "predictionDetailResolutionCriteria",
+        ).text()
+        == latest.resolution_criteria
+    )
+
+
+def test_prediction_detail_hides_all_empty_optional_metadata(qtbot: QtBot) -> None:
+    window = MainWindow(
+        FakePredictionOperations(FakePrediction(42, "Will the view stay calm?", 65))
+    )
+    qtbot.addWidget(window)
+
+    for object_name in (
+        "predictionDetailTags",
+        "predictionDetailForecastDeadlineRow",
+        "predictionDetailExpectedResolutionRow",
+        "predictionDetailBackgroundSection",
+        "predictionDetailResolutionCriteriaSection",
+        "definitionHistoryGroup",
+    ):
+        assert _required_child(window, QWidget, object_name).isHidden()
+
+
+def test_prediction_detail_keeps_later_actions_as_disabled_placeholders(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(1, "Will this stay in scope?", 50)
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    for object_name in (
+        "reviseForecastButton",
+        "addJournalEntryButton",
+        "resolvePredictionButton",
+        "markInvalidButton",
+    ):
+        button = _required_child(window, QPushButton, object_name)
+        assert not button.isEnabled()
+        assert "later milestone" in button.toolTip()
+    assert (
+        "later milestone"
+        in _required_child(
+            window,
+            QLabel,
+            "timelinePlaceholder",
+        ).text()
+    )
+    assert (
+        "later milestone"
+        in _required_child(
+            window,
+            QLabel,
+            "probabilityHistoryPlaceholder",
+        ).text()
+    )
+
+
+def test_edit_details_dialog_prefills_values_and_optional_date_controls(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(
+        prediction_id=7,
+        question="Will this dialog be prefilled?",
+        probability_percent=55,
+        background="Context",
+        resolution_criteria="A public release counts.",
+        forecast_deadline=date(2026, 9, 2),
+        tags=("ui", "m3"),
+    )
+    window = MainWindow(FakePredictionOperations(latest))
+    qtbot.addWidget(window)
+
+    dialog = _open_edit_dialog(qtbot, window)
+
+    assert _required_child(dialog, QLineEdit, "editQuestionInput").text() == (
+        latest.question
+    )
+    assert _required_child(
+        dialog, QPlainTextEdit, "editBackgroundInput"
+    ).toPlainText() == ("Context")
+    assert _required_child(dialog, QLineEdit, "editTagsInput").text() == "ui, m3"
+    deadline_toggle = _required_child(
+        dialog,
+        QCheckBox,
+        "editForecastDeadlineToggle",
+    )
+    deadline_input = _required_child(
+        dialog,
+        QDateEdit,
+        "editForecastDeadlineInput",
+    )
+    assert deadline_toggle.isChecked()
+    assert deadline_input.isEnabled()
+    assert deadline_input.isVisible()
+    assert deadline_input.date() == QDate(2026, 9, 2)
+    expected_toggle = _required_child(
+        dialog,
+        QCheckBox,
+        "editExpectedResolutionToggle",
+    )
+    expected_input = _required_child(
+        dialog,
+        QDateEdit,
+        "editExpectedResolutionInput",
+    )
+    assert not expected_toggle.isChecked()
+    assert not expected_input.isEnabled()
+    assert expected_input.isHidden()
+    assert deadline_input.minimumDate() == QDate(1752, 9, 14)
+    assert deadline_input.maximumDate() == QDate(9999, 12, 31)
+
+
+def test_unset_optional_date_is_revealed_only_when_enabled(qtbot: QtBot) -> None:
+    window = MainWindow(
+        FakePredictionOperations(FakePrediction(7, "Will dates stay optional?", 55))
+    )
+    qtbot.addWidget(window)
+
+    dialog = _open_edit_dialog(qtbot, window)
+    deadline_toggle = _required_child(
+        dialog,
+        QCheckBox,
+        "editForecastDeadlineToggle",
+    )
+    deadline_input = _required_child(
+        dialog,
+        QDateEdit,
+        "editForecastDeadlineInput",
+    )
+
+    assert not deadline_toggle.isChecked()
+    assert not deadline_input.isEnabled()
+    assert deadline_input.isHidden()
+
+    qtbot.keyClick(deadline_toggle, Qt.Key.Key_Space)
+
+    assert deadline_toggle.isChecked()
+    assert deadline_input.isEnabled()
+    assert deadline_input.isVisible()
+
+    qtbot.keyClick(deadline_toggle, Qt.Key.Key_Space)
+
+    assert not deadline_toggle.isChecked()
+    assert not deadline_input.isEnabled()
+    assert deadline_input.isHidden()
+
+
+def test_edit_details_dialog_preserves_earliest_supported_date(
+    qtbot: QtBot,
+) -> None:
+    earliest = date(1752, 9, 14)
+    window = MainWindow(
+        FakePredictionOperations(
+            FakePrediction(
+                7, "Earliest supported deadline?", 55, forecast_deadline=earliest
+            )
+        )
+    )
+    qtbot.addWidget(window)
+
+    dialog = _open_edit_dialog(qtbot, window)
+
+    deadline = _required_child(dialog, QDateEdit, "editForecastDeadlineInput")
+    assert deadline.date() == QDate(1752, 9, 14)
+    assert deadline.isVisible()
+
+
+def test_user_definition_text_is_always_rendered_as_plain_text(qtbot: QtBot) -> None:
+    markup = "<b>Literal forecast wording</b>"
+    operations = FakePredictionOperations(
+        FakePrediction(
+            prediction_id=7,
+            question=markup,
+            probability_percent=55,
+            background="<i>Literal background</i>",
+            resolution_criteria="<a href='x'>Literal criteria</a>",
+            tags=("<u>tag</u>",),
+        )
+    )
+    operations.definition_changes = (
+        DefinitionChange(
+            change_id=4,
+            prediction_id=7,
+            changed_at=datetime(2026, 8, 12, 19, 30, tzinfo=UTC),
+            changed_fields=("question",),
+            old_question="<em>Old literal</em>",
+            new_question=markup,
+            old_resolution_criteria=None,
+            new_resolution_criteria=None,
+            old_forecast_deadline=None,
+            new_forecast_deadline=None,
+        ),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    for object_name in (
+        "predictionDetailQuestion",
+        "predictionDetailTags",
+        "predictionDetailBackground",
+        "predictionDetailResolutionCriteria",
+        "definitionChange4Question",
+    ):
+        label = _required_child(window, QLabel, object_name)
+        assert label.textFormat() is Qt.TextFormat.PlainText
+    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == markup
+    assert (
+        "<em>Old literal</em>"
+        in _required_child(
+            window,
+            QLabel,
+            "definitionChange4Question",
+        ).text()
+    )
+
+
+def test_open_edit_details_refreshes_externally_changed_prediction(
+    qtbot: QtBot,
+) -> None:
+    original = FakePrediction(7, "Original question", 55)
+    operations = FakePredictionOperations(original)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    operations.latest = replace(
+        original,
+        question="Externally changed question",
+        background="Newer context",
+        metadata_version=2,
+    )
+
+    dialog = _open_edit_dialog(qtbot, window)
+
+    assert operations.get_calls == [7, 7]
+    assert _required_child(dialog, QLineEdit, "editQuestionInput").text() == (
+        "Externally changed question"
+    )
+    assert (
+        _required_child(
+            dialog,
+            QPlainTextEdit,
+            "editBackgroundInput",
+        ).toPlainText()
+        == "Newer context"
+    )
+    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
+        "Externally changed question"
+    )
+
+
+def test_cancel_edit_details_does_not_call_update(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_edit_dialog(qtbot, window)
+    _required_child(dialog, QLineEdit, "editQuestionInput").setText("Unsaved edit")
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "cancelPredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.update_calls == []
+    assert operations.mutation_count == 0
+    assert not dialog.isVisible()
+
+
+def test_repeated_cancel_deletes_finished_edit_dialogs(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    for _attempt in range(3):
+        dialog = _open_edit_dialog(qtbot, window)
+        qtbot.mouseClick(
+            _required_child(dialog, QPushButton, "cancelPredictionDetailsButton"),
+            Qt.MouseButton.LeftButton,
+        )
+        qtbot.waitUntil(lambda current=dialog: not current.isVisible())
+        qtbot.waitUntil(
+            lambda: (
+                not window.findChildren(
+                    QDialog,
+                    "editPredictionDetailsDialog",
+                )
+            )
+        )
+
+    remaining = [
+        dialog
+        for dialog in window.findChildren(QDialog)
+        if dialog.objectName() == "editPredictionDetailsDialog"
+    ]
+    assert remaining == []
+    assert operations.update_calls == []
+
+
+def test_noop_edit_closes_without_mutation(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_edit_dialog(qtbot, window)
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert len(operations.update_calls) == 1
+    assert operations.mutation_count == 0
+    assert not dialog.isVisible()
+
+
+def test_unprotected_edit_saves_without_warning_and_refreshes_detail(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *args, **kwargs: pytest.fail("Unexpected confirmation warning"),
+    )
+    dialog = _open_edit_dialog(qtbot, window)
+    _required_child(dialog, QPlainTextEdit, "editBackgroundInput").setPlainText(
+        "New background"
+    )
+    expected_toggle = _required_child(
+        dialog,
+        QCheckBox,
+        "editExpectedResolutionToggle",
+    )
+    expected_input = _required_child(
+        dialog,
+        QDateEdit,
+        "editExpectedResolutionInput",
+    )
+    expected_toggle.setChecked(True)
+    expected_input.setDate(QDate(2026, 10, 20))
+    _required_child(dialog, QLineEdit, "editTagsInput").setText("launch, ui")
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.update_calls == [
+        MetadataUpdateCall(
+            prediction_id=7,
+            question="Original question",
+            background="New background",
+            resolution_criteria="",
+            forecast_deadline=None,
+            expected_resolution=date(2026, 10, 20),
+            tags=("launch", "ui"),
+            expected_metadata_version=1,
+            confirm_meaning_change=False,
+        )
+    ]
+    assert operations.mutation_count == 1
+    assert _required_child(window, QLabel, "predictionDetailBackground").text() == (
+        "New background"
+    )
+    assert _required_child(window, QLabel, "predictionDetailTags").text() == (
+        "#launch  #ui"
+    )
+    assert (
+        "2026"
+        in _required_child(
+            window,
+            QLabel,
+            "predictionDetailExpectedResolution",
+        ).text()
+    )
+
+
+def test_expected_resolution_only_saves_without_warning(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *args, **kwargs: pytest.fail("Unexpected confirmation warning"),
+    )
+    dialog = _open_edit_dialog(qtbot, window)
+    expected_toggle = _required_child(
+        dialog,
+        QCheckBox,
+        "editExpectedResolutionToggle",
+    )
+    expected_input = _required_child(
+        dialog,
+        QDateEdit,
+        "editExpectedResolutionInput",
+    )
+    qtbot.mouseClick(expected_toggle, Qt.MouseButton.LeftButton)
+    expected_input.setDate(QDate(2026, 10, 20))
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert len(operations.update_calls) == 1
+    assert operations.update_calls[0].expected_resolution == date(2026, 10, 20)
+    assert not operations.update_calls[0].confirm_meaning_change
+    assert operations.mutation_count == 1
+    assert not dialog.isVisible()
+
+
+def test_expected_edit_failure_is_shown_inline(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    operations.update_error = ApplicationError("Those details could not be saved.")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_edit_dialog(qtbot, window)
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    error = _required_child(dialog, QLabel, "editDetailsError")
+    assert error.text() == "Those details could not be saved."
+    assert not error.isHidden()
+    assert dialog.isVisible()
+    assert operations.mutation_count == 0
+
+
+def test_deadline_only_warning_explains_locking_without_proposition_guidance(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    operations.confirmation_fields = ("forecast_deadline",)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    warnings: list[tuple[str, str]] = []
+
+    def decline_warning(
+        _parent: QWidget,
+        title: str,
+        message: str,
+        _buttons: QMessageBox.StandardButton,
+        _default: QMessageBox.StandardButton,
+    ) -> QMessageBox.StandardButton:
+        warnings.append((title, message))
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", decline_warning)
+    dialog = _open_edit_dialog(qtbot, window)
+    deadline_toggle = _required_child(
+        dialog,
+        QCheckBox,
+        "editForecastDeadlineToggle",
+    )
+    qtbot.mouseClick(deadline_toggle, Qt.MouseButton.LeftButton)
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert len(operations.update_calls) == 1
+    assert operations.mutation_count == 0
+    assert dialog.isVisible()
+    assert warnings[0][0] == "Confirm forecast deadline change"
+    assert "forecast revisions become locked" in warnings[0][1]
+    assert "Definition history" in warnings[0][1]
+    assert "what this prediction means" not in warnings[0][1]
+    assert "new prediction" not in warnings[0][1]
+
+
+def test_semantic_change_warning_decline_does_not_retry_or_mutate(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    operations.confirmation_fields = ("question",)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    warnings: list[tuple[str, str]] = []
+
+    def decline_warning(
+        _parent: QWidget,
+        title: str,
+        message: str,
+        _buttons: QMessageBox.StandardButton,
+        _default: QMessageBox.StandardButton,
+    ) -> QMessageBox.StandardButton:
+        warnings.append((title, message))
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", decline_warning)
+    dialog = _open_edit_dialog(qtbot, window)
+    _required_child(dialog, QLineEdit, "editQuestionInput").setText("Changed question")
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert len(operations.update_calls) == 1
+    assert not operations.update_calls[0].confirm_meaning_change
+    assert operations.mutation_count == 0
+    assert operations.latest is not None
+    assert operations.latest.question == "Original question"
+    assert dialog.isVisible()
+    assert warnings[0][0] == "Confirm definition change"
+    assert "what this prediction means" in warnings[0][1]
+    assert "create a new prediction" in warnings[0][1]
+    assert "forecast revisions become locked" not in warnings[0][1]
+
+
+def test_meaning_change_confirmation_retries_and_refreshes_returned_detail(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    operations.confirmation_fields = ("question", "forecast_deadline")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    warnings: list[tuple[str, str]] = []
+
+    def accept_warning(
+        _parent: QWidget,
+        title: str,
+        message: str,
+        _buttons: QMessageBox.StandardButton,
+        _default: QMessageBox.StandardButton,
+    ) -> QMessageBox.StandardButton:
+        warnings.append((title, message))
+        return QMessageBox.StandardButton.Save
+
+    monkeypatch.setattr(QMessageBox, "warning", accept_warning)
+    dialog = _open_edit_dialog(qtbot, window)
+    _required_child(dialog, QLineEdit, "editQuestionInput").setText("Changed question")
+    deadline_toggle = _required_child(
+        dialog,
+        QCheckBox,
+        "editForecastDeadlineToggle",
+    )
+    deadline_toggle.setChecked(True)
+    _required_child(dialog, QDateEdit, "editForecastDeadlineInput").setDate(
+        QDate(2026, 9, 30)
+    )
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert [call.confirm_meaning_change for call in operations.update_calls] == [
+        False,
+        True,
+    ]
+    assert [call.expected_metadata_version for call in operations.update_calls] == [
+        1,
+        1,
+    ]
+    assert operations.mutation_count == 1
+    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
+        "Changed question"
+    )
+    assert warnings[0][0] == "Confirm definition and deadline changes"
+    assert "what this prediction means" in warnings[0][1]
+    assert "create a new prediction" in warnings[0][1]
+    assert "forecast revisions become locked" in warnings[0][1]
+    assert "Definition history" in warnings[0][1]
+    assert not dialog.isVisible()
+    assert operations.definition_change_calls == [7, 7, 7, 7]
+
+
+def test_stale_confirmation_retry_stays_inline_without_mutating(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
+    operations.confirmation_fields = ("question",)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_edit_dialog(qtbot, window)
+    _required_child(dialog, QLineEdit, "editQuestionInput").setText("Changed question")
+
+    def make_stale(*args, **kwargs) -> QMessageBox.StandardButton:
+        assert operations.latest is not None
+        operations.latest = replace(
+            operations.latest,
+            background="Intervening edit",
+            metadata_version=2,
+        )
+        return QMessageBox.StandardButton.Save
+
+    monkeypatch.setattr(QMessageBox, "warning", make_stale)
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert [call.expected_metadata_version for call in operations.update_calls] == [
+        1,
+        1,
+    ]
+    assert operations.mutation_count == 0
+    assert operations.latest is not None
+    assert operations.latest.question == "Original question"
+    assert operations.latest.background == "Intervening edit"
+    error = _required_child(dialog, QLabel, "editDetailsError")
+    assert "changed before" in error.text()
+    assert not error.isHidden()
+    assert dialog.isVisible()
+
+
+def test_definition_history_is_collapsed_and_shows_snapshot_in_local_time(
+    qtbot: QtBot,
+) -> None:
+    changed_at = datetime(2026, 8, 12, 19, 30, tzinfo=UTC)
+    operations = FakePredictionOperations(FakePrediction(7, "Changed question", 55))
+    operations.definition_changes = (
+        DefinitionChange(
+            change_id=3,
+            prediction_id=7,
+            changed_at=changed_at,
+            changed_fields=(
+                "question",
+                "resolution_criteria",
+                "forecast_deadline",
+            ),
+            old_question="Original question",
+            new_question="Changed question",
+            old_resolution_criteria=None,
+            new_resolution_criteria="A public release counts.",
+            old_forecast_deadline=None,
+            new_forecast_deadline=date(2026, 9, 30),
+        ),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    history = _required_child(window, QGroupBox, "definitionHistoryGroup")
+    content = _required_child(window, QWidget, "definitionHistoryContent")
+    assert not history.isHidden()
+    assert not history.isChecked()
+    assert content.isHidden()
+    history.setChecked(True)
+    assert not content.isHidden()
+    expected_timestamp = (
+        changed_at.astimezone().strftime("%b %d, %Y at %H:%M %Z").strip()
+    )
+    assert (
+        _required_child(
+            history,
+            QLabel,
+            "definitionChangeTimestamp3",
+        ).text()
+        == expected_timestamp
+    )
+    assert (
+        "Original question"
+        in _required_child(
+            history,
+            QLabel,
+            "definitionChange3Question",
+        ).text()
+    )
+    assert (
+        "Not set"
+        in _required_child(
+            history,
+            QLabel,
+            "definitionChange3ResolutionCriteria",
+        ).text()
+    )
+    assert (
+        "2026"
+        in _required_child(
+            history,
+            QLabel,
+            "definitionChange3ForecastDeadline",
+        ).text()
+    )
+
+
 def test_prediction_detail_has_helpful_empty_state(window: MainWindow) -> None:
     window.navigate_to("Prediction Detail")
 
@@ -307,6 +1215,18 @@ def _required_child[WidgetType: QWidget](
     child = parent.findChild(widget_type, object_name)
     assert child is not None
     return child
+
+
+def _open_edit_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
+    window.show()
+    window.navigate_to("Prediction Detail")
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "editPredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    dialog = _required_child(window, QDialog, "editPredictionDetailsDialog")
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
 
 
 def _object_name_prefix(screen_name: str) -> str:

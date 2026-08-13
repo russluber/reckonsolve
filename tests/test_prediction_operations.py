@@ -151,6 +151,17 @@ def test_validation_errors_are_expected_application_errors_and_write_nothing(
     database.close()
 
 
+def test_nul_question_is_an_expected_application_error(tmp_path) -> None:
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    operations = PredictionOperations(database, FixedClock(NOW))
+
+    with pytest.raises(ValidationError) as error_info:
+        operations.create_prediction("Will this\x00 persist?", 50)
+
+    assert error_info.value.field == "question"
+    database.close()
+
+
 def test_initial_revision_failure_rolls_back_prediction(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     with database.transaction() as connection:

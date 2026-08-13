@@ -14,7 +14,7 @@ def test_migration_two_upgrades_baseline_and_preserves_existing_data(tmp_path) -
         connection.execute("INSERT INTO sentinel VALUES ('preserved')")
     baseline.close()
 
-    upgraded = Database.open(database_path)
+    upgraded = Database.open(database_path, migrations=MIGRATIONS[:2])
 
     assert upgraded.schema_version == 2
     with upgraded.transaction() as connection:

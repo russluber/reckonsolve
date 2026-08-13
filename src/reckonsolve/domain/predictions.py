@@ -1,7 +1,7 @@
 """Binary-prediction values and validation rules."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 
@@ -14,9 +14,10 @@ class PredictionValidationError(ValueError):
 
 
 class PredictionStatus(StrEnum):
-    """Persisted prediction states; Locked is derived rather than persisted."""
+    """Lifecycle state; Locked is derived and is never stored in SQLite."""
 
     OPEN = "open"
+    LOCKED = "locked"
     RESOLVED = "resolved"
     INVALID = "invalid"
 
@@ -29,19 +30,7 @@ class NewPrediction:
     probability_percent: int
 
     def __post_init__(self) -> None:
-        if not isinstance(self.question, str):
-            raise PredictionValidationError(
-                "Question is required.",
-                field="question",
-            )
-
-        normalized_question = self.question.strip()
-        if not normalized_question:
-            raise PredictionValidationError(
-                "Question is required.",
-                field="question",
-            )
-        object.__setattr__(self, "question", normalized_question)
+        object.__setattr__(self, "question", _required_text(self.question, "question"))
 
         probability = self.probability_percent
         if isinstance(probability, bool) or not isinstance(probability, int):
@@ -87,3 +76,200 @@ class PredictionDetail:
     probability_percent: int
     status: PredictionStatus
     created_at: datetime
+    background: str | None = None
+    resolution_criteria: str | None = None
+    forecast_deadline: date | None = None
+    expected_resolution: date | None = None
+    tags: tuple[str, ...] = ()
+    updated_at: datetime | None = None
+    metadata_version: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class PredictionMetadataUpdate:
+    """Validated replacement values for editable prediction metadata."""
+
+    question: str
+    background: str | None = None
+    resolution_criteria: str | None = None
+    forecast_deadline: date | None = None
+    expected_resolution: date | None = None
+    tags: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "question", _required_text(self.question, "question"))
+        object.__setattr__(
+            self,
+            "background",
+            _optional_text(self.background, "background"),
+        )
+        object.__setattr__(
+            self,
+            "resolution_criteria",
+            _optional_text(self.resolution_criteria, "resolution_criteria"),
+        )
+        _validate_date_only(self.forecast_deadline, "forecast_deadline")
+        _validate_date_only(self.expected_resolution, "expected_resolution")
+        object.__setattr__(self, "tags", _normalize_tags(self.tags))
+
+
+@dataclass(frozen=True, slots=True)
+class DefinitionChange:
+    """One immutable before/after snapshot of meaning-bearing metadata."""
+
+    change_id: int
+    prediction_id: int
+    changed_at: datetime
+    changed_fields: tuple[str, ...]
+    old_question: str
+    new_question: str
+    old_resolution_criteria: str | None
+    new_resolution_criteria: str | None
+    old_forecast_deadline: date | None
+    new_forecast_deadline: date | None
+
+
+DEFINITION_FIELDS = (
+    "question",
+    "resolution_criteria",
+    "forecast_deadline",
+)
+
+MIN_METADATA_DATE = date(1752, 9, 14)
+MAX_METADATA_DATE = date(9999, 12, 31)
+
+
+def changed_definition_fields(
+    current: PredictionDetail,
+    update: PredictionMetadataUpdate,
+) -> tuple[str, ...]:
+    """Return meaning-bearing fields whose normalized values would change."""
+
+    return tuple(
+        field_name
+        for field_name in DEFINITION_FIELDS
+        if getattr(current, field_name) != getattr(update, field_name)
+    )
+
+
+def metadata_would_change(
+    current: PredictionDetail,
+    update: PredictionMetadataUpdate,
+) -> bool:
+    """Whether an update differs semantically from the persisted metadata."""
+
+    scalar_fields = (
+        "question",
+        "background",
+        "resolution_criteria",
+        "forecast_deadline",
+        "expected_resolution",
+    )
+    if any(
+        getattr(current, field_name) != getattr(update, field_name)
+        for field_name in scalar_fields
+    ):
+        return True
+    return {tag.casefold() for tag in current.tags} != {
+        tag.casefold() for tag in update.tags
+    }
+
+
+def display_status(
+    persisted_status: PredictionStatus,
+    forecast_deadline: date | None,
+    current_date: date,
+) -> PredictionStatus:
+    """Derive Locked after an inclusive date-only forecast deadline."""
+
+    if (
+        persisted_status is PredictionStatus.OPEN
+        and forecast_deadline is not None
+        and current_date > forecast_deadline
+    ):
+        return PredictionStatus.LOCKED
+    return persisted_status
+
+
+def _required_text(value: object, field: str) -> str:
+    if not isinstance(value, str) or not (normalized := value.strip()):
+        raise PredictionValidationError("Question is required.", field=field)
+    if "\x00" in normalized:
+        raise PredictionValidationError(
+            "Question cannot contain the NUL control character.",
+            field=field,
+        )
+    return normalized
+
+
+def _optional_text(value: object, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise PredictionValidationError(
+            "Optional text must be text or left blank.",
+            field=field,
+        )
+    normalized = value.strip()
+    if "\x00" in normalized:
+        raise PredictionValidationError(
+            "Text cannot contain the NUL control character.",
+            field=field,
+        )
+    return normalized or None
+
+
+def _validate_date_only(value: object, field: str) -> None:
+    if value is not None and (
+        not isinstance(value, date) or isinstance(value, datetime)
+    ):
+        raise PredictionValidationError(
+            "Date values must be calendar dates.",
+            field=field,
+        )
+    if isinstance(value, date) and not MIN_METADATA_DATE <= value <= MAX_METADATA_DATE:
+        raise PredictionValidationError(
+            "Date values must be between 1752-09-14 and 9999-12-31.",
+            field=field,
+        )
+
+
+def _normalize_tags(values: object) -> tuple[str, ...]:
+    if isinstance(values, str):
+        raise PredictionValidationError(
+            "Tags must be supplied as separate labels.",
+            field="tags",
+        )
+    try:
+        candidates = tuple(values)  # type: ignore[arg-type]
+    except TypeError as error:
+        raise PredictionValidationError(
+            "Tags must be supplied as separate labels.",
+            field="tags",
+        ) from error
+
+    normalized_tags: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            raise PredictionValidationError(
+                "Every tag must be text.",
+                field="tags",
+            )
+        tag = candidate.strip()
+        if "\x00" in tag:
+            raise PredictionValidationError(
+                "Tags cannot contain the NUL control character.",
+                field="tags",
+            )
+        if any(delimiter in tag for delimiter in (",", "\r", "\n")):
+            raise PredictionValidationError(
+                "Tags cannot contain commas or line breaks.",
+                field="tags",
+            )
+        normalized_name = tag.casefold()
+        if not normalized_name or normalized_name in seen:
+            continue
+        seen.add(normalized_name)
+        normalized_tags.append(tag)
+    return tuple(normalized_tags)

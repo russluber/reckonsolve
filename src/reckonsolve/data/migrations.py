@@ -141,6 +141,206 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=3,
+        name="add prediction metadata and definition history",
+        statements=(
+            """
+            ALTER TABLE predictions ADD COLUMN metadata_version INTEGER NOT NULL
+                DEFAULT 1
+                CHECK (
+                    typeof(metadata_version) = 'integer'
+                    AND metadata_version >= 1
+                )
+            """,
+            """
+            ALTER TABLE predictions ADD COLUMN background TEXT
+                CHECK (background IS NULL OR (
+                    length(background) > 0 AND background = trim(background)
+                ))
+            """,
+            """
+            ALTER TABLE predictions ADD COLUMN resolution_criteria TEXT
+                CHECK (resolution_criteria IS NULL OR (
+                    length(resolution_criteria) > 0
+                    AND resolution_criteria = trim(resolution_criteria)
+                ))
+            """,
+            """
+            ALTER TABLE predictions ADD COLUMN forecast_deadline TEXT
+                CHECK (forecast_deadline IS NULL OR (
+                    length(forecast_deadline) = 10
+                    AND forecast_deadline GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                    AND forecast_deadline BETWEEN '1752-09-14' AND '9999-12-31'
+                    AND COALESCE(
+                        date(forecast_deadline || 'T00:00:00Z', '+0 days')
+                            = forecast_deadline,
+                        0
+                    )
+                ))
+            """,
+            """
+            ALTER TABLE predictions ADD COLUMN expected_resolution TEXT
+                CHECK (expected_resolution IS NULL OR (
+                    length(expected_resolution) = 10
+                    AND expected_resolution GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                    AND expected_resolution BETWEEN '1752-09-14' AND '9999-12-31'
+                    AND COALESCE(
+                        date(expected_resolution || 'T00:00:00Z', '+0 days')
+                            = expected_resolution,
+                        0
+                    )
+                ))
+            """,
+            """
+            CREATE TABLE tags (
+                id INTEGER PRIMARY KEY,
+                display_name TEXT NOT NULL
+                    CHECK (
+                        length(display_name) > 0
+                        AND display_name = trim(display_name)
+                        AND instr(display_name, ',') = 0
+                        AND instr(display_name, char(10)) = 0
+                        AND instr(display_name, char(13)) = 0
+                    ),
+                normalized_name TEXT NOT NULL UNIQUE
+                    CHECK (
+                        length(normalized_name) > 0
+                        AND normalized_name = trim(normalized_name)
+                        AND instr(normalized_name, ',') = 0
+                        AND instr(normalized_name, char(10)) = 0
+                        AND instr(normalized_name, char(13)) = 0
+                    )
+            ) STRICT
+            """,
+            """
+            CREATE TABLE prediction_tags (
+                prediction_id INTEGER NOT NULL
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE RESTRICT,
+                PRIMARY KEY (prediction_id, tag_id)
+            ) WITHOUT ROWID, STRICT
+            """,
+            """
+            CREATE INDEX prediction_tags_by_tag
+            ON prediction_tags (tag_id, prediction_id)
+            """,
+            """
+            CREATE TABLE prediction_definition_changes (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                changed_at TEXT NOT NULL
+                    CHECK (
+                        length(changed_at) = 27
+                        AND changed_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(changed_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(changed_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(changed_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(changed_at, 1, 10),
+                            0
+                        )
+                    ),
+                old_question TEXT NOT NULL
+                    CHECK (
+                        length(old_question) > 0
+                        AND old_question = trim(old_question)
+                    ),
+                new_question TEXT NOT NULL
+                    CHECK (
+                        length(new_question) > 0
+                        AND new_question = trim(new_question)
+                    ),
+                old_resolution_criteria TEXT
+                    CHECK (old_resolution_criteria IS NULL OR (
+                        length(old_resolution_criteria) > 0
+                        AND old_resolution_criteria = trim(old_resolution_criteria)
+                    )),
+                new_resolution_criteria TEXT
+                    CHECK (new_resolution_criteria IS NULL OR (
+                        length(new_resolution_criteria) > 0
+                        AND new_resolution_criteria = trim(new_resolution_criteria)
+                    )),
+                old_forecast_deadline TEXT
+                    CHECK (old_forecast_deadline IS NULL OR (
+                        length(old_forecast_deadline) = 10
+                        AND old_forecast_deadline GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                        AND old_forecast_deadline
+                            BETWEEN '1752-09-14' AND '9999-12-31'
+                        AND COALESCE(
+                            date(
+                                old_forecast_deadline || 'T00:00:00Z',
+                                '+0 days'
+                            ) = old_forecast_deadline,
+                            0
+                        )
+                    )),
+                new_forecast_deadline TEXT
+                    CHECK (new_forecast_deadline IS NULL OR (
+                        length(new_forecast_deadline) = 10
+                        AND new_forecast_deadline GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                        AND new_forecast_deadline
+                            BETWEEN '1752-09-14' AND '9999-12-31'
+                        AND COALESCE(
+                            date(
+                                new_forecast_deadline || 'T00:00:00Z',
+                                '+0 days'
+                            ) = new_forecast_deadline,
+                            0
+                        )
+                    )),
+                CHECK (
+                    old_question IS NOT new_question
+                    OR old_resolution_criteria IS NOT new_resolution_criteria
+                    OR old_forecast_deadline IS NOT new_forecast_deadline
+                )
+            ) STRICT
+            """,
+            """
+            CREATE INDEX prediction_definition_changes_by_prediction
+            ON prediction_definition_changes (prediction_id, id)
+            """,
+            """
+            CREATE TRIGGER prediction_definition_changes_are_immutable
+            BEFORE UPDATE ON prediction_definition_changes
+            BEGIN
+                SELECT RAISE(ABORT, 'saved definition changes are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_definition_changes_reject_id_reuse
+            BEFORE INSERT ON prediction_definition_changes
+            WHEN EXISTS (
+                SELECT 1
+                FROM prediction_definition_changes
+                WHERE id = NEW.id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved definition changes are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_definition_changes_reject_direct_delete
+            BEFORE DELETE ON prediction_definition_changes
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved definition changes are immutable');
+            END
+            """,
+        ),
+    ),
 )
 
 

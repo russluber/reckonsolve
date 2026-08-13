@@ -31,6 +31,13 @@ def test_new_prediction_requires_nonblank_question(question: Any) -> None:
     assert str(error_info.value) == "Question is required."
 
 
+def test_new_prediction_rejects_nul_in_question() -> None:
+    with pytest.raises(PredictionValidationError) as error_info:
+        NewPrediction("Will this\x00 happen?", 50)
+
+    assert error_info.value.field == "question"
+
+
 @pytest.mark.parametrize("probability", [-1, 101, 37.5, "50", True, False, None])
 def test_new_prediction_rejects_non_whole_or_out_of_range_probability(
     probability: Any,
