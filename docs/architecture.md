@@ -458,8 +458,8 @@ The M12 resource, identity, and private-build boundary is implemented. The origi
 
 A normal installer, uninstall policy, code signing, public distribution channel, and automatic updates remain Later decisions. When one becomes consequential, seek explicit user authorization before changing the product specification. Record durable technical reasoning in an [architecture decision record](decisions/README.md) when appropriate.
 
-## 19. Evolution beyond v0.1
+## 19. Evolution into v0.2
 
-Numeric forecasts and Forecast Reviews are v0.2 work. v0.1 should avoid choices that make later extension needlessly destructive, but it must not add unused tables, generalized forecast-type frameworks, review entities, or UI abstractions in anticipation of them.
+The approved v0.2 product plan adds one central numeric prediction interval per revision and explicit Forecast Reviews through Milestones 13 through 20. The current implementation remains the completed binary schema-v8 application: it has no numeric tables, generalized forecast-type framework, Review entity, or numeric UI yet.
 
-The architecture evolves through implemented vertical slices. After each milestone, update this document to reflect actual modules, persistence behavior, and any recorded technical decisions.
+The architecture will evolve through those implemented vertical slices rather than prebuilding the whole release. Milestone 13 owns the first persistence and type-boundary decisions, including an exact fixed-precision decimal representation that preserves all existing binary data. After each milestone, update this document to reflect actual modules, persistence behavior, and any recorded technical decisions; do not describe planned structures as already implemented.

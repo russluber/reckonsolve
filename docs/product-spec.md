@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Product Specification
+## v0.1 Baseline and v0.2 Product Plan
 
-Status: Approved product scope for implementation  
+Status: v0.1 source milestone implemented; v0.2 product contract approved for staged implementation
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -14,16 +14,16 @@ Related repository documentation: [Architecture](architecture.md) and [technical
 
 Build a local-first personal forecasting journal that lets one person:
 
-1. make binary probabilistic predictions;
+1. make binary and numeric probabilistic predictions;
 2. record the reasoning behind them;
 3. update beliefs as information changes;
 4. preserve the complete history of those updates;
 5. resolve predictions against real outcomes; and
-6. study calibration and forecasting performance.
+6. study calibration and forecasting performance without collapsing unlike quantities into misleading comparisons.
 
 The product is not merely a database of current probabilities. Its defining value is an honest historical record of what the user believed, why they believed it, and how those beliefs changed.
 
-The v0.1 release is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting.
+The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior.
 
 ---
 
@@ -50,7 +50,7 @@ It is not:
 
 Core product statement:
 
-> A local-first forecasting journal where you can make probabilistic predictions, explain your reasoning, update your beliefs over time without rewriting history, resolve outcomes, and study your calibration.
+> A local-first forecasting journal where you can make probabilistic predictions about events or quantities, explain your reasoning, update your beliefs over time without rewriting history, resolve outcomes, and study your calibration.
 
 ---
 
@@ -60,17 +60,17 @@ These principles take precedence over implementation convenience.
 
 ### 3.1 Historical integrity
 
-A saved forecast revision is immutable. The application may never silently overwrite a probability, rationale, or timestamp belonging to a historical revision.
+A saved forecast revision is immutable. The application may never silently overwrite a binary probability, numeric bound, numeric median, confidence level, rationale, or timestamp belonging to a historical revision.
 
 Changing one's mind creates a new revision. It does not mutate the old one.
 
 ### 3.2 Belief updating is encouraged
 
-Revising a forecast is a normal and desirable act. The interface should make it easy to move from one probability to another while preserving both.
+Revising a forecast is a normal and desirable act. The interface should make it easy to change a binary probability or numeric interval while preserving both the old and new statements.
 
 ### 3.3 Reasoning is first-class
 
-The app must support more than probabilities. A forecast revision may contain its own rationale, and a prediction may accumulate journal entries even when the probability does not change.
+The app must support more than forecast values. A revision may contain its own rationale, and a prediction may accumulate journal entries even when its forecast does not change.
 
 ### 3.4 Low floor, high ceiling
 
@@ -81,9 +81,11 @@ Creating a binary prediction requires only:
 
 All additional structure is optional. The app may encourage useful detail, but it must not require boilerplate.
 
-### 3.5 Probability does not decay
+Creating a numeric prediction necessarily requires Question, unit, precision, lower bound, median estimate, upper bound, and confidence. Background, Resolution Criteria, dates, tags, and rationale remain optional rather than becoming numeric boilerplate.
 
-A stale forecast remains the probability the user last entered. The app may flag that forecast as needing attention, but it must never automatically lower, raise, or otherwise alter the probability.
+### 3.5 Forecast values do not decay
+
+A stale binary forecast remains the probability the user last entered. A stale numeric forecast retains its last bounds, median, and confidence. The app may flag either as needing attention, but it must never automatically alter the saved forecast.
 
 ### 3.6 Local ownership
 
@@ -125,7 +127,7 @@ v0.1 supports binary forecasts only.
 - Export prediction data to CSV.
 - Establish visual identity, isolated development data, and a private frozen Windows build without publishing a normal installer.
 
-### Deferred to v0.2
+### Approved for v0.2 staged implementation
 
 - Numeric interval forecasting.
 - Forecast Reviews, including a dedicated "Still at 60%" action.
@@ -135,7 +137,7 @@ v0.1 supports binary forecasts only.
 - Multiple-choice forecasts.
 - Dedicated date forecasts.
 - Full continuous or discrete probability distributions.
-- Quantile elicitation.
+- Standalone multi-quantile elicitation beyond the two endpoints implied by one central interval.
 - Conditional forecasts.
 - Collections.
 - Structured Sources/Evidence.
@@ -169,15 +171,19 @@ Every implementation milestone should preserve or extend this loop rather than c
 
 ### Prediction
 
-The enduring Yes/No question plus its stable metadata and lifecycle state.
+The enduring forecasting question plus its type-specific definition, stable metadata, and lifecycle state. A Prediction has exactly one forecast type for its entire lifetime.
 
-Example:
+Binary example:
 
 > Will I finish *Statistical Rethinking* before December 1?
 
+Numeric example:
+
+> How many days will it take person X to respond to my offer?
+
 ### Forecast revision
 
-A timestamped statement of probability and optional rationale. A prediction has one or more revisions. Revisions are immutable.
+A timestamped statement of belief and optional rationale. For a binary prediction, the statement is one Yes probability. For a numeric prediction, it is one central prediction interval, a median estimate, and a confidence level. A prediction has one or more revisions. Revisions are immutable.
 
 ### Current forecast
 
@@ -185,7 +191,7 @@ The most recent valid forecast revision.
 
 ### Journal entry
 
-A timestamped note about evidence or reasoning that does not itself change the forecast probability.
+A timestamped note about evidence or reasoning that does not itself change the forecast values.
 
 ### Forecast deadline
 
@@ -197,7 +203,7 @@ The calendar date by which the user expects the outcome to be knowable. It is op
 
 ### Resolution
 
-The recorded Yes/No outcome and its associated resolution information.
+The recorded type-appropriate outcome and its associated resolution information: Yes/No for a binary prediction or the realized quantity for a numeric prediction.
 
 ### Postmortem
 
@@ -219,10 +225,12 @@ Required fields:
 
 - stable identifier;
 - question text;
-- type, fixed to binary in v0.1;
+- forecast type, fixed to binary in v0.1 and fixed to either binary or numeric once v0.2 creates the prediction;
 - status;
 - created timestamp; and
 - updated timestamp for mutable metadata.
+
+A numeric Prediction also has a required unit label and fixed decimal precision. Unit and precision belong to the enduring Prediction definition, not to individual revisions, and are immutable after creation.
 
 Optional fields:
 
@@ -235,6 +243,8 @@ Optional fields:
 System-derived information should not be redundantly stored unless needed for correctness or performance. For example, Current Forecast should normally be derived from the latest valid revision.
 
 ### 7.2 ForecastRevision
+
+In v0.1, a binary ForecastRevision has these required fields:
 
 Required fields:
 
@@ -252,6 +262,8 @@ Invariant:
 
 > Probability belongs to ForecastRevision, not Prediction.
 
+The v0.2 numeric counterpart is defined in Section 30. Its lower bound, median estimate, upper bound, and confidence likewise belong to the immutable revision rather than Prediction.
+
 ### 7.3 JournalEntry
 
 Required creation facts:
@@ -268,6 +280,8 @@ The displayed body may be corrected, but the entry's identity, original created 
 
 ### 7.4 Resolution
 
+In v0.1, a binary Resolution has these required fields:
+
 Required fields:
 
 - stable identifier;
@@ -280,6 +294,8 @@ Optional fields:
 
 - factual resolution notes; and
 - postmortem.
+
+The v0.2 numeric counterpart records an actual value using the Prediction's unit and precision. Both forecast types capture exactly one final eligible revision for scoring.
 
 ### 7.5 Tags
 
@@ -304,7 +320,7 @@ It remains visible and is excluded from scoring.
 - `tags`
 - `prediction_tags`
 
-Do not create a forecast-reviews entity in v0.1. Reviews are a v0.2 feature.
+Do not retrofit forecast reviews into the completed v0.1 schema history. Reviews are introduced by a new v0.2 migration and milestone.
 
 ---
 
@@ -881,9 +897,11 @@ Required boundaries:
 - Creating a prediction plus its first revision is atomic.
 - Creating a revision is append-only in normal application logic.
 - Resolution and invalidation are transactional.
+- Numeric quantities must use an exact base-ten representation consistent with the Prediction's fixed decimal precision; binary floating-point is not canonical storage.
 - System-generated instants are stored in UTC and displayed in the computer's local time.
 - Date-only values retain their calendar-date meaning and are not converted between time zones.
-- Analytics queries must use the final eligible revision exactly once per resolved prediction.
+- Analytics queries must use the final eligible type-appropriate revision exactly once per resolved prediction.
+- Unitless numeric containment calibration may combine units, but raw numeric errors and interval scores must not be aggregated across unlike units.
 - The application must reopen existing data correctly after restart.
 
 Architecture should stay proportionate to a single-user local desktop app. Prefer clear modules and a testable data-access/domain layer over service-oriented infrastructure.
@@ -907,8 +925,9 @@ Unless the product spec is explicitly revised, Codex must not:
 - require Background, Resolution Criteria, dates, tags, or rationale;
 - automatically change stale probabilities;
 - conflate Forecast Deadline with Expected Resolution;
-- implement numeric forecasting in v0.1;
-- implement Forecast Reviews in v0.1;
+- weaken or silently reinterpret existing binary behavior while adding numeric forecasts;
+- add more than one central numeric interval per revision, a full probability distribution, or automatic unit conversion in v0.2;
+- treat a Forecast Review as a new forecast revision or independent scoring observation;
 - quietly expand Later features into the MVP;
 - delete legitimate history merely because a prediction becomes invalid; or
 - add infrastructure for hypothetical future scale.
@@ -1009,6 +1028,8 @@ Acceptance demonstration:
 - Verify resource loading, development/stable data isolation, migration, backup, restart, and the core user loop in the private frozen build.
 - Defer an installer, shortcuts, uninstall behavior, code signing, automatic updates, and public binary distribution until a later release-readiness decision.
 
+The approved v0.2 milestones continue as Milestones 13 through 20 in Section 30. Each must preserve the completed v0.1 binary workflow.
+
 ---
 
 ## 27. Cross-cutting acceptance criteria
@@ -1078,30 +1099,238 @@ The application and project name is resolved as **Reckonsolve**. Metadata-edit s
 
 The installer format, signing approach, public distribution channel, and final original icon artwork remain intentionally unresolved until the user chooses to pursue normal Windows distribution. They are Later decisions rather than v0.1 acceptance blockers.
 
+The v0.2 numeric product contract is resolved in Section 30. Milestone 13 must choose and document a modest maximum supported decimal precision and its exact SQLite representation without changing the approved signed, fixed-precision semantics. Milestone 19 must settle whether a Forecast Review is allowed only while Open or may also be recorded while Locked; that choice must be recorded before Review behavior is implemented. Neither decision blocks starting Milestone 13.
+
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
 ---
 
-## 30. v0.2 opening scope
+## 30. v0.2 approved scope and milestone plan
 
-The first planned additions after a stable v0.1 are:
+v0.2 adds one practical numeric forecasting model and explicit Forecast Reviews to the completed binary application. It is an additive release: existing binary predictions, revisions, resolutions, analytics, backups, and exports must continue to work without reinterpretation or data loss.
 
-### Numeric interval forecasting
+### 30.1 Included in v0.2
 
-Add numeric forecasts represented initially by lower bound, upper bound, and confidence level, together with appropriate resolution and analytics such as interval coverage, width/sharpness, and Winkler score.
+- Numeric Predictions using one central prediction interval per immutable revision.
+- Signed, exact, fixed-precision quantities with a user-supplied unit label.
+- A required median estimate and whole-number confidence from 1% through 99%.
+- Numeric creation, revision, journal, timeline, visualization, lifecycle, resolution, browsing, dashboard, and analytics workflows.
+- Forecast Reviews for binary and numeric predictions, allowing the user to record deliberate reconsideration without fabricating a changed forecast.
+- Type-aware backup, CSV export, restart, migration, and private frozen-build verification.
 
-### Forecast Reviews
+### 30.2 Numeric Prediction definition and value representation
 
-Add an explicit way to record that a forecast was reconsidered and retained without creating a fake probability revision:
+A Numeric Prediction has these required enduring fields:
+
+- Question;
+- unit label; and
+- decimal precision.
+
+The unit describes the quantity in the user's own language, such as `days`, `books`, `USD`, or `messages`. Reckonsolve does not maintain a conversion system or infer relationships between differently spelled units.
+
+Numeric values may be negative, zero, or positive. They use exact base-ten fixed precision rather than binary floating-point. Whole numbers are the default through precision zero, while a user who genuinely needs decimals may deliberately choose a supported number of decimal places. The same precision applies to every bound, median, and actual outcome for that Prediction. Milestone 13 must select and document a modest technical upper bound on decimal places.
+
+Unit and precision are part of the enduring quantity definition and cannot be edited after creation. If either was defined incorrectly or the quantity itself changes materially, the honest workflow is to mark the old Prediction Invalid when appropriate and create a new one.
+
+### 30.3 Central prediction interval contract
+
+Each Numeric ForecastRevision contains exactly:
+
+- an inclusive lower bound;
+- a required median estimate;
+- an inclusive upper bound;
+- a whole-number confidence level from 1% through 99%;
+- an optional rationale;
+- an immutable created timestamp; and
+- a deterministic revision sequence.
+
+The required ordering is:
 
 ```text
-Current forecast: 35%
-[ Still 35% ]  [ Revise ]
+lower <= median <= upper
 ```
 
-Once Reviews exist, Needs Attention should use last thoughtful review rather than only the latest probability revision.
+Equality is valid, especially for discrete quantities or narrow low-confidence intervals. The median is the user's central estimate: the user is expressing roughly equal probability above and below it. It is not automatically calculated as the arithmetic midpoint and need not be geometrically centered between the bounds.
 
-Neither feature should be partially prebuilt into v0.1 beyond avoiding schema choices that make later extension unnecessarily difficult.
+The interval is central and equal-tailed. For confidence `c%`, the user is expressing `c%` probability inside the inclusive interval and `(100 - c) / 2%` in each tail. For example, an 80% interval leaves 10% below the lower bound and 10% above the upper bound.
+
+Confidence may be any whole percentage from 1 through 99. Zero and 100 are excluded because they do not define a useful finite central interval and the proper interval score is undefined at 100%. The input should make multiples of 5 easy and offer especially convenient 50%, 80%, 90%, and 95% shortcuts without restricting manual entry.
+
+### 30.4 Numeric revision and historical-integrity rules
+
+Changing any of lower bound, median, upper bound, or confidence creates one new immutable Numeric ForecastRevision. One save changes all supplied forecast values atomically; it never edits an earlier revision in place.
+
+Submitting values identical to the current revision does not create a revision. Until Forecast Reviews are implemented, unchanged-belief reasoning belongs in a Journal entry. Once Reviews exist, the user may instead explicitly record that the current numeric interval was reconsidered and retained.
+
+The normal revision operation must enforce lifecycle eligibility and optimistic concurrency both before and inside its transaction. A Journal entry must reference the exact type-appropriate revision that was current when the entry was created. Journal entries, corrections, and Reviews never create chart observations or change numeric forecast values.
+
+### 30.5 Numeric creation, detail, timeline, and visualization
+
+New Prediction gains an explicit Binary/Numeric type choice. Binary remains the familiar default so the existing quick path does not become more cumbersome.
+
+Numeric quick creation requires only Question, unit, precision, lower bound, median, upper bound, and confidence. Existing optional rationale, metadata, dates, and tags remain behind **More details**. The Prediction and first Numeric ForecastRevision, including optional details and tags, are saved in one transaction.
+
+Prediction Detail must make forecast type, unit, current interval, median, confidence, and lifecycle immediately legible. A concise presentation may read:
+
+```text
+80% interval: 3-21 days
+Median estimate: 7 days
+```
+
+The unified timeline shows every numeric revision and its optional rationale, interleaved causally with anchored Journal entries and later Reviews. The numeric history visualization shows the lower and upper bounds as an interval band and the median as a distinct line or markers over stored time. It contains exactly one observation per Numeric ForecastRevision, handles one revision and equal or regressing timestamps, and retains the textual timeline as its exact nonvisual equivalent.
+
+### 30.6 Numeric lifecycle, resolution, and scoring selection
+
+Open, Locked, Resolved, Invalid, Forecast Deadline, Expected Resolution, Needs Attention, and Ready to Resolve retain their v0.1 meanings and become type-aware.
+
+- Open Numeric Predictions accept normal revisions and Journal entries.
+- Locked Numeric Predictions reject normal revisions but accept Journal entries.
+- Resolved and Invalid Numeric Predictions reject normal revisions and new Journal entries.
+- Numeric resolution records the realized value at the Prediction's fixed precision, even when it falls outside the forecast interval.
+- Resolution notes and Postmortem remain optional.
+- Resolution captures exactly one final eligible Numeric ForecastRevision for scoring.
+- Unresolved and Invalid Numeric Predictions are excluded from numeric scoring and calibration.
+- Existing untouched-prediction deletion and meaningful-history safeguards apply to Numeric Predictions.
+
+### 30.7 Numeric analytics
+
+For one resolved Numeric Prediction with final eligible interval `[lower, upper]`, median `m`, actual value `y`, confidence fraction `c`, and `alpha = 1 - c`:
+
+**Containment** is Yes when `lower <= y <= upper`, otherwise No. Because this result and the stated confidence are unitless, containment calibration may combine predictions with different quantities and units. The calibration view uses the same fixed ten confidence bands as the binary reliability view, reports the actual mean stated confidence, observed containment rate, and count for every nonempty band, and warns against conclusions from sparse data.
+
+**Median absolute error** is `abs(m - y)`. It answers how far the central estimate missed in the Prediction's natural unit.
+
+**Interval score** is a proper score that rewards narrow intervals while penalizing misses:
+
+```text
+(upper - lower)
++ (2 / alpha) * (lower - y), when y < lower
++ (2 / alpha) * (y - upper), when y > upper
+```
+
+Only the applicable miss term is added. Lower interval score is better. This is commonly called the interval or Winkler interval score.
+
+Median absolute error, interval width, and interval score retain the quantity's unit. Reckonsolve may summarize them only within one exact unit label or for an individual Prediction. It must not present an overall raw score that averages days, dollars, counts, and other unlike quantities. No cross-unit normalization or composite numeric performance grade is part of v0.2.
+
+All numeric analytics use exactly one final eligible revision per resolved Prediction. Tags and type/unit filters must define a consistent subset across headline numbers, tables, and charts.
+
+### 30.8 Forecast Reviews
+
+A Forecast Review is an immutable record that the user deliberately reconsidered the current forecast and retained it unchanged. It records:
+
+- stable identifier;
+- Prediction identifier;
+- exact current type-appropriate ForecastRevision reference;
+- created timestamp; and
+- optional note.
+
+A Review does not create or modify a ForecastRevision, change probability or numeric interval values, add a scoring observation, or add a probability/numeric-history chart marker. It appears in the unified timeline and preserves the reviewed forecast context.
+
+For binary forecasts, the action may read **Still at 60%**. For numeric forecasts, it may read **Keep this interval**. After Reviews exist, Needs Attention uses the most recent eligible ForecastRevision or Forecast Review, whichever is later. Journal entries continue not to reset the Needs Attention clock.
+
+The allowed lifecycle states for creating a Review remain the one consequential v0.2 product choice to settle before Milestone 19. Full review sessions, prompted checklists, concealed prior forecasts, and anti-anchoring workflows remain Later.
+
+### 30.9 Implementation milestones
+
+#### Milestone 13: Numeric domain and persistence foundation
+
+- Choose and document the bounded decimal-precision representation.
+- Add a safe migration for forecast type and type-specific numeric data without rewriting the completed v0.1 migrations.
+- Introduce independently testable Numeric Prediction, Numeric ForecastRevision, and Numeric Resolution domain concepts.
+- Preserve every existing binary row, invariant, query, and workflow through migration and restart.
+- Prove exact signed decimal round trips, interval validation, confidence endpoints, immutability, and transaction rollback.
+
+This milestone is intentionally foundation-heavy. It should not expose a half-working Numeric option in the UI.
+
+#### Milestone 14: Numeric creation and current detail
+
+- Add the Binary/Numeric creation choice while keeping Binary as the default quick path.
+- Implement atomic Numeric creation with all required values and optional **More details** content.
+- Display the current interval, median, confidence, unit, metadata, and lifecycle on Prediction Detail.
+- Reopen the application and display the identical values after restart.
+
+Acceptance demonstration:
+
+> Create an 80% interval of 3-21 days with median 7 -> close -> reopen -> the same interval, median, confidence, precision, and unit remain.
+
+#### Milestone 15: Numeric revisions, timeline, and history chart
+
+- Append a revision when any numeric forecast value changes; reject a completely unchanged submission.
+- Enforce stale-token and lifecycle checks transactionally.
+- Show numeric revisions and anchored Journal entries in one causal timeline.
+- Add the lower/upper interval band and median history visualization with an exact nonvisual equivalent.
+- Verify that Journal creation/correction changes neither revision count nor chart observations.
+
+#### Milestone 16: Numeric lifecycle, resolution, and scoring selection
+
+- Apply Open, Locked, Resolved, Invalid, delete, and deadline behavior to Numeric Predictions.
+- Resolve with an exact actual value, including an outcome outside the interval.
+- Capture exactly one final eligible Numeric ForecastRevision.
+- Preserve resolution, invalidation, restart, and transactional rollback behavior.
+
+#### Milestone 17: Type-aware Dashboard and Predictions browser
+
+- Render concise binary and numeric summaries without obscuring forecast type or unit.
+- Make search, status/tag filters, selection, and detail navigation work for both types.
+- Include Numeric Predictions correctly in Needs Attention, Ready to Resolve, and Locked sections.
+- Add a forecast-type filter where it materially reduces ambiguity.
+
+#### Milestone 18: Numeric analytics
+
+- Add containment calibration with mean confidence, observed containment, and count.
+- Add median absolute error, interval width, and proper interval score views within one unit.
+- Support type, tag, and unit filtering with consistent subsets.
+- Explicitly prevent misleading cross-unit raw-score aggregation.
+- Test final-eligible-revision selection, inclusive boundaries, misses on each side, confidence extremes, sparse bins, and exclusions independently of chart rendering.
+
+#### Milestone 19: Forecast Reviews
+
+- Resolve and record Review lifecycle eligibility before coding.
+- Add immutable type-aware Reviews referencing the exact current revision.
+- Show Reviews in the unified timeline without changing forecast values, revision history, charts, or scoring.
+- Update Needs Attention to use the later of the last eligible revision and Review while leaving Journal behavior unchanged.
+- Cover concurrency, cancellation, restart, and both Binary and Numeric workflows.
+
+#### Milestone 20: v0.2 portability and hardening
+
+- Extend backup/recovery verification across Binary, Numeric, and Review records.
+- Extend the documented CSV ZIP format with type-specific numeric and Review data while preserving honest relational history.
+- Exercise migrations from a real v0.1-shaped database through every v0.2 schema version.
+- Run the complete automated suite and private frozen-build smoke workflow across both forecast types.
+- Align README, architecture, decision records, and user-facing export documentation with implemented v0.2 behavior.
+
+An installer, code signing, automatic updates, and public binary distribution remain separate Later work.
+
+### 30.10 v0.2 acceptance criteria
+
+v0.2 is not complete unless all of the following are true:
+
+1. Every existing v0.1 binary workflow and historical record still behaves correctly.
+2. A Numeric Prediction can be created from the required numeric fields without optional boilerplate.
+3. Signed whole and supported decimal values round-trip exactly through restart, backup, and export.
+4. Every Numeric ForecastRevision satisfies `lower <= median <= upper` and confidence 1% through 99%.
+5. Any numeric forecast change appends one immutable revision; cancel and unchanged submission append none.
+6. Journal entries retain the exact Binary or Numeric revision context and never change forecast values.
+7. Numeric history contains exactly one interval/median observation per Numeric ForecastRevision.
+8. Numeric lifecycle and deadline rules match their binary counterparts.
+9. A Numeric Prediction can resolve to any valid actual value, including one outside its interval.
+10. Each resolved Numeric Prediction contributes exactly one final eligible revision to numeric analytics.
+11. Inclusive containment, median absolute error, and interval score are correct at boundaries and on both sides of a miss.
+12. Cross-unit containment calibration is clearly unitless, while raw numeric errors and scores are never misleadingly aggregated across unlike units.
+13. Forecast Reviews preserve exact context and change neither forecast history, chart observations, nor scoring observations.
+14. Needs Attention uses Forecast Reviews only according to the lifecycle policy approved before Milestone 19.
+15. Backup, export, migration, restart, and the private frozen build preserve both forecast types and Reviews.
+16. Core workflows remain fully offline and single-user.
+
+### 30.11 Explicitly outside v0.2
+
+- More than one interval or confidence level in a single revision.
+- Full probability distributions or arbitrary quantile sets.
+- Automatic unit conversion, unit inference, or editing a Prediction's unit/precision after creation.
+- A normalized or composite raw score across unlike units.
+- Multiple-choice, dedicated date, conditional, or relational forecasts.
+- Full Forecast Review sessions, prompted checklists, or anti-anchoring modes.
+- Every feature already listed as Later in Section 4 unless separately promoted through an explicit specification revision.
 
 ---
 

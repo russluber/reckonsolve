@@ -13,7 +13,7 @@
 
 This project is a personal, local-first forecasting journal for Windows. It is a fresh successor to Predlog, not an extension of the Predlog CLI codebase.
 
-The application lets one user create binary probabilistic predictions, record reasoning, revise beliefs without rewriting history, resolve outcomes, and study calibration.
+The application lets one user create binary and numeric probabilistic predictions, record reasoning, revise beliefs without rewriting history, resolve outcomes, and study calibration.
 
 The governing product rule is:
 
@@ -21,9 +21,9 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The current target is v0.1, the minimum viable product.
+The completed source baseline is v0.1. The current staged development target is v0.2.
 
-v0.1 includes:
+The v0.1 baseline includes:
 
 - binary Yes/No forecasts;
 - optional rationale and prediction metadata;
@@ -39,7 +39,16 @@ v0.1 includes:
 - backup and CSV export; and
 - visual identity, development-data isolation, and a private Windows frozen-build validation.
 
-Do not implement numeric forecasting or Forecast Reviews in v0.1. Both are reserved for v0.2.
+v0.2 adds:
+
+- one central numeric prediction interval per immutable revision;
+- signed, exact, fixed-precision quantities with a stable unit;
+- a required median estimate and 1% through 99% confidence;
+- type-aware creation, revision, journal, timeline, visualization, lifecycle, resolution, browsing, attention, and analytics behavior;
+- Forecast Reviews that retain an unchanged Binary or Numeric forecast without creating a fake revision; and
+- type-aware backup, CSV export, migration, and private-build hardening.
+
+Implement v0.2 only through the staged Milestones 13 through 20 in `docs/product-spec.md`. Preserve the completed binary behavior rather than redesigning it incidentally.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 
@@ -69,35 +78,40 @@ Do not implement other Later features unless the user explicitly changes the sco
 
 ### Forecast history
 
-- A saved `ForecastRevision` is immutable.
-- A probability change always appends a new revision; it never updates an earlier revision in place.
-- Probability belongs to `ForecastRevision`, not as the sole canonical value on `Prediction`.
-- The current forecast is derived from the latest valid eligible revision.
+- A saved Binary or Numeric ForecastRevision is immutable.
+- A binary probability change or numeric interval/median/confidence change always appends a new revision; it never updates an earlier revision in place.
+- Type-specific forecast values belong to the immutable revision, not as the sole canonical value on `Prediction`.
+- The current forecast is derived from the latest valid eligible type-appropriate revision.
 - Creating a prediction and its first revision is atomic.
 - Opening or cancelling a revision form must not create a revision.
+- Numeric revisions require `lower <= median <= upper`, inclusive bounds, and whole-number confidence from 1% through 99%.
+- Numeric values use an exact base-ten representation at the Prediction's immutable unit and precision; canonical storage must not use binary floating-point.
 
 ### Journal entries
 
-- A journal entry records reasoning or evidence without changing probability.
+- A journal entry records reasoning or evidence without changing Binary or Numeric forecast values.
 - Adding a journal entry must not create a forecast revision.
 - A journal entry records which forecast revision was current when it was created.
-- In v0.1, a journal entry does not reset the Needs Attention clock.
+- A journal entry does not reset the Needs Attention clock.
 
 ### Lifecycle
 
 - Forecast Deadline and Expected Resolution are separate concepts.
-- Open predictions accept forecast revisions and journal entries.
-- Locked predictions reject normal forecast revisions but accept journal entries.
+- Open predictions accept type-appropriate forecast revisions and journal entries.
+- Locked predictions reject normal type-appropriate forecast revisions but accept journal entries.
 - Resolved and Invalid predictions reject normal forecast revisions.
 - Invalid predictions remain in history and are excluded from scoring.
 - Ready to Resolve and Needs Attention are attention classifications, not additional canonical lifecycle states.
-- Staleness may change how a prediction is displayed, but it must never alter its probability.
+- Staleness may change how a prediction is displayed, but it must never alter its forecast values.
 
 ### Scoring
 
-- Ordinary scoring uses exactly one final eligible forecast revision per resolved prediction.
+- Ordinary scoring uses exactly one final eligible type-appropriate forecast revision per resolved prediction.
 - Never treat every revision as an independent resolved forecast.
-- Exclude unresolved and Invalid predictions from Brier and calibration calculations.
+- Exclude unresolved and Invalid predictions from all scoring and calibration calculations.
+- Binary forecasts use Brier and binary calibration behavior.
+- Numeric forecasts use inclusive containment calibration, median absolute error, and proper interval score as specified in Section 30.
+- Unitless numeric containment calibration may combine units; raw numeric errors, widths, and interval scores must not be aggregated across unlike units.
 - Test scoring selection rules separately from chart rendering.
 
 ### Deletion and data integrity
@@ -110,11 +124,12 @@ Do not implement other Later features unless the user explicitly changes the sco
 ## UX Guardrails
 
 - Creating a binary prediction requires only Question and Probability.
+- Creating a numeric prediction requires Question, unit, precision, lower bound, median estimate, upper bound, and confidence; whole-number precision is the default.
 - Rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags remain optional.
 - Do not force the user to enter boilerplate Resolution Criteria for self-evident questions.
-- Keep Question and Probability visually primary during creation.
+- Keep Question and the type-appropriate forecast values visually primary during creation.
 - Favor a calm desktop-journal interface over a dense trading or enterprise dashboard.
-- Make the current probability and lifecycle state immediately legible.
+- Make the current type-appropriate forecast and lifecycle state immediately legible.
 - Hide or de-emphasize empty optional sections.
 - Use plain language and avoid false precision.
 - Confirm destructive or historically consequential actions.
@@ -154,7 +169,7 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Use temporary directories and temporary SQLite databases in tests.
 - Do not rely on network access, the user's clock, or the user's local application data.
 - Prioritize tests for immutable revisions, transactions, lifecycle boundaries, scoring selection, date-based attention rules, migrations, backup consistency, and persistence across restart.
-- Cover edge cases described in `docs/product-spec.md`, including a single revision, repeated equal probabilities, missing optional dates, and boundary-time transitions.
+- Cover edge cases described in `docs/product-spec.md`, including a single revision, repeated equal probabilities, inclusive numeric bounds, exact signed decimals, missing optional dates, and boundary-time transitions.
 
 Once the corresponding tools are configured in the repository, use these standard checks:
 
@@ -206,8 +221,8 @@ Unless explicitly authorized through a change to `docs/product-spec.md`, do not 
 - cloud sync, hosted storage, or required network access;
 - social sharing, comments, groups, leaderboards, tournaments, or crowd forecasts;
 - web/PWA architecture or an application API;
-- numeric, multiple-choice, date-distribution, conditional, or full-distribution forecasts;
-- Forecast Reviews or review sessions;
+- multiple numeric intervals per revision, full numeric distributions, arbitrary quantile sets, automatic unit conversion, multiple-choice, date-distribution, or conditional forecasts;
+- full Forecast Review sessions or anti-anchoring review modes beyond the explicit v0.2 Review record;
 - Collections, structured Sources/Evidence, attachments, or prediction graphs;
 - notifications or automatic reminders;
 - log loss, Expected Calibration Error, probability bias, or advanced revision analytics;

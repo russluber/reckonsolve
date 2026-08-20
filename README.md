@@ -4,6 +4,8 @@ Reckonsolve is a local-first personal forecasting journal for Windows. It is des
 
 > Reckonsolve now has isolated development data, local action icons, and a validated private Windows build, but it is not ready for normal distribution. Original application-icon artwork, an installer, signing, and public binaries remain deferred.
 
+The current application is the completed binary v0.1 baseline. Numeric interval forecasting and explicit Forecast Reviews now have an approved staged v0.2 plan, but they are not implemented yet.
+
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
 Journal entries record evidence or reasoning without changing the forecast. Each entry preserves the forecast that was current when it was written, and revisions and Journal entries appear together in one timeline. Saved Journal text can be transparently corrected: the timeline marks it **Edited** and retains the original and every prior version in a collapsed edit history. Individual Journal entries cannot be deleted.
@@ -26,7 +28,7 @@ The M12 visual pass uses a deliberately small, offline subset of Lucide icons wh
 
 ## Documentation
 
-- [Product specification](docs/product-spec.md) — v0.1 scope, behavior, invariants, and acceptance criteria
+- [Product specification](docs/product-spec.md) — implemented v0.1 behavior and the approved v0.2 contract, milestones, and acceptance criteria
 - [Architecture](docs/architecture.md) — current implementation state and intended technical boundaries
 - [Architecture decision records](docs/decisions/README.md) — durable reasoning for consequential technical choices
 
