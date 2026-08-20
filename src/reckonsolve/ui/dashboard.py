@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from functools import partial
+from pathlib import Path
 from typing import Protocol
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QStandardPaths, Qt, QTimer, Signal
 from PySide6.QtGui import QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -25,6 +27,11 @@ from reckonsolve.domain.attention import (
     MIN_STALE_THRESHOLD_DAYS,
     DashboardPrediction,
     DashboardSnapshot,
+)
+from reckonsolve.domain.transfer import (
+    BackupResult,
+    CsvExportResult,
+    DataManagementStatus,
 )
 
 
@@ -45,13 +52,22 @@ class DashboardOperations(Protocol):
 
 
 class AttentionSettingsOperations(Protocol):
-    """Application operations used by the minimal M8 Settings control."""
+    """Application operations used by the focused Settings screen."""
 
     def get_stale_threshold_days(self) -> int:
         """Return the persisted threshold."""
 
     def set_stale_threshold_days(self, value: int) -> int:
         """Persist a validated threshold."""
+
+    def get_data_management_status(self) -> DataManagementStatus:
+        """Return recovery status and suggested destination names."""
+
+    def create_backup(self, destination: Path) -> BackupResult:
+        """Create a complete SQLite recovery artifact."""
+
+    def export_csv_bundle(self, destination: Path) -> CsvExportResult:
+        """Create a documented relational CSV ZIP."""
 
 
 class DashboardScreen(QWidget):
@@ -265,7 +281,7 @@ class DashboardScreen(QWidget):
 
 
 class AttentionSettingsScreen(QWidget):
-    """Expose the one persisted preference required by Milestone 8."""
+    """Expose the small set of v0.1 attention and data-management controls."""
 
     threshold_changed = Signal(int)
 
@@ -277,21 +293,25 @@ class AttentionSettingsScreen(QWidget):
         super().__init__(parent)
         self.setObjectName("settingsScreen")
         self._operations = operations
+        self._suggested_backup_filename = "reckonsolve-backup.sqlite3"
+        self._suggested_export_filename = "reckonsolve-export.zip"
 
         title = QLabel("Settings", self)
         title.setObjectName("settingsScreenTitle")
 
+        attention_group = QGroupBox("Needs Attention", self)
+        attention_layout = QVBoxLayout(attention_group)
         description = QLabel(
             "A nonterminal forecast needs attention after this many complete "
             "24-hour days without a forecast revision. Journal entries do not "
             "reset it.",
-            self,
+            attention_group,
         )
         description.setObjectName("staleThresholdDescription")
         description.setWordWrap(True)
         description.setTextFormat(Qt.TextFormat.PlainText)
 
-        self.threshold_input = QSpinBox(self)
+        self.threshold_input = QSpinBox(attention_group)
         self.threshold_input.setObjectName("staleThresholdInput")
         self.threshold_input.setRange(
             MIN_STALE_THRESHOLD_DAYS,
@@ -300,7 +320,7 @@ class AttentionSettingsScreen(QWidget):
         self.threshold_input.setSuffix(" days")
         self.threshold_input.setAccessibleName("Needs Attention threshold in days")
 
-        self.save_button = QPushButton("Save threshold", self)
+        self.save_button = QPushButton("Save threshold", attention_group)
         self.save_button.setObjectName("saveStaleThresholdButton")
         self.save_button.clicked.connect(self._save)
 
@@ -309,22 +329,74 @@ class AttentionSettingsScreen(QWidget):
         control_layout.addWidget(self.save_button)
         control_layout.addStretch()
 
-        self.status_label = QLabel(self)
+        self.status_label = QLabel(attention_group)
         self.status_label.setObjectName("staleThresholdStatus")
         self.status_label.setWordWrap(True)
         self.status_label.setTextFormat(Qt.TextFormat.PlainText)
         self.status_label.setHidden(True)
 
+        attention_layout.addWidget(description)
+        attention_layout.addLayout(control_layout)
+        attention_layout.addWidget(self.status_label)
+
+        data_group = QGroupBox("Data and recovery", self)
+        data_layout = QVBoxLayout(data_group)
+        data_description = QLabel(
+            "A SQLite backup can restore the complete application. A CSV bundle "
+            "is a portable analytical export and cannot restore Reckonsolve.",
+            data_group,
+        )
+        data_description.setObjectName("dataManagementDescription")
+        data_description.setWordWrap(True)
+        data_description.setTextFormat(Qt.TextFormat.PlainText)
+
+        self.database_path_label = QLabel("Database: loading...", data_group)
+        self.database_path_label.setObjectName("databaseLocation")
+        self.database_path_label.setWordWrap(True)
+        self.database_path_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.database_path_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+
+        self.last_backup_label = QLabel(
+            "Last successful backup: loading...",
+            data_group,
+        )
+        self.last_backup_label.setObjectName("lastSuccessfulBackup")
+        self.last_backup_label.setTextFormat(Qt.TextFormat.PlainText)
+
+        self.backup_button = QPushButton("Back Up Now", data_group)
+        self.backup_button.setObjectName("backUpNowButton")
+        self.backup_button.clicked.connect(self._back_up_now)
+        self.export_button = QPushButton("Export CSV Bundle", data_group)
+        self.export_button.setObjectName("exportCsvBundleButton")
+        self.export_button.clicked.connect(self._export_csv_bundle)
+        action_layout = QHBoxLayout()
+        action_layout.addWidget(self.backup_button)
+        action_layout.addWidget(self.export_button)
+        action_layout.addStretch()
+
+        self.data_status_label = QLabel(data_group)
+        self.data_status_label.setObjectName("dataManagementStatus")
+        self.data_status_label.setWordWrap(True)
+        self.data_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.data_status_label.setHidden(True)
+
+        data_layout.addWidget(data_description)
+        data_layout.addWidget(self.database_path_label)
+        data_layout.addWidget(self.last_backup_label)
+        data_layout.addLayout(action_layout)
+        data_layout.addWidget(self.data_status_label)
+
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(title)
-        layout.addWidget(description)
-        layout.addLayout(control_layout)
-        layout.addWidget(self.status_label)
+        layout.addWidget(attention_group)
+        layout.addWidget(data_group)
         layout.addStretch()
 
     def refresh(self) -> None:
-        """Load the persisted threshold whenever Settings is entered."""
+        """Load persisted attention and recovery status when Settings is entered."""
 
         try:
             value = self._operations.get_stale_threshold_days()
@@ -332,11 +404,21 @@ class AttentionSettingsScreen(QWidget):
             self.threshold_input.setEnabled(False)
             self.save_button.setEnabled(False)
             self._show_status(str(error))
+        else:
+            self.threshold_input.setEnabled(True)
+            self.save_button.setEnabled(True)
+            self.threshold_input.setValue(value)
+            self.status_label.setHidden(True)
+        try:
+            status = self._operations.get_data_management_status()
+        except ApplicationError as error:
+            self._show_data_status(str(error))
             return
-        self.threshold_input.setEnabled(True)
-        self.save_button.setEnabled(True)
-        self.threshold_input.setValue(value)
-        self.status_label.setHidden(True)
+        self._suggested_backup_filename = status.suggested_backup_filename
+        self._suggested_export_filename = status.suggested_export_filename
+        self.database_path_label.setText(f"Database: {status.database_path}")
+        self._show_last_backup(status.last_successful_backup_at)
+        self.data_status_label.setHidden(True)
 
     def _save(self) -> None:
         try:
@@ -348,6 +430,89 @@ class AttentionSettingsScreen(QWidget):
             return
         self._show_status(f"Saved. Dashboard now uses {value} days.")
         self.threshold_changed.emit(value)
+
+    def _back_up_now(self) -> None:
+        destination = self._choose_destination(
+            title="Create Reckonsolve Backup",
+            suggested_filename=self._suggested_backup_filename,
+            file_filter="SQLite database (*.sqlite3);;All files (*)",
+            default_suffix=".sqlite3",
+        )
+        if destination is None:
+            return
+        try:
+            result = self._operations.create_backup(destination)
+        except ApplicationError as error:
+            self._show_data_status(str(error))
+            return
+        self._show_last_backup(result.completed_at)
+        message = f"Backup created: {result.destination}"
+        if not result.last_successful_time_recorded:
+            message += (
+                " The file is usable, but its successful time could not be "
+                "recorded in Settings."
+            )
+        self._show_data_status(message)
+
+    def _export_csv_bundle(self) -> None:
+        destination = self._choose_destination(
+            title="Export Reckonsolve CSV Bundle",
+            suggested_filename=self._suggested_export_filename,
+            file_filter="ZIP archive (*.zip);;All files (*)",
+            default_suffix=".zip",
+        )
+        if destination is None:
+            return
+        try:
+            result = self._operations.export_csv_bundle(destination)
+        except ApplicationError as error:
+            self._show_data_status(str(error))
+            return
+        self._show_data_status(
+            f"Exported {result.csv_file_count} CSV files: {result.destination}"
+        )
+
+    def _choose_destination(
+        self,
+        *,
+        title: str,
+        suggested_filename: str,
+        file_filter: str,
+        default_suffix: str,
+    ) -> Path | None:
+        documents = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.DocumentsLocation
+        )
+        initial_path = (
+            Path(documents) / suggested_filename
+            if documents
+            else Path(suggested_filename)
+        )
+        selected, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            title,
+            str(initial_path),
+            file_filter,
+        )
+        if not selected:
+            return None
+        destination = Path(selected)
+        return (
+            destination
+            if destination.suffix
+            else destination.with_suffix(default_suffix)
+        )
+
+    def _show_last_backup(self, value: datetime | None) -> None:
+        self.last_backup_label.setText(
+            "Last successful backup: Not yet"
+            if value is None
+            else f"Last successful backup: {_format_local_timestamp(value)}"
+        )
+
+    def _show_data_status(self, message: str) -> None:
+        self.data_status_label.setText(message)
+        self.data_status_label.setHidden(False)
 
     def _show_status(self, message: str) -> None:
         self.status_label.setText(message)

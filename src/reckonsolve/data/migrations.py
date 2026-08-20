@@ -889,6 +889,35 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=8,
+        name="record last successful backup time",
+        statements=(
+            """
+            ALTER TABLE app_settings
+            ADD COLUMN last_successful_backup_at TEXT
+                CHECK (last_successful_backup_at IS NULL OR (
+                    length(last_successful_backup_at) = 27
+                    AND last_successful_backup_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                    AND substr(last_successful_backup_at, 1, 4)
+                        BETWEEN '0001' AND '9999'
+                    AND substr(last_successful_backup_at, 12, 2)
+                        BETWEEN '00' AND '23'
+                    AND COALESCE(
+                        date(
+                            substr(last_successful_backup_at, 1, 10)
+                                || 'T00:00:00Z',
+                            '+0 days'
+                        ) = substr(last_successful_backup_at, 1, 10),
+                        0
+                    )
+                ))
+            """,
+        ),
+    ),
 )
 
 

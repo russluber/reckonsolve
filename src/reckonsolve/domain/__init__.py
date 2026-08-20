@@ -37,6 +37,7 @@ from .predictions import (
     Resolution,
     TimelineEvent,
 )
+from .transfer import BackupResult, CsvExportResult, DataManagementStatus
 
 __all__ = [
     "DEFAULT_STALE_THRESHOLD_DAYS",
@@ -46,9 +47,12 @@ __all__ = [
     "MIN_STALE_THRESHOLD_DAYS",
     "AnalyticsSource",
     "AttentionValidationError",
+    "BackupResult",
     "BinaryOutcome",
+    "CsvExportResult",
     "DashboardPrediction",
     "DashboardSnapshot",
+    "DataManagementStatus",
     "DefinitionChange",
     "ForecastRevision",
     "ForecastTimelineEvent",

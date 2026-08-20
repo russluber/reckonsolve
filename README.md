@@ -2,7 +2,7 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its scoring-analytics milestone, but backup, export, and packaging workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its backup-and-export milestone, but Windows packaging is still being built and it is not ready for normal use.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
@@ -20,7 +20,9 @@ The Predictions screen now browses the complete archive, including Resolved and 
 
 The Analytics screen scores each Resolved prediction exactly once using the ForecastRevision captured when it resolved; Open, Locked, and Invalid predictions are excluded. It shows the scored count and mean Brier score, a ten-bin calibration diagram with the perfect-calibration reference and visible bin counts, and clearly labeled cumulative mean Brier by resolution time. Lower Brier is better, while movement over time is not presented as proof of skill improvement. One tag filter recomputes all three views over the same subset.
 
-Backup, export, broader Settings tools, and Windows packaging are reserved for later milestones.
+Settings now creates a complete SQLite recovery backup at a chosen destination, verifies it before replacing an existing backup, and remembers the last successful backup time. It also exports a documented ZIP containing nine related CSV files for Predictions, immutable history, lifecycle records, and tags. The CSV bundle is portable analytical data rather than a restoration format; its included README explains every relationship and convention.
+
+Windows packaging is reserved for the final v0.1 milestone.
 
 ## Documentation
 

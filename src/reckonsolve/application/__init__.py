@@ -2,11 +2,13 @@
 
 from .errors import (
     ApplicationError,
+    BackupError,
     ConcurrentForecastUpdateError,
     ConcurrentJournalCorrectionError,
     ConcurrentJournalUpdateError,
     ConcurrentLifecycleUpdateError,
     ConcurrentPredictionUpdateError,
+    CsvExportError,
     ForecastRevisionNotAllowedError,
     ForecastUnchangedError,
     JournalEntryNotAllowedError,
@@ -22,11 +24,13 @@ from .predictions import PredictionOperations
 
 __all__ = [
     "ApplicationError",
+    "BackupError",
     "ConcurrentForecastUpdateError",
     "ConcurrentJournalCorrectionError",
     "ConcurrentJournalUpdateError",
     "ConcurrentLifecycleUpdateError",
     "ConcurrentPredictionUpdateError",
+    "CsvExportError",
     "ForecastRevisionNotAllowedError",
     "ForecastUnchangedError",
     "JournalEntryNotAllowedError",

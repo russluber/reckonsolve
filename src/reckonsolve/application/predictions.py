@@ -1,7 +1,11 @@
 """Application operations for binary predictions."""
 
+import csv
+import sqlite3
 from dataclasses import replace
 from datetime import date, datetime, tzinfo
+from pathlib import Path
+from zipfile import BadZipFile
 
 from reckonsolve.analytics import AnalyticsSnapshot, summarize_analytics
 from reckonsolve.clock import Clock, SystemClock, as_utc
@@ -21,6 +25,7 @@ from reckonsolve.data.predictions import (
     PredictionRepository,
 )
 from reckonsolve.data.settings import SettingsRepository
+from reckonsolve.data.transfer import DataTransferRepository
 from reckonsolve.domain.attention import (
     AttentionValidationError,
     DashboardPrediction,
@@ -50,13 +55,20 @@ from reckonsolve.domain.predictions import (
     display_status,
     metadata_would_change,
 )
+from reckonsolve.domain.transfer import (
+    BackupResult,
+    CsvExportResult,
+    DataManagementStatus,
+)
 
 from .errors import (
+    BackupError,
     ConcurrentForecastUpdateError,
     ConcurrentJournalCorrectionError,
     ConcurrentJournalUpdateError,
     ConcurrentLifecycleUpdateError,
     ConcurrentPredictionUpdateError,
+    CsvExportError,
     ForecastRevisionNotAllowedError,
     ForecastUnchangedError,
     JournalEntryNotAllowedError,
@@ -82,6 +94,7 @@ class PredictionOperations:
         self._repository = PredictionRepository(database)
         self._analytics_repository = AnalyticsRepository(database)
         self._settings_repository = SettingsRepository(database)
+        self._transfer_repository = DataTransferRepository(database)
         self._clock = SystemClock() if clock is None else clock
         self._local_timezone = local_timezone
 
@@ -617,6 +630,66 @@ class PredictionOperations:
         return summarize_analytics(
             self._analytics_repository.get_source(),
             tag=tag,
+        )
+
+    def get_data_management_status(self) -> DataManagementStatus:
+        """Return recovery status and suggested timestamped artifact names."""
+
+        instant = as_utc(self._clock.now())
+        local_instant = instant.astimezone(self._local_timezone)
+        suffix = local_instant.strftime("%Y%m%d-%H%M%S")
+        try:
+            last_successful_backup_at = (
+                self._settings_repository.get_last_successful_backup_at()
+            )
+        except sqlite3.Error as error:
+            raise BackupError(f"Backup status could not be loaded. {error}") from error
+        return DataManagementStatus(
+            database_path=self._transfer_repository.database_path,
+            last_successful_backup_at=last_successful_backup_at,
+            suggested_backup_filename=f"reckonsolve-backup-{suffix}.sqlite3",
+            suggested_export_filename=f"reckonsolve-export-{suffix}.zip",
+        )
+
+    def create_backup(self, destination: Path) -> BackupResult:
+        """Create a verified SQLite recovery file and record its success time."""
+
+        try:
+            created_destination = self._transfer_repository.create_backup(destination)
+        except (OSError, sqlite3.Error, ValueError) as error:
+            raise BackupError(f"The backup could not be created. {error}") from error
+
+        completed_at = as_utc(self._clock.now())
+        recorded = True
+        try:
+            self._settings_repository.set_last_successful_backup_at(completed_at)
+        except sqlite3.Error:
+            recorded = False
+        return BackupResult(
+            destination=created_destination,
+            completed_at=completed_at,
+            last_successful_time_recorded=recorded,
+        )
+
+    def export_csv_bundle(self, destination: Path) -> CsvExportResult:
+        """Create one documented relational CSV ZIP without mutating app data."""
+
+        exported_at = as_utc(self._clock.now())
+        try:
+            created_destination, csv_file_count = (
+                self._transfer_repository.export_csv_bundle(
+                    destination,
+                    exported_at=exported_at,
+                )
+            )
+        except (BadZipFile, OSError, sqlite3.Error, csv.Error, ValueError) as error:
+            raise CsvExportError(
+                f"The CSV export could not be created. {error}"
+            ) from error
+        return CsvExportResult(
+            destination=created_destination,
+            exported_at=exported_at,
+            csv_file_count=csv_file_count,
         )
 
     def get_stale_threshold_days(self) -> int:

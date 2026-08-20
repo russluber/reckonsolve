@@ -22,7 +22,7 @@ def test_v7_upgrade_preserves_predictions_and_adds_default_setting(tmp_path) -> 
     )
     old_database.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:7])
 
     assert upgraded.schema_version == 7
     reopened = PredictionOperations(upgraded, FixedClock()).get_prediction(
@@ -38,7 +38,10 @@ def test_v7_upgrade_preserves_predictions_and_adds_default_setting(tmp_path) -> 
 
 
 def test_v7_setting_constraints_reject_invalid_rows(tmp_path) -> None:
-    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    database = Database.open(
+        tmp_path / "reckonsolve.sqlite3",
+        migrations=MIGRATIONS[:7],
+    )
 
     with pytest.raises(sqlite3.IntegrityError), database.transaction() as connection:
         connection.execute(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QDate, Qt, QTimer
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDialog,
+    QFileDialog,
     QGroupBox,
     QLabel,
     QLineEdit,
@@ -45,6 +47,11 @@ from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
     PredictionStatus,
+)
+from reckonsolve.domain.transfer import (
+    BackupResult,
+    CsvExportResult,
+    DataManagementStatus,
 )
 from reckonsolve.ui import MainWindow
 from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
@@ -274,6 +281,18 @@ class FakePredictionOperations:
         self.threshold_get_calls = 0
         self.threshold_set_calls: list[int] = []
         self.threshold_error: ApplicationError | None = None
+        self.data_management_status = DataManagementStatus(
+            database_path=Path("test-data/reckonsolve.sqlite3"),
+            last_successful_backup_at=None,
+            suggested_backup_filename="reckonsolve-backup-20260820-123000.sqlite3",
+            suggested_export_filename="reckonsolve-export-20260820-123000.zip",
+        )
+        self.data_management_calls = 0
+        self.data_management_error: ApplicationError | None = None
+        self.backup_calls: list[Path] = []
+        self.backup_error: ApplicationError | None = None
+        self.export_calls: list[Path] = []
+        self.export_error: ApplicationError | None = None
         self.mutation_count = 0
 
     def create_prediction(
@@ -787,6 +806,33 @@ class FakePredictionOperations:
             raise self.threshold_error
         self.stale_threshold_days = value
         return value
+
+    def get_data_management_status(self) -> DataManagementStatus:
+        self.data_management_calls += 1
+        if self.data_management_error is not None:
+            raise self.data_management_error
+        return self.data_management_status
+
+    def create_backup(self, destination: Path) -> BackupResult:
+        self.backup_calls.append(destination)
+        if self.backup_error is not None:
+            raise self.backup_error
+        completed_at = datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
+        self.data_management_status = replace(
+            self.data_management_status,
+            last_successful_backup_at=completed_at,
+        )
+        return BackupResult(destination=destination, completed_at=completed_at)
+
+    def export_csv_bundle(self, destination: Path) -> CsvExportResult:
+        self.export_calls.append(destination)
+        if self.export_error is not None:
+            raise self.export_error
+        return CsvExportResult(
+            destination=destination,
+            exported_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+            csv_file_count=9,
+        )
 
 
 @pytest.fixture
@@ -1414,6 +1460,152 @@ def test_settings_persists_threshold_and_refreshes_dashboard(qtbot: QtBot) -> No
     )
 
 
+def test_settings_displays_database_and_persisted_backup_status(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    operations.data_management_status = replace(
+        operations.data_management_status,
+        last_successful_backup_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    window.navigate_to("Settings")
+
+    assert _required_child(window, QLabel, "databaseLocation").text() == (
+        f"Database: {Path('test-data/reckonsolve.sqlite3')}"
+    )
+    expected_local = (
+        datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
+        .astimezone()
+        .strftime("%b %d, %Y, %I:%M %p")
+        .replace(" 0", " ")
+    )
+    assert _required_child(window, QLabel, "lastSuccessfulBackup").text() == (
+        f"Last successful backup: {expected_local}"
+    )
+
+
+def test_settings_creates_backup_and_csv_bundle_from_selected_destinations(
+    qtbot: QtBot,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Settings")
+    selected_paths = iter(
+        (
+            str(tmp_path / "chosen-backup"),
+            str(tmp_path / "chosen-export"),
+        )
+    )
+    suggested_paths: list[str] = []
+
+    def choose_file(_parent, _title, suggested, _file_filter):
+        suggested_paths.append(suggested)
+        return next(selected_paths), ""
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", choose_file)
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "backUpNowButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    expected_backup = tmp_path / "chosen-backup.sqlite3"
+    assert operations.backup_calls == [expected_backup]
+    assert _required_child(window, QLabel, "dataManagementStatus").text() == (
+        f"Backup created: {expected_backup}"
+    )
+    assert (
+        "Not yet"
+        not in _required_child(
+            window,
+            QLabel,
+            "lastSuccessfulBackup",
+        ).text()
+    )
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "exportCsvBundleButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    expected_export = tmp_path / "chosen-export.zip"
+    assert operations.export_calls == [expected_export]
+    assert _required_child(window, QLabel, "dataManagementStatus").text() == (
+        f"Exported 9 CSV files: {expected_export}"
+    )
+    assert suggested_paths[0].endswith("reckonsolve-backup-20260820-123000.sqlite3")
+    assert suggested_paths[1].endswith("reckonsolve-export-20260820-123000.zip")
+
+
+def test_cancelling_data_destination_dialogs_has_no_side_effect(
+    qtbot: QtBot,
+    monkeypatch,
+) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Settings")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *_arguments: ("", ""),
+    )
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "backUpNowButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "exportCsvBundleButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.backup_calls == []
+    assert operations.export_calls == []
+    assert _required_child(window, QLabel, "dataManagementStatus").isHidden()
+
+
+def test_settings_shows_expected_backup_export_and_status_errors(
+    qtbot: QtBot,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    operations = FakePredictionOperations()
+    operations.data_management_error = ApplicationError("Backup status unavailable.")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Settings")
+    status = _required_child(window, QLabel, "dataManagementStatus")
+    assert status.text() == "Backup status unavailable."
+
+    operations.data_management_error = None
+    operations.backup_error = ApplicationError("Backup destination is locked.")
+    operations.export_error = ApplicationError("Export destination is locked.")
+    selected_paths = iter(
+        (str(tmp_path / "backup.sqlite3"), str(tmp_path / "export.zip"))
+    )
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *_arguments: (next(selected_paths), ""),
+    )
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "backUpNowButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert status.text() == "Backup destination is locked."
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "exportCsvBundleButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert status.text() == "Export destination is locked."
+
+
 def test_dashboard_and_settings_show_expected_read_errors(qtbot: QtBot) -> None:
     operations = FakePredictionOperations()
     operations.dashboard_error = ApplicationError("Dashboard could not be loaded.")
@@ -1446,6 +1638,10 @@ def test_dashboard_and_settings_show_expected_read_errors(qtbot: QtBot) -> None:
         QPushButton,
         "saveStaleThresholdButton",
     ).isEnabled()
+    assert operations.data_management_calls > 0
+    assert _required_child(window, QLabel, "databaseLocation").text() == (
+        f"Database: {Path('test-data/reckonsolve.sqlite3')}"
+    )
 
 
 def test_new_prediction_form_has_integer_probability_bounds_and_focus(

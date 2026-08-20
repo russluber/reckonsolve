@@ -7,6 +7,14 @@ class ApplicationError(Exception):
     """Base class for expected, user-presentable application failures."""
 
 
+class BackupError(ApplicationError):
+    """A complete recovery artifact could not be created safely."""
+
+
+class CsvExportError(ApplicationError):
+    """A portable CSV bundle could not be created safely."""
+
+
 class ValidationError(ApplicationError):
     """A user-supplied value failed authoritative validation."""
 

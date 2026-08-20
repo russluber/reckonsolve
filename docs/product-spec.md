@@ -796,6 +796,10 @@ Backup and export are different features.
 
 A backup is sufficient for complete application recovery. It must capture the canonical SQLite state consistently, including related metadata required by the app.
 
+v0.1 creates one SQLite backup file through SQLite's online backup mechanism rather than copying the live database file directly. The user chooses the destination, with a timestamped `.sqlite3` filename suggested. Reckonsolve writes and verifies a temporary snapshot before replacing the selected destination, rejects the live canonical database as a destination, and never damages an existing backup when snapshot creation or verification fails. Choosing Cancel creates no file and changes no application state.
+
+The backup contains the complete database needed for recovery, including Forecast and Journal history, terminal records, tags, definition history, and persisted settings. Settings persist and display the last successful backup time across application restarts. A failed or cancelled attempt must not advance that time.
+
 Minimum UI:
 
 - Back Up Now;
@@ -806,7 +810,11 @@ Minimum UI:
 
 CSV is a portable analytical representation, not a complete relational restoration format.
 
-The export must be documented well enough that fields and repeated entities are understandable. If several CSV files are required to represent predictions, revisions, journal entries, and resolutions honestly, prefer a clearly named export bundle over flattening away history.
+v0.1 exports one timestamp-named ZIP bundle containing `predictions.csv`, `forecast_revisions.csv`, `definition_changes.csv`, `journal_entries.csv`, `journal_corrections.csv`, `resolutions.csv`, `invalidations.csv`, `tags.csv`, and `prediction_tags.csv`, plus `README.txt`. Stable identifiers and relationship columns preserve the joins among Predictions, ForecastRevisions, Journal entries and corrections, terminal records, and tags rather than flattening away repeated history.
+
+The README documents every file and column, relationship keys, null handling, timestamp and date conventions, and how current forecasts and corrected Journal bodies are derived. CSV files use UTF-8, standard quoting, and Windows-friendly line endings. Canonical instants remain UTC text and date-only values remain ISO calendar dates. Optional nulls are represented by documented blank fields; legitimate stored text is preserved without analytical rewriting.
+
+The bundle excludes application settings and is not a restoration format. It is built from one consistent read of canonical data, changes no application state, and is installed at the selected destination only after the complete temporary ZIP validates successfully. Cancelled or failed exports do not replace an existing export.
 
 JSON and Markdown export are Later.
 
@@ -987,8 +995,9 @@ Acceptance demonstration:
 
 ### Milestone 11: Backup and CSV export
 
-- Produce a consistent recoverable backup.
-- Export portable CSV data without erasing historical structure.
+- Produce a verified, consistent, recoverable SQLite backup at a user-selected destination and persist its last successful time.
+- Export a documented nine-table CSV ZIP without erasing historical structure.
+- Preserve an existing destination artifact when backup or export generation fails.
 
 ### Milestone 12: Windows packaging and polish
 
@@ -1060,7 +1069,6 @@ For repeated displayed probabilities, cover a valid nonconsecutive return such a
 The application and project name is resolved as **Reckonsolve**. Metadata-edit safety, probability input, and time handling are resolved in Sections 8.2, 9.2, and 24. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
 
 - precise visual design system;
-- exact CSV export layout; and
 - installer/packaging format.
 
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.

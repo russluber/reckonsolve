@@ -1,4 +1,5 @@
 from typing import cast
+from zipfile import ZipFile
 
 import pytest
 from PySide6.QtCore import QDate, Qt
@@ -8,6 +9,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDialog,
+    QFileDialog,
     QGroupBox,
     QLabel,
     QLineEdit,
@@ -27,6 +29,7 @@ from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
+from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
 from reckonsolve.domain.predictions import BinaryOutcome
 from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
@@ -39,15 +42,87 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 7
+    assert first_runtime.database.schema_version == 8
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 7
+    assert second_runtime.database.schema_version == 8
     second_runtime.close()
+
+
+def test_settings_backup_and_export_work_end_to_end_across_restart(
+    qtbot,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    source_path = tmp_path / "reckonsolve.sqlite3"
+    backup_path = tmp_path / "manual-backup.sqlite3"
+    export_path = tmp_path / "manual-export.zip"
+    runtime = create_runtime(database_path=source_path)
+    qtbot.addWidget(runtime.window)
+    operations = PredictionOperations(runtime.database)
+    created = operations.create_prediction(
+        "Will Settings create complete data artifacts?",
+        65,
+        rationale="The export should retain this.",
+        tags=("Recovery",),
+    )
+    selected = iter((str(backup_path), str(export_path)))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        lambda *_arguments: (next(selected), ""),
+    )
+    runtime.window.show()
+    runtime.window.navigate_to("Settings")
+
+    qtbot.mouseClick(
+        runtime.window.findChild(QPushButton, "backUpNowButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    qtbot.mouseClick(
+        runtime.window.findChild(QPushButton, "exportCsvBundleButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert backup_path.is_file()
+    assert export_path.is_file()
+    assert (
+        "Exported 9 CSV files"
+        in runtime.window.findChild(
+            QLabel,
+            "dataManagementStatus",
+        ).text()
+    )
+    runtime.close()
+
+    recovered = Database.open(backup_path)
+    assert (
+        PredictionOperations(recovered).get_prediction(created.prediction_id).question
+        == created.question
+    )
+    recovered.close()
+    with ZipFile(export_path) as archive:
+        assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
+        assert b"Settings create complete data artifacts" in archive.read(
+            "predictions.csv"
+        )
+
+    reopened = create_runtime(database_path=source_path)
+    qtbot.addWidget(reopened.window)
+    reopened.window.show()
+    reopened.window.navigate_to("Settings")
+    assert (
+        "Not yet"
+        not in reopened.window.findChild(
+            QLabel,
+            "lastSuccessfulBackup",
+        ).text()
+    )
+    reopened.close()
 
 
 def test_dashboard_and_attention_setting_survive_restart(qtbot, tmp_path) -> None:

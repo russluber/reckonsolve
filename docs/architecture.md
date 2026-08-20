@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 10 implemented; backup, export, and packaging remain to be built
+Status: Milestone 11 implemented; Windows packaging remains to be built
 Last reviewed: 2026-08-20
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 10 completes focused binary scoring analytics on top of the historical Prediction workflow. Each immutable Resolution contributes its captured scoring revision exactly once. The Analytics screen presents count and mean Brier, a fixed ten-bin reliability diagram with actual bin means and visible counts, and cumulative mean Brier over resolution time. One tag filter constrains all views before aggregation. Backup and export workflows remain to be built.
+Milestone 11 completes local recovery and portable export. Settings creates a verified SQLite online-backup snapshot at a user-selected destination and persists its last successful time. A separately labeled ZIP contains nine relational CSV files plus a data dictionary, preserving stable identifiers and historical relationships without pretending to be a restoration format. Windows packaging remains to be built.
 
 | Area | Current state |
 |---|---|
@@ -17,13 +17,13 @@ Milestone 10 completes focused binary scoring analytics on top of the historical
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | All six primary screens are functional for their implemented v0.1 slices, including native Brier, calibration, and cumulative-performance views; Settings currently implements the persisted attention control |
+| UI | All six primary screens are functional for their implemented v0.1 slices; Settings includes the attention threshold, database location, backup status/action, and CSV export action |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 7 remains current; M10 derives analytics from existing immutable Resolution, scoring-revision, outcome, and tag facts without stored aggregates |
-| Domain and application operations | Complete prediction workflows, Dashboard and archive queries, settings, and tag-filtered analytics orchestration are implemented without placing rules in Qt |
+| Schema | Version 8 adds only the nullable last-successful-backup instant to the singleton settings row |
+| Domain and application operations | Complete prediction workflows plus analytics, backup, export, and focused settings orchestration are implemented without placing rules in Qt |
 | Analytics | Exactly-once scoring selection, binary Brier, fixed-bin calibration, and cumulative resolution-time aggregation are implemented as pure calculations behind a read-only data source |
-| Automated tests | Tests cover historical and lifecycle behavior plus exact scoring selection/exclusions, Brier endpoints, calibration boundaries/counts, cumulative ordering, tag subsets, native charts, and restart persistence |
+| Automated tests | Tests cover historical/lifecycle behavior, scoring analytics, verified recovery, relational CSV fidelity, destination-failure preservation, Qt workflows, and restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
@@ -127,7 +127,7 @@ No normal data-access operation may update or delete a saved forecast revision, 
 
 Analytics code owns scoring selection and aggregation, separate from chart rendering. Its input is candidate prediction, resolution, and revision data obtained through the data-access boundary. It constructs exactly one scoring observation for each included resolved prediction by selecting that prediction's final eligible revision according to the product specification.
 
-The analytics boundary will contain:
+The analytics boundary contains:
 
 - final-eligible-revision selection;
 - per-prediction Brier calculation;
@@ -166,7 +166,7 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 10 implements this package structure:
+Milestone 11 implements this package structure:
 
 ```text
 src/reckonsolve/
@@ -185,20 +185,22 @@ src/reckonsolve/
     attention.py       stale-threshold validation and derived Dashboard values/rules
     browser.py         current prediction summaries and archive-query results
     predictions.py     prediction, history, terminal records, metadata, status, and validation values
+    transfer.py        backup/export status and result values
   data/
     __init__.py        persistence package surface
     analytics.py       read-only captured-scoring-revision source
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
     predictions.py     purpose-specific prediction, history, terminal, tag, and deletion persistence
-    settings.py        singleton persisted attention-setting access
+    settings.py        singleton attention and backup-status setting access
+    transfer.py        verified SQLite backup and relational CSV ZIP creation
   ui/
     __init__.py        UI package surface
     analytics_charts.py
                        native reliability and cumulative Brier painting
     analytics_screen.py
                        summary, common tag filter, bin table, and charts
-    dashboard.py       action buckets and the minimal attention Settings control
+    dashboard.py       action buckets plus attention, backup, and export settings
     main_window.py     navigation and screen coordination
     prediction_browser.py
                        question search, status/tag filters, and archive navigation
@@ -268,6 +270,8 @@ Milestone 9 requires no schema change. The archive is a purpose-specific read mo
 
 Milestone 10 also requires no schema change. Resolution's immutable composite reference to its owned `scoring_revision_id` is the canonical final eligible forecast. The analytics source joins that exact row rather than every revision or a newly derived latest row, requires persisted Resolved status, and returns one observation per Resolution. Tags offered by Analytics come only from scored Predictions. Brier scores, calibration bins, and cumulative points remain derived and are never written back to SQLite. [ADR 0006](decisions/0006-fixed-calibration-and-cumulative-brier.md) records the analytical construction.
 
+Milestone 11 migrates the database to version 8 by adding a nullable canonical UTC `last_successful_backup_at` to the singleton settings row. It records only an artifact that has already been installed successfully; cancellation and artifact failure leave the prior value intact. No export metadata or analytical copy is persisted. [ADR 0007](decisions/0007-online-backup-and-relational-csv-export.md) records the transfer approach.
+
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
@@ -309,7 +313,8 @@ Transactions protect operations that must not leave partial history:
 - Invalidation rechecks the same reviewed context and records terminal state, timestamp, and optional reason atomically.
 - Deletion requires explicit confirmation, rechecks untouched Open eligibility, and cascades the eligible parent and its initial child state atomically.
 - Updating the stale threshold validates the value and replaces the singleton setting in one transaction; it does not mutate any Prediction or history row.
-- Backup must capture a transactionally consistent SQLite state.
+- Backup uses SQLite's online backup API to capture a consistent snapshot, verifies a temporary database, atomically installs it, and only then records the successful time in the source settings.
+- CSV export reads all nine related tables inside one immediate transaction, closes that transaction, then serializes and validates a temporary ZIP before atomically installing it. It never updates canonical state.
 
 Expected domain or validation failures roll back the operation and are translated into clear user-facing messages. Unexpected persistence failures are not silently swallowed.
 
@@ -369,6 +374,8 @@ Predictions refreshes whenever it is entered and once per minute while visible s
 
 Analytics refreshes whenever it is entered and on explicit refresh or tag change. Its scored count, mean Brier, reliability diagram, complete ten-row bin table, and cumulative trend always represent one common subset. Empty bins remain visible in the table with count zero but add no chart point. Both charts expose nonvisual summaries; the table makes calibration sparsity directly accessible. Empty All and empty filtered states are distinct, expected read failures are not shown as zero scores, and a failed refresh retains prior results only with a warning. Labels say lower Brier is better and explicitly avoid treating cumulative movement as proof of skill improvement.
 
+Settings displays the canonical database path and last successful backup time alongside the existing attention threshold. **Back Up Now** and **Export CSV Bundle** use native save dialogs with timestamped suggestions. Cancel is side-effect free. Expected path, file, SQLite, or archive failures remain visible without replacing a previous destination artifact. Backup success updates the displayed time; CSV success reports the nine generated tables while continuing to label the ZIP as non-restorable analytical data.
+
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
 Dialog cancellation has no side effect. In particular, opening and closing a revision, Journal, correction, Resolution, or Invalidation dialog cannot create history or terminal state.
@@ -383,20 +390,22 @@ Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled r
 
 An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
 
-Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 7 upgrade is tested from version 6 with an existing Prediction, installs the 14-day singleton setting, and rolls back completely if a settings statement fails. Milestones 9 and 10 intentionally leave the schema at version 7. Earlier version-specific migration tests remain pinned to their historical target. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 8 upgrade is tested from version 7 with an existing Prediction and attention setting, starts with no invented backup time, validates canonical timestamps, and rolls back completely if its column migration fails. Earlier version-specific migration tests remain pinned to their historical target. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
-Backup and CSV export have separate contracts:
+Backup and CSV export have separate implemented contracts:
 
 - Backup produces a consistent artifact sufficient to recover the full application state.
 - CSV export produces documented, portable analytical data and may use several related files to preserve historical structure honestly.
 
-The backup implementation must use a SQLite-safe snapshot approach rather than copying a potentially changing database file blindly. Export code reads through the data boundary and must not mutate canonical state.
+Backup uses the standard-library binding to SQLite's online backup API. It writes to a unique temporary database beside the chosen destination; runs SQLite quick, foreign-key, and schema-version checks; closes the temporary connection; then uses same-directory atomic replacement. The canonical database path, including an equivalent hard link, is rejected as a destination. Failure cleanup targets only the owned temporary file, and an existing destination remains untouched until installation succeeds.
+
+CSV export reads canonical rows in one transaction and then uses the standard-library `csv` and `zipfile` modules. Its nine files mirror the historical relationships through stable identifiers rather than flattening one-to-many records. CSV uses UTF-8 with a byte-order mark, CRLF rows, and quoted fields; `README.txt` documents columns, joins, blank nulls, UTC instants, ISO dates, derivation rules, and spreadsheet handling of formula-like free text. The ZIP follows the same temporary-write, validation, and atomic-install discipline as backup. Neither workflow adds a production dependency.
 
 ## 15. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 7, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M9 retain their historical, lifecycle, Dashboard, and archive coverage. M10 adds Brier endpoints, unique contribution validation, captured-revision selection despite an adversarial later row, unresolved/Invalid exclusions, every calibration boundary including 0% and 100%, actual bin means, empty counts, stable equal-time trend order, tag-filter recomputation, chart geometry/accessibility, empty/error UI states, and restart persistence.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 8, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M10 retain their historical, lifecycle, Dashboard, archive, and analytics coverage. M11 adds v7-to-v8 migration safety, complete backup recovery, SQLite integrity verification, last-success persistence, live-database destination rejection, exact ZIP membership and CSV relationships, multiline/quoted text round trips, empty exports, failed-replacement preservation, cancel/error UI behavior, and end-to-end Settings recovery after restart.
 
 Most behavior should be verified below the GUI:
 
@@ -425,7 +434,6 @@ Unexpected exceptions should not be converted into false success or empty data. 
 The product specification lists choices that must be made at their relevant milestones. Architecture must not settle them indirectly. They include:
 
 - visual design details;
-- CSV layout; and
 - Windows packaging format.
 
 When one of these choices becomes consequential, seek explicit user authorization before changing the product specification. Record durable technical reasoning in an [architecture decision record](decisions/README.md) when appropriate.

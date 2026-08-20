@@ -4,6 +4,7 @@ __pycache__/
 *.py[cod]
 
 .pytest_cache/
+.pytest-*/
 .pytest-tmp*/
 .ruff_cache/
 .mypy_cache/
@@ -22,6 +23,7 @@ dist/
 *.sqlite3-*
 backups/
 exports/
+reckonsolve-export-*.zip
 logs/
 *.log
 
