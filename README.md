@@ -2,7 +2,7 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its action-oriented Dashboard milestone, but browsing, analytics, and data-management workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its searchable prediction-archive milestone, but analytics and data-management workflows are still being built and it is not ready for normal use.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
@@ -16,7 +16,9 @@ Open and Locked predictions can now be resolved Yes or No or marked Invalid. Res
 
 The Dashboard now separates active work into overlapping Open, Needs Attention, Ready to Resolve, and Locked sections. Needs Attention uses the latest forecast revision, not Journal activity, and defaults to 14 elapsed days. The threshold persists in the application database and can be changed through the currently minimal Settings screen. Dashboard rows show the current probability and forecast-update time and open the corresponding Prediction Detail.
 
-The Predictions and Analytics screens remain placeholders. Browsing, scoring analytics, backup, export, broader Settings tools, and Windows packaging are reserved for later milestones.
+The Predictions screen now browses the complete archive, including Resolved and Invalid history. It supports case-insensitive question-text search plus combined lifecycle-status and tag filters, shows each result's current probability and status, and opens a freshly queried Prediction Detail. Search deliberately does not inspect Background, rationales, or Journal text in v0.1.
+
+The Analytics screen remains a placeholder. Scoring analytics, backup, export, broader Settings tools, and Windows packaging are reserved for later milestones.
 
 ## Documentation
 

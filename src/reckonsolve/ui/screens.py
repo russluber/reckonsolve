@@ -33,6 +33,7 @@ from reckonsolve.application.errors import (
     MeaningChangeConfirmationRequired,
 )
 from reckonsolve.domain.attention import DashboardSnapshot
+from reckonsolve.domain.browser import PredictionBrowserSnapshot
 from reckonsolve.domain.predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
@@ -259,6 +260,15 @@ class PredictionOperations(Protocol):
 
     def get_dashboard(self) -> DashboardSnapshot:
         """Return the current overlapping Dashboard buckets."""
+
+    def browse_predictions(
+        self,
+        question_text: str = "",
+        *,
+        status: PredictionStatus | None = None,
+        tag: str | None = None,
+    ) -> PredictionBrowserSnapshot:
+        """Return filtered prediction summaries and available tags."""
 
     def get_stale_threshold_days(self) -> int:
         """Return the persisted Needs Attention threshold."""

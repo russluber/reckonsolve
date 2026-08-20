@@ -27,6 +27,7 @@ from reckonsolve.domain.attention import (
     ready_to_resolve,
     validate_stale_threshold_days,
 )
+from reckonsolve.domain.browser import PredictionBrowserSnapshot
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
@@ -545,6 +546,61 @@ class PredictionOperations:
             needs_attention_predictions=needs_attention_predictions,
             ready_to_resolve_predictions=ready_to_resolve_predictions,
             locked_predictions=locked_predictions,
+        )
+
+    def browse_predictions(
+        self,
+        question_text: str = "",
+        *,
+        status: PredictionStatus | None = None,
+        tag: str | None = None,
+    ) -> PredictionBrowserSnapshot:
+        """Search and filter current prediction summaries for the archive."""
+
+        if not isinstance(question_text, str):
+            raise ValidationError(
+                "Question search text must be text.",
+                field="question_text",
+            )
+        if status is not None and not isinstance(status, PredictionStatus):
+            raise ValidationError(
+                "The prediction status filter is invalid.",
+                field="status",
+            )
+        if tag is not None and not isinstance(tag, str):
+            raise ValidationError(
+                "The prediction tag filter is invalid.",
+                field="tag",
+            )
+
+        search_key = question_text.strip().casefold()
+        tag_key = None if tag is None else tag.strip().casefold() or None
+        now = as_utc(self._clock.now())
+        current_date = now.astimezone(self._local_timezone).date()
+        snapshot = self._repository.list_browser_predictions()
+        predictions = tuple(
+            replace(
+                prediction,
+                status=display_status(
+                    prediction.status,
+                    prediction.forecast_deadline,
+                    current_date,
+                ),
+            )
+            for prediction in snapshot.predictions
+        )
+        return replace(
+            snapshot,
+            predictions=tuple(
+                prediction
+                for prediction in predictions
+                if (not search_key or search_key in prediction.question.casefold())
+                and (status is None or prediction.status is status)
+                and (
+                    tag_key is None
+                    or tag_key in {item.casefold() for item in prediction.tags}
+                )
+            ),
         )
 
     def get_stale_threshold_days(self) -> int:

@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 8 implemented; later browsing and analytics workflows remain to be built
+Status: Milestone 9 implemented; analytics and data-management workflows remain to be built
 Last reviewed: 2026-08-20
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 8 adds an action-oriented Dashboard on top of the complete individual Prediction lifecycle. Open and derived Locked work is reclassified on each query into overlapping Open, Needs Attention, Ready to Resolve, and Locked sections. Freshness uses the current ForecastRevision's canonical instant and a persisted 14-day default threshold; Ready to Resolve uses the local calendar date after the inclusive Expected Resolution date. The threshold has one minimal Settings control. Prediction browsing, scoring analytics, backup, and export workflows remain to be built.
+Milestone 9 adds a searchable Predictions archive on top of the complete individual Prediction lifecycle and action-oriented Dashboard. The browser includes every lifecycle state, derives Locked against the current local date, searches question text with Unicode-aware case-insensitive substring matching, and combines one status and one tag filter. Each result uses the current revision and opens freshly queried Prediction Detail. Scoring analytics, backup, and export workflows remain to be built.
 
 | Area | Current state |
 |---|---|
@@ -17,13 +17,13 @@ Milestone 8 adds an action-oriented Dashboard on top of the complete individual 
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | Native PySide6 navigation plus functional Dashboard, New Prediction, and Prediction Detail screens; Settings implements the one persisted attention control, while Predictions and Analytics remain explicit placeholders |
+| UI | Native PySide6 navigation plus functional Dashboard, New Prediction, Prediction Detail, and searchable Predictions screens; Settings implements the one persisted attention control, while Analytics remains an explicit placeholder |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
 | Schema | Version 7 adds a constrained singleton application-settings row for the stale threshold, building on immutable terminal records, protected revisions, Journal history, metadata, tags, and definition snapshots |
-| Domain and application operations | Complete prediction workflows plus derived Dashboard attention classification, persisted threshold access, and deterministic overlapping bucket construction are implemented without Qt dependencies |
+| Domain and application operations | Complete prediction workflows plus Dashboard attention classification, persisted threshold access, and deterministic archive search/filter construction are implemented without Qt dependencies |
 | Analytics | Scoring analytics are not implemented; the Prediction Detail chart is a presentation of all revisions, not an analytics aggregate |
-| Automated tests | Tests cover the persistence foundation plus complete prediction history/lifecycle behavior, Dashboard elapsed-time and local-date boundaries, overlapping classifications, persisted threshold changes, migrations through v7, Qt behavior, and restart persistence |
+| Automated tests | Tests cover the persistence foundation plus complete prediction history/lifecycle behavior, Dashboard attention boundaries, archive search/filter combinations and lifecycle derivation, migrations through v7, Qt behavior, and restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
@@ -166,7 +166,7 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 8 implements this package structure:
+Milestone 9 implements this package structure:
 
 ```text
 src/reckonsolve/
@@ -180,6 +180,7 @@ src/reckonsolve/
     predictions.py     prediction workflows, Dashboard queries, and attention settings
   domain/
     attention.py       stale-threshold validation and derived Dashboard values/rules
+    browser.py         current prediction summaries and archive-query results
     predictions.py     prediction, history, terminal records, metadata, status, and validation values
   data/
     __init__.py        persistence package surface
@@ -191,6 +192,8 @@ src/reckonsolve/
     __init__.py        UI package surface
     dashboard.py       action buckets and the minimal attention Settings control
     main_window.py     navigation and screen coordination
+    prediction_browser.py
+                       question search, status/tag filters, and archive navigation
     probability_history_chart.py
                        native probability-history projection and painting
     screens.py         creation, Prediction Detail, history, lifecycle, deletion, and metadata UI
@@ -252,6 +255,8 @@ Insert guards require a nonterminal persisted Prediction and, for Resolution, th
 Delete eligibility is derived rather than stored. An Open Prediction is eligible only when its current revision remains sequence one, its metadata version remains one, and neither Journal nor Definition history exists. The application additionally derives the current deadline status, so a now-Locked record is never treated as deletable. The delete operation rechecks revision and metadata tokens plus every eligibility condition inside one immediate transaction before cascading the parent. Initial rationale, metadata, and tag associations do not by themselves make an otherwise untouched creation ineligible.
 
 Milestone 8 migrates the database to version 7 with one `app_settings` row. Its constrained whole-number `stale_threshold_days` value defaults to 14 and is the only persisted preference needed by this slice. Dashboard membership itself remains derived and is never written back to Predictions. Keeping this setting in SQLite makes it part of normal backup/recovery state without introducing a general preference registry or platform-specific settings store.
+
+Milestone 9 requires no schema change. The archive is a purpose-specific read model over every Prediction, its highest-sequence ForecastRevision, and associated tags. Stored terminal status remains canonical, while Locked is derived in the application against the current local calendar date before status filtering. Associated tag choices come from current `prediction_tags` relationships, so retained tag rows with no Prediction do not create empty filter choices. Results use deterministic newest-created-first order; filtering never mutates or reorders history.
 
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
@@ -348,6 +353,8 @@ For an Open or Locked prediction, **Resolve** opens a deliberate terminal dialog
 
 Dashboard refreshes at startup, whenever it is entered, and once per minute while it remains visible; the timer stops on other screens. It queries all nonterminal Predictions with their current ForecastRevision, derives deadline status and attention against one current instant, then renders four counted sections. Open and Locked are lifecycle views; Needs Attention and Ready to Resolve are overlapping action views, so a Prediction may appear in several sections with all applicable labels intact. Each row says **Forecast last updated**, shows the current probability, and opens freshly queried Prediction Detail. Empty sections remain explicit rather than disappearing. Settings currently exposes only the persisted Needs Attention threshold; saving it immediately refreshes Dashboard without adding a general settings framework.
 
+Predictions refreshes whenever it is entered and once per minute while visible so its Open and Locked views remain correct across local-date boundaries. Question search trims surrounding whitespace and uses Unicode-aware case-insensitive substring matching over Question only; v0.1 does not silently extend this to Background, rationales, or Journal bodies. Status choices are All, Open, Locked, Resolved, and Invalid. The single tag filter uses stable stored display spelling and combines with search and status using logical AND. Results show current probability, derived lifecycle status, associated tags, and latest forecast time, use explicit new-database and no-match empty states, and load current Prediction Detail before navigation. A failed initial query is not presented as an empty archive; a failed refresh retains earlier rows only with an explicit warning.
+
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
 Dialog cancellation has no side effect. In particular, opening and closing a revision, Journal, correction, Resolution, or Invalidation dialog cannot create history or terminal state.
@@ -362,7 +369,7 @@ Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled r
 
 An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
 
-Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 7 upgrade is tested from version 6 with an existing Prediction, installs the 14-day singleton setting, and rolls back completely if a settings statement fails. Earlier version-specific migration tests remain pinned to their historical target. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 7 upgrade is tested from version 6 with an existing Prediction, installs the 14-day singleton setting, and rolls back completely if a settings statement fails. Milestone 9 intentionally leaves the schema at version 7. Earlier version-specific migration tests remain pinned to their historical target. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
@@ -375,7 +382,7 @@ The backup implementation must use a SQLite-safe snapshot approach rather than c
 
 ## 15. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 7, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M7 retain coverage for metadata safety, immutable history, timeline/chart rendering, concurrency, terminal lifecycle, deletion, and restart behavior. M8 adds exact 14-day elapsed-time boundaries, local Expected Resolution date transitions, Open/Locked and terminal eligibility, overlapping bucket membership, latest-revision freshness despite Journal activity, threshold validation/persistence, v6-to-v7 migration safety, counted Qt sections, fresh Detail navigation, screen re-entry refresh, and application restart.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 7, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M7 retain coverage for metadata safety, immutable history, timeline/chart rendering, concurrency, terminal lifecycle, deletion, and restart behavior. M8 adds exact attention boundaries, overlapping Dashboard membership, threshold persistence, and v6-to-v7 migration safety. M9 adds complete lifecycle browsing, current-revision summaries, Unicode question and tag matching, combined filters, orphan-tag exclusion, deadline-derived status, empty/error states, keyboard navigation, visible-screen refresh, and application restart.
 
 Most behavior should be verified below the GUI:
 

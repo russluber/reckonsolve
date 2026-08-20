@@ -7,6 +7,7 @@ import pytest
 from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDateEdit,
     QDialog,
     QGroupBox,
@@ -29,6 +30,10 @@ from reckonsolve.application.errors import (
     MeaningChangeConfirmationRequired,
 )
 from reckonsolve.domain.attention import DashboardPrediction, DashboardSnapshot
+from reckonsolve.domain.browser import (
+    PredictionBrowserItem,
+    PredictionBrowserSnapshot,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
@@ -251,6 +256,9 @@ class FakePredictionOperations:
         self.dashboard_snapshot: DashboardSnapshot | None = None
         self.dashboard_error: ApplicationError | None = None
         self.dashboard_calls = 0
+        self.browser_snapshot: PredictionBrowserSnapshot | None = None
+        self.browser_error: ApplicationError | None = None
+        self.browser_calls: list[tuple[str, PredictionStatus | None, str | None]] = []
         self.stale_threshold_days = 14
         self.threshold_get_calls = 0
         self.threshold_set_calls: list[int] = []
@@ -702,6 +710,54 @@ class FakePredictionOperations:
             locked_predictions=locked_predictions,
         )
 
+    def browse_predictions(
+        self,
+        question_text: str = "",
+        *,
+        status: PredictionStatus | None = None,
+        tag: str | None = None,
+    ) -> PredictionBrowserSnapshot:
+        self.browser_calls.append((question_text, status, tag))
+        if self.browser_error is not None:
+            raise self.browser_error
+        if self.browser_snapshot is not None:
+            source = self.browser_snapshot
+        elif self.latest is None:
+            source = PredictionBrowserSnapshot(predictions=(), available_tags=())
+        else:
+            source = PredictionBrowserSnapshot(
+                predictions=(
+                    PredictionBrowserItem(
+                        prediction_id=self.latest.prediction_id,
+                        question=self.latest.question,
+                        probability_percent=self.latest.probability_percent,
+                        status=self.latest.status,
+                        created_at=self.latest.created_at,
+                        latest_revision_at=self.latest.created_at,
+                        forecast_deadline=self.latest.forecast_deadline,
+                        tags=self.latest.tags,
+                    ),
+                ),
+                available_tags=tuple(
+                    sorted(self.latest.tags, key=lambda item: item.casefold())
+                ),
+            )
+        search_key = question_text.strip().casefold()
+        tag_key = None if tag is None else tag.casefold()
+        return replace(
+            source,
+            predictions=tuple(
+                prediction
+                for prediction in source.predictions
+                if (not search_key or search_key in prediction.question.casefold())
+                and (status is None or prediction.status is status)
+                and (
+                    tag_key is None
+                    or tag_key in {item.casefold() for item in prediction.tags}
+                )
+            ),
+        )
+
     def get_stale_threshold_days(self) -> int:
         self.threshold_get_calls += 1
         if self.threshold_error is not None:
@@ -755,10 +811,7 @@ def test_main_window_navigates_to_each_primary_screen(window: MainWindow) -> Non
 
 
 def test_unimplemented_screens_remain_honest_placeholders(window: MainWindow) -> None:
-    placeholder_screens = (
-        "Predictions",
-        "Analytics",
-    )
+    placeholder_screens = ("Analytics",)
 
     for screen_name in placeholder_screens:
         window.navigate_to(screen_name)
@@ -769,6 +822,283 @@ def test_unimplemented_screens_remain_honest_placeholders(window: MainWindow) ->
         )
 
         assert any(word in placeholder.text() for word in ("coming", "will"))
+
+
+def test_prediction_browser_renders_all_results_and_filter_choices(
+    qtbot: QtBot,
+) -> None:
+    first = PredictionBrowserItem(
+        prediction_id=1,
+        question="Will the archive remain calm?",
+        probability_percent=35,
+        status=PredictionStatus.OPEN,
+        created_at=datetime(2026, 8, 18, 19, 30, tzinfo=UTC),
+        latest_revision_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
+        tags=("Work",),
+    )
+    second = PredictionBrowserItem(
+        prediction_id=2,
+        question="<b>Will literal markup stay literal?</b>",
+        probability_percent=80,
+        status=PredictionStatus.RESOLVED,
+        created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+        latest_revision_at=datetime(2026, 8, 20, 20, 30, tzinfo=UTC),
+        tags=("Personal", "Work"),
+    )
+    operations = FakePredictionOperations()
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=(second, first),
+        available_tags=("Personal", "Work"),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    window.navigate_to("Predictions")
+
+    status_filter = _required_child(window, QComboBox, "predictionStatusFilter")
+    tag_filter = _required_child(window, QComboBox, "predictionTagFilter")
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+    assert [
+        status_filter.itemText(index) for index in range(status_filter.count())
+    ] == [
+        "All",
+        "Open",
+        "Locked",
+        "Resolved",
+        "Invalid",
+    ]
+    assert [tag_filter.itemText(index) for index in range(tag_filter.count())] == [
+        "All tags",
+        "Personal",
+        "Work",
+    ]
+    assert results.count() == 2
+    assert "<b>Will literal markup stay literal?</b>" in results.item(0).text()
+    assert "80%  |  RESOLVED" in results.item(0).text()
+    assert "Tags: Personal, Work" in results.item(0).text()
+    assert _required_child(window, QLabel, "predictionBrowserResultCount").text() == (
+        "2 predictions"
+    )
+
+
+def test_prediction_browser_combines_filters_and_clear_restores_archive(
+    qtbot: QtBot,
+) -> None:
+    items = (
+        PredictionBrowserItem(
+            prediction_id=3,
+            question="Will policy pass this year?",
+            probability_percent=70,
+            status=PredictionStatus.RESOLVED,
+            created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+            latest_revision_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+            tags=("Work",),
+        ),
+        PredictionBrowserItem(
+            prediction_id=2,
+            question="Will policy pass next year?",
+            probability_percent=40,
+            status=PredictionStatus.OPEN,
+            created_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
+            latest_revision_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
+            tags=("Work",),
+        ),
+        PredictionBrowserItem(
+            prediction_id=1,
+            question="Will another issue resolve?",
+            probability_percent=20,
+            status=PredictionStatus.RESOLVED,
+            created_at=datetime(2026, 8, 18, 19, 30, tzinfo=UTC),
+            latest_revision_at=datetime(2026, 8, 18, 19, 30, tzinfo=UTC),
+            tags=("Personal",),
+        ),
+    )
+    operations = FakePredictionOperations()
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=items,
+        available_tags=("Personal", "Work"),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+    search = _required_child(window, QLineEdit, "predictionSearchInput")
+    status_filter = _required_child(window, QComboBox, "predictionStatusFilter")
+    tag_filter = _required_child(window, QComboBox, "predictionTagFilter")
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+
+    search.setText("THIS YEAR")
+    status_filter.setCurrentIndex(status_filter.findData("resolved"))
+    tag_filter.setCurrentIndex(tag_filter.findData("Work"))
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "applyPredictionFiltersButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert results.count() == 1
+    assert "Will policy pass this year?" in results.item(0).text()
+    assert operations.browser_calls[-1] == (
+        "THIS YEAR",
+        PredictionStatus.RESOLVED,
+        "Work",
+    )
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "clearPredictionFiltersButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert search.text() == ""
+    assert status_filter.currentData() is None
+    assert tag_filter.currentData() is None
+    assert results.count() == 3
+    assert operations.browser_calls[-1] == ("", None, None)
+
+
+def test_prediction_browser_clears_a_filter_when_its_last_tag_is_removed(
+    qtbot: QtBot,
+) -> None:
+    tagged = PredictionBrowserItem(
+        prediction_id=1,
+        question="Will an external edit remove this tag?",
+        probability_percent=50,
+        status=PredictionStatus.OPEN,
+        created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+        latest_revision_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+        tags=("Temporary",),
+    )
+    operations = FakePredictionOperations()
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=(tagged,),
+        available_tags=("Temporary",),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+    tag_filter = _required_child(window, QComboBox, "predictionTagFilter")
+    tag_filter.setCurrentIndex(tag_filter.findData("Temporary"))
+
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=(replace(tagged, tags=()),),
+        available_tags=(),
+    )
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "applyPredictionFiltersButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+    assert tag_filter.currentData() is None
+    assert results.count() == 1
+    assert operations.browser_calls[-2:] == [
+        ("", None, "Temporary"),
+        ("", None, None),
+    ]
+
+
+def test_prediction_browser_distinguishes_new_database_and_no_matches(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+    empty = _required_child(window, QLabel, "predictionBrowserEmpty")
+
+    assert empty.text() == "No predictions yet. Create one from New Prediction."
+
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=(
+            PredictionBrowserItem(
+                prediction_id=1,
+                question="Will something happen?",
+                probability_percent=50,
+                status=PredictionStatus.OPEN,
+                created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+                latest_revision_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+            ),
+        ),
+        available_tags=(),
+    )
+    search = _required_child(window, QLineEdit, "predictionSearchInput")
+    search.setText("absent")
+    qtbot.keyPress(search, Qt.Key.Key_Return)
+
+    assert empty.text() == "No predictions match the current search and filters."
+    assert _required_child(window, QListWidget, "predictionBrowserResults").isHidden()
+
+
+def test_prediction_browser_opens_fresh_detail_from_keyboard_activation(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(
+        7,
+        "Open this from the Predictions archive",
+        62,
+        tags=("Archive",),
+    )
+    operations = FakePredictionOperations(latest)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+
+    results.itemActivated.emit(results.item(0))
+
+    assert operations.get_calls[-1] == latest.prediction_id
+    assert window.current_screen_name == "Prediction Detail"
+    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
+        latest.question
+    )
+
+
+def test_prediction_browser_refreshes_and_reports_initial_or_stale_errors(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations()
+    operations.browser_error = ApplicationError("Archive could not be loaded.")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+    error = _required_child(window, QLabel, "predictionBrowserError")
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+
+    assert error.text() == "Predictions unavailable. Archive could not be loaded."
+    assert results.isHidden()
+
+    operations.browser_error = None
+    operations.latest = FakePrediction(9, "Appeared after retry", 48)
+    window.navigate_to("New Prediction")
+    window.navigate_to("Predictions")
+    assert results.count() == 1
+    operations.browser_error = ApplicationError("Refresh failed.")
+    window.navigate_to("New Prediction")
+    window.navigate_to("Predictions")
+
+    assert error.text() == (
+        "Predictions could not refresh; showing the last loaded results. "
+        "Refresh failed."
+    )
+    assert not results.isHidden()
+    assert "Appeared after retry" in results.item(0).text()
+
+
+def test_prediction_browser_timer_runs_only_while_visible(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    window.navigate_to("Predictions")
+    timer = window.findChild(QTimer, "predictionBrowserRefreshTimer")
+    assert timer is not None
+    assert timer.isActive()
+
+    operations.latest = FakePrediction(10, "Appeared at the lock boundary", 33)
+    timer.timeout.emit()
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+    assert "Appeared at the lock boundary" in results.item(0).text()
+
+    window.navigate_to("New Prediction")
+    assert not timer.isActive()
 
 
 def test_dashboard_renders_overlapping_buckets_without_losing_classifications(

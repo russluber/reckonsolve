@@ -5,6 +5,10 @@ from datetime import date, datetime
 
 from reckonsolve.clock import format_utc, parse_utc
 from reckonsolve.domain.attention import DashboardPrediction
+from reckonsolve.domain.browser import (
+    PredictionBrowserItem,
+    PredictionBrowserSnapshot,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
@@ -695,6 +699,71 @@ class PredictionRepository:
                 expected_resolution=_parse_date(row["expected_resolution"]),
             )
             for row in rows
+        )
+
+    def list_browser_predictions(self) -> PredictionBrowserSnapshot:
+        """Load every prediction summary and every associated tag."""
+
+        with self._database.transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    prediction.id AS prediction_id,
+                    prediction.question,
+                    prediction.status,
+                    prediction.created_at,
+                    prediction.forecast_deadline,
+                    current_revision.probability_percent,
+                    current_revision.created_at AS latest_revision_at
+                FROM predictions AS prediction
+                JOIN forecast_revisions AS current_revision
+                    ON current_revision.id = (
+                        SELECT candidate.id
+                        FROM forecast_revisions AS candidate
+                        WHERE candidate.prediction_id = prediction.id
+                        ORDER BY candidate.sequence DESC
+                        LIMIT 1
+                    )
+                ORDER BY prediction.created_at DESC, prediction.id DESC
+                """
+            ).fetchall()
+            tag_rows = connection.execute(
+                """
+                SELECT prediction_tag.prediction_id, tag.display_name
+                FROM tags AS tag
+                JOIN prediction_tags AS prediction_tag
+                    ON prediction_tag.tag_id = tag.id
+                ORDER BY tag.normalized_name, tag.id, prediction_tag.prediction_id
+                """
+            ).fetchall()
+
+        tags_by_prediction: dict[int, list[str]] = {}
+        available_tags: list[str] = []
+        seen_tag_names: set[str] = set()
+        for row in tag_rows:
+            prediction_id = int(row["prediction_id"])
+            display_name = str(row["display_name"])
+            tags_by_prediction.setdefault(prediction_id, []).append(display_name)
+            normalized_name = display_name.casefold()
+            if normalized_name not in seen_tag_names:
+                available_tags.append(display_name)
+                seen_tag_names.add(normalized_name)
+
+        return PredictionBrowserSnapshot(
+            predictions=tuple(
+                PredictionBrowserItem(
+                    prediction_id=int(row["prediction_id"]),
+                    question=str(row["question"]),
+                    probability_percent=int(row["probability_percent"]),
+                    status=PredictionStatus(row["status"]),
+                    created_at=parse_utc(str(row["created_at"])),
+                    latest_revision_at=parse_utc(str(row["latest_revision_at"])),
+                    forecast_deadline=_parse_date(row["forecast_deadline"]),
+                    tags=tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
+                )
+                for row in rows
+            ),
+            available_tags=tuple(available_tags),
         )
 
     def get_prediction(self, prediction_id: int) -> PredictionDetail | None:

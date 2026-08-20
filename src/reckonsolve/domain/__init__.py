@@ -11,6 +11,7 @@ from .attention import (
     ready_to_resolve,
     validate_stale_threshold_days,
 )
+from .browser import PredictionBrowserItem, PredictionBrowserSnapshot
 from .predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
@@ -59,6 +60,8 @@ __all__ = [
     "NewPrediction",
     "NewResolution",
     "Prediction",
+    "PredictionBrowserItem",
+    "PredictionBrowserSnapshot",
     "PredictionDetail",
     "PredictionMetadataUpdate",
     "PredictionStatus",

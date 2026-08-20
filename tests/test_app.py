@@ -5,11 +5,13 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QDateEdit,
     QDialog,
     QGroupBox,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
 
 import reckonsolve.app
 from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
+from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
@@ -80,6 +83,70 @@ def test_dashboard_and_attention_setting_survive_restart(qtbot, tmp_path) -> Non
     assert dashboard_threshold is not None
     assert "M8 Dashboard" in row.text()
     assert dashboard_threshold.text() == "Needs Attention threshold: 21 days"
+    second.close()
+
+
+def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
+    qtbot,
+    tmp_path,
+) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    first = create_runtime(database_path=path)
+    qtbot.addWidget(first.window)
+    operations = PredictionOperations(first.database)
+    operations.create_prediction(
+        "Will the open archive item survive?",
+        35,
+        tags=("Durability",),
+    )
+    invalid = operations.create_prediction(
+        "Will the Invalid archive item survive?",
+        65,
+        tags=("Durability", "Review"),
+    )
+    operations.invalidate_prediction(
+        invalid.prediction_id,
+        reason="Test the terminal archive filter.",
+        expected_revision_id=invalid.current_revision_id,
+        expected_metadata_version=invalid.metadata_version,
+    )
+    first.close()
+
+    second = create_runtime(database_path=path)
+    qtbot.addWidget(second.window)
+    second.window.show()
+    second.window.navigate_to("Predictions")
+    search = second.window.findChild(QLineEdit, "predictionSearchInput")
+    status_filter = second.window.findChild(QComboBox, "predictionStatusFilter")
+    tag_filter = second.window.findChild(QComboBox, "predictionTagFilter")
+    apply_filters = second.window.findChild(
+        QPushButton,
+        "applyPredictionFiltersButton",
+    )
+    results = second.window.findChild(QListWidget, "predictionBrowserResults")
+    assert search is not None
+    assert status_filter is not None
+    assert tag_filter is not None
+    assert apply_filters is not None
+    assert results is not None
+    assert results.count() == 2
+
+    search.setText("INVALID ARCHIVE")
+    status_filter.setCurrentIndex(status_filter.findData("invalid"))
+    tag_filter.setCurrentIndex(tag_filter.findData("Durability"))
+    qtbot.mouseClick(apply_filters, Qt.MouseButton.LeftButton)
+
+    assert results.count() == 1
+    assert "65%  |  INVALID" in results.item(0).text()
+    assert "Tags: Durability, Review" in results.item(0).text()
+    results.itemActivated.emit(results.item(0))
+    assert second.window.current_screen_name == "Prediction Detail"
+    detail_question = second.window.findChild(QLabel, "predictionDetailQuestion")
+    detail_status = second.window.findChild(QLabel, "predictionDetailStatus")
+    assert detail_question is not None
+    assert detail_status is not None
+    assert detail_question.text() == invalid.question
+    assert detail_status.text() == "INVALID"
     second.close()
 
 

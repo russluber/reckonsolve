@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from reckonsolve.ui.dashboard import AttentionSettingsScreen, DashboardScreen
+from reckonsolve.ui.prediction_browser import PredictionBrowserScreen
 from reckonsolve.ui.screens import (
     NewPredictionScreen,
     PredictionDetailScreen,
@@ -41,7 +42,7 @@ _SCREEN_DEFINITIONS: tuple[tuple[str, str, str | None], ...] = (
     (
         "Predictions",
         "predictions",
-        "Prediction browsing is coming in a later milestone.",
+        None,
     ),
     (
         "Analytics",
@@ -80,6 +81,7 @@ class MainWindow(QMainWindow):
         self._new_prediction_screen = NewPredictionScreen(operations)
         self._prediction_detail_screen = PredictionDetailScreen(operations)
         self._dashboard_screen = DashboardScreen(operations)
+        self._prediction_browser_screen = PredictionBrowserScreen(operations)
         self._settings_screen = AttentionSettingsScreen(operations)
 
         for screen_name, object_name, placeholder_text in _SCREEN_DEFINITIONS:
@@ -92,6 +94,8 @@ class MainWindow(QMainWindow):
                 screen = self._new_prediction_screen
             elif screen_name == "Prediction Detail":
                 screen = self._prediction_detail_screen
+            elif screen_name == "Predictions":
+                screen = self._prediction_browser_screen
             elif screen_name == "Settings":
                 screen = self._settings_screen
             else:
@@ -116,6 +120,9 @@ class MainWindow(QMainWindow):
             self._show_created_prediction
         )
         self._dashboard_screen.prediction_selected.connect(
+            self._show_selected_prediction
+        )
+        self._prediction_browser_screen.prediction_selected.connect(
             self._show_selected_prediction
         )
         self._settings_screen.threshold_changed.connect(
@@ -151,6 +158,9 @@ class MainWindow(QMainWindow):
             self._new_prediction_screen.focus_question()
         elif self.current_screen_name == "Prediction Detail":
             self._prediction_detail_screen.refresh()
+        elif self.current_screen_name == "Predictions":
+            self._prediction_browser_screen.refresh()
+            self._prediction_browser_screen.focus_search()
         elif self.current_screen_name == "Settings":
             self._settings_screen.refresh()
 
