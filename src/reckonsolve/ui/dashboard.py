@@ -33,6 +33,7 @@ from reckonsolve.domain.transfer import (
     CsvExportResult,
     DataManagementStatus,
 )
+from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 
 
 class DashboardPredictionSnapshot(Protocol):
@@ -230,6 +231,7 @@ class DashboardScreen(QWidget):
             button.setToolTip("Open Prediction Detail")
             button.setAccessibleName(prediction.question)
             button.setAccessibleDescription(self._row_description(prediction))
+            apply_lucide_icon(button, LucideIcon.ARROW_RIGHT, size=16)
             button.clicked.connect(
                 partial(self._open_prediction, prediction.prediction_id)
             )
@@ -322,6 +324,7 @@ class AttentionSettingsScreen(QWidget):
 
         self.save_button = QPushButton("Save threshold", attention_group)
         self.save_button.setObjectName("saveStaleThresholdButton")
+        apply_lucide_icon(self.save_button, LucideIcon.SAVE)
         self.save_button.clicked.connect(self._save)
 
         control_layout = QHBoxLayout()
@@ -367,9 +370,11 @@ class AttentionSettingsScreen(QWidget):
 
         self.backup_button = QPushButton("Back Up Now", data_group)
         self.backup_button.setObjectName("backUpNowButton")
+        apply_lucide_icon(self.backup_button, LucideIcon.DATABASE_BACKUP)
         self.backup_button.clicked.connect(self._back_up_now)
         self.export_button = QPushButton("Export CSV Bundle", data_group)
         self.export_button.setObjectName("exportCsvBundleButton")
+        apply_lucide_icon(self.export_button, LucideIcon.FILE_ARCHIVE)
         self.export_button.clicked.connect(self._export_csv_bundle)
         action_layout = QHBoxLayout()
         action_layout.addWidget(self.backup_button)

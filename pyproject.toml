@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A local-first personal forecasting journal."
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "pyside6>=6.11.1",
@@ -12,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 reckonsolve = "reckonsolve:main"
+reckonsolve-dev = "reckonsolve:main_dev"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
@@ -22,4 +23,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-qt>=4.5.0",
     "ruff>=0.16.2",
+]
+packaging = [
+    "pyinstaller==6.22.2",
 ]

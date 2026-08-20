@@ -123,7 +123,7 @@ v0.1 supports binary forecasts only.
 - Display Brier performance over time.
 - Back up the complete application database.
 - Export prediction data to CSV.
-- Package the application for normal use on Windows.
+- Establish visual identity, isolated development data, and a private frozen Windows build without publishing a normal installer.
 
 ### Deferred to v0.2
 
@@ -872,7 +872,7 @@ Dialogs or secondary views may support revision, journal, resolution, invalidati
 
 ## 24. Technical boundaries
 
-The initial implementation direction is a Python desktop application using PySide6 and SQLite, packaged for Windows. This direction may be revisited only deliberately; product invariants must survive any technology change.
+The implementation direction is a Python desktop application using PySide6 and SQLite, targeting eventual normal Windows distribution. v0.1 establishes visual identity, isolates development data from future stable data, and validates a private frozen Windows build. A normal installer, code signing, and public binary distribution are Later. This direction may be revisited only deliberately; product invariants must survive any technology change.
 
 Required boundaries:
 
@@ -999,10 +999,15 @@ Acceptance demonstration:
 - Export a documented nine-table CSV ZIP without erasing historical structure.
 - Preserve an existing destination artifact when backup or export generation fails.
 
-### Milestone 12: Windows packaging and polish
+### Milestone 12: Visual identity and private release readiness
 
-- Package for normal Windows use.
-- Verify fresh install, upgrade/migration, backup, restart, and core user loop.
+- Establish an offline icon-resource system using only selected, version-pinned Lucide SVG assets, retain clear text for important actions, and include the applicable third-party license notices.
+- Add an original, user-directed Reckonsolve application icon suitable for the window, taskbar, and future Windows distribution.
+- Apply conservative native-Windows polish to action hierarchy, spacing, resizing, high-DPI behavior, keyboard access, and light/dark palette legibility without introducing a custom theme framework or broad redesign.
+- Give development runs an explicit visible identity and a separate per-user database location from future stable builds. Never silently copy or migrate the stable database into the development location.
+- Create a repeatable private PyInstaller `onedir` smoke build and verify that it runs without a source checkout, Python, or `uv`; keep generated artifacts untracked and unpublished.
+- Verify resource loading, development/stable data isolation, migration, backup, restart, and the core user loop in the private frozen build.
+- Defer an installer, shortcuts, uninstall behavior, code signing, automatic updates, and public binary distribution until a later release-readiness decision.
 
 ---
 
@@ -1056,7 +1061,10 @@ Highest-risk behavior should receive automated tests before visual polish:
 - cascade/restrict behavior for deletion;
 - database migrations;
 - backup consistency; and
-- reopen-after-restart persistence.
+- reopen-after-restart persistence;
+- development and stable application-data isolation;
+- local icon availability, palette legibility, text-label retention, and accessible action names; and
+- private frozen-build startup, migration, backup, restart, and core-loop behavior without the development environment.
 
 Use representative edge cases such as a single revision, several revisions at the same displayed probability, resolution before Expected Resolution, a missing Forecast Deadline, and time-boundary transitions.
 
@@ -1066,10 +1074,9 @@ For repeated displayed probabilities, cover a valid nonconsecutive return such a
 
 ## 29. Open implementation decisions
 
-The application and project name is resolved as **Reckonsolve**. Metadata-edit safety, probability input, and time handling are resolved in Sections 8.2, 9.2, and 24. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
+The application and project name is resolved as **Reckonsolve**. Metadata-edit safety, probability input, time handling, and the v0.1 visual/release-readiness boundary are resolved in Sections 8.2, 9.2, 24, and Milestone 12. M12 uses native system styling, selected local Lucide assets, an original user-directed app icon, separated development data, and a private `onedir` validation build. It does not choose a normal installer or public distribution channel.
 
-- precise visual design system;
-- installer/packaging format.
+The installer format, signing approach, public distribution channel, and final original icon artwork remain intentionally unresolved until the user chooses to pursue normal Windows distribution. They are Later decisions rather than v0.1 acceptance blockers.
 
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 

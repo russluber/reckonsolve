@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from reckonsolve.analytics import AnalyticsSnapshot
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
+from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 
 
 class AnalyticsOperations(Protocol):
@@ -65,6 +66,7 @@ class AnalyticsScreen(QWidget):
         tag_label.setBuddy(self.tag_filter)
         self.refresh_button = QPushButton("Refresh", self)
         self.refresh_button.setObjectName("refreshAnalyticsButton")
+        apply_lucide_icon(self.refresh_button, LucideIcon.REFRESH)
 
         filter_layout = QHBoxLayout()
         filter_layout.addWidget(tag_label)

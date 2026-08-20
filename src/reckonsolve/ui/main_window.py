@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QSize, Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -16,6 +16,12 @@ from PySide6.QtWidgets import (
 
 from reckonsolve.ui.analytics_screen import AnalyticsScreen
 from reckonsolve.ui.dashboard import AttentionSettingsScreen, DashboardScreen
+from reckonsolve.ui.icons import (
+    LucideIcon,
+    is_palette_change,
+    lucide_icon,
+    refresh_lucide_icons,
+)
 from reckonsolve.ui.prediction_browser import PredictionBrowserScreen
 from reckonsolve.ui.screens import (
     NewPredictionScreen,
@@ -57,6 +63,15 @@ _SCREEN_DEFINITIONS: tuple[tuple[str, str, str | None], ...] = (
     ),
 )
 
+_SCREEN_ICONS = {
+    "Dashboard": LucideIcon.LAYOUT_DASHBOARD,
+    "New Prediction": LucideIcon.CIRCLE_PLUS,
+    "Prediction Detail": LucideIcon.FILE_TEXT,
+    "Predictions": LucideIcon.LIST_FILTER,
+    "Analytics": LucideIcon.CHART,
+    "Settings": LucideIcon.SETTINGS,
+}
+
 
 class MainWindow(QMainWindow):
     """Display the primary navigation shell for the desktop application."""
@@ -65,16 +80,20 @@ class MainWindow(QMainWindow):
         self,
         operations: PredictionOperations,
         parent: QWidget | None = None,
+        *,
+        window_title: str = "Reckonsolve",
     ) -> None:
         super().__init__(parent)
         self.setObjectName("mainWindow")
-        self.setWindowTitle("Reckonsolve")
+        self.setWindowTitle(window_title)
+        self.setMinimumSize(760, 520)
         self.resize(960, 640)
 
         self._navigation = QListWidget(self)
         self._navigation.setObjectName("primaryNavigation")
         self._navigation.setAccessibleName("Primary navigation")
         self._navigation.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self._navigation.setIconSize(QSize(20, 20))
 
         self._screen_stack = QStackedWidget(self)
         self._screen_stack.setObjectName("screenStack")
@@ -89,6 +108,9 @@ class MainWindow(QMainWindow):
         for screen_name, object_name, placeholder_text in _SCREEN_DEFINITIONS:
             navigation_item = QListWidgetItem(screen_name)
             navigation_item.setData(Qt.ItemDataRole.UserRole, screen_name)
+            navigation_item.setIcon(
+                lucide_icon(_SCREEN_ICONS[screen_name], self._navigation.palette())
+            )
             self._navigation.addItem(navigation_item)
             if screen_name == "Dashboard":
                 screen = self._dashboard_screen
@@ -134,6 +156,14 @@ class MainWindow(QMainWindow):
         )
         self._navigation.setCurrentRow(0)
 
+    def changeEvent(self, event: QEvent) -> None:
+        """Keep palette-colored icons legible when the native theme changes."""
+
+        super().changeEvent(event)
+        if is_palette_change(event) and hasattr(self, "_navigation"):
+            self._refresh_navigation_icons()
+            refresh_lucide_icons(self)
+
     @property
     def screen_names(self) -> tuple[str, ...]:
         """Return the primary screens in navigation order."""
@@ -177,6 +207,12 @@ class MainWindow(QMainWindow):
     def _show_selected_prediction(self, prediction: PredictionSnapshot) -> None:
         self._prediction_detail_screen.show_prediction(prediction)
         self.navigate_to("Prediction Detail")
+
+    def _refresh_navigation_icons(self) -> None:
+        for row, screen_name in enumerate(self.screen_names):
+            self._navigation.item(row).setIcon(
+                lucide_icon(_SCREEN_ICONS[screen_name], self._navigation.palette())
+            )
 
     @staticmethod
     def _create_placeholder_screen(

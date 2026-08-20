@@ -66,3 +66,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0005: Preserve terminal lifecycle decisions as immutable records](0005-immutable-terminal-lifecycle-records.md) — Accepted 2026-08-20
 - [0006: Use fixed calibration bins and cumulative Brier performance](0006-fixed-calibration-and-cumulative-brier.md) — Accepted 2026-08-20
 - [0007: Use online SQLite backup and relational CSV export](0007-online-backup-and-relational-csv-export.md) — Accepted 2026-08-20
+- [0008: Use selected local icons and a private onedir build](0008-private-onedir-and-local-icons.md) — Accepted 2026-08-20

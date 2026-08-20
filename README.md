@@ -2,7 +2,7 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its backup-and-export milestone, but Windows packaging is still being built and it is not ready for normal use.
+> Reckonsolve now has isolated development data, local action icons, and a validated private Windows build, but it is not ready for normal distribution. Original application-icon artwork, an installer, signing, and public binaries remain deferred.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
@@ -22,7 +22,7 @@ The Analytics screen scores each Resolved prediction exactly once using the Fore
 
 Settings now creates a complete SQLite recovery backup at a chosen destination, verifies it before replacing an existing backup, and remembers the last successful backup time. It also exports a documented ZIP containing nine related CSV files for Predictions, immutable history, lifecycle records, and tags. The CSV bundle is portable analytical data rather than a restoration format; its included README explains every relationship and convention.
 
-Windows packaging is reserved for the final v0.1 milestone.
+The M12 visual pass uses a deliberately small, offline subset of Lucide icons while keeping action text and accessible names. Icons follow the active native Qt palette rather than imposing a custom theme. Development runs identify themselves as **Reckonsolve Dev** and use a separate database from the stable channel. A repeatable private PyInstaller `onedir` build now validates startup, icon resources, prediction creation, revision, Journal history, backup, and restart from the frozen executable. Original application-icon artwork still awaits user direction; a normal installer, signing, and public binary distribution are deliberately deferred.
 
 ## Documentation
 
@@ -36,13 +36,23 @@ Reckonsolve uses Python 3.13, PySide6, SQLite, and `uv`.
 
 ```powershell
 uv sync --locked
-uv run reckonsolve
+uv run reckonsolve-dev
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 ```
 
-Running the application creates or opens its SQLite database, applies any pending schema migrations, and keeps that database available until the application shuts down.
+`uv run reckonsolve-dev` is the normal source-development command. Its window title says **Reckonsolve Dev**, and it creates or opens an isolated development database, applies pending schema migrations, and keeps that database available until shutdown. `uv run reckonsolve` remains the stable-channel entry point and must not be used as an interchangeable development command because it opens the stable database location.
+
+## Private Windows build
+
+M12 includes a private smoke build, not an installer or public release:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1
+```
+
+The script synchronizes the locked `packaging` dependency group, builds `dist\Reckonsolve\Reckonsolve.exe`, copies that onedir bundle to a disposable ignored directory, and runs the frozen executable through an offscreen smoke workflow. The workflow uses only temporary data and checks a pending schema migration with preserved data, create, revise, Journal, backup, and restart persistence. `build\` and `dist\` are generated and must remain untracked. The frozen app intentionally has no original Reckonsolve application icon yet.
 
 ## Runtime data
 
@@ -52,8 +62,16 @@ On Windows, Reckonsolve stores its canonical database outside the repository at:
 %LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3
 ```
 
-The directory is selected through Qt's per-user local application-data location. Automated tests inject temporary database paths and do not open the real user database. The application is local-only and does not require network access.
+Source-development runs instead use:
+
+```text
+%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3
+```
+
+Each directory is selected through Qt's per-user local application-data location after its visible application identity is set. Reckonsolve never silently copies the stable database into the development location. Automated tests and frozen-build smoke checks inject temporary database paths and do not open either real user database. The application is local-only and does not require network access.
 
 ## License
 
 Reckonsolve is licensed under the [MIT License](LICENSE).
+
+The selected Lucide resources retain their upstream notices in [Third-party notices](THIRD_PARTY_NOTICES.md).

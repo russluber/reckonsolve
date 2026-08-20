@@ -861,6 +861,37 @@ def test_main_window_has_expected_navigation(window: MainWindow) -> None:
     )
     assert window.current_screen_name == "Dashboard"
     assert navigation.currentRow() == 0
+    assert all(
+        not navigation.item(index).icon().isNull()
+        for index in range(navigation.count())
+    )
+
+
+def test_high_value_actions_keep_text_icons_and_accessible_names(
+    window: MainWindow,
+) -> None:
+    expected_actions = {
+        "createPredictionButton": "Create Prediction",
+        "editPredictionDetailsButton": "Edit Details",
+        "reviseForecastButton": "Revise Forecast",
+        "addJournalEntryButton": "Add Journal Entry",
+        "resolvePredictionButton": "Resolve",
+        "markInvalidButton": "Mark Invalid",
+        "deletePredictionButton": "Delete",
+        "applyPredictionFiltersButton": "Apply filters",
+        "clearPredictionFiltersButton": "Clear filters",
+        "openSelectedPredictionButton": "Open selected",
+        "refreshAnalyticsButton": "Refresh",
+        "saveStaleThresholdButton": "Save threshold",
+        "backUpNowButton": "Back Up Now",
+        "exportCsvBundleButton": "Export CSV Bundle",
+    }
+
+    for object_name, text in expected_actions.items():
+        button = _required_child(window, QPushButton, object_name)
+        assert button.text() == text
+        assert not button.icon().isNull()
+        assert button.accessibleName()
 
 
 def test_main_window_navigates_to_each_primary_screen(window: MainWindow) -> None:

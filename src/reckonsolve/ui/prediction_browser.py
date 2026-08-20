@@ -25,6 +25,7 @@ from reckonsolve.domain.browser import (
     PredictionBrowserSnapshot,
 )
 from reckonsolve.domain.predictions import PredictionStatus
+from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 
 
 class PredictionBrowserDetailSnapshot(Protocol):
@@ -113,8 +114,10 @@ class PredictionBrowserScreen(QWidget):
 
         self.apply_button = QPushButton("Apply filters", self)
         self.apply_button.setObjectName("applyPredictionFiltersButton")
+        apply_lucide_icon(self.apply_button, LucideIcon.LIST_FILTER)
         self.clear_button = QPushButton("Clear filters", self)
         self.clear_button.setObjectName("clearPredictionFiltersButton")
+        apply_lucide_icon(self.clear_button, LucideIcon.ERASER)
 
         filters_layout = QHBoxLayout()
         filters_layout.addWidget(search_label)
@@ -153,6 +156,7 @@ class PredictionBrowserScreen(QWidget):
 
         self.open_button = QPushButton("Open selected", self)
         self.open_button.setObjectName("openSelectedPredictionButton")
+        apply_lucide_icon(self.open_button, LucideIcon.ARROW_RIGHT)
         self.open_button.setEnabled(False)
 
         actions_layout = QHBoxLayout()

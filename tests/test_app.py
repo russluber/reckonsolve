@@ -31,6 +31,7 @@ from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
 from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
@@ -51,6 +52,36 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
     assert second_runtime.database.schema_version == 8
     second_runtime.close()
+
+
+def test_development_runtime_has_visible_isolated_identity(
+    qtbot,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    def isolated_location(_location) -> str:
+        return str(tmp_path / QApplication.applicationName())
+
+    monkeypatch.setattr(
+        "reckonsolve.paths.QStandardPaths.writableLocation",
+        isolated_location,
+    )
+
+    development = create_runtime(identity=DEVELOPMENT_APPLICATION)
+    qtbot.addWidget(development.window)
+    assert development.identity is DEVELOPMENT_APPLICATION
+    assert development.window.windowTitle() == "Reckonsolve Dev"
+    assert development.database.path == (
+        tmp_path / "Reckonsolve Dev" / "reckonsolve.sqlite3"
+    )
+    development.close()
+
+    stable = create_runtime(identity=STABLE_APPLICATION)
+    qtbot.addWidget(stable.window)
+    assert stable.window.windowTitle() == "Reckonsolve"
+    assert stable.database.path == tmp_path / "Reckonsolve" / "reckonsolve.sqlite3"
+    assert stable.database.path != development.database.path
+    stable.close()
 
 
 def test_settings_backup_and_export_work_end_to_end_across_restart(

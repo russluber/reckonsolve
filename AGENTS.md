@@ -37,7 +37,7 @@ v0.1 includes:
 - Needs Attention and Ready to Resolve surfacing;
 - Brier score, calibration, and clearly labeled Brier performance over time;
 - backup and CSV export; and
-- Windows packaging.
+- visual identity, development-data isolation, and a private Windows frozen-build validation.
 
 Do not implement numeric forecasting or Forecast Reviews in v0.1. Both are reserved for v0.2.
 
@@ -48,7 +48,7 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Use Python managed by `uv`.
 - Build the desktop interface with PySide6.
 - Use SQLite as the canonical data store.
-- Target native Windows development and packaging.
+- Target native Windows development and eventual packaging; v0.1 does not require a normal installer or public binary distribution.
 - Keep core behavior fully functional offline.
 - Keep the architecture proportionate to a single-user local desktop application.
 - Do not add an ORM, migration framework, GUI framework, charting library, packaging system, or other production dependency casually. Prefer existing dependencies; when a new dependency is necessary, explain the need and tradeoff.

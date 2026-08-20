@@ -1,30 +1,30 @@
 # Reckonsolve Architecture
 
-Status: Milestone 11 implemented; Windows packaging remains to be built
+Status: Milestone 12 implementation complete except user-directed application artwork
 Last reviewed: 2026-08-20
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 11 completes local recovery and portable export. Settings creates a verified SQLite online-backup snapshot at a user-selected destination and persists its last successful time. A separately labeled ZIP contains nine relational CSV files plus a data dictionary, preserving stable identifiers and historical relationships without pretending to be a restoration format. Windows packaging remains to be built.
+Milestone 12 adds a selected offline Lucide resource layer, palette-aware native icons with retained text labels, explicit **Reckonsolve Dev** identity and storage isolation, and a repeatable private PyInstaller `onedir` build. The frozen executable is smoke-tested from a relocated bundle with disposable data through UI construction, creation, revision, Journal, backup, and restart. Original user-directed application artwork remains intentionally unimplemented rather than being invented; normal installation and public distribution remain deferred.
 
 | Area | Current state |
 |---|---|
 | Project management | `uv` project with Python 3.13 pinned in `.python-version` |
 | Runtime dependency | PySide6 |
-| Development tools | pytest, pytest-qt, and Ruff |
+| Development tools | pytest, pytest-qt, and Ruff; pinned PyInstaller exists only in the separate `packaging` dependency group |
 | Python package | `src/reckonsolve/` |
-| Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
+| Entry points | `reckonsolve` and `python -m reckonsolve` use the stable identity; `reckonsolve-dev` uses the visibly separate development identity; the private frozen entry adds only its disposable build-smoke path |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | All six primary screens are functional for their implemented v0.1 slices; Settings includes the attention threshold, database location, backup status/action, and CSV export action |
-| Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
+| UI | All six primary screens are functional; selected navigation and action icons are local, palette-aware Lucide SVGs rendered through QtSvg while visible text and accessible names remain authoritative |
+| Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
 | Schema | Version 8 adds only the nullable last-successful-backup instant to the singleton settings row |
 | Domain and application operations | Complete prediction workflows plus analytics, backup, export, and focused settings orchestration are implemented without placing rules in Qt |
 | Analytics | Exactly-once scoring selection, binary Brier, fixed-bin calibration, and cumulative resolution-time aggregation are implemented as pure calculations behind a read-only data source |
-| Automated tests | Tests cover historical/lifecycle behavior, scoring analytics, verified recovery, relational CSV fidelity, destination-failure preservation, Qt workflows, and restart persistence |
-| Windows packaging | Not implemented; the packaging format remains undecided |
+| Automated tests | Existing product coverage plus resource completeness/rendering, label/accessibility retention, identity/path isolation, and frozen core-loop/backup/restart smoke coverage |
+| Windows distribution | A private PyInstaller `onedir` build is repeatable and smoke-validated; original icon artwork, installer, signing, shortcuts, uninstall, updates, and public distribution remain deferred |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
 
@@ -79,6 +79,8 @@ This is a local, single-user desktop application. Prefer direct calls, small mod
 The PySide6 layer owns windows, screens, dialogs, Qt models, presentation formatting, and user interaction. It may validate basic form shape for immediate feedback, but authoritative validation and state transitions belong below the UI.
 
 The six primary screens are Dashboard, New Prediction, Prediction Detail, Predictions, Analytics, and Settings. Revision, journal, resolution, invalidation, deletion, and metadata editing can remain focused dialogs or secondary views.
+
+M12 keeps the native Qt/Windows visual system rather than adding a theme framework. Navigation and high-value actions use a small selected set of local Lucide 1.33.0 SVGs rendered through QtSvg in normal, disabled, and selected palette colors. Visible action text is retained, accessible names remain meaningful, and palette changes re-render remembered button and navigation icons. Font-aware chart sizing, existing scrollable forms, keyboard-native controls, and a minimum resizable main-window size provide conservative polish without fixed-pixel screen layouts. [ADR 0008](decisions/0008-private-onedir-and-local-icons.md) records the resource and private-build approach.
 
 The Prediction Detail probability-history widget is presentation code. It projects immutable revisions onto elapsed stored time, paints the fixed probability scale and sequence-ordered step geometry, and supplies an accessibility summary. It does not select scoring observations, infer probabilities, or persist chart state. [ADR 0004](decisions/0004-native-probability-history-chart.md) records the native rendering approach.
 
@@ -166,15 +168,18 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 11 implements this package structure:
+Milestone 12 implements this package structure:
 
 ```text
 src/reckonsolve/
-  __init__.py          public `main()` console entry point
+  __init__.py          stable `main()` and isolated-development `main_dev()` entry points
   __main__.py          `python -m reckonsolve` entry point
   app.py               QApplication composition, runtime ownership, and startup errors
   clock.py             injectable clock and canonical UTC instant conversion
+  identity.py          stable and visible development application identities
   paths.py             per-user and explicitly injected database paths
+  private_build_smoke.py
+                       disposable frozen UI, core-loop, backup, and restart probe
   application/
     errors.py          expected user-presentable operation and concurrency errors
     predictions.py     prediction workflows and read-use-case orchestration
@@ -201,13 +206,17 @@ src/reckonsolve/
     analytics_screen.py
                        summary, common tag filter, bin table, and charts
     dashboard.py       action buckets plus attention, backup, and export settings
+    icons.py           palette-aware rendering for the selected Lucide resources
     main_window.py     navigation and screen coordination
     prediction_browser.py
                        question search, status/tag filters, and archive navigation
     probability_history_chart.py
                        native probability-history projection and painting
     screens.py         creation, Prediction Detail, history, lifecycle, deletion, and metadata UI
+    assets/icons/      pinned selected Lucide SVGs and their upstream license
 ```
+
+The checked-in `packaging/Reckonsolve.spec` and `tools/build_windows.ps1` live outside the import package. The spec defines only the private onedir bundle and explicitly collects UI resources and notices. Generated `build/` and `dist/` trees remain ignored.
 
 Later milestones can extend these boundaries when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
 
@@ -217,8 +226,8 @@ Tests should live under `tests/` and generally mirror the behavior boundary they
 
 The package-level entry point delegates immediately to `app.py`. Startup currently:
 
-1. sets the Qt application name to Reckonsolve and creates or reuses the `QApplication`;
-2. resolves `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3` through Qt's `AppLocalDataLocation`, unless an explicit database path was supplied;
+1. sets the supplied stable or development identity before creating or reusing the `QApplication`;
+2. resolves that identity's Qt `AppLocalDataLocation`, unless an explicit database path was supplied;
 3. opens one long-lived SQLite connection, enables foreign keys and the busy timeout, and applies pending migrations;
 4. composes `PredictionOperations` with that database and a system UTC clock;
 5. constructs the six-screen `MainWindow` with those operations;
@@ -227,7 +236,7 @@ The package-level entry point delegates immediately to `app.py`. Startup current
 
 The production runner catches expected path, migration, operating-system, and SQLite startup failures and presents a fatal database error. It does not replace or silently recreate an existing database. The runner's `finally` cleanup closes the database after the Qt event loop ends or if showing the window fails; close is idempotent.
 
-`create_runtime()` accepts an explicit database path so tests never discover or open the real user database. The clock and application operations are composed at this boundary rather than through global state or widget-side service lookup; later operations should follow the same pattern.
+`create_runtime()` accepts both an explicit identity and database path. Normal source work uses `reckonsolve-dev`, whose title and application name are **Reckonsolve Dev**; stable entry points retain **Reckonsolve**. Because path resolution happens only after setting that identity, Qt supplies distinct per-user directories without an ad hoc environment override. No startup path copies or migrates data between those channels. Tests never discover or open either real user database. The clock and application operations are composed at this boundary rather than through global state or widget-side service lookup; later operations should follow the same pattern.
 
 ## 8. Persistence model
 
@@ -290,13 +299,19 @@ Derived values should not be stored merely for display convenience unless a demo
 
 ### Runtime location
 
-Qt's `AppLocalDataLocation`, after the application name is set to Reckonsolve, provides the production directory. On Windows the canonical database is:
+Qt's `AppLocalDataLocation`, after the application identity is set, provides the corresponding per-user directory. On Windows the stable canonical database is:
 
 ```text
 %LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3
 ```
 
-The database parent directory is created when needed. Future backups, exports, and logs must likewise live outside the source tree in an appropriate per-user location or a destination explicitly chosen by the user. Tests always inject temporary paths and never discover or open the real user database.
+The normal source-development command uses a visibly different identity and path:
+
+```text
+%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3
+```
+
+The database parent directory is created when needed. There is no automatic copying, migration, or fallback between stable and development data. Backups and exports live at destinations explicitly chosen by the user. Tests and private frozen-build smoke checks always inject temporary paths and never discover or open either real user database.
 
 ## 9. Transaction boundaries
 
@@ -403,16 +418,24 @@ Backup uses the standard-library binding to SQLite's online backup API. It write
 
 CSV export reads canonical rows in one transaction and then uses the standard-library `csv` and `zipfile` modules. Its nine files mirror the historical relationships through stable identifiers rather than flattening one-to-many records. CSV uses UTF-8 with a byte-order mark, CRLF rows, and quoted fields; `README.txt` documents columns, joins, blank nulls, UTC instants, ISO dates, derivation rules, and spreadsheet handling of formula-like free text. The ZIP follows the same temporary-write, validation, and atomic-install discipline as backup. Neither workflow adds a production dependency.
 
-## 15. Testing strategy
+## 15. Private Windows build
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 8, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M10 retain their historical, lifecycle, Dashboard, archive, and analytics coverage. M11 adds v7-to-v8 migration safety, complete backup recovery, SQLite integrity verification, last-success persistence, live-database destination rejection, exact ZIP membership and CSV relationships, multiline/quoted text round trips, empty exports, failed-replacement preservation, cancel/error UI behavior, and end-to-end Settings recovery after restart.
+PyInstaller 6.22.2 is an exact, locked build-only dependency in the `packaging` dependency group. It is not imported by the application, included as a runtime library, or required for normal development. The checked-in spec produces a windowed `onedir` bundle, collects only the application's imported code plus selected UI resources and license notices, and deliberately supplies no invented Reckonsolve icon. `onedir` keeps the first private build inspectable and gives clearer missing-resource diagnostics than a self-extracting executable.
+
+`tools/build_windows.ps1` synchronizes the locked group, replaces only generated PyInstaller output under ignored `build/` and `dist/` directories, and then copies the completed bundle to a unique ignored smoke directory. It launches the copied executable with an internal private-smoke argument and an offscreen Qt platform from that relocated working directory. The executable verifies that it is actually frozen, creates a disposable database at the immediately previous schema with seed data, constructs the real main window so startup migrates that data and every local resource is loaded, creates and revises another Prediction, appends a Journal entry, creates a verified backup, closes, and reopens both source and backup databases. The source checkout, Python interpreter, and `uv` are used to build but are not used by the smoke process.
+
+This artifact is a development validation output, not a supported release. There is no installer, Start menu integration, shortcut ownership, uninstaller, code signature, update channel, or public download contract. [ADR 0008](decisions/0008-private-onedir-and-local-icons.md) records why this narrow build exists.
+
+## 16. Testing strategy
+
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 8, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M10 retain their historical, lifecycle, Dashboard, archive, and analytics coverage. M11 adds v7-to-v8 migration safety, complete backup recovery, SQLite integrity verification, last-success persistence, live-database destination rejection, exact ZIP membership and CSV relationships, multiline/quoted text round trips, empty exports, failed-replacement preservation, cancel/error UI behavior, and end-to-end Settings recovery after restart. M12 adds exact icon-resource inventory and version checks, palette-dependent rendering, retained text/accessibility, stable/development path separation, disposable private-smoke safety, and a real relocated frozen-executable smoke run.
 
 Most behavior should be verified below the GUI:
 
 - pure unit tests for probability, lifecycle, attention, revision selection, probability-history projection, and scoring rules;
 - temporary-SQLite integration tests for transactions, constraints, queries, migrations, restart persistence, and backup consistency;
 - pytest-qt tests only for behavior that genuinely depends on Qt signals, widgets, navigation, or dialog cancellation; and
-- a small application smoke test for startup against a temporary data directory.
+- application and private-build smoke tests against temporary data directories.
 
 Tests use fixed clocks, explicit temporary paths, and representative boundary cases. The normal verification commands are:
 
@@ -423,22 +446,19 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-## 16. Error handling
+## 17. Error handling
 
 Expected errors should use explicit application or domain error types that the UI can present without a traceback. Examples include invalid probability, missing question or Journal text, an action disallowed by lifecycle, stale forecast or metadata context, and a concurrently corrected Journal entry.
 
 Unexpected exceptions should not be converted into false success or empty data. Database failures must preserve the original database and provide enough context for diagnosis without exposing unrelated local information.
 
-## 17. Decisions intentionally deferred
+## 18. Decisions intentionally deferred
 
-The product specification lists choices that must be made at their relevant milestones. Architecture must not settle them indirectly. They include:
+The M12 resource, identity, and private-build boundary is implemented. The original application icon remains pending because its artwork must be directed or supplied by the user; the current private executable therefore retains PyInstaller's generic default rather than pretending to establish Reckonsolve's permanent mark.
 
-- visual design details;
-- Windows packaging format.
+A normal installer, uninstall policy, code signing, public distribution channel, and automatic updates remain Later decisions. When one becomes consequential, seek explicit user authorization before changing the product specification. Record durable technical reasoning in an [architecture decision record](decisions/README.md) when appropriate.
 
-When one of these choices becomes consequential, seek explicit user authorization before changing the product specification. Record durable technical reasoning in an [architecture decision record](decisions/README.md) when appropriate.
-
-## 18. Evolution beyond v0.1
+## 19. Evolution beyond v0.1
 
 Numeric forecasts and Forecast Reviews are v0.2 work. v0.1 should avoid choices that make later extension needlessly destructive, but it must not add unused tables, generalized forecast-type frameworks, review entities, or UI abstractions in anticipation of them.
 

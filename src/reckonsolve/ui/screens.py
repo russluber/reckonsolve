@@ -42,6 +42,7 @@ from reckonsolve.domain.predictions import (
     DefinitionChange,
     PredictionStatus,
 )
+from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 
@@ -450,6 +451,7 @@ class NewPredictionScreen(QWidget):
         self.create_button = QPushButton("Create Prediction", self)
         self.create_button.setObjectName("createPredictionButton")
         self.create_button.setAccessibleName("Create prediction")
+        apply_lucide_icon(self.create_button, LucideIcon.CIRCLE_PLUS)
 
         form_content = QWidget(self)
         form_content.setObjectName("newPredictionFormContent")
@@ -666,6 +668,7 @@ class EditPredictionDetailsDialog(QDialog):
         save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
         save_button.setObjectName("savePredictionDetailsButton")
         save_button.setDefault(True)
+        apply_lucide_icon(save_button, LucideIcon.SAVE)
         cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel_button.setObjectName("cancelPredictionDetailsButton")
 
@@ -910,6 +913,7 @@ class ReviseForecastDialog(QDialog):
         save_button.setObjectName("saveForecastRevisionButton")
         save_button.setText("Save Revision")
         save_button.setDefault(True)
+        apply_lucide_icon(save_button, LucideIcon.SAVE)
         cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel_button.setObjectName("cancelForecastRevisionButton")
 
@@ -1031,6 +1035,7 @@ class AddJournalEntryDialog(QDialog):
         save_button.setObjectName("saveJournalEntryButton")
         save_button.setText("Save Journal Entry")
         save_button.setDefault(True)
+        apply_lucide_icon(save_button, LucideIcon.SAVE)
         cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel_button.setObjectName("cancelJournalEntryButton")
 
@@ -1152,6 +1157,7 @@ class CorrectJournalEntryDialog(QDialog):
         save_button.setObjectName("saveJournalCorrectionButton")
         save_button.setText("Save Correction")
         save_button.setDefault(True)
+        apply_lucide_icon(save_button, LucideIcon.SAVE)
         cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel_button.setObjectName("cancelJournalCorrectionButton")
 
@@ -1300,6 +1306,7 @@ class ResolvePredictionDialog(QDialog):
         save_button.setObjectName("confirmResolvePredictionButton")
         save_button.setText("Resolve")
         save_button.setEnabled(False)
+        apply_lucide_icon(save_button, LucideIcon.CIRCLE_CHECK)
         cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel_button.setObjectName("cancelResolvePredictionButton")
 
@@ -1433,6 +1440,7 @@ class MarkInvalidDialog(QDialog):
         save_button.setObjectName("confirmMarkInvalidButton")
         save_button.setText("Mark Invalid")
         save_button.setDefault(True)
+        apply_lucide_icon(save_button, LucideIcon.BAN)
         cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel_button.setObjectName("cancelMarkInvalidButton")
 
@@ -1553,6 +1561,7 @@ class PredictionDetailScreen(QWidget):
 
         self.edit_details_button = QPushButton("Edit Details", self.detail_content)
         self.edit_details_button.setObjectName("editPredictionDetailsButton")
+        apply_lucide_icon(self.edit_details_button, LucideIcon.PENCIL)
         self.edit_details_button.clicked.connect(self.open_edit_details)
 
         action_row = QWidget(self.detail_content)
@@ -1561,6 +1570,7 @@ class PredictionDetailScreen(QWidget):
         action_layout.setContentsMargins(0, 0, 0, 0)
         self.revise_forecast_button = QPushButton("Revise Forecast", action_row)
         self.revise_forecast_button.setObjectName("reviseForecastButton")
+        apply_lucide_icon(self.revise_forecast_button, LucideIcon.REFRESH)
         self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
         action_layout.addWidget(self.revise_forecast_button)
         self.add_journal_entry_button = QPushButton(
@@ -1568,18 +1578,22 @@ class PredictionDetailScreen(QWidget):
             action_row,
         )
         self.add_journal_entry_button.setObjectName("addJournalEntryButton")
+        apply_lucide_icon(self.add_journal_entry_button, LucideIcon.NOTEBOOK_PEN)
         self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
         action_layout.addWidget(self.add_journal_entry_button)
         self.resolve_button = QPushButton("Resolve", action_row)
         self.resolve_button.setObjectName("resolvePredictionButton")
+        apply_lucide_icon(self.resolve_button, LucideIcon.CIRCLE_CHECK)
         self.resolve_button.clicked.connect(self.open_resolve_prediction)
         action_layout.addWidget(self.resolve_button)
         self.mark_invalid_button = QPushButton("Mark Invalid", action_row)
         self.mark_invalid_button.setObjectName("markInvalidButton")
+        apply_lucide_icon(self.mark_invalid_button, LucideIcon.BAN)
         self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
         action_layout.addWidget(self.mark_invalid_button)
         self.delete_button = QPushButton("Delete", action_row)
         self.delete_button.setObjectName("deletePredictionButton")
+        apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
         self.delete_button.clicked.connect(self.delete_prediction)
         action_layout.addWidget(self.delete_button)
         action_layout.addStretch()
@@ -2433,6 +2447,7 @@ def _journal_entry_widget(
     heading_layout.addStretch()
     correct_button = QPushButton("Correct Entry", heading_row)
     correct_button.setObjectName(f"correctJournalEntryButton{entry.entry_id}")
+    apply_lucide_icon(correct_button, LucideIcon.PENCIL, size=16)
     correct_button.setToolTip(
         "Save a correction while preserving the original and prior versions."
     )
