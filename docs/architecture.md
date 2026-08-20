@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 9 implemented; analytics and data-management workflows remain to be built
+Status: Milestone 10 implemented; backup, export, and packaging remain to be built
 Last reviewed: 2026-08-20
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 9 adds a searchable Predictions archive on top of the complete individual Prediction lifecycle and action-oriented Dashboard. The browser includes every lifecycle state, derives Locked against the current local date, searches question text with Unicode-aware case-insensitive substring matching, and combines one status and one tag filter. Each result uses the current revision and opens freshly queried Prediction Detail. Scoring analytics, backup, and export workflows remain to be built.
+Milestone 10 completes focused binary scoring analytics on top of the historical Prediction workflow. Each immutable Resolution contributes its captured scoring revision exactly once. The Analytics screen presents count and mean Brier, a fixed ten-bin reliability diagram with actual bin means and visible counts, and cumulative mean Brier over resolution time. One tag filter constrains all views before aggregation. Backup and export workflows remain to be built.
 
 | Area | Current state |
 |---|---|
@@ -17,13 +17,13 @@ Milestone 9 adds a searchable Predictions archive on top of the complete individ
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | Native PySide6 navigation plus functional Dashboard, New Prediction, Prediction Detail, and searchable Predictions screens; Settings implements the one persisted attention control, while Analytics remains an explicit placeholder |
+| UI | All six primary screens are functional for their implemented v0.1 slices, including native Brier, calibration, and cumulative-performance views; Settings currently implements the persisted attention control |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 7 adds a constrained singleton application-settings row for the stale threshold, building on immutable terminal records, protected revisions, Journal history, metadata, tags, and definition snapshots |
-| Domain and application operations | Complete prediction workflows plus Dashboard attention classification, persisted threshold access, and deterministic archive search/filter construction are implemented without Qt dependencies |
-| Analytics | Scoring analytics are not implemented; the Prediction Detail chart is a presentation of all revisions, not an analytics aggregate |
-| Automated tests | Tests cover the persistence foundation plus complete prediction history/lifecycle behavior, Dashboard attention boundaries, archive search/filter combinations and lifecycle derivation, migrations through v7, Qt behavior, and restart persistence |
+| Schema | Version 7 remains current; M10 derives analytics from existing immutable Resolution, scoring-revision, outcome, and tag facts without stored aggregates |
+| Domain and application operations | Complete prediction workflows, Dashboard and archive queries, settings, and tag-filtered analytics orchestration are implemented without placing rules in Qt |
+| Analytics | Exactly-once scoring selection, binary Brier, fixed-bin calibration, and cumulative resolution-time aggregation are implemented as pure calculations behind a read-only data source |
+| Automated tests | Tests cover historical and lifecycle behavior plus exact scoring selection/exclusions, Brier endpoints, calibration boundaries/counts, cumulative ordering, tag subsets, native charts, and restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
@@ -166,7 +166,7 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 9 implements this package structure:
+Milestone 10 implements this package structure:
 
 ```text
 src/reckonsolve/
@@ -177,19 +177,27 @@ src/reckonsolve/
   paths.py             per-user and explicitly injected database paths
   application/
     errors.py          expected user-presentable operation and concurrency errors
-    predictions.py     prediction workflows, Dashboard queries, and attention settings
+    predictions.py     prediction workflows and read-use-case orchestration
+  analytics/
+    scoring.py         pure exactly-once Brier, calibration, and trend calculations
   domain/
+    analytics.py       captured resolved-forecast facts shared by data and analytics
     attention.py       stale-threshold validation and derived Dashboard values/rules
     browser.py         current prediction summaries and archive-query results
     predictions.py     prediction, history, terminal records, metadata, status, and validation values
   data/
     __init__.py        persistence package surface
+    analytics.py       read-only captured-scoring-revision source
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
     predictions.py     purpose-specific prediction, history, terminal, tag, and deletion persistence
     settings.py        singleton persisted attention-setting access
   ui/
     __init__.py        UI package surface
+    analytics_charts.py
+                       native reliability and cumulative Brier painting
+    analytics_screen.py
+                       summary, common tag filter, bin table, and charts
     dashboard.py       action buckets and the minimal attention Settings control
     main_window.py     navigation and screen coordination
     prediction_browser.py
@@ -199,7 +207,7 @@ src/reckonsolve/
     screens.py         creation, Prediction Detail, history, lifecycle, deletion, and metadata UI
 ```
 
-Later milestones can extend these boundaries and add analytics when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
+Later milestones can extend these boundaries when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
 
 Tests should live under `tests/` and generally mirror the behavior boundary they exercise rather than mirror every source file mechanically.
 
@@ -258,6 +266,8 @@ Milestone 8 migrates the database to version 7 with one `app_settings` row. Its 
 
 Milestone 9 requires no schema change. The archive is a purpose-specific read model over every Prediction, its highest-sequence ForecastRevision, and associated tags. Stored terminal status remains canonical, while Locked is derived in the application against the current local calendar date before status filtering. Associated tag choices come from current `prediction_tags` relationships, so retained tag rows with no Prediction do not create empty filter choices. Results use deterministic newest-created-first order; filtering never mutates or reorders history.
 
+Milestone 10 also requires no schema change. Resolution's immutable composite reference to its owned `scoring_revision_id` is the canonical final eligible forecast. The analytics source joins that exact row rather than every revision or a newly derived latest row, requires persisted Resolved status, and returns one observation per Resolution. Tags offered by Analytics come only from scored Predictions. Brier scores, calibration bins, and cumulative points remain derived and are never written back to SQLite. [ADR 0006](decisions/0006-fixed-calibration-and-cumulative-brier.md) records the analytical construction.
+
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
@@ -315,7 +325,7 @@ System-generated instants follow [ADR 0002](decisions/0002-canonical-utc-instant
 
 ## 11. Analytics flow
 
-The ordinary scoring pipeline is:
+The implemented ordinary scoring pipeline is:
 
 ```text
 candidate prediction, resolution, and revision data
@@ -328,6 +338,8 @@ candidate prediction, resolution, and revision data
 ```
 
 Selection logic and calculation logic require tests independent of chart widgets. Tag filtering should constrain the observation set before aggregation. Probability-history charts use all revisions for one prediction, while scoring uses exactly one eligible revision; these are separate data products and must not share misleading selection behavior.
+
+The source query returns each Resolution's captured scoring revision and associated tags in canonical resolution-time and identifier order. Pure analytics code validates unique Prediction and Resolution contributions, maps Yes to 1 and No to 0, calculates binary Brier on the 0-through-1 scale, applies the tag subset, and builds all outputs from that common filtered set. Calibration uses fixed `0-9%` through `90-100%` bands; occupied points use actual forecast means and observed Yes frequencies. The trend is the cumulative mean at each resolution. UI charts consume these results and cannot change selection or aggregation.
 
 ## 12. UI data flow
 
@@ -355,6 +367,8 @@ Dashboard refreshes at startup, whenever it is entered, and once per minute whil
 
 Predictions refreshes whenever it is entered and once per minute while visible so its Open and Locked views remain correct across local-date boundaries. Question search trims surrounding whitespace and uses Unicode-aware case-insensitive substring matching over Question only; v0.1 does not silently extend this to Background, rationales, or Journal bodies. Status choices are All, Open, Locked, Resolved, and Invalid. The single tag filter uses stable stored display spelling and combines with search and status using logical AND. Results show current probability, derived lifecycle status, associated tags, and latest forecast time, use explicit new-database and no-match empty states, and load current Prediction Detail before navigation. A failed initial query is not presented as an empty archive; a failed refresh retains earlier rows only with an explicit warning.
 
+Analytics refreshes whenever it is entered and on explicit refresh or tag change. Its scored count, mean Brier, reliability diagram, complete ten-row bin table, and cumulative trend always represent one common subset. Empty bins remain visible in the table with count zero but add no chart point. Both charts expose nonvisual summaries; the table makes calibration sparsity directly accessible. Empty All and empty filtered states are distinct, expected read failures are not shown as zero scores, and a failed refresh retains prior results only with a warning. Labels say lower Brier is better and explicitly avoid treating cumulative movement as proof of skill improvement.
+
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
 Dialog cancellation has no side effect. In particular, opening and closing a revision, Journal, correction, Resolution, or Invalidation dialog cannot create history or terminal state.
@@ -369,7 +383,7 @@ Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled r
 
 An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
 
-Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 7 upgrade is tested from version 6 with an existing Prediction, installs the 14-day singleton setting, and rolls back completely if a settings statement fails. Milestone 9 intentionally leaves the schema at version 7. Earlier version-specific migration tests remain pinned to their historical target. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 7 upgrade is tested from version 6 with an existing Prediction, installs the 14-day singleton setting, and rolls back completely if a settings statement fails. Milestones 9 and 10 intentionally leave the schema at version 7. Earlier version-specific migration tests remain pinned to their historical target. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
@@ -382,7 +396,7 @@ The backup implementation must use a SQLite-safe snapshot approach rather than c
 
 ## 15. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 7, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M7 retain coverage for metadata safety, immutable history, timeline/chart rendering, concurrency, terminal lifecycle, deletion, and restart behavior. M8 adds exact attention boundaries, overlapping Dashboard membership, threshold persistence, and v6-to-v7 migration safety. M9 adds complete lifecycle browsing, current-revision summaries, Unicode question and tag matching, combined filters, orphan-tag exclusion, deadline-derived status, empty/error states, keyboard navigation, visible-screen refresh, and application restart.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 7, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M9 retain their historical, lifecycle, Dashboard, and archive coverage. M10 adds Brier endpoints, unique contribution validation, captured-revision selection despite an adversarial later row, unresolved/Invalid exclusions, every calibration boundary including 0% and 100%, actual bin means, empty counts, stable equal-time trend order, tag-filter recomputation, chart geometry/accessibility, empty/error UI states, and restart persistence.
 
 Most behavior should be verified below the GUI:
 
@@ -411,8 +425,6 @@ Unexpected exceptions should not be converted into false success or empty data. 
 The product specification lists choices that must be made at their relevant milestones. Architecture must not settle them indirectly. They include:
 
 - visual design details;
-- calibration bins;
-- cumulative versus windowed Brier trend;
 - CSV layout; and
 - Windows packaging format.
 

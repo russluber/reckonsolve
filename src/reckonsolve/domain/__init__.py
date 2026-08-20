@@ -1,5 +1,6 @@
 """Domain values and rules for Reckonsolve."""
 
+from .analytics import AnalyticsSource, ScoringObservation
 from .attention import (
     DEFAULT_STALE_THRESHOLD_DAYS,
     MAX_STALE_THRESHOLD_DAYS,
@@ -43,6 +44,7 @@ __all__ = [
     "MAX_STALE_THRESHOLD_DAYS",
     "MIN_METADATA_DATE",
     "MIN_STALE_THRESHOLD_DAYS",
+    "AnalyticsSource",
     "AttentionValidationError",
     "BinaryOutcome",
     "DashboardPrediction",
@@ -67,6 +69,7 @@ __all__ = [
     "PredictionStatus",
     "PredictionValidationError",
     "Resolution",
+    "ScoringObservation",
     "TimelineEvent",
     "needs_attention",
     "ready_to_resolve",

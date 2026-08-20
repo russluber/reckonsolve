@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QSpinBox,
+    QTableWidget,
     QWidget,
 )
 
@@ -26,6 +27,8 @@ from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
+from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 
@@ -147,6 +150,76 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
     assert detail_status is not None
     assert detail_question.text() == invalid.question
     assert detail_status.text() == "INVALID"
+    second.close()
+
+
+def test_analytics_score_resolved_predictions_and_filters_after_restart(
+    qtbot,
+    tmp_path,
+) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    first = create_runtime(database_path=path)
+    qtbot.addWidget(first.window)
+    operations = PredictionOperations(first.database)
+    work = operations.create_prediction(
+        "Will the scored Work event occur?",
+        70,
+        tags=("Work",),
+    )
+    operations.resolve_prediction(
+        work.prediction_id,
+        BinaryOutcome.YES,
+        expected_revision_id=work.current_revision_id,
+        expected_metadata_version=work.metadata_version,
+    )
+    personal = operations.create_prediction(
+        "Will the scored Personal event occur?",
+        20,
+        tags=("Personal",),
+    )
+    operations.resolve_prediction(
+        personal.prediction_id,
+        BinaryOutcome.NO,
+        expected_revision_id=personal.current_revision_id,
+        expected_metadata_version=personal.metadata_version,
+    )
+    invalid = operations.create_prediction("Exclude this Invalid event?", 100)
+    operations.invalidate_prediction(
+        invalid.prediction_id,
+        expected_revision_id=invalid.current_revision_id,
+        expected_metadata_version=invalid.metadata_version,
+    )
+    first.close()
+
+    second = create_runtime(database_path=path)
+    qtbot.addWidget(second.window)
+    second.window.show()
+    second.window.navigate_to("Analytics")
+    count = second.window.findChild(QLabel, "analyticsScoredCount")
+    mean = second.window.findChild(QLabel, "analyticsMeanBrier")
+    calibration = second.window.findChild(CalibrationChart, "calibrationChart")
+    trend = second.window.findChild(BrierTrendChart, "brierTrendChart")
+    table = second.window.findChild(QTableWidget, "calibrationBinTable")
+    tag_filter = second.window.findChild(QComboBox, "analyticsTagFilter")
+    assert count is not None
+    assert mean is not None
+    assert calibration is not None
+    assert trend is not None
+    assert table is not None
+    assert tag_filter is not None
+    assert count.text() == "Scored predictions: 2"
+    assert mean.text() == "Mean Brier: 0.065"
+    assert sum(item.count for item in calibration.bins) == 2
+    assert len(trend.points) == 2
+    assert table.item(2, 1).text() == "1"
+    assert table.item(7, 1).text() == "1"
+
+    tag_filter.setCurrentIndex(tag_filter.findData("Work"))
+
+    assert count.text() == "Scored predictions: 1"
+    assert mean.text() == "Mean Brier: 0.090"
+    assert sum(item.count for item in calibration.bins) == 1
+    assert len(trend.points) == 1
     second.close()
 
 

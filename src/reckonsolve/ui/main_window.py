@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from reckonsolve.ui.analytics_screen import AnalyticsScreen
 from reckonsolve.ui.dashboard import AttentionSettingsScreen, DashboardScreen
 from reckonsolve.ui.prediction_browser import PredictionBrowserScreen
 from reckonsolve.ui.screens import (
@@ -47,7 +48,7 @@ _SCREEN_DEFINITIONS: tuple[tuple[str, str, str | None], ...] = (
     (
         "Analytics",
         "analytics",
-        "Forecast analytics are coming in a later milestone.",
+        None,
     ),
     (
         "Settings",
@@ -82,6 +83,7 @@ class MainWindow(QMainWindow):
         self._prediction_detail_screen = PredictionDetailScreen(operations)
         self._dashboard_screen = DashboardScreen(operations)
         self._prediction_browser_screen = PredictionBrowserScreen(operations)
+        self._analytics_screen = AnalyticsScreen(operations)
         self._settings_screen = AttentionSettingsScreen(operations)
 
         for screen_name, object_name, placeholder_text in _SCREEN_DEFINITIONS:
@@ -96,6 +98,8 @@ class MainWindow(QMainWindow):
                 screen = self._prediction_detail_screen
             elif screen_name == "Predictions":
                 screen = self._prediction_browser_screen
+            elif screen_name == "Analytics":
+                screen = self._analytics_screen
             elif screen_name == "Settings":
                 screen = self._settings_screen
             else:
@@ -161,6 +165,8 @@ class MainWindow(QMainWindow):
         elif self.current_screen_name == "Predictions":
             self._prediction_browser_screen.refresh()
             self._prediction_browser_screen.focus_search()
+        elif self.current_screen_name == "Analytics":
+            self._analytics_screen.refresh()
         elif self.current_screen_name == "Settings":
             self._settings_screen.refresh()
 

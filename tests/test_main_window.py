@@ -20,10 +20,17 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QSpinBox,
     QStackedWidget,
+    QTableWidget,
     QWidget,
 )
 from pytestqt.qtbot import QtBot
 
+from reckonsolve.analytics import (
+    AnalyticsSnapshot,
+    AnalyticsSource,
+    ScoringObservation,
+    summarize_analytics,
+)
 from reckonsolve.application.errors import (
     ApplicationError,
     ConcurrentPredictionUpdateError,
@@ -40,6 +47,7 @@ from reckonsolve.domain.predictions import (
     PredictionStatus,
 )
 from reckonsolve.ui import MainWindow
+from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 EXPECTED_SCREEN_NAMES = (
@@ -259,6 +267,9 @@ class FakePredictionOperations:
         self.browser_snapshot: PredictionBrowserSnapshot | None = None
         self.browser_error: ApplicationError | None = None
         self.browser_calls: list[tuple[str, PredictionStatus | None, str | None]] = []
+        self.analytics_source = AnalyticsSource(observations=(), available_tags=())
+        self.analytics_error: ApplicationError | None = None
+        self.analytics_calls: list[str | None] = []
         self.stale_threshold_days = 14
         self.threshold_get_calls = 0
         self.threshold_set_calls: list[int] = []
@@ -758,6 +769,12 @@ class FakePredictionOperations:
             ),
         )
 
+    def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
+        self.analytics_calls.append(tag)
+        if self.analytics_error is not None:
+            raise self.analytics_error
+        return summarize_analytics(self.analytics_source, tag=tag)
+
     def get_stale_threshold_days(self) -> int:
         self.threshold_get_calls += 1
         if self.threshold_error is not None:
@@ -810,18 +827,152 @@ def test_main_window_navigates_to_each_primary_screen(window: MainWindow) -> Non
         assert screen_stack.currentIndex() == expected_index
 
 
-def test_unimplemented_screens_remain_honest_placeholders(window: MainWindow) -> None:
-    placeholder_screens = ("Analytics",)
+def test_analytics_screen_replaces_the_placeholder(window: MainWindow) -> None:
+    window.navigate_to("Analytics")
 
-    for screen_name in placeholder_screens:
-        window.navigate_to(screen_name)
-        placeholder = _required_child(
-            window,
-            QLabel,
-            f"{_object_name_prefix(screen_name)}ScreenPlaceholder",
-        )
+    assert _required_child(window, QWidget, "analyticsScreen").objectName() == (
+        "analyticsScreen"
+    )
+    assert window.findChild(QLabel, "analyticsScreenPlaceholder") is None
 
-        assert any(word in placeholder.text() for word in ("coming", "will"))
+
+def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    window.navigate_to("Analytics")
+
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
+        "Scored predictions: 0"
+    )
+    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
+        "Mean Brier: Not available"
+    )
+    assert _required_child(window, QLabel, "analyticsEmpty").text() == (
+        "No scored predictions yet. Resolve a prediction to begin analytics."
+    )
+    assert _required_child(window, QWidget, "analyticsScrollArea").isHidden()
+
+
+def test_analytics_renders_summary_bins_counts_and_cumulative_series(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations()
+    operations.analytics_source = AnalyticsSource(
+        observations=(
+            _scoring_observation(1, 20, BinaryOutcome.NO, tags=("Work",)),
+            _scoring_observation(
+                2,
+                80,
+                BinaryOutcome.YES,
+                resolved_at=datetime(2026, 8, 21, 19, 30, tzinfo=UTC),
+                tags=("Personal",),
+            ),
+            _scoring_observation(
+                3,
+                90,
+                BinaryOutcome.NO,
+                resolved_at=datetime(2026, 8, 22, 19, 30, tzinfo=UTC),
+                tags=("Work",),
+            ),
+        ),
+        available_tags=("Personal", "Work"),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    window.navigate_to("Analytics")
+
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
+        "Scored predictions: 3"
+    )
+    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
+        "Mean Brier: 0.297"
+    )
+    tag_filter = _required_child(window, QComboBox, "analyticsTagFilter")
+    assert [tag_filter.itemText(index) for index in range(tag_filter.count())] == [
+        "All tags",
+        "Personal",
+        "Work",
+    ]
+    calibration = _required_child(window, CalibrationChart, "calibrationChart")
+    trend = _required_child(window, BrierTrendChart, "brierTrendChart")
+    table = _required_child(window, QTableWidget, "calibrationBinTable")
+    assert sum(item.count for item in calibration.bins) == 3
+    assert [point.scored_count for point in trend.points] == [1, 2, 3]
+    assert table.item(2, 0).text() == "20-29%"
+    assert table.item(2, 1).text() == "1"
+    assert table.item(2, 2).text() == "20%"
+    assert table.item(2, 3).text() == "0%"
+    assert table.item(4, 1).text() == "0"
+    assert table.item(4, 2).text() == "Not available"
+    assert not _required_child(window, QWidget, "analyticsScrollArea").isHidden()
+
+
+def test_analytics_tag_filter_recomputes_all_views_from_one_subset(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations()
+    operations.analytics_source = AnalyticsSource(
+        observations=(
+            _scoring_observation(1, 20, BinaryOutcome.NO, tags=("Work",)),
+            _scoring_observation(2, 80, BinaryOutcome.YES, tags=("Personal",)),
+            _scoring_observation(3, 20, BinaryOutcome.YES, tags=("Work",)),
+        ),
+        available_tags=("Personal", "Work"),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Analytics")
+    tag_filter = _required_child(window, QComboBox, "analyticsTagFilter")
+
+    tag_filter.setCurrentIndex(tag_filter.findData("Work"))
+
+    assert operations.analytics_calls[-1] == "Work"
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
+        "Scored predictions: 2"
+    )
+    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
+        "Mean Brier: 0.340"
+    )
+    calibration = _required_child(window, CalibrationChart, "calibrationChart")
+    trend = _required_child(window, BrierTrendChart, "brierTrendChart")
+    assert sum(item.count for item in calibration.bins) == 2
+    assert len(trend.points) == 2
+
+
+def test_analytics_reports_initial_and_stale_refresh_errors(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    operations.analytics_error = ApplicationError("Scores could not be loaded.")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    window.navigate_to("Analytics")
+    error = _required_child(window, QLabel, "analyticsError")
+    assert error.text() == "Analytics unavailable. Scores could not be loaded."
+    assert _required_child(window, QWidget, "analyticsBrierSummary").isHidden()
+
+    operations.analytics_error = None
+    operations.analytics_source = AnalyticsSource(
+        observations=(_scoring_observation(1, 60, BinaryOutcome.YES),),
+        available_tags=(),
+    )
+    window.navigate_to("New Prediction")
+    window.navigate_to("Analytics")
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
+        "Scored predictions: 1"
+    )
+    operations.analytics_error = ApplicationError("Refresh failed.")
+    window.navigate_to("New Prediction")
+    window.navigate_to("Analytics")
+
+    assert error.text() == (
+        "Analytics could not refresh; showing the last loaded results. Refresh failed."
+    )
+    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
+        "Mean Brier: 0.160"
+    )
 
 
 def test_prediction_browser_renders_all_results_and_filter_choices(
@@ -3770,6 +3921,26 @@ def _required_child[WidgetType: QWidget](
     return child
 
 
+def _scoring_observation(
+    identifier: int,
+    probability_percent: int,
+    outcome: BinaryOutcome,
+    *,
+    resolved_at: datetime = datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+    tags: tuple[str, ...] = (),
+) -> ScoringObservation:
+    return ScoringObservation(
+        prediction_id=identifier,
+        question=f"Prediction {identifier}",
+        resolution_id=identifier,
+        resolved_at=resolved_at,
+        scoring_revision_id=identifier,
+        probability_percent=probability_percent,
+        outcome=outcome,
+        tags=tags,
+    )
+
+
 def _open_edit_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
     window.show()
     window.navigate_to("Prediction Detail")
@@ -3862,8 +4033,3 @@ def _click_correction_button(
     )
     assert dialog is not None
     return dialog
-
-
-def _object_name_prefix(screen_name: str) -> str:
-    first_word, *remaining_words = screen_name.split()
-    return first_word.lower() + "".join(remaining_words)

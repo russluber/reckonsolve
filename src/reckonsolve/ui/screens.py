@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from reckonsolve.analytics import AnalyticsSnapshot
 from reckonsolve.application.errors import (
     ApplicationError,
     MeaningChangeConfirmationRequired,
@@ -269,6 +270,9 @@ class PredictionOperations(Protocol):
         tag: str | None = None,
     ) -> PredictionBrowserSnapshot:
         """Return filtered prediction summaries and available tags."""
+
+    def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
+        """Return exactly-once scoring analytics for all or one tag."""
 
     def get_stale_threshold_days(self) -> int:
         """Return the persisted Needs Attention threshold."""

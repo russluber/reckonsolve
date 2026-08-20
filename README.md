@@ -2,7 +2,7 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its searchable prediction-archive milestone, but analytics and data-management workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its scoring-analytics milestone, but backup, export, and packaging workflows are still being built and it is not ready for normal use.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
@@ -18,7 +18,9 @@ The Dashboard now separates active work into overlapping Open, Needs Attention, 
 
 The Predictions screen now browses the complete archive, including Resolved and Invalid history. It supports case-insensitive question-text search plus combined lifecycle-status and tag filters, shows each result's current probability and status, and opens a freshly queried Prediction Detail. Search deliberately does not inspect Background, rationales, or Journal text in v0.1.
 
-The Analytics screen remains a placeholder. Scoring analytics, backup, export, broader Settings tools, and Windows packaging are reserved for later milestones.
+The Analytics screen scores each Resolved prediction exactly once using the ForecastRevision captured when it resolved; Open, Locked, and Invalid predictions are excluded. It shows the scored count and mean Brier score, a ten-bin calibration diagram with the perfect-calibration reference and visible bin counts, and clearly labeled cumulative mean Brier by resolution time. Lower Brier is better, while movement over time is not presented as proof of skill improvement. One tag filter recomputes all three views over the same subset.
+
+Backup, export, broader Settings tools, and Windows packaging are reserved for later milestones.
 
 ## Documentation
 

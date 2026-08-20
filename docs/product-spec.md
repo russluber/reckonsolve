@@ -730,17 +730,19 @@ Requirements:
 - exclude Invalid and unresolved predictions; and
 - use the same final-eligible-revision rule as Brier scoring.
 
-The exact binning scheme is an implementation choice that must be documented and tested.
+v0.1 uses ten fixed probability bins: `0-9%`, `10-19%`, continuing in ten-point bands through `80-89%`, and `90-100%`. A forecast belongs to exactly one bin; 0% is included in the first and 100% in the last. Each occupied bin is plotted at its actual mean forecast probability on the horizontal axis and its observed Yes frequency on the vertical axis, rather than at an invented bin midpoint. Bin counts must be visible or otherwise directly discoverable, including zero counts for empty bins; empty bins do not create fake calibration observations or chart points.
+
+The bins remain fixed when filtering so views stay comparable. They group observations only for calibration display and never round, rewrite, or constrain the underlying whole-number forecasts.
 
 ### 18.3 Brier performance over time
 
-Display forecasting performance over resolution time using a clearly labeled cumulative or rolling measure.
+v0.1 displays **Cumulative mean Brier by resolution time**. Resolved predictions are ordered by their canonical resolution instant, with stable Resolution-record order breaking timestamp ties. The first point is the first scored prediction's Brier score; every later point is the mean Brier of all predictions resolved up to and including that point. The series begins with one scored prediction rather than waiting for an arbitrary rolling-window size.
 
-The first implementation may use cumulative mean Brier if that is simplest, but the label must say what is being calculated. Do not imply that movement proves skill improvement: forecast difficulty and composition may also change.
+The label must say exactly what is being calculated, state that lower is better, and avoid implying that movement proves skill improvement: forecast difficulty and composition may also change.
 
 ### 18.4 Filtering
 
-Analytics should support All predictions and tag-filtered subsets if feasible within v0.1 without compromising core correctness.
+Analytics supports All predictions and one tag-filtered subset at a time. The same filter is applied before the Brier summary, calibration bins, and cumulative series are calculated, so all three views describe the same scored set. Tag filtering must not alter the one-final-eligible-revision selection rule.
 
 ### 18.5 Not in v0.1
 
@@ -978,8 +980,9 @@ Acceptance demonstration:
 ### Milestone 10: Analytics
 
 - Brier scoring.
-- Reliability diagram.
-- Clearly labeled Brier performance over time.
+- Ten-bin reliability diagram with actual bin means, observed frequencies, and discoverable counts.
+- Clearly labeled cumulative mean Brier by resolution time.
+- All-predictions and single-tag analytical subsets.
 - Tests for final-eligible-revision selection and exclusions.
 
 ### Milestone 11: Backup and CSV export
@@ -1057,8 +1060,6 @@ For repeated displayed probabilities, cover a valid nonconsecutive return such a
 The application and project name is resolved as **Reckonsolve**. Metadata-edit safety, probability input, and time handling are resolved in Sections 8.2, 9.2, and 24. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
 
 - precise visual design system;
-- exact calibration binning scheme;
-- cumulative versus windowed Brier trend for the first implementation;
 - exact CSV export layout; and
 - installer/packaging format.
 

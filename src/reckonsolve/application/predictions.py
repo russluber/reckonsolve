@@ -3,7 +3,9 @@
 from dataclasses import replace
 from datetime import date, datetime, tzinfo
 
+from reckonsolve.analytics import AnalyticsSnapshot, summarize_analytics
 from reckonsolve.clock import Clock, SystemClock, as_utc
+from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
 from reckonsolve.data.predictions import (
     ForecastContextChangedError,
@@ -78,6 +80,7 @@ class PredictionOperations:
         local_timezone: tzinfo | None = None,
     ) -> None:
         self._repository = PredictionRepository(database)
+        self._analytics_repository = AnalyticsRepository(database)
         self._settings_repository = SettingsRepository(database)
         self._clock = SystemClock() if clock is None else clock
         self._local_timezone = local_timezone
@@ -601,6 +604,19 @@ class PredictionOperations:
                     or tag_key in {item.casefold() for item in prediction.tags}
                 )
             ),
+        )
+
+    def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
+        """Return exactly-once scoring analytics for all or one tag subset."""
+
+        if tag is not None and not isinstance(tag, str):
+            raise ValidationError(
+                "The analytics tag filter is invalid.",
+                field="tag",
+            )
+        return summarize_analytics(
+            self._analytics_repository.get_source(),
+            tag=tag,
         )
 
     def get_stale_threshold_days(self) -> int:
