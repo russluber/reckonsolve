@@ -354,7 +354,7 @@ v0.1 provides no operation or normal UI action to delete an individual journal e
 
 ### 8.4 Resolved predictions
 
-Normal forecast revisions are disabled after resolution. Resolution correction may be supported with a deliberate confirmation flow, but casual toggling of an outcome is not acceptable.
+Normal forecast revisions are disabled after resolution. Resolution and invalidation are deliberate, one-way terminal decisions in v0.1. The interface must clearly describe that finality before saving either action. v0.1 provides no reopen, outcome-toggle, or terminal-record correction flow; adding one later requires a separately designed historically honest workflow rather than casual status editing.
 
 ---
 
@@ -766,9 +766,19 @@ Invalidation is appropriate when:
 - the event ceases to make sense; or
 - the prediction is genuinely malformed after meaningful history exists.
 
-The normal UI should encourage Invalid rather than Delete once a prediction has meaningful history. Because this is the user's private local database, v0.1 may use warnings and friction rather than absolute prohibition.
+The normal v0.1 UI permits permanent deletion only for an untouched Open prediction. For this rule, untouched means all of the following remain true at the moment of deletion:
 
-Resolved scored predictions should not be casually deletable from the normal interface. The purpose is to protect honest calibration statistics, not to deny the user ownership of their data.
+- the persisted and derived status is Open;
+- only the required initial ForecastRevision exists;
+- prediction metadata has not been changed after creation;
+- no Journal entry exists; and
+- no Definition history record exists.
+
+Initial rationale, metadata, and tags supplied during atomic creation do not by themselves make the prediction ineligible for deletion. A Forecast Deadline that has since passed does make it ineligible because the prediction is then Locked.
+
+Deletion requires an explicit permanent-action confirmation and rechecks eligibility inside the deletion transaction. Once a prediction is Locked, revised, edited, journaled, Resolved, or Invalid, the normal application rejects deletion. For a nonterminal prediction with meaningful history, the interface directs the user toward **Mark Invalid** so the record is preserved but excluded from scoring.
+
+Resolved and Invalid predictions are never deletable from the normal v0.1 interface. The purpose is to protect honest history and calibration statistics, not to deny the user ownership of their underlying local database.
 
 Deletion behavior must be transactional and must not leave orphan records.
 
@@ -947,7 +957,8 @@ Acceptance demonstration:
 
 - Implement Open, Locked, Resolved, and Invalid behavior.
 - Resolve Yes/No with optional notes and postmortem.
-- Implement deliberate Delete versus Invalid behavior.
+- Make resolution and invalidation deliberate one-way v0.1 terminal decisions.
+- Permanently delete only explicitly confirmed, transaction-current untouched Open predictions; direct meaningful nonterminal history toward Invalid instead.
 
 ### Milestone 8: Dashboard
 
@@ -1020,6 +1031,7 @@ Highest-risk behavior should receive automated tests before visual polish:
 - current-revision selection;
 - lock-boundary behavior;
 - resolution and invalidation transitions;
+- immutable terminal records and rejection of repeated or conflicting terminal actions;
 - final eligible forecast selection for scoring;
 - exclusion of Invalid and unresolved predictions;
 - Brier calculations;
@@ -1044,7 +1056,6 @@ The application and project name is resolved as **Reckonsolve**. Metadata-edit s
 - default stale threshold;
 - exact calibration binning scheme;
 - cumulative versus windowed Brier trend for the first implementation;
-- precise deletion restrictions after meaningful history exists;
 - exact CSV export layout; and
 - installer/packaging format.
 

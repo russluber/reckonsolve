@@ -2,7 +2,7 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its probability-history milestone, but several forecasting workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its lifecycle and resolution milestone, but browsing, analytics, and data-management workflows are still being built and it is not ready for normal use.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
@@ -12,7 +12,9 @@ Prediction Detail also plots every saved forecast revision in a probability-hist
 
 Question, Resolution Criteria, and Forecast Deadline edits require tailored confirmation and remain visible in a collapsed Definition history. A Forecast Deadline is inclusive, so normal revisions stop after it passes while new Journal entries remain available. Resolved and Invalid predictions reject new entries, but existing entries can still receive audited corrections. Unchanged probabilities are not recorded as revisions; reasoning that leaves the probability unchanged belongs in the Journal. All of this history persists across restarts.
 
-The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. Resolution, invalidation, browsing, analytics, backup, export, and Windows packaging are reserved for later milestones.
+Open and Locked predictions can now be resolved Yes or No or marked Invalid. Resolution captures the exact final scoring revision plus optional factual notes and a reflective postmortem; invalidation preserves an optional reason and excludes the prediction from future scoring. Both are deliberate, immutable terminal decisions in v0.1. An untouched Open duplicate or test record can instead be permanently deleted after confirmation. Once a prediction is Locked, revised, edited, journaled, Resolved, or Invalid, its normal Delete action is unavailable and meaningful nonterminal history is directed toward Invalid.
+
+The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. Browsing, attention surfacing, scoring analytics, backup, export, and Windows packaging are reserved for later milestones.
 
 ## Documentation
 

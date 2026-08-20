@@ -41,7 +41,7 @@ def test_migration_five_preserves_v4_history_and_adds_empty_journal_tables(
     prediction_id, revision_id = _insert_prediction(v4)
     v4.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:5])
 
     assert upgraded.schema_version == 5
     with upgraded.transaction() as connection:
@@ -164,7 +164,10 @@ def test_journal_anchor_must_belong_to_prediction_and_be_current(tmp_path) -> No
 def test_terminal_predictions_reject_raw_new_entries_but_accept_corrections(
     tmp_path,
 ) -> None:
-    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    database = Database.open(
+        tmp_path / "reckonsolve.sqlite3",
+        migrations=MIGRATIONS[:5],
+    )
     prediction_id, revision_id = _insert_prediction(database)
     with database.transaction() as connection:
         entry_id = connection.execute(

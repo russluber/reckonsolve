@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QSpinBox,
     QVBoxLayout,
@@ -34,6 +35,7 @@ from reckonsolve.application.errors import (
 from reckonsolve.domain.predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
+    BinaryOutcome,
     DefinitionChange,
     PredictionStatus,
 )
@@ -58,6 +60,32 @@ class PredictionSnapshot(Protocol):
     current_revision_id: int
     current_revision_sequence: int
     current_rationale: str | None
+    resolution: ResolutionSnapshot | None
+    invalidation: InvalidationSnapshot | None
+    deletion_allowed: bool
+
+
+class ResolutionSnapshot(Protocol):
+    """Read-only immutable resolution data shown on Prediction Detail."""
+
+    resolution_id: int
+    prediction_id: int
+    outcome: BinaryOutcome
+    resolved_at: datetime
+    scoring_revision_id: int
+    scoring_revision_sequence: int
+    scoring_probability_percent: int
+    resolution_notes: str | None
+    postmortem: str | None
+
+
+class InvalidationSnapshot(Protocol):
+    """Read-only immutable invalidation data shown on Prediction Detail."""
+
+    invalidation_id: int
+    prediction_id: int
+    invalidated_at: datetime
+    reason: str | None
 
 
 class ForecastRevisionSnapshot(Protocol):
@@ -162,6 +190,38 @@ class PredictionOperations(Protocol):
         expected_correction_id: int | None,
     ) -> JournalTimelineSnapshot:
         """Append a transparent correction without replacing earlier text."""
+
+    def resolve_prediction(
+        self,
+        prediction_id: int,
+        outcome: BinaryOutcome,
+        *,
+        resolution_notes: str | None = None,
+        postmortem: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> PredictionSnapshot:
+        """Persist a terminal outcome and the exact scoring forecast."""
+
+    def invalidate_prediction(
+        self,
+        prediction_id: int,
+        *,
+        reason: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> PredictionSnapshot:
+        """Preserve a prediction as terminal and excluded from scoring."""
+
+    def delete_prediction(
+        self,
+        prediction_id: int,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        confirm_permanent_deletion: bool = False,
+    ) -> PredictionSnapshot | None:
+        """Permanently delete an explicitly confirmed untouched Open prediction."""
 
     def list_timeline(
         self,
@@ -1125,6 +1185,275 @@ class CorrectJournalEntryDialog(QDialog):
         self.form_error.setHidden(True)
 
 
+class ResolvePredictionDialog(QDialog):
+    """Record one deliberate Yes/No terminal outcome."""
+
+    prediction_resolved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: PredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("resolvePredictionDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Resolve Prediction")
+        self.setModal(True)
+        self.resize(570, 520)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision_id
+        self._expected_metadata_version = prediction.metadata_version
+
+        title = QLabel("Resolve Prediction", self)
+        title.setObjectName("resolvePredictionTitle")
+        explanation = QLabel(
+            "Resolution records a final Yes/No outcome and the current forecast "
+            "for scoring. This terminal decision cannot be reopened or changed "
+            "in v0.1.",
+            self,
+        )
+        explanation.setObjectName("resolvePredictionExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+
+        reviewed = QLabel(
+            f"Scoring forecast: {prediction.probability_percent}% "
+            f"(revision {prediction.current_revision_sequence})",
+            self,
+        )
+        reviewed.setObjectName("resolveScoringForecast")
+        reviewed.setTextFormat(Qt.TextFormat.PlainText)
+
+        outcome_label = QLabel("Outcome", self)
+        self.outcome_yes = QRadioButton("Yes", self)
+        self.outcome_yes.setObjectName("resolutionOutcomeYes")
+        self.outcome_no = QRadioButton("No", self)
+        self.outcome_no.setObjectName("resolutionOutcomeNo")
+        outcome_row = QWidget(self)
+        outcome_layout = QHBoxLayout(outcome_row)
+        outcome_layout.setContentsMargins(0, 0, 0, 0)
+        outcome_layout.addWidget(self.outcome_yes)
+        outcome_layout.addWidget(self.outcome_no)
+        outcome_layout.addStretch()
+
+        notes_label = QLabel("Resolution notes (optional)", self)
+        self.notes_input = QPlainTextEdit(self)
+        self.notes_input.setObjectName("resolutionNotesInput")
+        self.notes_input.setAccessibleName("Resolution notes")
+        self.notes_input.setPlaceholderText(
+            "Record the factual source or evidence that determined the outcome."
+        )
+        self.notes_input.setTabChangesFocus(True)
+        notes_label.setBuddy(self.notes_input)
+
+        postmortem_label = QLabel("Postmortem (optional)", self)
+        self.postmortem_input = QPlainTextEdit(self)
+        self.postmortem_input.setObjectName("resolutionPostmortemInput")
+        self.postmortem_input.setAccessibleName("Postmortem")
+        self.postmortem_input.setPlaceholderText(
+            "Reflect on what your reasoning or updates got right or wrong."
+        )
+        self.postmortem_input.setTabChangesFocus(True)
+        postmortem_label.setBuddy(self.postmortem_input)
+
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("resolvePredictionError")
+        self.form_error.setAccessibleName("Resolve prediction error")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        self.buttons.setObjectName("resolvePredictionButtons")
+        save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        save_button.setObjectName("confirmResolvePredictionButton")
+        save_button.setText("Resolve")
+        save_button.setEnabled(False)
+        cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel_button.setObjectName("cancelResolvePredictionButton")
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addWidget(reviewed)
+        layout.addSpacing(8)
+        layout.addWidget(outcome_label)
+        layout.addWidget(outcome_row)
+        layout.addWidget(notes_label)
+        layout.addWidget(self.notes_input, 1)
+        layout.addWidget(postmortem_label)
+        layout.addWidget(self.postmortem_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.outcome_yes.toggled.connect(
+            lambda _checked: save_button.setEnabled(
+                self.outcome_yes.isChecked() or self.outcome_no.isChecked()
+            )
+        )
+        self.outcome_no.toggled.connect(
+            lambda _checked: save_button.setEnabled(
+                self.outcome_yes.isChecked() or self.outcome_no.isChecked()
+            )
+        )
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
+        self.notes_input.installEventFilter(self._submit_key_filter)
+        self.postmortem_input.installEventFilter(self._submit_key_filter)
+        self.setTabOrder(self.outcome_yes, self.outcome_no)
+        self.setTabOrder(self.outcome_no, self.notes_input)
+        self.setTabOrder(self.notes_input, self.postmortem_input)
+        self.setTabOrder(self.postmortem_input, save_button)
+        self.outcome_yes.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def submit(self) -> None:
+        """Save exactly one selected outcome; expected failures remain visible."""
+
+        self._hide_error()
+        if self.outcome_yes.isChecked():
+            outcome = BinaryOutcome.YES
+        elif self.outcome_no.isChecked():
+            outcome = BinaryOutcome.NO
+        else:
+            self._show_error("Choose Yes or No before resolving this prediction.")
+            return
+        try:
+            prediction = self._operations.resolve_prediction(
+                self._prediction_id,
+                outcome,
+                resolution_notes=self.notes_input.toPlainText(),
+                postmortem=self.postmortem_input.toPlainText(),
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.prediction_resolved.emit(prediction)
+        self.accept()
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
+
+
+class MarkInvalidDialog(QDialog):
+    """Record one deliberate terminal Invalid decision."""
+
+    prediction_invalidated = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: PredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("markInvalidDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Mark Prediction Invalid")
+        self.setModal(True)
+        self.resize(560, 360)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision_id
+        self._expected_metadata_version = prediction.metadata_version
+
+        title = QLabel("Mark Prediction Invalid", self)
+        title.setObjectName("markInvalidTitle")
+        explanation = QLabel(
+            "Invalid keeps the prediction and its complete history but excludes it "
+            "from scoring. This terminal decision cannot be reopened in v0.1.",
+            self,
+        )
+        explanation.setObjectName("markInvalidExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+
+        reason_label = QLabel("Reason (optional)", self)
+        self.reason_input = QPlainTextEdit(self)
+        self.reason_input.setObjectName("invalidationReasonInput")
+        self.reason_input.setAccessibleName("Invalidation reason")
+        self.reason_input.setPlaceholderText(
+            "For example: the event was cancelled or the criteria became unresolvable."
+        )
+        self.reason_input.setTabChangesFocus(True)
+        reason_label.setBuddy(self.reason_input)
+
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("markInvalidError")
+        self.form_error.setAccessibleName("Mark invalid error")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        self.buttons.setObjectName("markInvalidButtons")
+        save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        save_button.setObjectName("confirmMarkInvalidButton")
+        save_button.setText("Mark Invalid")
+        save_button.setDefault(True)
+        cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel_button.setObjectName("cancelMarkInvalidButton")
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addSpacing(8)
+        layout.addWidget(reason_label)
+        layout.addWidget(self.reason_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
+        self.reason_input.installEventFilter(self._submit_key_filter)
+        self.setTabOrder(self.reason_input, save_button)
+        self.reason_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def submit(self) -> None:
+        """Save one Invalid record; expected failures remain editable."""
+
+        self._hide_error()
+        try:
+            prediction = self._operations.invalidate_prediction(
+                self._prediction_id,
+                reason=self.reason_input.toPlainText(),
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.prediction_invalidated.emit(prediction)
+        self.accept()
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
+
+
 class PredictionDetailScreen(QWidget):
     """Display the current prediction definition and safe metadata editing."""
 
@@ -1141,6 +1470,8 @@ class PredictionDetailScreen(QWidget):
         self._revision_dialog: ReviseForecastDialog | None = None
         self._journal_dialog: AddJournalEntryDialog | None = None
         self._journal_correction_dialog: CorrectJournalEntryDialog | None = None
+        self._resolution_dialog: ResolvePredictionDialog | None = None
+        self._invalidation_dialog: MarkInvalidDialog | None = None
         self._chart_prediction_id: int | None = None
 
         title = QLabel("Prediction Detail", self)
@@ -1215,15 +1546,18 @@ class PredictionDetailScreen(QWidget):
         self.add_journal_entry_button.setObjectName("addJournalEntryButton")
         self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
         action_layout.addWidget(self.add_journal_entry_button)
-        for label, object_name in (
-            ("Resolve", "resolvePredictionButton"),
-            ("Mark Invalid", "markInvalidButton"),
-        ):
-            button = QPushButton(label, action_row)
-            button.setObjectName(object_name)
-            button.setEnabled(False)
-            button.setToolTip("This action is coming in a later milestone.")
-            action_layout.addWidget(button)
+        self.resolve_button = QPushButton("Resolve", action_row)
+        self.resolve_button.setObjectName("resolvePredictionButton")
+        self.resolve_button.clicked.connect(self.open_resolve_prediction)
+        action_layout.addWidget(self.resolve_button)
+        self.mark_invalid_button = QPushButton("Mark Invalid", action_row)
+        self.mark_invalid_button.setObjectName("markInvalidButton")
+        self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
+        action_layout.addWidget(self.mark_invalid_button)
+        self.delete_button = QPushButton("Delete", action_row)
+        self.delete_button.setObjectName("deletePredictionButton")
+        self.delete_button.clicked.connect(self.delete_prediction)
+        action_layout.addWidget(self.delete_button)
         action_layout.addStretch()
 
         self.forecast_deadline_row, self.forecast_deadline = _detail_value_row(
@@ -1252,6 +1586,66 @@ class PredictionDetailScreen(QWidget):
                 self.detail_content,
             )
         )
+
+        self.resolution_section = QGroupBox("RESOLUTION", self.detail_content)
+        self.resolution_section.setObjectName("predictionResolutionSection")
+        resolution_layout = QVBoxLayout(self.resolution_section)
+        self.resolution_outcome = QLabel("", self.resolution_section)
+        self.resolution_outcome.setObjectName("predictionResolutionOutcome")
+        self.resolution_outcome.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_resolved_at = QLabel("", self.resolution_section)
+        self.resolution_resolved_at.setObjectName("predictionResolvedAt")
+        self.resolution_resolved_at.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_scoring_forecast = QLabel("", self.resolution_section)
+        self.resolution_scoring_forecast.setObjectName(
+            "predictionResolutionScoringForecast"
+        )
+        self.resolution_scoring_forecast.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_notes_heading = QLabel(
+            "RESOLUTION NOTES",
+            self.resolution_section,
+        )
+        self.resolution_notes_heading.setObjectName("predictionResolutionNotesHeading")
+        self.resolution_notes = QLabel("", self.resolution_section)
+        self.resolution_notes.setObjectName("predictionResolutionNotes")
+        self.resolution_notes.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_notes.setWordWrap(True)
+        self.postmortem_heading = QLabel("POSTMORTEM", self.resolution_section)
+        self.postmortem_heading.setObjectName("predictionPostmortemHeading")
+        self.postmortem = QLabel("", self.resolution_section)
+        self.postmortem.setObjectName("predictionPostmortem")
+        self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
+        self.postmortem.setWordWrap(True)
+        resolution_layout.addWidget(self.resolution_outcome)
+        resolution_layout.addWidget(self.resolution_resolved_at)
+        resolution_layout.addWidget(self.resolution_scoring_forecast)
+        resolution_layout.addWidget(self.resolution_notes_heading)
+        resolution_layout.addWidget(self.resolution_notes)
+        resolution_layout.addWidget(self.postmortem_heading)
+        resolution_layout.addWidget(self.postmortem)
+        self.resolution_section.setHidden(True)
+
+        self.invalidation_section = QGroupBox("INVALID", self.detail_content)
+        self.invalidation_section.setObjectName("predictionInvalidationSection")
+        invalidation_layout = QVBoxLayout(self.invalidation_section)
+        self.invalidated_at = QLabel("", self.invalidation_section)
+        self.invalidated_at.setObjectName("predictionInvalidatedAt")
+        self.invalidated_at.setTextFormat(Qt.TextFormat.PlainText)
+        self.invalidation_reason_heading = QLabel(
+            "REASON",
+            self.invalidation_section,
+        )
+        self.invalidation_reason_heading.setObjectName(
+            "predictionInvalidationReasonHeading"
+        )
+        self.invalidation_reason = QLabel("", self.invalidation_section)
+        self.invalidation_reason.setObjectName("predictionInvalidationReason")
+        self.invalidation_reason.setTextFormat(Qt.TextFormat.PlainText)
+        self.invalidation_reason.setWordWrap(True)
+        invalidation_layout.addWidget(self.invalidated_at)
+        invalidation_layout.addWidget(self.invalidation_reason_heading)
+        invalidation_layout.addWidget(self.invalidation_reason)
+        self.invalidation_section.setHidden(True)
 
         self.definition_history = QGroupBox("Definition history", self.detail_content)
         self.definition_history.setObjectName("definitionHistoryGroup")
@@ -1307,6 +1701,8 @@ class PredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.expected_resolution_row)
         detail_layout.addWidget(self.background_section)
         detail_layout.addWidget(self.resolution_criteria_section)
+        detail_layout.addWidget(self.resolution_section)
+        detail_layout.addWidget(self.invalidation_section)
         detail_layout.addWidget(self.definition_history)
         detail_layout.addSpacing(16)
         detail_layout.addWidget(timeline_label)
@@ -1358,6 +1754,8 @@ class PredictionDetailScreen(QWidget):
             self.detail_content.setHidden(True)
             self.empty_state.setHidden(False)
             self.definition_history.setHidden(True)
+            self.resolution_section.setHidden(True)
+            self.invalidation_section.setHidden(True)
             return
 
         self.question.setText(prediction.question)
@@ -1388,9 +1786,55 @@ class PredictionDetailScreen(QWidget):
                 f"New Journal entries are not allowed while this prediction is "
                 f"{prediction.status.value}. Existing entries can still be corrected."
             )
+        terminal_action_allowed = prediction.status in (
+            PredictionStatus.OPEN,
+            PredictionStatus.LOCKED,
+        )
+        self.resolve_button.setEnabled(terminal_action_allowed)
+        self.mark_invalid_button.setEnabled(terminal_action_allowed)
+        if terminal_action_allowed:
+            self.resolve_button.setToolTip(
+                "Record a final Yes or No outcome and capture the scoring forecast."
+            )
+            self.mark_invalid_button.setToolTip(
+                "Preserve this prediction but exclude it from scoring."
+            )
+        else:
+            terminal_tooltip = (
+                f"This prediction is already {prediction.status.value}; terminal "
+                "decisions cannot be changed in v0.1."
+            )
+            self.resolve_button.setToolTip(terminal_tooltip)
+            self.mark_invalid_button.setToolTip(terminal_tooltip)
+        delete_allowed = (
+            prediction.status is PredictionStatus.OPEN and prediction.deletion_allowed
+        )
+        self.delete_button.setEnabled(delete_allowed)
+        if delete_allowed:
+            self.delete_button.setToolTip(
+                "Permanently delete this untouched Open prediction."
+            )
+        elif prediction.status is PredictionStatus.LOCKED:
+            self.delete_button.setToolTip(
+                "Locked predictions are preserved. Use Mark Invalid when appropriate."
+            )
+        elif prediction.status in (
+            PredictionStatus.RESOLVED,
+            PredictionStatus.INVALID,
+        ):
+            self.delete_button.setToolTip(
+                "Terminal prediction history cannot be deleted from the normal "
+                "interface."
+            )
+        else:
+            self.delete_button.setToolTip(
+                "Predictions with meaningful history are preserved. Use Mark Invalid "
+                "when appropriate."
+            )
         self.tags.setText("  ".join(f"#{tag}" for tag in prediction.tags))
         self.tags.setHidden(not prediction.tags)
         self._show_optional_metadata(prediction)
+        self._show_terminal_information(prediction)
         self.empty_state.setHidden(True)
         self.detail_content.setHidden(False)
         self._load_definition_history(prediction.prediction_id)
@@ -1476,6 +1920,94 @@ class PredictionDetailScreen(QWidget):
         dialog.finished.connect(self._journal_dialog_finished)
         dialog.open()
 
+    def open_resolve_prediction(self) -> None:
+        """Refresh reviewed context before opening the terminal resolution form."""
+
+        if self._prediction is None:
+            return
+        try:
+            prediction = self._operations.get_prediction(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(prediction)
+        if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
+            self._show_error(
+                f"This prediction is already {prediction.status.value} and cannot "
+                "be resolved again."
+            )
+            return
+        dialog = ResolvePredictionDialog(self._operations, prediction, self)
+        self._resolution_dialog = dialog
+        dialog.prediction_resolved.connect(self.show_prediction)
+        dialog.finished.connect(self._resolution_dialog_finished)
+        dialog.open()
+
+    def open_mark_invalid(self) -> None:
+        """Refresh reviewed context before opening the terminal Invalid form."""
+
+        if self._prediction is None:
+            return
+        try:
+            prediction = self._operations.get_prediction(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(prediction)
+        if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
+            self._show_error(
+                f"This prediction is already {prediction.status.value} and cannot "
+                "be marked Invalid again."
+            )
+            return
+        dialog = MarkInvalidDialog(self._operations, prediction, self)
+        self._invalidation_dialog = dialog
+        dialog.prediction_invalidated.connect(self.show_prediction)
+        dialog.finished.connect(self._invalidation_dialog_finished)
+        dialog.open()
+
+    def delete_prediction(self) -> None:
+        """Confirm and permanently delete only refreshed untouched Open state."""
+
+        if self._prediction is None:
+            return
+        try:
+            prediction = self._operations.get_prediction(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(prediction)
+        if (
+            not prediction.deletion_allowed
+            or prediction.status is not PredictionStatus.OPEN
+        ):
+            self._show_error(
+                "Only an untouched Open prediction can be deleted. Use Mark Invalid "
+                "to preserve meaningful history outside scoring."
+            )
+            return
+        answer = QMessageBox.warning(
+            self,
+            "Permanently delete prediction?",
+            "This permanently deletes the prediction and its initial forecast. "
+            "This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            latest = self._operations.delete_prediction(
+                prediction.prediction_id,
+                expected_revision_id=prediction.current_revision_id,
+                expected_metadata_version=prediction.metadata_version,
+                confirm_permanent_deletion=True,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(latest)
+
     def open_correct_journal_entry(self, entry: JournalTimelineSnapshot) -> None:
         """Refresh the Journal entry before opening its correction form."""
         try:
@@ -1516,6 +2048,12 @@ class PredictionDetailScreen(QWidget):
     def _journal_correction_dialog_finished(self, _result: int) -> None:
         self._journal_correction_dialog = None
 
+    def _resolution_dialog_finished(self, _result: int) -> None:
+        self._resolution_dialog = None
+
+    def _invalidation_dialog_finished(self, _result: int) -> None:
+        self._invalidation_dialog = None
+
     def _journal_saved(self, _result: object) -> None:
         if self._prediction is not None:
             self.show_prediction(self._prediction)
@@ -1534,6 +2072,43 @@ class PredictionDetailScreen(QWidget):
         self.background_section.setHidden(not prediction.background)
         self.resolution_criteria.setText(prediction.resolution_criteria or "")
         self.resolution_criteria_section.setHidden(not prediction.resolution_criteria)
+
+    def _show_terminal_information(self, prediction: PredictionSnapshot) -> None:
+        """Render immutable terminal facts without inventing absent notes."""
+
+        resolution = prediction.resolution
+        self.resolution_section.setHidden(resolution is None)
+        if resolution is not None:
+            self.resolution_outcome.setText(
+                f"Outcome: {resolution.outcome.value.capitalize()}"
+            )
+            self.resolution_resolved_at.setText(
+                f"Resolved: {_format_local_timestamp(resolution.resolved_at)}"
+            )
+            self.resolution_scoring_forecast.setText(
+                f"Scoring forecast: {resolution.scoring_probability_percent}% "
+                f"(revision {resolution.scoring_revision_sequence})"
+            )
+            self.resolution_notes.setText(resolution.resolution_notes or "")
+            has_notes = resolution.resolution_notes is not None
+            self.resolution_notes_heading.setHidden(not has_notes)
+            self.resolution_notes.setHidden(not has_notes)
+            self.postmortem.setText(resolution.postmortem or "")
+            has_postmortem = resolution.postmortem is not None
+            self.postmortem_heading.setHidden(not has_postmortem)
+            self.postmortem.setHidden(not has_postmortem)
+
+        invalidation = prediction.invalidation
+        self.invalidation_section.setHidden(invalidation is None)
+        if invalidation is not None:
+            self.invalidated_at.setText(
+                f"Marked Invalid: "
+                f"{_format_local_timestamp(invalidation.invalidated_at)}"
+            )
+            self.invalidation_reason.setText(invalidation.reason or "")
+            has_reason = invalidation.reason is not None
+            self.invalidation_reason_heading.setHidden(not has_reason)
+            self.invalidation_reason.setHidden(not has_reason)
 
     def _load_definition_history(self, prediction_id: int) -> None:
         try:

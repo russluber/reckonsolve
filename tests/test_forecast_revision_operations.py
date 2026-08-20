@@ -14,7 +14,7 @@ from reckonsolve.application.errors import (
 )
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
-from reckonsolve.domain.predictions import PredictionStatus
+from reckonsolve.domain.predictions import BinaryOutcome, PredictionStatus
 
 
 @dataclass(frozen=True)
@@ -404,10 +404,19 @@ def test_terminal_states_reject_revisions(
 ) -> None:
     database = Database.open(tmp_path / f"{persisted_status}.sqlite3")
     created = _create(database)
-    with database.transaction() as connection:
-        connection.execute(
-            "UPDATE predictions SET status = ? WHERE id = ?",
-            (persisted_status, created.prediction_id),
+    terminal_operations = PredictionOperations(database, FixedClock(REVISED))
+    if persisted_status == "resolved":
+        terminal_operations.resolve_prediction(
+            created.prediction_id,
+            BinaryOutcome.YES,
+            expected_revision_id=created.current_revision_id,
+            expected_metadata_version=created.metadata_version,
+        )
+    else:
+        terminal_operations.invalidate_prediction(
+            created.prediction_id,
+            expected_revision_id=created.current_revision_id,
+            expected_metadata_version=created.metadata_version,
         )
 
     with pytest.raises(ForecastRevisionNotAllowedError) as error_info:

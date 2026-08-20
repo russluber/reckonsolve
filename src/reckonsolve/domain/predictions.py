@@ -22,6 +22,13 @@ class PredictionStatus(StrEnum):
     INVALID = "invalid"
 
 
+class BinaryOutcome(StrEnum):
+    """The factual Yes/No result of a resolved binary prediction."""
+
+    YES = "yes"
+    NO = "no"
+
+
 @dataclass(frozen=True, slots=True)
 class NewPrediction:
     """Validated initial prediction state and its sequence-one forecast."""
@@ -91,6 +98,42 @@ class NewJournalCorrection:
 
 
 @dataclass(frozen=True, slots=True)
+class NewResolution:
+    """Validated terminal outcome with optional factual and reflective notes."""
+
+    outcome: BinaryOutcome
+    resolution_notes: str | None = None
+    postmortem: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.outcome, BinaryOutcome):
+            raise PredictionValidationError(
+                "Outcome must be Yes or No.",
+                field="outcome",
+            )
+        object.__setattr__(
+            self,
+            "resolution_notes",
+            _optional_text(self.resolution_notes, "resolution_notes"),
+        )
+        object.__setattr__(
+            self,
+            "postmortem",
+            _optional_text(self.postmortem, "postmortem"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NewInvalidation:
+    """Validated reason for preserving a prediction outside scoring."""
+
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reason", _optional_text(self.reason, "reason"))
+
+
+@dataclass(frozen=True, slots=True)
 class Prediction:
     """The stable identity and lifecycle facts of a binary prediction."""
 
@@ -155,6 +198,31 @@ type TimelineEvent = ForecastTimelineEvent | JournalTimelineEvent
 
 
 @dataclass(frozen=True, slots=True)
+class Resolution:
+    """One immutable terminal outcome and its captured scoring forecast."""
+
+    resolution_id: int
+    prediction_id: int
+    outcome: BinaryOutcome
+    resolved_at: datetime
+    scoring_revision_id: int
+    scoring_revision_sequence: int
+    scoring_probability_percent: int
+    resolution_notes: str | None = None
+    postmortem: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Invalidation:
+    """One immutable decision to preserve but exclude a prediction."""
+
+    invalidation_id: int
+    prediction_id: int
+    invalidated_at: datetime
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class PredictionDetail:
     """Current display data derived from a prediction and its latest revision."""
 
@@ -173,6 +241,9 @@ class PredictionDetail:
     tags: tuple[str, ...] = ()
     updated_at: datetime | None = None
     metadata_version: int = 1
+    resolution: Resolution | None = None
+    invalidation: Invalidation | None = None
+    deletion_allowed: bool = False
 
 
 @dataclass(frozen=True, slots=True)

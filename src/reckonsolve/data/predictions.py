@@ -5,18 +5,23 @@ from datetime import date, datetime
 
 from reckonsolve.clock import format_utc, parse_utc
 from reckonsolve.domain.predictions import (
+    BinaryOutcome,
     DefinitionChange,
     ForecastRevision,
     ForecastTimelineEvent,
+    Invalidation,
     JournalCorrection,
     JournalTimelineEvent,
     NewForecastRevision,
+    NewInvalidation,
     NewJournalCorrection,
     NewJournalEntry,
     NewPrediction,
+    NewResolution,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
+    Resolution,
     TimelineEvent,
     changed_definition_fields,
     display_status,
@@ -60,6 +65,26 @@ class JournalEntryDisallowedError(RuntimeError):
 
 class JournalCorrectionContextChangedError(RuntimeError):
     """Raised when a Journal correction no longer matches current edit history."""
+
+
+class LifecycleContextChangedError(RuntimeError):
+    """Raised when a terminal action no longer matches reviewed prediction state."""
+
+
+class LifecycleTransitionDisallowedError(RuntimeError):
+    """Raised when a terminal action targets an already-terminal prediction."""
+
+    def __init__(self, status: PredictionStatus) -> None:
+        super().__init__(status.value)
+        self.status = status
+
+
+class PredictionDeletionDisallowedError(RuntimeError):
+    """Raised when a prediction no longer qualifies as untouched Open junk."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 class PredictionRepository:
@@ -358,6 +383,163 @@ class PredictionRepository:
 
         return updated
 
+    def resolve_prediction(
+        self,
+        prediction_id: int,
+        resolution: NewResolution,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        resolved_at: datetime,
+    ) -> PredictionDetail | None:
+        """Capture the current scoring revision and terminal outcome atomically."""
+
+        with self._database.transaction() as connection:
+            row = _select_prediction_detail(connection, prediction_id)
+            if row is None:
+                return None
+            current = _map_prediction_detail(
+                row,
+                _select_tags(connection, prediction_id),
+            )
+            if (
+                current.current_revision_id != expected_revision_id
+                or current.metadata_version != expected_metadata_version
+            ):
+                raise LifecycleContextChangedError
+            if current.status is not PredictionStatus.OPEN:
+                raise LifecycleTransitionDisallowedError(current.status)
+
+            cursor = connection.execute(
+                """
+                INSERT INTO resolutions (
+                    prediction_id,
+                    outcome,
+                    resolved_at,
+                    scoring_revision_id,
+                    resolution_notes,
+                    postmortem
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    prediction_id,
+                    resolution.outcome.value,
+                    format_utc(resolved_at),
+                    current.current_revision_id,
+                    resolution.resolution_notes,
+                    resolution.postmortem,
+                ),
+            )
+            if cursor.lastrowid is None:
+                raise sqlite3.DatabaseError("SQLite did not return a resolution ID.")
+            updated_row = _select_prediction_detail(connection, prediction_id)
+            if updated_row is None:
+                raise sqlite3.DatabaseError(
+                    "The resolved prediction could not be loaded."
+                )
+            updated = _map_prediction_detail(
+                updated_row,
+                _select_tags(connection, prediction_id),
+            )
+
+        return updated
+
+    def invalidate_prediction(
+        self,
+        prediction_id: int,
+        invalidation: NewInvalidation,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        invalidated_at: datetime,
+    ) -> PredictionDetail | None:
+        """Preserve an immutable non-scored terminal decision atomically."""
+
+        with self._database.transaction() as connection:
+            row = _select_prediction_detail(connection, prediction_id)
+            if row is None:
+                return None
+            current = _map_prediction_detail(
+                row,
+                _select_tags(connection, prediction_id),
+            )
+            if (
+                current.current_revision_id != expected_revision_id
+                or current.metadata_version != expected_metadata_version
+            ):
+                raise LifecycleContextChangedError
+            if current.status is not PredictionStatus.OPEN:
+                raise LifecycleTransitionDisallowedError(current.status)
+
+            cursor = connection.execute(
+                """
+                INSERT INTO prediction_invalidations (
+                    prediction_id,
+                    invalidated_at,
+                    reason
+                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    prediction_id,
+                    format_utc(invalidated_at),
+                    invalidation.reason,
+                ),
+            )
+            if cursor.lastrowid is None:
+                raise sqlite3.DatabaseError("SQLite did not return an invalidation ID.")
+            updated_row = _select_prediction_detail(connection, prediction_id)
+            if updated_row is None:
+                raise sqlite3.DatabaseError(
+                    "The invalid prediction could not be loaded."
+                )
+            updated = _map_prediction_detail(
+                updated_row,
+                _select_tags(connection, prediction_id),
+            )
+
+        return updated
+
+    def delete_prediction(
+        self,
+        prediction_id: int,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        current_date: date,
+    ) -> bool:
+        """Delete only a transaction-current untouched Open prediction."""
+
+        with self._database.transaction() as connection:
+            row = _select_prediction_detail(connection, prediction_id)
+            if row is None:
+                return False
+            current = _map_prediction_detail(row)
+            if (
+                current.current_revision_id != expected_revision_id
+                or current.metadata_version != expected_metadata_version
+            ):
+                raise LifecycleContextChangedError
+            effective_status = display_status(
+                current.status,
+                current.forecast_deadline,
+                current_date,
+            )
+            if effective_status is not PredictionStatus.OPEN:
+                raise PredictionDeletionDisallowedError(effective_status.value)
+            if not current.deletion_allowed:
+                raise PredictionDeletionDisallowedError("meaningful_history")
+
+            connection.execute(
+                "DELETE FROM predictions WHERE id = ?",
+                (prediction_id,),
+            )
+            if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise LifecycleContextChangedError
+
+        return True
+
     def list_timeline(
         self,
         prediction_id: int,
@@ -634,7 +816,31 @@ SELECT
     current_revision.id AS current_revision_id,
     current_revision.probability_percent,
     current_revision.sequence AS current_revision_sequence,
-    current_revision.rationale AS current_rationale
+    current_revision.rationale AS current_rationale,
+    resolution.id AS resolution_id,
+    resolution.outcome AS resolution_outcome,
+    resolution.resolved_at,
+    resolution.scoring_revision_id,
+    resolution.resolution_notes,
+    resolution.postmortem,
+    scoring_revision.sequence AS scoring_revision_sequence,
+    scoring_revision.probability_percent AS scoring_probability_percent,
+    invalidation.id AS invalidation_id,
+    invalidation.invalidated_at,
+    invalidation.reason AS invalidation_reason,
+    (
+        prediction.status = 'open'
+        AND prediction.metadata_version = 1
+        AND current_revision.sequence = 1
+        AND NOT EXISTS (
+            SELECT 1 FROM journal_entries
+            WHERE prediction_id = prediction.id
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM prediction_definition_changes
+            WHERE prediction_id = prediction.id
+        )
+    ) AS deletion_allowed
 FROM predictions AS prediction
 JOIN forecast_revisions AS current_revision
     ON current_revision.id = (
@@ -644,6 +850,13 @@ JOIN forecast_revisions AS current_revision
         ORDER BY candidate.sequence DESC
         LIMIT 1
     )
+LEFT JOIN resolutions AS resolution
+    ON resolution.prediction_id = prediction.id
+LEFT JOIN forecast_revisions AS scoring_revision
+    ON scoring_revision.prediction_id = resolution.prediction_id
+    AND scoring_revision.id = resolution.scoring_revision_id
+LEFT JOIN prediction_invalidations AS invalidation
+    ON invalidation.prediction_id = prediction.id
 """
 
 
@@ -665,6 +878,31 @@ def _map_prediction_detail(
     tags: tuple[str, ...] = (),
 ) -> PredictionDetail:
     status = PredictionStatus(row["status"])
+    resolution = (
+        None
+        if row["resolution_id"] is None
+        else Resolution(
+            resolution_id=int(row["resolution_id"]),
+            prediction_id=int(row["prediction_id"]),
+            outcome=BinaryOutcome(row["resolution_outcome"]),
+            resolved_at=parse_utc(str(row["resolved_at"])),
+            scoring_revision_id=int(row["scoring_revision_id"]),
+            scoring_revision_sequence=int(row["scoring_revision_sequence"]),
+            scoring_probability_percent=int(row["scoring_probability_percent"]),
+            resolution_notes=_optional_string(row["resolution_notes"]),
+            postmortem=_optional_string(row["postmortem"]),
+        )
+    )
+    invalidation = (
+        None
+        if row["invalidation_id"] is None
+        else Invalidation(
+            invalidation_id=int(row["invalidation_id"]),
+            prediction_id=int(row["prediction_id"]),
+            invalidated_at=parse_utc(str(row["invalidated_at"])),
+            reason=_optional_string(row["invalidation_reason"]),
+        )
+    )
     return PredictionDetail(
         prediction_id=int(row["prediction_id"]),
         question=str(row["question"]),
@@ -681,6 +919,9 @@ def _map_prediction_detail(
         tags=tags,
         updated_at=parse_utc(str(row["updated_at"])),
         metadata_version=int(row["metadata_version"]),
+        resolution=resolution,
+        invalidation=invalidation,
+        deletion_allowed=bool(row["deletion_allowed"]),
     )
 
 

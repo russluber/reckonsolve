@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QStackedWidget,
     QWidget,
@@ -28,6 +29,7 @@ from reckonsolve.application.errors import (
     MeaningChangeConfirmationRequired,
 )
 from reckonsolve.domain.predictions import (
+    BinaryOutcome,
     DefinitionChange,
     PredictionStatus,
 )
@@ -42,6 +44,27 @@ EXPECTED_SCREEN_NAMES = (
     "Analytics",
     "Settings",
 )
+
+
+@dataclass(frozen=True, slots=True)
+class FakeResolution:
+    resolution_id: int
+    prediction_id: int
+    outcome: BinaryOutcome
+    resolved_at: datetime
+    scoring_revision_id: int
+    scoring_revision_sequence: int
+    scoring_probability_percent: int
+    resolution_notes: str | None = None
+    postmortem: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FakeInvalidation:
+    invalidation_id: int
+    prediction_id: int
+    invalidated_at: datetime
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +84,9 @@ class FakePrediction:
     current_revision_id: int = 1
     current_revision_sequence: int = 1
     current_rationale: str | None = None
+    resolution: FakeResolution | None = None
+    invalidation: FakeInvalidation | None = None
+    deletion_allowed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,6 +181,32 @@ class MetadataUpdateCall:
     confirm_meaning_change: bool
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvePredictionCall:
+    prediction_id: int
+    outcome: BinaryOutcome
+    resolution_notes: str | None
+    postmortem: str | None
+    expected_revision_id: int
+    expected_metadata_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidatePredictionCall:
+    prediction_id: int
+    reason: str | None
+    expected_revision_id: int
+    expected_metadata_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class DeletePredictionCall:
+    prediction_id: int
+    expected_revision_id: int
+    expected_metadata_version: int
+    confirm_permanent_deletion: bool
+
+
 class FakePredictionOperations:
     def __init__(self, latest: FakePrediction | None = None) -> None:
         self.latest = latest
@@ -189,6 +241,12 @@ class FakePredictionOperations:
         self.definition_changes: tuple[DefinitionChange, ...] = ()
         self.definition_change_error: ApplicationError | None = None
         self.definition_change_calls: list[int] = []
+        self.resolve_calls: list[ResolvePredictionCall] = []
+        self.resolve_error: ApplicationError | None = None
+        self.invalidate_calls: list[InvalidatePredictionCall] = []
+        self.invalidate_error: ApplicationError | None = None
+        self.delete_calls: list[DeletePredictionCall] = []
+        self.delete_error: ApplicationError | None = None
         self.mutation_count = 0
 
     def create_prediction(
@@ -272,6 +330,7 @@ class FakePredictionOperations:
             current_revision_id=new_revision_id,
             current_revision_sequence=new_sequence,
             current_rationale=normalized_rationale,
+            deletion_allowed=False,
         )
         self.revisions.append(
             FakeForecastRevision(
@@ -329,6 +388,7 @@ class FakePredictionOperations:
             forecast_probability_percent=self.latest.probability_percent,
         )
         self.journal_entries.append(entry)
+        self.latest = replace(self.latest, deletion_allowed=False)
         return entry
 
     def correct_journal_entry(
@@ -369,6 +429,112 @@ class FakePredictionOperations:
                 self.journal_entries[index] = updated
                 return updated
         raise ApplicationError("Journal entry not found.")
+
+    def resolve_prediction(
+        self,
+        prediction_id: int,
+        outcome: BinaryOutcome,
+        *,
+        resolution_notes: str | None = None,
+        postmortem: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakePrediction:
+        self.resolve_calls.append(
+            ResolvePredictionCall(
+                prediction_id=prediction_id,
+                outcome=outcome,
+                resolution_notes=resolution_notes,
+                postmortem=postmortem,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
+        )
+        if self.resolve_error is not None:
+            raise self.resolve_error
+        if self.latest is None or self.latest.prediction_id != prediction_id:
+            raise ApplicationError("Prediction not found.")
+        resolution = FakeResolution(
+            resolution_id=1,
+            prediction_id=prediction_id,
+            outcome=outcome,
+            resolved_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+            scoring_revision_id=self.latest.current_revision_id,
+            scoring_revision_sequence=self.latest.current_revision_sequence,
+            scoring_probability_percent=self.latest.probability_percent,
+            resolution_notes=(resolution_notes or "").strip() or None,
+            postmortem=(postmortem or "").strip() or None,
+        )
+        self.latest = replace(
+            self.latest,
+            status=PredictionStatus.RESOLVED,
+            resolution=resolution,
+            deletion_allowed=False,
+        )
+        return self.latest
+
+    def invalidate_prediction(
+        self,
+        prediction_id: int,
+        *,
+        reason: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakePrediction:
+        self.invalidate_calls.append(
+            InvalidatePredictionCall(
+                prediction_id=prediction_id,
+                reason=reason,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
+        )
+        if self.invalidate_error is not None:
+            raise self.invalidate_error
+        if self.latest is None or self.latest.prediction_id != prediction_id:
+            raise ApplicationError("Prediction not found.")
+        invalidation = FakeInvalidation(
+            invalidation_id=1,
+            prediction_id=prediction_id,
+            invalidated_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+            reason=(reason or "").strip() or None,
+        )
+        self.latest = replace(
+            self.latest,
+            status=PredictionStatus.INVALID,
+            invalidation=invalidation,
+            deletion_allowed=False,
+        )
+        return self.latest
+
+    def delete_prediction(
+        self,
+        prediction_id: int,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        confirm_permanent_deletion: bool = False,
+    ) -> FakePrediction | None:
+        self.delete_calls.append(
+            DeletePredictionCall(
+                prediction_id=prediction_id,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                confirm_permanent_deletion=confirm_permanent_deletion,
+            )
+        )
+        if self.delete_error is not None:
+            raise self.delete_error
+        if self.latest is None or self.latest.prediction_id != prediction_id:
+            raise ApplicationError("Prediction not found.")
+        self.revisions = [
+            item for item in self.revisions if item.prediction_id != prediction_id
+        ]
+        self.journal_entries = [
+            item for item in self.journal_entries if item.prediction_id != prediction_id
+        ]
+        self.latest = None
+        return None
 
     def list_timeline(
         self,
@@ -478,6 +644,7 @@ class FakePredictionOperations:
             updated = replace(
                 updated,
                 metadata_version=self.latest.metadata_version + 1,
+                deletion_allowed=False,
             )
         self.latest = updated
         return self.latest
@@ -1082,7 +1249,7 @@ def test_prediction_detail_hides_all_empty_optional_metadata(qtbot: QtBot) -> No
         assert _required_child(window, QWidget, object_name).isHidden()
 
 
-def test_prediction_detail_enables_current_actions_and_keeps_later_ones_disabled(
+def test_prediction_detail_enables_open_lifecycle_actions(
     qtbot: QtBot,
 ) -> None:
     operations = FakePredictionOperations(
@@ -1099,10 +1266,14 @@ def test_prediction_detail_enables_current_actions_and_keeps_later_ones_disabled
     assert journal.isEnabled()
     assert "without changing" in journal.toolTip()
 
-    for object_name in ("resolvePredictionButton", "markInvalidButton"):
+    for object_name in (
+        "resolvePredictionButton",
+        "markInvalidButton",
+        "deletePredictionButton",
+    ):
         button = _required_child(window, QPushButton, object_name)
-        assert not button.isEnabled()
-        assert "later milestone" in button.toolTip()
+        assert button.isEnabled()
+        assert button.toolTip()
     assert _required_child(window, QLabel, "timelinePlaceholder").isHidden()
     chart = _required_child(
         window,
@@ -2690,6 +2861,313 @@ def test_prediction_detail_has_helpful_empty_state(window: MainWindow) -> None:
     assert chart.isHidden()
 
 
+def test_resolve_dialog_is_side_effect_free_until_an_outcome_is_saved(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Will it resolve?", 35))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_resolution_dialog(qtbot, window)
+
+    explanation = _required_child(dialog, QLabel, "resolvePredictionExplanation")
+    save = _required_child(dialog, QPushButton, "confirmResolvePredictionButton")
+    assert "cannot be reopened" in explanation.text()
+    assert explanation.textFormat() is Qt.TextFormat.PlainText
+    assert not save.isEnabled()
+    assert operations.resolve_calls == []
+
+    dialog.reject()
+    assert operations.resolve_calls == []
+
+
+def test_resolve_yes_saves_reviewed_context_and_renders_terminal_facts(
+    qtbot: QtBot,
+) -> None:
+    prediction = FakePrediction(
+        7,
+        "Will it resolve?",
+        35,
+        current_revision_id=9,
+        current_revision_sequence=3,
+        metadata_version=4,
+        deletion_allowed=False,
+    )
+    operations = FakePredictionOperations(prediction)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_resolution_dialog(qtbot, window)
+    _required_child(dialog, QRadioButton, "resolutionOutcomeYes").setChecked(True)
+    _required_child(dialog, QPlainTextEdit, "resolutionNotesInput").setPlainText(
+        "Certified result"
+    )
+    _required_child(dialog, QPlainTextEdit, "resolutionPostmortemInput").setPlainText(
+        "I updated too slowly."
+    )
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "confirmResolvePredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.resolve_calls == [
+        ResolvePredictionCall(
+            prediction_id=7,
+            outcome=BinaryOutcome.YES,
+            resolution_notes="Certified result",
+            postmortem="I updated too slowly.",
+            expected_revision_id=9,
+            expected_metadata_version=4,
+        )
+    ]
+    assert (
+        _required_child(window, QLabel, "predictionDetailStatus").text() == "RESOLVED"
+    )
+    section = _required_child(window, QGroupBox, "predictionResolutionSection")
+    assert not section.isHidden()
+    assert (
+        "Yes"
+        in _required_child(
+            section,
+            QLabel,
+            "predictionResolutionOutcome",
+        ).text()
+    )
+    assert (
+        "35%"
+        in _required_child(
+            section,
+            QLabel,
+            "predictionResolutionScoringForecast",
+        ).text()
+    )
+    assert (
+        _required_child(
+            section,
+            QLabel,
+            "predictionResolutionNotes",
+        ).text()
+        == "Certified result"
+    )
+    assert (
+        _required_child(
+            section,
+            QLabel,
+            "predictionPostmortem",
+        ).text()
+        == "I updated too slowly."
+    )
+    for object_name in (
+        "reviseForecastButton",
+        "addJournalEntryButton",
+        "resolvePredictionButton",
+        "markInvalidButton",
+        "deletePredictionButton",
+    ):
+        assert not _required_child(window, QPushButton, object_name).isEnabled()
+
+
+def test_resolve_expected_error_keeps_dialog_and_inputs_for_retry(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Will it resolve?", 35))
+    operations.resolve_error = ApplicationError("The prediction changed.")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_resolution_dialog(qtbot, window)
+    _required_child(dialog, QRadioButton, "resolutionOutcomeNo").setChecked(True)
+    notes = _required_child(dialog, QPlainTextEdit, "resolutionNotesInput")
+    notes.setPlainText("Keep this source")
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "confirmResolvePredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert dialog.isVisible()
+    assert notes.toPlainText() == "Keep this source"
+    error = _required_child(dialog, QLabel, "resolvePredictionError")
+    assert "changed" in error.text()
+    assert not error.isHidden()
+
+
+def test_mark_invalid_saves_optional_reason_and_renders_preserved_state(
+    qtbot: QtBot,
+) -> None:
+    prediction = FakePrediction(
+        7,
+        "Was this cancelled?",
+        55,
+        current_revision_id=4,
+        metadata_version=2,
+        deletion_allowed=False,
+    )
+    operations = FakePredictionOperations(prediction)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_invalidation_dialog(qtbot, window)
+    explanation = _required_child(dialog, QLabel, "markInvalidExplanation")
+    assert "excludes it from scoring" in explanation.text()
+    reason = _required_child(dialog, QPlainTextEdit, "invalidationReasonInput")
+    reason.setPlainText("The event was cancelled.")
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "confirmMarkInvalidButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.invalidate_calls == [
+        InvalidatePredictionCall(
+            prediction_id=7,
+            reason="The event was cancelled.",
+            expected_revision_id=4,
+            expected_metadata_version=2,
+        )
+    ]
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "INVALID"
+    section = _required_child(window, QGroupBox, "predictionInvalidationSection")
+    assert not section.isHidden()
+    assert (
+        _required_child(
+            section,
+            QLabel,
+            "predictionInvalidationReason",
+        ).text()
+        == "The event was cancelled."
+    )
+    assert not _required_child(
+        window, QPushButton, "deletePredictionButton"
+    ).isEnabled()
+
+
+def test_mark_invalid_cancel_writes_nothing(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Keep this Open?", 55))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dialog = _open_invalidation_dialog(qtbot, window)
+    _required_child(dialog, QPlainTextEdit, "invalidationReasonInput").setPlainText(
+        "Do not save this"
+    )
+
+    dialog.reject()
+
+    assert operations.invalidate_calls == []
+    assert operations.latest is not None
+    assert operations.latest.status is PredictionStatus.OPEN
+
+
+def test_locked_prediction_can_resolve_or_invalidate_but_not_revise_or_delete(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(
+            7,
+            "Locked question?",
+            55,
+            status=PredictionStatus.LOCKED,
+            deletion_allowed=False,
+        )
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    assert _required_child(window, QPushButton, "resolvePredictionButton").isEnabled()
+    assert _required_child(window, QPushButton, "markInvalidButton").isEnabled()
+    assert _required_child(window, QPushButton, "addJournalEntryButton").isEnabled()
+    assert not _required_child(window, QPushButton, "reviseForecastButton").isEnabled()
+    delete = _required_child(window, QPushButton, "deletePredictionButton")
+    assert not delete.isEnabled()
+    assert "Mark Invalid" in delete.toolTip()
+
+
+def test_terminal_user_text_is_rendered_as_plain_text(qtbot: QtBot) -> None:
+    resolution = FakeResolution(
+        resolution_id=1,
+        prediction_id=7,
+        outcome=BinaryOutcome.NO,
+        resolved_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+        scoring_revision_id=1,
+        scoring_revision_sequence=1,
+        scoring_probability_percent=60,
+        resolution_notes="<b>literal source</b>",
+        postmortem="<i>literal reflection</i>",
+    )
+    operations = FakePredictionOperations(
+        FakePrediction(
+            7,
+            "Question?",
+            60,
+            status=PredictionStatus.RESOLVED,
+            resolution=resolution,
+            deletion_allowed=False,
+        )
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    for object_name, expected in (
+        ("predictionResolutionNotes", "<b>literal source</b>"),
+        ("predictionPostmortem", "<i>literal reflection</i>"),
+    ):
+        label = _required_child(window, QLabel, object_name)
+        assert label.textFormat() is Qt.TextFormat.PlainText
+        assert label.text() == expected
+
+
+def test_delete_cancel_is_side_effect_free_and_confirm_clears_detail(
+    qtbot: QtBot,
+    monkeypatch,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Duplicate?", 55))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    delete = _required_child(window, QPushButton, "deletePredictionButton")
+
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *_args: QMessageBox.StandardButton.Cancel,
+    )
+    qtbot.mouseClick(delete, Qt.MouseButton.LeftButton)
+    assert operations.delete_calls == []
+
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        # PySide may return an equal integral button value rather than the
+        # identical Python enum object used in this test process.
+        lambda *_args: int(QMessageBox.StandardButton.Yes),
+    )
+    qtbot.mouseClick(delete, Qt.MouseButton.LeftButton)
+
+    assert operations.delete_calls == [
+        DeletePredictionCall(
+            prediction_id=7,
+            expected_revision_id=1,
+            expected_metadata_version=1,
+            confirm_permanent_deletion=True,
+        )
+    ]
+    assert not _required_child(
+        window,
+        QLabel,
+        "predictionDetailEmptyState",
+    ).isHidden()
+
+
+def test_meaningful_open_prediction_disables_delete_and_guides_invalid(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(
+        FakePrediction(7, "Meaningful?", 55, deletion_allowed=False)
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    delete = _required_child(window, QPushButton, "deletePredictionButton")
+    assert not delete.isEnabled()
+    assert "Mark Invalid" in delete.toolTip()
+    assert _required_child(window, QPushButton, "markInvalidButton").isEnabled()
+
+
 def test_main_window_can_be_shown_and_closed(
     qtbot: QtBot,
     window: MainWindow,
@@ -2743,6 +3221,30 @@ def _open_journal_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
         Qt.MouseButton.LeftButton,
     )
     dialog = _required_child(window, QDialog, "addJournalEntryDialog")
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def _open_resolution_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
+    window.show()
+    window.navigate_to("Prediction Detail")
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "resolvePredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    dialog = _required_child(window, QDialog, "resolvePredictionDialog")
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def _open_invalidation_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
+    window.show()
+    window.navigate_to("Prediction Detail")
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "markInvalidButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    dialog = _required_child(window, QDialog, "markInvalidDialog")
     qtbot.waitUntil(dialog.isVisible)
     return dialog
 

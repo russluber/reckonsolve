@@ -63,3 +63,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0002: Store instants as canonical UTC text](0002-canonical-utc-instants.md) — Accepted 2026-08-12
 - [0003: Preserve definition changes as immutable snapshots](0003-immutable-definition-snapshots.md) — Accepted 2026-08-12
 - [0004: Render probability history with a native Qt widget](0004-native-probability-history-chart.md) — Accepted 2026-08-13
+- [0005: Preserve terminal lifecycle decisions as immutable records](0005-immutable-terminal-lifecycle-records.md) — Accepted 2026-08-20

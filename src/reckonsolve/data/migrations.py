@@ -607,6 +607,268 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=6,
+        name="add terminal lifecycle records and guarded transitions",
+        statements=(
+            """
+            CREATE TABLE migration_v6_requires_nonterminal_predictions (
+                sentinel INTEGER NOT NULL CHECK (sentinel = 1)
+            ) STRICT
+            """,
+            """
+            INSERT INTO migration_v6_requires_nonterminal_predictions (sentinel)
+            SELECT 0 FROM predictions WHERE status != 'open'
+            """,
+            """
+            DROP TABLE migration_v6_requires_nonterminal_predictions
+            """,
+            """
+            CREATE TABLE resolutions (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL UNIQUE
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                outcome TEXT NOT NULL CHECK (outcome IN ('yes', 'no')),
+                resolved_at TEXT NOT NULL
+                    CHECK (
+                        length(resolved_at) = 27
+                        AND resolved_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(resolved_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(resolved_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(resolved_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(resolved_at, 1, 10),
+                            0
+                        )
+                    ),
+                scoring_revision_id INTEGER NOT NULL,
+                resolution_notes TEXT
+                    CHECK (resolution_notes IS NULL OR (
+                        length(resolution_notes) > 0
+                        AND resolution_notes = trim(
+                            resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(resolution_notes, char(0)) = 0
+                    )),
+                postmortem TEXT
+                    CHECK (postmortem IS NULL OR (
+                        length(postmortem) > 0
+                        AND postmortem = trim(
+                            postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(postmortem, char(0)) = 0
+                    )),
+                FOREIGN KEY (prediction_id, scoring_revision_id)
+                    REFERENCES forecast_revisions(prediction_id, id)
+                    ON DELETE CASCADE
+            ) STRICT
+            """,
+            """
+            CREATE INDEX resolutions_by_resolved_at
+            ON resolutions (resolved_at, id)
+            """,
+            """
+            CREATE TABLE prediction_invalidations (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL UNIQUE
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                invalidated_at TEXT NOT NULL
+                    CHECK (
+                        length(invalidated_at) = 27
+                        AND invalidated_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(invalidated_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(invalidated_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(invalidated_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(invalidated_at, 1, 10),
+                            0
+                        )
+                    ),
+                reason TEXT
+                    CHECK (reason IS NULL OR (
+                        length(reason) > 0
+                        AND reason = trim(
+                            reason,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(reason, char(0)) = 0
+                    ))
+            ) STRICT
+            """,
+            """
+            CREATE TRIGGER resolutions_require_open_prediction
+            BEFORE INSERT ON resolutions
+            WHEN (
+                SELECT status FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'open'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'only an open or locked prediction can be resolved'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER resolutions_require_current_scoring_revision
+            BEFORE INSERT ON resolutions
+            WHEN NEW.scoring_revision_id IS NOT (
+                SELECT id
+                FROM forecast_revisions
+                WHERE prediction_id = NEW.prediction_id
+                ORDER BY sequence DESC
+                LIMIT 1
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'resolution must capture the current forecast revision'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_invalidations_require_open_prediction
+            BEFORE INSERT ON prediction_invalidations
+            WHEN (
+                SELECT status FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'open'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'only an open or locked prediction can be marked invalid'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER predictions_terminal_status_is_immutable
+            BEFORE UPDATE OF status ON predictions
+            WHEN OLD.status IN ('resolved', 'invalid')
+                AND NEW.status IS NOT OLD.status
+            BEGIN
+                SELECT RAISE(ABORT, 'terminal prediction status is immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER predictions_status_requires_terminal_record
+            BEFORE UPDATE OF status ON predictions
+            WHEN OLD.status = 'open'
+                AND (
+                    (
+                        NEW.status = 'resolved'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM resolutions
+                            WHERE prediction_id = NEW.id
+                        )
+                    )
+                    OR (
+                        NEW.status = 'invalid'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM prediction_invalidations
+                            WHERE prediction_id = NEW.id
+                        )
+                    )
+                )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'terminal status requires its immutable lifecycle record'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER resolutions_mark_prediction_resolved
+            AFTER INSERT ON resolutions
+            BEGIN
+                UPDATE predictions
+                SET status = 'resolved', updated_at = NEW.resolved_at
+                WHERE id = NEW.prediction_id;
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_invalidations_mark_prediction_invalid
+            AFTER INSERT ON prediction_invalidations
+            BEGIN
+                UPDATE predictions
+                SET status = 'invalid', updated_at = NEW.invalidated_at
+                WHERE id = NEW.prediction_id;
+            END
+            """,
+            """
+            CREATE TRIGGER resolutions_are_immutable
+            BEFORE UPDATE ON resolutions
+            BEGIN
+                SELECT RAISE(ABORT, 'saved resolutions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER resolutions_reject_history_replacement
+            BEFORE INSERT ON resolutions
+            WHEN EXISTS (SELECT 1 FROM resolutions WHERE id = NEW.id)
+                OR EXISTS (
+                    SELECT 1 FROM resolutions
+                    WHERE prediction_id = NEW.prediction_id
+                )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved resolutions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER resolutions_reject_direct_delete
+            BEFORE DELETE ON resolutions
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved resolutions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_invalidations_are_immutable
+            BEFORE UPDATE ON prediction_invalidations
+            BEGIN
+                SELECT RAISE(ABORT, 'saved invalidations are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_invalidations_reject_history_replacement
+            BEFORE INSERT ON prediction_invalidations
+            WHEN EXISTS (
+                SELECT 1 FROM prediction_invalidations WHERE id = NEW.id
+            )
+                OR EXISTS (
+                    SELECT 1 FROM prediction_invalidations
+                    WHERE prediction_id = NEW.prediction_id
+                )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved invalidations are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_invalidations_reject_direct_delete
+            BEFORE DELETE ON prediction_invalidations
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved invalidations are immutable');
+            END
+            """,
+        ),
+    ),
 )
 
 

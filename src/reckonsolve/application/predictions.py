@@ -1,5 +1,6 @@
 """Application operations for binary predictions."""
 
+from dataclasses import replace
 from datetime import date, datetime, tzinfo
 
 from reckonsolve.clock import Clock, SystemClock, as_utc
@@ -11,17 +12,23 @@ from reckonsolve.data.predictions import (
     JournalContextChangedError,
     JournalCorrectionContextChangedError,
     JournalEntryDisallowedError,
+    LifecycleContextChangedError,
+    LifecycleTransitionDisallowedError,
     PredictionChangedError,
+    PredictionDeletionDisallowedError,
     PredictionRepository,
 )
 from reckonsolve.domain.predictions import (
+    BinaryOutcome,
     DefinitionChange,
     ForecastRevision,
     JournalTimelineEvent,
     NewForecastRevision,
+    NewInvalidation,
     NewJournalCorrection,
     NewJournalEntry,
     NewPrediction,
+    NewResolution,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
@@ -36,12 +43,16 @@ from .errors import (
     ConcurrentForecastUpdateError,
     ConcurrentJournalCorrectionError,
     ConcurrentJournalUpdateError,
+    ConcurrentLifecycleUpdateError,
     ConcurrentPredictionUpdateError,
     ForecastRevisionNotAllowedError,
     ForecastUnchangedError,
     JournalEntryNotAllowedError,
     JournalEntryNotFoundError,
+    LifecycleTransitionNotAllowedError,
     MeaningChangeConfirmationRequired,
+    PredictionDeletionConfirmationRequired,
+    PredictionDeletionNotAllowedError,
     PredictionNotFoundError,
     ValidationError,
 )
@@ -270,6 +281,168 @@ class PredictionOperations:
             raise JournalEntryNotFoundError(entry_id)
         return updated
 
+    def resolve_prediction(
+        self,
+        prediction_id: int,
+        outcome: BinaryOutcome,
+        *,
+        resolution_notes: str | None = None,
+        postmortem: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> PredictionDetail:
+        """Persist one immutable outcome and its exact scoring revision."""
+
+        try:
+            resolution = NewResolution(
+                outcome=outcome,
+                resolution_notes=resolution_notes,
+                postmortem=postmortem,
+            )
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+
+        current = self._repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentLifecycleUpdateError(prediction_id)
+        if current.status is not PredictionStatus.OPEN:
+            raise LifecycleTransitionNotAllowedError("resolved", current.status)
+
+        resolved_at = as_utc(self._clock.now())
+        try:
+            updated = self._repository.resolve_prediction(
+                prediction_id,
+                resolution,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                resolved_at=resolved_at,
+            )
+        except LifecycleContextChangedError as error:
+            raise ConcurrentLifecycleUpdateError(prediction_id) from error
+        except LifecycleTransitionDisallowedError as error:
+            raise LifecycleTransitionNotAllowedError(
+                "resolved",
+                error.status,
+            ) from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_status(updated, resolved_at)
+
+    def invalidate_prediction(
+        self,
+        prediction_id: int,
+        *,
+        reason: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> PredictionDetail:
+        """Persist one immutable Invalid decision outside scoring."""
+
+        try:
+            invalidation = NewInvalidation(reason=reason)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+
+        current = self._repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentLifecycleUpdateError(prediction_id)
+        if current.status is not PredictionStatus.OPEN:
+            raise LifecycleTransitionNotAllowedError("marked Invalid", current.status)
+
+        invalidated_at = as_utc(self._clock.now())
+        try:
+            updated = self._repository.invalidate_prediction(
+                prediction_id,
+                invalidation,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                invalidated_at=invalidated_at,
+            )
+        except LifecycleContextChangedError as error:
+            raise ConcurrentLifecycleUpdateError(prediction_id) from error
+        except LifecycleTransitionDisallowedError as error:
+            raise LifecycleTransitionNotAllowedError(
+                "marked Invalid",
+                error.status,
+            ) from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_status(updated, invalidated_at)
+
+    def delete_prediction(
+        self,
+        prediction_id: int,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        confirm_permanent_deletion: bool = False,
+    ) -> PredictionDetail | None:
+        """Permanently delete only explicitly confirmed untouched Open junk."""
+
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        if confirm_permanent_deletion is not True:
+            raise PredictionDeletionConfirmationRequired
+
+        current = self._repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentLifecycleUpdateError(prediction_id)
+
+        now = as_utc(self._clock.now())
+        displayed = self._with_derived_status(current, now)
+        if not displayed.deletion_allowed:
+            reason = (
+                displayed.status.value
+                if displayed.status is not PredictionStatus.OPEN
+                else "meaningful_history"
+            )
+            raise PredictionDeletionNotAllowedError(reason)
+
+        try:
+            deleted = self._repository.delete_prediction(
+                prediction_id,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                current_date=now.astimezone(self._local_timezone).date(),
+            )
+        except LifecycleContextChangedError as error:
+            raise ConcurrentLifecycleUpdateError(prediction_id) from error
+        except PredictionDeletionDisallowedError as error:
+            raise PredictionDeletionNotAllowedError(error.reason) from error
+        if not deleted:
+            raise PredictionNotFoundError(prediction_id)
+
+        latest = self._repository.get_latest_prediction()
+        return None if latest is None else self._with_derived_status(latest, now)
+
     def list_timeline(self, prediction_id: int) -> tuple[TimelineEvent, ...]:
         """Return Forecast and Journal events in deterministic causal order."""
 
@@ -376,26 +549,17 @@ class PredictionOperations:
         now: datetime,
     ) -> PredictionDetail:
         local_date = now.astimezone(self._local_timezone).date()
-        return PredictionDetail(
-            prediction_id=detail.prediction_id,
-            question=detail.question,
-            probability_percent=detail.probability_percent,
-            status=display_status(
-                detail.status,
-                detail.forecast_deadline,
-                local_date,
+        status = display_status(
+            detail.status,
+            detail.forecast_deadline,
+            local_date,
+        )
+        return replace(
+            detail,
+            status=status,
+            deletion_allowed=(
+                detail.deletion_allowed and status is PredictionStatus.OPEN
             ),
-            created_at=detail.created_at,
-            current_revision_id=detail.current_revision_id,
-            current_revision_sequence=detail.current_revision_sequence,
-            current_rationale=detail.current_rationale,
-            background=detail.background,
-            resolution_criteria=detail.resolution_criteria,
-            forecast_deadline=detail.forecast_deadline,
-            expected_resolution=detail.expected_resolution,
-            tags=detail.tags,
-            updated_at=detail.updated_at,
-            metadata_version=detail.metadata_version,
         )
 
     @staticmethod

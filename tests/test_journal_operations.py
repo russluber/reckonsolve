@@ -15,6 +15,7 @@ from reckonsolve.application.errors import (
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import (
+    BinaryOutcome,
     ForecastTimelineEvent,
     JournalTimelineEvent,
     PredictionStatus,
@@ -124,10 +125,19 @@ def test_locked_prediction_accepts_journal_but_terminal_predictions_reject_new(
     for status in ("resolved", "invalid"):
         database = Database.open(tmp_path / f"{status}.sqlite3")
         detail = _create(database)
-        with database.transaction() as connection:
-            connection.execute(
-                "UPDATE predictions SET status = ? WHERE id = ?",
-                (status, detail.prediction_id),
+        terminal_operations = PredictionOperations(database, FixedClock(JOURNALED))
+        if status == "resolved":
+            terminal_operations.resolve_prediction(
+                detail.prediction_id,
+                BinaryOutcome.YES,
+                expected_revision_id=detail.current_revision_id,
+                expected_metadata_version=detail.metadata_version,
+            )
+        else:
+            terminal_operations.invalidate_prediction(
+                detail.prediction_id,
+                expected_revision_id=detail.current_revision_id,
+                expected_metadata_version=detail.metadata_version,
             )
         with pytest.raises(JournalEntryNotAllowedError) as error_info:
             _add(PredictionOperations(database, FixedClock(JOURNALED)), detail)
@@ -197,18 +207,29 @@ def test_repository_rechecks_journal_context_inside_transaction(
     database.close()
 
 
+@pytest.mark.parametrize("status", ["resolved", "invalid"])
 def test_corrections_append_versions_keep_anchor_and_allow_terminal_state(
     tmp_path,
+    status: str,
 ) -> None:
-    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    database = Database.open(tmp_path / f"{status}.sqlite3")
     detail = _create(database)
     entry = _add(
         PredictionOperations(database, FixedClock(JOURNALED)), detail, "Typo bodi"
     )
-    with database.transaction() as connection:
-        connection.execute(
-            "UPDATE predictions SET status = 'resolved' WHERE id = ?",
-            (detail.prediction_id,),
+    terminal_operations = PredictionOperations(database, FixedClock(CORRECTED))
+    if status == "resolved":
+        terminal_operations.resolve_prediction(
+            detail.prediction_id,
+            BinaryOutcome.YES,
+            expected_revision_id=detail.current_revision_id,
+            expected_metadata_version=detail.metadata_version,
+        )
+    else:
+        terminal_operations.invalidate_prediction(
+            detail.prediction_id,
+            expected_revision_id=detail.current_revision_id,
+            expected_metadata_version=detail.metadata_version,
         )
     operations = PredictionOperations(database, FixedClock(CORRECTED))
 

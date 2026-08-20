@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QWidget,
 )
@@ -32,15 +33,159 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 5
+    assert first_runtime.database.schema_version == 6
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 5
+    assert second_runtime.database.schema_version == 6
     second_runtime.close()
+
+
+def test_resolve_through_ui_survives_restart_with_scoring_context(
+    qtbot,
+    tmp_path,
+) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    first = create_runtime(database_path=path)
+    qtbot.addWidget(first.window)
+    first.window.show()
+    first.window.navigate_to("New Prediction")
+    question = first.window.findChild(QLineEdit, "questionInput")
+    probability = first.window.findChild(QSpinBox, "probabilityInput")
+    create = first.window.findChild(QPushButton, "createPredictionButton")
+    assert question is not None
+    assert probability is not None
+    assert create is not None
+    question.setText("Will the M7 resolution survive restart?")
+    probability.setValue(42)
+    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+
+    resolve = first.window.findChild(QPushButton, "resolvePredictionButton")
+    assert resolve is not None
+    qtbot.mouseClick(resolve, Qt.MouseButton.LeftButton)
+    dialog = first.window.findChild(QDialog, "resolvePredictionDialog")
+    assert dialog is not None
+    qtbot.waitUntil(dialog.isVisible)
+    outcome_no = dialog.findChild(QRadioButton, "resolutionOutcomeNo")
+    notes = dialog.findChild(QPlainTextEdit, "resolutionNotesInput")
+    postmortem = dialog.findChild(QPlainTextEdit, "resolutionPostmortemInput")
+    save = dialog.findChild(QPushButton, "confirmResolvePredictionButton")
+    assert outcome_no is not None
+    assert notes is not None
+    assert postmortem is not None
+    assert save is not None
+    outcome_no.setChecked(True)
+    notes.setPlainText("Verified from the official result.")
+    postmortem.setPlainText("I should have weighted the base rate more.")
+    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
+
+    status = first.window.findChild(QLabel, "predictionDetailStatus")
+    scoring = first.window.findChild(QLabel, "predictionResolutionScoringForecast")
+    assert status is not None
+    assert scoring is not None
+    assert status.text() == "RESOLVED"
+    assert "42%" in scoring.text()
+    first.close()
+
+    second = create_runtime(database_path=path)
+    qtbot.addWidget(second.window)
+    second.window.show()
+    second.window.navigate_to("Prediction Detail")
+    reopened_status = second.window.findChild(QLabel, "predictionDetailStatus")
+    reopened_outcome = second.window.findChild(QLabel, "predictionResolutionOutcome")
+    reopened_notes = second.window.findChild(QLabel, "predictionResolutionNotes")
+    reopened_postmortem = second.window.findChild(QLabel, "predictionPostmortem")
+    assert reopened_status is not None
+    assert reopened_outcome is not None
+    assert reopened_notes is not None
+    assert reopened_postmortem is not None
+    assert reopened_status.text() == "RESOLVED"
+    assert reopened_outcome.text() == "Outcome: No"
+    assert reopened_notes.text() == "Verified from the official result."
+    assert reopened_postmortem.text() == "I should have weighted the base rate more."
+    second.close()
+
+
+def test_mark_invalid_through_ui_survives_restart(qtbot, tmp_path) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    first = create_runtime(database_path=path)
+    qtbot.addWidget(first.window)
+    first.window.show()
+    first.window.navigate_to("New Prediction")
+    question = first.window.findChild(QLineEdit, "questionInput")
+    create = first.window.findChild(QPushButton, "createPredictionButton")
+    assert question is not None
+    assert create is not None
+    question.setText("Will this cancelled event happen?")
+    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+
+    mark_invalid = first.window.findChild(QPushButton, "markInvalidButton")
+    assert mark_invalid is not None
+    qtbot.mouseClick(mark_invalid, Qt.MouseButton.LeftButton)
+    dialog = first.window.findChild(QDialog, "markInvalidDialog")
+    assert dialog is not None
+    qtbot.waitUntil(dialog.isVisible)
+    reason = dialog.findChild(QPlainTextEdit, "invalidationReasonInput")
+    save = dialog.findChild(QPushButton, "confirmMarkInvalidButton")
+    assert reason is not None
+    assert save is not None
+    reason.setPlainText("The underlying event was cancelled.")
+    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
+    first.close()
+
+    second = create_runtime(database_path=path)
+    qtbot.addWidget(second.window)
+    second.window.show()
+    second.window.navigate_to("Prediction Detail")
+    status = second.window.findChild(QLabel, "predictionDetailStatus")
+    reopened_reason = second.window.findChild(QLabel, "predictionInvalidationReason")
+    assert status is not None
+    assert reopened_reason is not None
+    assert status.text() == "INVALID"
+    assert reopened_reason.text() == "The underlying event was cancelled."
+    second.close()
+
+
+def test_confirmed_untouched_delete_through_ui_remains_deleted_after_restart(
+    qtbot,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    first = create_runtime(database_path=path)
+    qtbot.addWidget(first.window)
+    first.window.show()
+    first.window.navigate_to("New Prediction")
+    question = first.window.findChild(QLineEdit, "questionInput")
+    create = first.window.findChild(QPushButton, "createPredictionButton")
+    assert question is not None
+    assert create is not None
+    question.setText("Accidental duplicate")
+    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *_args: QMessageBox.StandardButton.Yes,
+    )
+    delete = first.window.findChild(QPushButton, "deletePredictionButton")
+    assert delete is not None
+    assert delete.isEnabled()
+    qtbot.mouseClick(delete, Qt.MouseButton.LeftButton)
+    with first.database.transaction() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] == 0
+    first.close()
+
+    second = create_runtime(database_path=path)
+    qtbot.addWidget(second.window)
+    second.window.show()
+    second.window.navigate_to("Prediction Detail")
+    empty = second.window.findChild(QLabel, "predictionDetailEmptyState")
+    assert empty is not None
+    assert not empty.isHidden()
+    second.close()
 
 
 def test_create_close_reopen_displays_persisted_prediction(qtbot, tmp_path) -> None:

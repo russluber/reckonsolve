@@ -145,3 +145,60 @@ class ConcurrentJournalCorrectionError(ApplicationError):
             "and try again."
         )
         self.entry_id = entry_id
+
+
+class ConcurrentLifecycleUpdateError(ApplicationError):
+    """A terminal action no longer matches the prediction the user reviewed."""
+
+    def __init__(self, prediction_id: int) -> None:
+        super().__init__(
+            "This prediction changed before the lifecycle action could be saved. "
+            "Close this dialog, review the latest prediction, and try again."
+        )
+        self.prediction_id = prediction_id
+
+
+class LifecycleTransitionNotAllowedError(ApplicationError):
+    """An already-terminal prediction cannot receive another terminal decision."""
+
+    def __init__(self, action: str, status: PredictionStatus) -> None:
+        super().__init__(
+            f"This prediction cannot be {action}. Its status is already "
+            f"{status.value.capitalize()}."
+        )
+        self.action = action
+        self.status = status
+
+
+class PredictionDeletionConfirmationRequired(ApplicationError):
+    """Permanent deletion was requested without explicit confirmation."""
+
+    def __init__(self) -> None:
+        super().__init__("Permanent deletion must be explicitly confirmed.")
+
+
+class PredictionDeletionNotAllowedError(ApplicationError):
+    """The prediction has lifecycle state or history that must be preserved."""
+
+    def __init__(self, reason: str) -> None:
+        if reason == PredictionStatus.LOCKED.value:
+            message = (
+                "A Locked prediction cannot be deleted. Mark it Invalid to preserve "
+                "the forecast while excluding it from scoring."
+            )
+        elif reason in (
+            PredictionStatus.RESOLVED.value,
+            PredictionStatus.INVALID.value,
+        ):
+            message = (
+                "Terminal prediction history cannot be deleted from the normal "
+                "interface."
+            )
+        else:
+            message = (
+                "Only an untouched Open prediction can be deleted. Mark this "
+                "prediction Invalid to preserve its meaningful history while "
+                "excluding it from scoring."
+            )
+        super().__init__(message)
+        self.reason = reason
