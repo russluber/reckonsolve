@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 7 implemented; later browsing and analytics workflows remain to be built
+Status: Milestone 8 implemented; later browsing and analytics workflows remain to be built
 Last reviewed: 2026-08-20
 
 This document describes how Reckonsolve is structured and how its implementation should evolve through v0.1. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 7 completes the individual Prediction lifecycle on top of creation, immutable revisions, Journal history, and probability-history rendering. Open and Locked predictions can resolve Yes or No or become Invalid through deliberate immutable terminal records. Resolution captures the exact scoring revision plus optional factual notes and postmortem. Only an explicitly confirmed, transaction-current untouched Open prediction can be permanently deleted. Dashboard attention surfacing, browser, scoring analytics, backup, and export workflows remain to be built.
+Milestone 8 adds an action-oriented Dashboard on top of the complete individual Prediction lifecycle. Open and derived Locked work is reclassified on each query into overlapping Open, Needs Attention, Ready to Resolve, and Locked sections. Freshness uses the current ForecastRevision's canonical instant and a persisted 14-day default threshold; Ready to Resolve uses the local calendar date after the inclusive Expected Resolution date. The threshold has one minimal Settings control. Prediction browsing, scoring analytics, backup, and export workflows remain to be built.
 
 | Area | Current state |
 |---|---|
@@ -17,13 +17,13 @@ Milestone 7 completes the individual Prediction lifecycle on top of creation, im
 | Python package | `src/reckonsolve/` |
 | Entry points | The `reckonsolve` console script and `python -m reckonsolve` both compose the desktop application through `app.py` |
 | Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
-| UI | Native PySide6 navigation plus functional New Prediction and Prediction Detail screens; optional initial details, metadata editing, revision entry, Journal capture and correction, Definition history, a unified timeline, native probability-history rendering, resolution, invalidation, and guarded junk deletion are implemented, while the other four primary screens remain explicit placeholders |
+| UI | Native PySide6 navigation plus functional Dashboard, New Prediction, and Prediction Detail screens; Settings implements the one persisted attention control, while Predictions and Analytics remain explicit placeholders |
 | Runtime path | Qt `AppLocalDataLocation`, which resolves on Windows to `%LOCALAPPDATA%\Reckonsolve`; tests can inject an explicit database path |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 6 adds immutable resolutions, invalidations, captured scoring-revision ownership, and guarded terminal transitions, building on protected revisions, Journal history, metadata, tags, and definition snapshots |
-| Domain and application operations | Complete atomic creation, append-only forecast revisions, Journal capture and correction, deterministic history reads, derived deadline status, immutable terminal transitions, guarded untouched-record deletion, stale-context rejection, and safe metadata editing are implemented without Qt dependencies |
+| Schema | Version 7 adds a constrained singleton application-settings row for the stale threshold, building on immutable terminal records, protected revisions, Journal history, metadata, tags, and definition snapshots |
+| Domain and application operations | Complete prediction workflows plus derived Dashboard attention classification, persisted threshold access, and deterministic overlapping bucket construction are implemented without Qt dependencies |
 | Analytics | Scoring analytics are not implemented; the Prediction Detail chart is a presentation of all revisions, not an analytics aggregate |
-| Automated tests | Tests cover the persistence foundation plus complete creation, immutable revisions and Journal history, causal timeline and probability-history rendering, lifecycle and date boundaries, terminal transitions and scoring capture, deletion restrictions, concurrency rejection, metadata safety, migrations through v6, transaction rollback, Qt behavior, and restart persistence |
+| Automated tests | Tests cover the persistence foundation plus complete prediction history/lifecycle behavior, Dashboard elapsed-time and local-date boundaries, overlapping classifications, persisted threshold changes, migrations through v7, Qt behavior, and restart persistence |
 | Windows packaging | Not implemented; the packaging format remains undecided |
 
 The sections below distinguish the current implementation from the boundaries still intended for later v0.1 slices.
@@ -166,7 +166,7 @@ The application may use concrete data-access classes directly while the program 
 
 ## 6. Package shape
 
-Milestone 7 implements this package structure:
+Milestone 8 implements this package structure:
 
 ```text
 src/reckonsolve/
@@ -177,16 +177,19 @@ src/reckonsolve/
   paths.py             per-user and explicitly injected database paths
   application/
     errors.py          expected user-presentable operation and concurrency errors
-    predictions.py     creation, history, lifecycle, deletion, detail, and metadata use cases
+    predictions.py     prediction workflows, Dashboard queries, and attention settings
   domain/
+    attention.py       stale-threshold validation and derived Dashboard values/rules
     predictions.py     prediction, history, terminal records, metadata, status, and validation values
   data/
     __init__.py        persistence package surface
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
     predictions.py     purpose-specific prediction, history, terminal, tag, and deletion persistence
+    settings.py        singleton persisted attention-setting access
   ui/
     __init__.py        UI package surface
+    dashboard.py       action buckets and the minimal attention Settings control
     main_window.py     navigation and screen coordination
     probability_history_chart.py
                        native probability-history projection and painting
@@ -248,6 +251,8 @@ Insert guards require a nonterminal persisted Prediction and, for Resolution, th
 
 Delete eligibility is derived rather than stored. An Open Prediction is eligible only when its current revision remains sequence one, its metadata version remains one, and neither Journal nor Definition history exists. The application additionally derives the current deadline status, so a now-Locked record is never treated as deletable. The delete operation rechecks revision and metadata tokens plus every eligibility condition inside one immediate transaction before cascading the parent. Initial rationale, metadata, and tag associations do not by themselves make an otherwise untouched creation ineligible.
 
+Milestone 8 migrates the database to version 7 with one `app_settings` row. Its constrained whole-number `stale_threshold_days` value defaults to 14 and is the only persisted preference needed by this slice. Dashboard membership itself remains derived and is never written back to Predictions. Keeping this setting in SQLite makes it part of normal backup/recovery state without introducing a general preference registry or platform-specific settings store.
+
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
@@ -288,6 +293,7 @@ Transactions protect operations that must not leave partial history:
 - Resolution rechecks the reviewed revision and metadata version, records the outcome and exact scoring revision, and persists terminal status atomically.
 - Invalidation rechecks the same reviewed context and records terminal state, timestamp, and optional reason atomically.
 - Deletion requires explicit confirmation, rechecks untouched Open eligibility, and cascades the eligible parent and its initial child state atomically.
+- Updating the stale threshold validates the value and replaces the singleton setting in one transaction; it does not mutate any Prediction or history row.
 - Backup must capture a transactionally consistent SQLite state.
 
 Expected domain or validation failures roll back the operation and are translated into clear user-facing messages. Unexpected persistence failures are not silently swallowed.
@@ -298,7 +304,7 @@ Terminal states—Resolved and Invalid—are persisted one-way v0.1 decisions ba
 
 Open and derived Locked predictions accept new Journal entries; Resolved and Invalid predictions reject them. Transparent corrections to existing entries remain allowed in every lifecycle state because they preserve the original assertion rather than create a backdated one.
 
-Needs Attention and Ready to Resolve are derived classifications, not stored lifecycle states. They may overlap and must not mutate probability. In v0.1, neither adding nor correcting a Journal entry resets Needs Attention; freshness continues to use the latest ForecastRevision timestamp.
+Needs Attention and Ready to Resolve are derived classifications, not stored lifecycle states. They may overlap and must not mutate probability. Needs Attention begins when at least the configured number of complete 24-hour periods has elapsed since the latest ForecastRevision's canonical UTC instant; the persisted v0.1 default is 14 days. Neither adding nor correcting a Journal entry resets it. Ready to Resolve begins when the computer's local date is later than the inclusive Expected Resolution date. Terminal Predictions participate in neither classification.
 
 System-generated instants follow [ADR 0002](decisions/0002-canonical-utc-instants.md): application operations obtain one aware instant from an injectable clock, normalize it to UTC, and the data layer stores canonical RFC 3339 text ending in `Z`. Definition, Forecast, Journal, and correction history render stored instants in the computer's local time. Date-only values retain calendar semantics and are not converted between time zones.
 
@@ -340,6 +346,8 @@ For an Open or Locked prediction, **Resolve** opens a deliberate terminal dialog
 
 **Delete** is enabled only when the refreshed Detail query reports an untouched Open prediction. It presents a permanent-action confirmation without mutating on Cancel. The confirmed operation rechecks all eligibility and concurrency facts inside its transaction. Locked or meaningful nonterminal history instead exposes **Mark Invalid**, while terminal history cannot be deleted through the normal interface. Widgets perform no SQL and own no transactions.
 
+Dashboard refreshes at startup, whenever it is entered, and once per minute while it remains visible; the timer stops on other screens. It queries all nonterminal Predictions with their current ForecastRevision, derives deadline status and attention against one current instant, then renders four counted sections. Open and Locked are lifecycle views; Needs Attention and Ready to Resolve are overlapping action views, so a Prediction may appear in several sections with all applicable labels intact. Each row says **Forecast last updated**, shows the current probability, and opens freshly queried Prediction Detail. Empty sections remain explicit rather than disappearing. Settings currently exposes only the persisted Needs Attention threshold; saving it immediately refreshes Dashboard without adding a general settings framework.
+
 A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
 
 Dialog cancellation has no side effect. In particular, opening and closing a revision, Journal, correction, Resolution, or Invalidation dialog cannot create history or terminal state.
@@ -354,7 +362,7 @@ Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled r
 
 An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
 
-Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 6 upgrade is tested from version 5 with existing revision and Journal history and rolls back completely if any terminal-lifecycle schema statement fails. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 7 upgrade is tested from version 6 with an existing Prediction, installs the 14-day singleton setting, and rolls back completely if a settings statement fails. Earlier version-specific migration tests remain pinned to their historical target. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
@@ -367,7 +375,7 @@ The backup implementation must use a SQLite-safe snapshot approach rather than c
 
 ## 15. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 6, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 coverage remains for optional-value normalization, calendar-date validation, inclusive deadline derivation, case-insensitive tag reuse, confirmation and no-op behavior, full immutable snapshots, transaction rollback, concurrency rejection, collapsed local-time history rendering, and metadata persistence. M4 adds complete-creation rollback and restart tests, initial-deadline boundaries, rationale persistence and normalization, unchanged and nonconsecutive probability behavior, immutable append and replacement protection, lifecycle enforcement, stale revision/metadata context rejection, sequence-ordered local-time history, and revision-dialog cancellation. M5 adds Journal normalization and atomic forecast capture, lifecycle boundaries, immutable correction sequences, terminal corrections, no-op and stale-form behavior, database immutability guards, causal ordering under equal or regressing clocks, unified Qt rendering, dialog cancellation, and full timeline persistence across restart. M6 adds native chart tests for one-revision layout, fixed probability endpoints, actual elapsed-time projection, sequence-ordered step geometry, equal and regressing timestamps, nonconsecutive repeated probabilities, revision-only marker selection, accessibility text, refresh behavior, and restart-backed history. M7 adds immutable Resolution and Invalidation records, exact scoring-revision capture, terminal mutual exclusion and stale-context rejection, Locked terminal actions, guarded untouched-record deletion, parent cascade integrity, local-time terminal Detail rendering, dialog cancellation, and restart persistence.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 7, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M7 retain coverage for metadata safety, immutable history, timeline/chart rendering, concurrency, terminal lifecycle, deletion, and restart behavior. M8 adds exact 14-day elapsed-time boundaries, local Expected Resolution date transitions, Open/Locked and terminal eligibility, overlapping bucket membership, latest-revision freshness despite Journal activity, threshold validation/persistence, v6-to-v7 migration safety, counted Qt sections, fresh Detail navigation, screen re-entry refresh, and application restart.
 
 Most behavior should be verified below the GUI:
 
@@ -396,7 +404,6 @@ Unexpected exceptions should not be converted into false success or empty data. 
 The product specification lists choices that must be made at their relevant milestones. Architecture must not settle them indirectly. They include:
 
 - visual design details;
-- stale threshold default;
 - calibration bins;
 - cumulative versus windowed Brier trend;
 - CSV layout; and

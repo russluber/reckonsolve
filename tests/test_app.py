@@ -33,15 +33,54 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 6
+    assert first_runtime.database.schema_version == 7
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 6
+    assert second_runtime.database.schema_version == 7
     second_runtime.close()
+
+
+def test_dashboard_and_attention_setting_survive_restart(qtbot, tmp_path) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    first = create_runtime(database_path=path)
+    qtbot.addWidget(first.window)
+    first.window.show()
+    first.window.navigate_to("New Prediction")
+    question = first.window.findChild(QLineEdit, "questionInput")
+    create = first.window.findChild(QPushButton, "createPredictionButton")
+    assert question is not None
+    assert create is not None
+    question.setText("Will the M8 Dashboard survive restart?")
+    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+
+    first.window.navigate_to("Settings")
+    threshold = first.window.findChild(QSpinBox, "staleThresholdInput")
+    save = first.window.findChild(QPushButton, "saveStaleThresholdButton")
+    assert threshold is not None
+    assert save is not None
+    threshold.setValue(21)
+    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
+    first.close()
+
+    second = create_runtime(database_path=path)
+    qtbot.addWidget(second.window)
+    second.window.show()
+    second.window.navigate_to("Settings")
+    reopened_threshold = second.window.findChild(QSpinBox, "staleThresholdInput")
+    assert reopened_threshold is not None
+    assert reopened_threshold.value() == 21
+    second.window.navigate_to("Dashboard")
+    row = second.window.findChild(QPushButton, "dashboardOpenPrediction1")
+    dashboard_threshold = second.window.findChild(QLabel, "dashboardThreshold")
+    assert row is not None
+    assert dashboard_threshold is not None
+    assert "M8 Dashboard" in row.text()
+    assert dashboard_threshold.text() == "Needs Attention threshold: 21 days"
+    second.close()
 
 
 def test_resolve_through_ui_survives_restart_with_scoring_context(

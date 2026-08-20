@@ -2,7 +2,7 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. It is designed for recording binary probabilistic predictions, revising beliefs without rewriting history, resolving outcomes, and studying calibration.
 
-> Reckonsolve has reached its lifecycle and resolution milestone, but browsing, analytics, and data-management workflows are still being built and it is not ready for normal use.
+> Reckonsolve has reached its action-oriented Dashboard milestone, but browsing, analytics, and data-management workflows are still being built and it is not ready for normal use.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
@@ -14,7 +14,9 @@ Question, Resolution Criteria, and Forecast Deadline edits require tailored conf
 
 Open and Locked predictions can now be resolved Yes or No or marked Invalid. Resolution captures the exact final scoring revision plus optional factual notes and a reflective postmortem; invalidation preserves an optional reason and excludes the prediction from future scoring. Both are deliberate, immutable terminal decisions in v0.1. An untouched Open duplicate or test record can instead be permanently deleted after confirmation. Once a prediction is Locked, revised, edited, journaled, Resolved, or Invalid, its normal Delete action is unavailable and meaningful nonterminal history is directed toward Invalid.
 
-The Dashboard, Predictions, Analytics, and Settings screens remain placeholders. Browsing, attention surfacing, scoring analytics, backup, export, and Windows packaging are reserved for later milestones.
+The Dashboard now separates active work into overlapping Open, Needs Attention, Ready to Resolve, and Locked sections. Needs Attention uses the latest forecast revision, not Journal activity, and defaults to 14 elapsed days. The threshold persists in the application database and can be changed through the currently minimal Settings screen. Dashboard rows show the current probability and forecast-update time and open the corresponding Prediction Detail.
+
+The Predictions and Analytics screens remain placeholders. Browsing, scoring analytics, backup, export, broader Settings tools, and Windows packaging are reserved for later milestones.
 
 ## Documentation
 

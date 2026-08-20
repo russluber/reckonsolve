@@ -32,6 +32,7 @@ from reckonsolve.application.errors import (
     ApplicationError,
     MeaningChangeConfirmationRequired,
 )
+from reckonsolve.domain.attention import DashboardSnapshot
 from reckonsolve.domain.predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
@@ -255,6 +256,15 @@ class PredictionOperations(Protocol):
         prediction_id: int,
     ) -> tuple[DefinitionChange, ...]:
         """Return immutable meaning-bearing definition changes."""
+
+    def get_dashboard(self) -> DashboardSnapshot:
+        """Return the current overlapping Dashboard buckets."""
+
+    def get_stale_threshold_days(self) -> int:
+        """Return the persisted Needs Attention threshold."""
+
+    def set_stale_threshold_days(self, value: int) -> int:
+        """Persist a validated Needs Attention threshold."""
 
 
 class NewPredictionScreen(QWidget):

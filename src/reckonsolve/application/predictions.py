@@ -18,6 +18,15 @@ from reckonsolve.data.predictions import (
     PredictionDeletionDisallowedError,
     PredictionRepository,
 )
+from reckonsolve.data.settings import SettingsRepository
+from reckonsolve.domain.attention import (
+    AttentionValidationError,
+    DashboardPrediction,
+    DashboardSnapshot,
+    needs_attention,
+    ready_to_resolve,
+    validate_stale_threshold_days,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
@@ -68,6 +77,7 @@ class PredictionOperations:
         local_timezone: tzinfo | None = None,
     ) -> None:
         self._repository = PredictionRepository(database)
+        self._settings_repository = SettingsRepository(database)
         self._clock = SystemClock() if clock is None else clock
         self._local_timezone = local_timezone
 
@@ -460,6 +470,101 @@ class PredictionOperations:
         now = as_utc(self._clock.now())
         return self._with_derived_status(detail, now)
 
+    def get_dashboard(self) -> DashboardSnapshot:
+        """Return deterministic overlapping action buckets for nonterminal work."""
+
+        now = as_utc(self._clock.now())
+        current_date = now.astimezone(self._local_timezone).date()
+        stale_threshold_days = self.get_stale_threshold_days()
+        predictions = tuple(
+            self._classify_dashboard_prediction(
+                prediction,
+                now=now,
+                current_date=current_date,
+                stale_threshold_days=stale_threshold_days,
+            )
+            for prediction in self._repository.list_dashboard_predictions()
+        )
+
+        open_predictions = tuple(
+            sorted(
+                (
+                    prediction
+                    for prediction in predictions
+                    if prediction.status is PredictionStatus.OPEN
+                ),
+                key=lambda prediction: (
+                    prediction.latest_revision_at,
+                    prediction.prediction_id,
+                ),
+                reverse=True,
+            )
+        )
+        needs_attention_predictions = tuple(
+            sorted(
+                (
+                    prediction
+                    for prediction in predictions
+                    if prediction.needs_attention
+                ),
+                key=lambda prediction: (
+                    prediction.latest_revision_at,
+                    prediction.prediction_id,
+                ),
+            )
+        )
+        ready_to_resolve_predictions = tuple(
+            sorted(
+                (
+                    prediction
+                    for prediction in predictions
+                    if prediction.ready_to_resolve
+                ),
+                key=lambda prediction: (
+                    prediction.expected_resolution or date.max,
+                    prediction.prediction_id,
+                ),
+            )
+        )
+        locked_predictions = tuple(
+            sorted(
+                (
+                    prediction
+                    for prediction in predictions
+                    if prediction.status is PredictionStatus.LOCKED
+                ),
+                key=lambda prediction: (
+                    prediction.forecast_deadline or date.max,
+                    prediction.prediction_id,
+                ),
+            )
+        )
+        return DashboardSnapshot(
+            stale_threshold_days=stale_threshold_days,
+            open_predictions=open_predictions,
+            needs_attention_predictions=needs_attention_predictions,
+            ready_to_resolve_predictions=ready_to_resolve_predictions,
+            locked_predictions=locked_predictions,
+        )
+
+    def get_stale_threshold_days(self) -> int:
+        """Return the persisted Needs Attention threshold."""
+
+        value = self._settings_repository.get_stale_threshold_days()
+        try:
+            return validate_stale_threshold_days(value)
+        except AttentionValidationError as error:
+            raise ValidationError(str(error), field="stale_threshold_days") from error
+
+    def set_stale_threshold_days(self, value: int) -> int:
+        """Validate and persist the Needs Attention threshold."""
+
+        try:
+            threshold = validate_stale_threshold_days(value)
+        except AttentionValidationError as error:
+            raise ValidationError(str(error), field="stale_threshold_days") from error
+        return self._settings_repository.set_stale_threshold_days(threshold)
+
     def get_prediction(self, prediction_id: int) -> PredictionDetail:
         """Return one prediction with current forecast and complete metadata."""
 
@@ -559,6 +664,35 @@ class PredictionOperations:
             status=status,
             deletion_allowed=(
                 detail.deletion_allowed and status is PredictionStatus.OPEN
+            ),
+        )
+
+    def _classify_dashboard_prediction(
+        self,
+        prediction: DashboardPrediction,
+        *,
+        now: datetime,
+        current_date: date,
+        stale_threshold_days: int,
+    ) -> DashboardPrediction:
+        status = display_status(
+            prediction.status,
+            prediction.forecast_deadline,
+            current_date,
+        )
+        return replace(
+            prediction,
+            status=status,
+            needs_attention=needs_attention(
+                status,
+                prediction.latest_revision_at,
+                now,
+                stale_threshold_days,
+            ),
+            ready_to_resolve=ready_to_resolve(
+                status,
+                prediction.expected_resolution,
+                current_date,
             ),
         )
 

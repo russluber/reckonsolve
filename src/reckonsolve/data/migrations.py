@@ -869,6 +869,26 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=7,
+        name="add persisted attention settings",
+        statements=(
+            """
+            CREATE TABLE app_settings (
+                singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                stale_threshold_days INTEGER NOT NULL
+                    CHECK (
+                        typeof(stale_threshold_days) = 'integer'
+                        AND stale_threshold_days BETWEEN 1 AND 9999
+                    )
+            ) STRICT
+            """,
+            """
+            INSERT INTO app_settings (singleton, stale_threshold_days)
+            VALUES (1, 14)
+            """,
+        ),
+    ),
 )
 
 

@@ -45,7 +45,7 @@ def test_v5_upgrade_preserves_history_and_adds_terminal_tables(tmp_path) -> None
     prediction_id, revision_id = _insert_v5_prediction(v5)
     v5.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:6])
 
     assert upgraded.schema_version == 6
     with upgraded.transaction() as connection:

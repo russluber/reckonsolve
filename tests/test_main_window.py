@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 
 import pytest
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QDateEdit,
@@ -28,6 +28,7 @@ from reckonsolve.application.errors import (
     ConcurrentPredictionUpdateError,
     MeaningChangeConfirmationRequired,
 )
+from reckonsolve.domain.attention import DashboardPrediction, DashboardSnapshot
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
@@ -247,6 +248,13 @@ class FakePredictionOperations:
         self.invalidate_error: ApplicationError | None = None
         self.delete_calls: list[DeletePredictionCall] = []
         self.delete_error: ApplicationError | None = None
+        self.dashboard_snapshot: DashboardSnapshot | None = None
+        self.dashboard_error: ApplicationError | None = None
+        self.dashboard_calls = 0
+        self.stale_threshold_days = 14
+        self.threshold_get_calls = 0
+        self.threshold_set_calls: list[int] = []
+        self.threshold_error: ApplicationError | None = None
         self.mutation_count = 0
 
     def create_prediction(
@@ -658,6 +666,55 @@ class FakePredictionOperations:
             raise self.definition_change_error
         return self.definition_changes
 
+    def get_dashboard(self) -> DashboardSnapshot:
+        self.dashboard_calls += 1
+        if self.dashboard_error is not None:
+            raise self.dashboard_error
+        if self.dashboard_snapshot is not None:
+            return self.dashboard_snapshot
+        if self.latest is None or self.latest.status in (
+            PredictionStatus.RESOLVED,
+            PredictionStatus.INVALID,
+        ):
+            open_predictions: tuple[DashboardPrediction, ...] = ()
+            locked_predictions: tuple[DashboardPrediction, ...] = ()
+        else:
+            prediction = DashboardPrediction(
+                prediction_id=self.latest.prediction_id,
+                question=self.latest.question,
+                probability_percent=self.latest.probability_percent,
+                status=self.latest.status,
+                latest_revision_at=self.latest.created_at,
+                forecast_deadline=self.latest.forecast_deadline,
+                expected_resolution=self.latest.expected_resolution,
+            )
+            open_predictions = (
+                (prediction,) if self.latest.status is PredictionStatus.OPEN else ()
+            )
+            locked_predictions = (
+                (prediction,) if self.latest.status is PredictionStatus.LOCKED else ()
+            )
+        return DashboardSnapshot(
+            stale_threshold_days=self.stale_threshold_days,
+            open_predictions=open_predictions,
+            needs_attention_predictions=(),
+            ready_to_resolve_predictions=(),
+            locked_predictions=locked_predictions,
+        )
+
+    def get_stale_threshold_days(self) -> int:
+        self.threshold_get_calls += 1
+        if self.threshold_error is not None:
+            raise self.threshold_error
+        return self.stale_threshold_days
+
+    def set_stale_threshold_days(self, value: int) -> int:
+        self.threshold_set_calls.append(value)
+        if self.threshold_error is not None:
+            raise self.threshold_error
+        self.stale_threshold_days = value
+        return value
+
 
 @pytest.fixture
 def operations() -> FakePredictionOperations:
@@ -699,10 +756,8 @@ def test_main_window_navigates_to_each_primary_screen(window: MainWindow) -> Non
 
 def test_unimplemented_screens_remain_honest_placeholders(window: MainWindow) -> None:
     placeholder_screens = (
-        "Dashboard",
         "Predictions",
         "Analytics",
-        "Settings",
     )
 
     for screen_name in placeholder_screens:
@@ -714,6 +769,202 @@ def test_unimplemented_screens_remain_honest_placeholders(window: MainWindow) ->
         )
 
         assert any(word in placeholder.text() for word in ("coming", "will"))
+
+
+def test_dashboard_renders_overlapping_buckets_without_losing_classifications(
+    qtbot: QtBot,
+) -> None:
+    open_prediction = DashboardPrediction(
+        prediction_id=1,
+        question="Fresh open forecast",
+        probability_percent=45,
+        status=PredictionStatus.OPEN,
+        latest_revision_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
+    )
+    overlap = DashboardPrediction(
+        prediction_id=7,
+        question="<b>Literal locked forecast</b>",
+        probability_percent=70,
+        status=PredictionStatus.LOCKED,
+        latest_revision_at=datetime(2026, 8, 1, 19, 30, tzinfo=UTC),
+        forecast_deadline=date(2026, 8, 10),
+        expected_resolution=date(2026, 8, 15),
+        needs_attention=True,
+        ready_to_resolve=True,
+    )
+    operations = FakePredictionOperations()
+    operations.dashboard_snapshot = DashboardSnapshot(
+        stale_threshold_days=14,
+        open_predictions=(open_prediction,),
+        needs_attention_predictions=(overlap,),
+        ready_to_resolve_predictions=(overlap,),
+        locked_predictions=(overlap,),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    assert _required_child(window, QGroupBox, "dashboardOpenSection").title() == (
+        "Open (1)"
+    )
+    assert (
+        _required_child(
+            window,
+            QGroupBox,
+            "dashboardNeedsAttentionSection",
+        ).title()
+        == "Needs Attention (1)"
+    )
+    assert (
+        _required_child(
+            window,
+            QGroupBox,
+            "dashboardReadyToResolveSection",
+        ).title()
+        == "Ready to Resolve (1)"
+    )
+    assert _required_child(window, QGroupBox, "dashboardLockedSection").title() == (
+        "Locked (1)"
+    )
+    for object_name in (
+        "dashboardNeedsAttentionPrediction7",
+        "dashboardReadyToResolvePrediction7",
+        "dashboardLockedPrediction7",
+    ):
+        row = _required_child(window, QPushButton, object_name)
+        assert "<b>Literal locked forecast</b>" in row.text()
+        assert "70%" in row.text()
+        assert "needs attention" in row.accessibleDescription()
+        assert "ready to resolve" in row.accessibleDescription()
+    assert _required_child(window, QLabel, "dashboardThreshold").text() == (
+        "Needs Attention threshold: 14 days"
+    )
+
+
+def test_dashboard_row_opens_fresh_prediction_detail(qtbot: QtBot) -> None:
+    latest = FakePrediction(7, "Open this from Dashboard", 55)
+    operations = FakePredictionOperations(latest)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    row = _required_child(window, QPushButton, "dashboardOpenPrediction7")
+    qtbot.mouseClick(row, Qt.MouseButton.LeftButton)
+
+    assert operations.get_calls[-1] == 7
+    assert window.current_screen_name == "Prediction Detail"
+    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
+        latest.question
+    )
+
+
+def test_dashboard_refreshes_when_reentered(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    initial_calls = operations.dashboard_calls
+    first_empty = _required_child(window, QLabel, "dashboardOpenEmpty")
+    assert first_empty.text() == "No open predictions."
+
+    operations.latest = FakePrediction(8, "Appeared while away", 35)
+    window.navigate_to("New Prediction")
+    window.navigate_to("Dashboard")
+
+    assert operations.dashboard_calls == initial_calls + 1
+    assert (
+        "Appeared while away"
+        in _required_child(
+            window,
+            QPushButton,
+            "dashboardOpenPrediction8",
+        ).text()
+    )
+
+
+def test_dashboard_refresh_timer_runs_only_while_visible(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    timer = window.findChild(QTimer, "dashboardRefreshTimer")
+    assert timer is not None
+    assert timer.isActive()
+
+    operations.latest = FakePrediction(9, "Appeared at a time boundary", 48)
+    timer.timeout.emit()
+    assert (
+        "Appeared at a time boundary"
+        in _required_child(
+            window,
+            QPushButton,
+            "dashboardOpenPrediction9",
+        ).text()
+    )
+
+    window.navigate_to("New Prediction")
+    assert not timer.isActive()
+    window.navigate_to("Dashboard")
+    assert timer.isActive()
+
+
+def test_settings_persists_threshold_and_refreshes_dashboard(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    dashboard_calls = operations.dashboard_calls
+
+    window.navigate_to("Settings")
+    threshold = _required_child(window, QSpinBox, "staleThresholdInput")
+    save = _required_child(window, QPushButton, "saveStaleThresholdButton")
+    assert threshold.value() == 14
+    assert threshold.minimum() == 1
+    assert threshold.maximum() == 9999
+
+    threshold.setValue(30)
+    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
+
+    assert operations.threshold_set_calls == [30]
+    assert operations.stale_threshold_days == 30
+    assert operations.dashboard_calls == dashboard_calls + 1
+    assert _required_child(window, QLabel, "staleThresholdStatus").text() == (
+        "Saved. Dashboard now uses 30 days."
+    )
+    window.navigate_to("Dashboard")
+    assert _required_child(window, QLabel, "dashboardThreshold").text() == (
+        "Needs Attention threshold: 30 days"
+    )
+
+
+def test_dashboard_and_settings_show_expected_read_errors(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    operations.dashboard_error = ApplicationError("Dashboard could not be loaded.")
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    assert _required_child(window, QLabel, "dashboardError").text() == (
+        "Dashboard unavailable. Dashboard could not be loaded."
+    )
+    assert _required_child(window, QWidget, "dashboardScrollArea").isHidden()
+
+    operations.dashboard_error = None
+    window.navigate_to("New Prediction")
+    window.navigate_to("Dashboard")
+    operations.dashboard_error = ApplicationError("Refresh failed.")
+    window.navigate_to("New Prediction")
+    window.navigate_to("Dashboard")
+    assert _required_child(window, QLabel, "dashboardError").text() == (
+        "Dashboard could not refresh; showing the last loaded results. Refresh failed."
+    )
+    assert not _required_child(window, QWidget, "dashboardScrollArea").isHidden()
+
+    operations.threshold_error = ApplicationError("Setting could not be loaded.")
+    window.navigate_to("Settings")
+    assert _required_child(window, QLabel, "staleThresholdStatus").text() == (
+        "Setting could not be loaded."
+    )
+    assert not _required_child(window, QSpinBox, "staleThresholdInput").isEnabled()
+    assert not _required_child(
+        window,
+        QPushButton,
+        "saveStaleThresholdButton",
+    ).isEnabled()
 
 
 def test_new_prediction_form_has_integer_probability_bounds_and_focus(

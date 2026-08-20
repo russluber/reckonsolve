@@ -4,6 +4,7 @@ import sqlite3
 from datetime import date, datetime
 
 from reckonsolve.clock import format_utc, parse_utc
+from reckonsolve.domain.attention import DashboardPrediction
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
@@ -654,6 +655,47 @@ class PredictionRepository:
             )
 
         return detail
+
+    def list_dashboard_predictions(self) -> tuple[DashboardPrediction, ...]:
+        """Load every nonterminal prediction with its current forecast facts."""
+
+        with self._database.transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    prediction.id AS prediction_id,
+                    prediction.question,
+                    prediction.status,
+                    prediction.forecast_deadline,
+                    prediction.expected_resolution,
+                    current_revision.probability_percent,
+                    current_revision.created_at AS latest_revision_at
+                FROM predictions AS prediction
+                JOIN forecast_revisions AS current_revision
+                    ON current_revision.id = (
+                        SELECT candidate.id
+                        FROM forecast_revisions AS candidate
+                        WHERE candidate.prediction_id = prediction.id
+                        ORDER BY candidate.sequence DESC
+                        LIMIT 1
+                    )
+                WHERE prediction.status = 'open'
+                ORDER BY prediction.id
+                """
+            ).fetchall()
+
+        return tuple(
+            DashboardPrediction(
+                prediction_id=int(row["prediction_id"]),
+                question=str(row["question"]),
+                probability_percent=int(row["probability_percent"]),
+                status=PredictionStatus(row["status"]),
+                latest_revision_at=parse_utc(str(row["latest_revision_at"])),
+                forecast_deadline=_parse_date(row["forecast_deadline"]),
+                expected_resolution=_parse_date(row["expected_resolution"]),
+            )
+            for row in rows
+        )
 
     def get_prediction(self, prediction_id: int) -> PredictionDetail | None:
         """Load one prediction and derive its current revision."""

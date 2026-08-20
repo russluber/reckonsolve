@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from reckonsolve.ui.dashboard import AttentionSettingsScreen, DashboardScreen
 from reckonsolve.ui.screens import (
     NewPredictionScreen,
     PredictionDetailScreen,
@@ -25,7 +26,7 @@ _SCREEN_DEFINITIONS: tuple[tuple[str, str, str | None], ...] = (
     (
         "Dashboard",
         "dashboard",
-        "Your forecasting dashboard is coming in a later milestone.",
+        None,
     ),
     (
         "New Prediction",
@@ -50,7 +51,7 @@ _SCREEN_DEFINITIONS: tuple[tuple[str, str, str | None], ...] = (
     (
         "Settings",
         "settings",
-        "Settings and data-management tools are coming in a later milestone.",
+        None,
     ),
 )
 
@@ -78,15 +79,21 @@ class MainWindow(QMainWindow):
 
         self._new_prediction_screen = NewPredictionScreen(operations)
         self._prediction_detail_screen = PredictionDetailScreen(operations)
+        self._dashboard_screen = DashboardScreen(operations)
+        self._settings_screen = AttentionSettingsScreen(operations)
 
         for screen_name, object_name, placeholder_text in _SCREEN_DEFINITIONS:
             navigation_item = QListWidgetItem(screen_name)
             navigation_item.setData(Qt.ItemDataRole.UserRole, screen_name)
             self._navigation.addItem(navigation_item)
-            if screen_name == "New Prediction":
+            if screen_name == "Dashboard":
+                screen = self._dashboard_screen
+            elif screen_name == "New Prediction":
                 screen = self._new_prediction_screen
             elif screen_name == "Prediction Detail":
                 screen = self._prediction_detail_screen
+            elif screen_name == "Settings":
+                screen = self._settings_screen
             else:
                 if placeholder_text is None:
                     raise AssertionError(f"Missing placeholder text for {screen_name}")
@@ -107,6 +114,12 @@ class MainWindow(QMainWindow):
         self._navigation.currentRowChanged.connect(self._show_screen)
         self._new_prediction_screen.prediction_created.connect(
             self._show_created_prediction
+        )
+        self._dashboard_screen.prediction_selected.connect(
+            self._show_selected_prediction
+        )
+        self._settings_screen.threshold_changed.connect(
+            lambda _value: self._dashboard_screen.refresh()
         )
         self._navigation.setCurrentRow(0)
 
@@ -132,12 +145,20 @@ class MainWindow(QMainWindow):
 
     def _show_screen(self, screen_index: int) -> None:
         self._screen_stack.setCurrentIndex(screen_index)
-        if self.current_screen_name == "New Prediction":
+        if self.current_screen_name == "Dashboard":
+            self._dashboard_screen.refresh()
+        elif self.current_screen_name == "New Prediction":
             self._new_prediction_screen.focus_question()
         elif self.current_screen_name == "Prediction Detail":
             self._prediction_detail_screen.refresh()
+        elif self.current_screen_name == "Settings":
+            self._settings_screen.refresh()
 
     def _show_created_prediction(self, prediction: PredictionSnapshot) -> None:
+        self._prediction_detail_screen.show_prediction(prediction)
+        self.navigate_to("Prediction Detail")
+
+    def _show_selected_prediction(self, prediction: PredictionSnapshot) -> None:
         self._prediction_detail_screen.show_prediction(prediction)
         self.navigate_to("Prediction Detail")
 

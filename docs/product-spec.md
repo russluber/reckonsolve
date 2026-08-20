@@ -655,11 +655,11 @@ It should surface counts and useful entries for:
 
 ### 16.1 Needs Attention
 
-In v0.1, a nonterminal prediction needs attention when its latest forecast revision is older than the configured stale threshold.
+In v0.1, a nonterminal prediction needs attention when its latest forecast revision is at least the configured stale threshold old. Freshness uses elapsed time between the latest ForecastRevision's canonical UTC instant and the current canonical UTC instant; local display formatting does not change that duration.
 
 The interface should say "Forecast last updated," not "Last reviewed," because v0.1 does not record Reviews.
 
-The exact default threshold was not settled in product design. Choose a clearly documented default during implementation and make it configurable without overbuilding the settings system.
+The v0.1 default stale threshold is **14 days**: fourteen complete 24-hour periods since the latest ForecastRevision. It is stored with the application data and adjustable through one minimal Settings control without introducing a general preferences framework. Adding or correcting Journal text does not reset this clock.
 
 ### 16.2 Ready to Resolve
 
@@ -667,6 +667,8 @@ A prediction is Ready to Resolve when:
 
 - it is not Resolved or Invalid; and
 - its Expected Resolution has passed.
+
+Expected Resolution is an inclusive date-only expectation. A prediction becomes Ready to Resolve when the computer's local calendar date is later than its Expected Resolution date, not at the start of that date.
 
 Ready to Resolve is an attention bucket, not a fifth canonical lifecycle status.
 
@@ -964,6 +966,8 @@ Acceptance demonstration:
 
 - Surface Open, Needs Attention, Ready to Resolve, and Locked predictions.
 - Use latest revision time for v0.1 freshness.
+- Default Needs Attention to 14 elapsed days and persist one minimal configurable threshold.
+- Preserve overlapping attention classifications rather than forcing predictions into one exclusive bucket.
 
 ### Milestone 9: Tags and prediction browser
 
@@ -1053,7 +1057,6 @@ For repeated displayed probabilities, cover a valid nonconsecutive return such a
 The application and project name is resolved as **Reckonsolve**. Metadata-edit safety, probability input, and time handling are resolved in Sections 8.2, 9.2, and 24. The following choices were not fully settled at the product-design stage. Resolve them during the relevant milestone, document the decision, and do not let them expand scope:
 
 - precise visual design system;
-- default stale threshold;
 - exact calibration binning scheme;
 - cumulative versus windowed Brier trend for the first implementation;
 - exact CSV export layout; and
