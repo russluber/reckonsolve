@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline and v0.2 Product Plan
+## v0.1 Baseline and v0.2 Product Specification
 
-Status: v0.1 source milestone implemented; v0.2 product contract approved for staged implementation
+Status: v0.2 source release implemented; Later scope requires explicit planning and authorization
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 

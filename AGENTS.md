@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source baseline is v0.1. The current staged development target is v0.2.
+The completed source release is v0.2. The next development target has not yet been selected.
 
 The v0.1 baseline includes:
 
@@ -48,7 +48,7 @@ v0.2 adds:
 - Forecast Reviews that retain an unchanged Binary or Numeric forecast without creating a fake revision; and
 - type-aware backup, CSV export, migration, and private-build hardening.
 
-Implement v0.2 only through the staged Milestones 13 through 20 in `docs/product-spec.md`. Preserve the completed binary behavior rather than redesigning it incidentally.
+Milestones 13 through 20 in `docs/product-spec.md` are complete. Preserve the completed Binary and Numeric behavior rather than redesigning it incidentally. Treat any post-v0.2 feature work as a new explicitly authorized milestone or coherent vertical slice.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 
@@ -57,7 +57,7 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Use Python managed by `uv`.
 - Build the desktop interface with PySide6.
 - Use SQLite as the canonical data store.
-- Target native Windows development and eventual packaging; v0.1 does not require a normal installer or public binary distribution.
+- Target native Windows development and eventual packaging; v0.2 does not require a normal installer or public binary distribution.
 - Keep core behavior fully functional offline.
 - Keep the architecture proportionate to a single-user local desktop application.
 - Do not add an ORM, migration framework, GUI framework, charting library, packaging system, or other production dependency casually. Prefer existing dependencies; when a new dependency is necessary, explain the need and tradeoff.
