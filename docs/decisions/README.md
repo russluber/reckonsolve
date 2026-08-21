@@ -68,3 +68,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0007: Use online SQLite backup and relational CSV export](0007-online-backup-and-relational-csv-export.md) — Accepted 2026-08-20
 - [0008: Use selected local icons and a private onedir build](0008-private-onedir-and-local-icons.md) — Accepted 2026-08-20
 - [0009: Store fixed-precision numeric values as scaled integers](0009-scaled-integer-numeric-values.md) — Accepted 2026-08-20
+- [0010: Preserve type-aware Forecast Reviews as immutable revision anchors](0010-type-aware-forecast-reviews.md) — Accepted 2026-08-20

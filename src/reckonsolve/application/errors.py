@@ -123,6 +123,29 @@ class ForecastRevisionNotAllowedError(ApplicationError):
         self.status = status
 
 
+class ConcurrentForecastReviewError(ApplicationError):
+    """The forecast or definition changed after the Review action opened."""
+
+    def __init__(self, prediction_id: int) -> None:
+        super().__init__(
+            "This prediction changed before the Forecast Review could be saved. "
+            "Close this dialog, review the latest forecast and details, and try "
+            "again."
+        )
+        self.prediction_id = prediction_id
+
+
+class ForecastReviewNotAllowedError(ApplicationError):
+    """Lifecycle state does not permit a Forecast Review."""
+
+    def __init__(self, status: PredictionStatus) -> None:
+        super().__init__(
+            "A Forecast Review can be recorded only while a prediction is Open. "
+            f"This prediction is {status.value.capitalize()}."
+        )
+        self.status = status
+
+
 class ConcurrentJournalUpdateError(ApplicationError):
     """The prediction changed after a new Journal form was opened."""
 

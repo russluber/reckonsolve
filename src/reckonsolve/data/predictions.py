@@ -13,11 +13,13 @@ from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
     FixedPrecisionValue,
+    ForecastReviewTimelineEvent,
     ForecastRevision,
     ForecastTimelineEvent,
     Invalidation,
     JournalCorrection,
     JournalTimelineEvent,
+    NewForecastReview,
     NewForecastRevision,
     NewInvalidation,
     NewJournalCorrection,
@@ -52,6 +54,18 @@ class ForecastRevisionUnchangedError(RuntimeError):
 
 class ForecastRevisionDisallowedError(RuntimeError):
     """Raised when lifecycle state rejects a normal forecast revision."""
+
+    def __init__(self, status: PredictionStatus) -> None:
+        super().__init__(status.value)
+        self.status = status
+
+
+class ForecastReviewContextChangedError(RuntimeError):
+    """Raised when a Review no longer matches the current forecast context."""
+
+
+class ForecastReviewDisallowedError(RuntimeError):
+    """Raised when lifecycle state rejects a Forecast Review."""
 
     def __init__(self, status: PredictionStatus) -> None:
         super().__init__(status.value)
@@ -324,6 +338,60 @@ class PredictionRepository:
                 )
 
         return entry
+
+    def add_forecast_review(
+        self,
+        prediction_id: int,
+        review: NewForecastReview,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        created_at: datetime,
+        current_date: date,
+    ) -> ForecastReviewTimelineEvent | None:
+        """Record reconsideration of the transaction-current Binary forecast."""
+
+        with self._database.transaction() as connection:
+            row = _select_prediction_detail(connection, prediction_id)
+            if row is None:
+                return None
+            current = _map_prediction_detail(row)
+            if (
+                current.current_revision_id != expected_revision_id
+                or current.metadata_version != expected_metadata_version
+            ):
+                raise ForecastReviewContextChangedError
+            effective_status = display_status(
+                current.status,
+                current.forecast_deadline,
+                current_date,
+            )
+            if effective_status is not PredictionStatus.OPEN:
+                raise ForecastReviewDisallowedError(effective_status)
+            cursor = connection.execute(
+                """
+                INSERT INTO forecast_reviews (
+                    prediction_id, forecast_revision_id, created_at, note
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (
+                    prediction_id,
+                    current.current_revision_id,
+                    format_utc(created_at),
+                    review.note,
+                ),
+            )
+            if cursor.lastrowid is None:
+                raise sqlite3.DatabaseError("SQLite did not return a Review ID.")
+            return ForecastReviewTimelineEvent(
+                review_id=int(cursor.lastrowid),
+                prediction_id=prediction_id,
+                created_at=created_at,
+                forecast_revision_id=current.current_revision_id,
+                forecast_revision_sequence=current.current_revision_sequence,
+                forecast_probability_percent=current.probability_percent,
+                note=review.note,
+            )
 
     def get_journal_entry(
         self,
@@ -606,6 +674,25 @@ class PredictionRepository:
                 """,
                 (prediction_id,),
             ).fetchall()
+            review_rows = (
+                connection.execute(
+                    """
+                    SELECT review.id AS review_id, review.prediction_id,
+                           review.created_at, review.note,
+                           revision.id AS forecast_revision_id,
+                           revision.sequence AS forecast_revision_sequence,
+                           revision.probability_percent AS forecast_probability_percent
+                    FROM forecast_reviews AS review
+                    JOIN forecast_revisions AS revision
+                      ON revision.id = review.forecast_revision_id
+                     AND revision.prediction_id = review.prediction_id
+                    WHERE review.prediction_id = ?
+                    """,
+                    (prediction_id,),
+                ).fetchall()
+                if _has_forecast_reviews(connection)
+                else ()
+            )
 
         corrections_by_entry: dict[int, list[JournalCorrection]] = {}
         for row in correction_rows:
@@ -637,6 +724,20 @@ class PredictionRepository:
                     tuple(corrections_by_entry.get(entry_id, ())),
                 )
             )
+        for row in review_rows:
+            events.append(
+                ForecastReviewTimelineEvent(
+                    review_id=int(row["review_id"]),
+                    prediction_id=int(row["prediction_id"]),
+                    created_at=parse_utc(str(row["created_at"])),
+                    forecast_revision_id=int(row["forecast_revision_id"]),
+                    forecast_revision_sequence=int(row["forecast_revision_sequence"]),
+                    forecast_probability_percent=int(
+                        row["forecast_probability_percent"]
+                    ),
+                    note=_optional_string(row["note"]),
+                )
+            )
 
         return tuple(sorted(events, key=_timeline_sort_key))
 
@@ -646,7 +747,7 @@ class PredictionRepository:
         with self._database.transaction() as connection:
             row = connection.execute(
                 f"""
-                {_PREDICTION_DETAIL_SELECT}
+                {_prediction_detail_select(connection)}
                 ORDER BY prediction.created_at DESC, prediction.id DESC
                 LIMIT 1
                 """
@@ -682,7 +783,10 @@ class PredictionRepository:
                     NULL AS numeric_confidence_percent,
                     NULL AS numeric_unit,
                     NULL AS numeric_precision,
-                    current_revision.created_at AS latest_revision_at
+                    current_revision.created_at AS latest_revision_at,
+                    (SELECT MAX(review.created_at)
+                     FROM forecast_reviews AS review
+                     WHERE review.prediction_id = prediction.id) AS latest_review_at
                 FROM predictions AS prediction
                 JOIN forecast_revisions AS current_revision
                     ON current_revision.id = (
@@ -709,7 +813,10 @@ class PredictionRepository:
                     current_revision.confidence_percent AS numeric_confidence_percent,
                     prediction.numeric_unit,
                     prediction.numeric_precision,
-                    current_revision.created_at AS latest_revision_at
+                    current_revision.created_at AS latest_revision_at,
+                    (SELECT MAX(review.created_at)
+                     FROM forecast_reviews AS review
+                     WHERE review.prediction_id = prediction.id) AS latest_review_at
                 FROM predictions AS prediction
                 JOIN numeric_forecast_revisions AS current_revision
                     ON current_revision.id = (
@@ -1005,6 +1112,7 @@ SELECT
             SELECT 1 FROM prediction_definition_changes
             WHERE prediction_id = prediction.id
         )
+        /* REVIEW_DELETION_GUARD */
     ) AS deletion_allowed
 FROM predictions AS prediction
 JOIN forecast_revisions AS current_revision
@@ -1031,11 +1139,34 @@ def _select_prediction_detail(
 ) -> sqlite3.Row | None:
     return connection.execute(
         f"""
-        {_PREDICTION_DETAIL_SELECT}
+        {_prediction_detail_select(connection)}
         WHERE prediction.id = ?
         """,
         (prediction_id,),
     ).fetchone()
+
+
+def _prediction_detail_select(connection: sqlite3.Connection) -> str:
+    """Use the M19 deletion guard only when querying an M19-era schema."""
+
+    has_reviews = _has_forecast_reviews(connection)
+    guard = (
+        "AND NOT EXISTS (SELECT 1 FROM forecast_reviews "
+        "WHERE prediction_id = prediction.id)"
+        if has_reviews
+        else ""
+    )
+    return _PREDICTION_DETAIL_SELECT.replace("/* REVIEW_DELETION_GUARD */", guard)
+
+
+def _has_forecast_reviews(connection: sqlite3.Connection) -> bool:
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'forecast_reviews'"
+        ).fetchone()
+        is not None
+    )
 
 
 def _map_prediction_detail(
@@ -1105,6 +1236,11 @@ def _map_dashboard_prediction(row: sqlite3.Row) -> DashboardPrediction:
         ),
         status=PredictionStatus(row["status"]),
         latest_revision_at=parse_utc(str(row["latest_revision_at"])),
+        latest_review_at=(
+            None
+            if row["latest_review_at"] is None
+            else parse_utc(str(row["latest_review_at"]))
+        ),
         forecast_deadline=_parse_date(row["forecast_deadline"]),
         expected_resolution=_parse_date(row["expected_resolution"]),
         prediction_type=prediction_type,
@@ -1247,6 +1383,12 @@ def _map_journal_event(
 def _timeline_sort_key(event: TimelineEvent) -> tuple[object, ...]:
     if isinstance(event, ForecastTimelineEvent):
         return (event.sequence, 0, event.revision_id)
+    if isinstance(event, ForecastReviewTimelineEvent):
+        return (
+            event.forecast_revision_sequence,
+            2,
+            event.review_id,
+        )
     return (
         event.forecast_revision_sequence,
         1,

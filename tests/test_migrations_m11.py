@@ -70,7 +70,7 @@ def test_v11_upgrade_preserves_v10_binary_terminal_and_numeric_history(
         )
     old.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:11])
     recovered = PredictionOperations(upgraded, FixedClock(), UTC)
 
     assert upgraded.schema_version == 11

@@ -270,6 +270,16 @@ class NewJournalCorrection:
 
 
 @dataclass(frozen=True, slots=True)
+class NewForecastReview:
+    """Validated deliberate reconsideration that retains the current forecast."""
+
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "note", _optional_text(self.note, "note"))
+
+
+@dataclass(frozen=True, slots=True)
 class NewResolution:
     """Validated terminal outcome with optional factual and reflective notes."""
 
@@ -438,7 +448,22 @@ class JournalTimelineEvent:
     corrections: tuple[JournalCorrection, ...] = ()
 
 
-type TimelineEvent = ForecastTimelineEvent | JournalTimelineEvent
+@dataclass(frozen=True, slots=True)
+class ForecastReviewTimelineEvent:
+    """One immutable Review anchored to an exact Binary revision."""
+
+    review_id: int
+    prediction_id: int
+    created_at: datetime
+    forecast_revision_id: int
+    forecast_revision_sequence: int
+    forecast_probability_percent: int
+    note: str | None = None
+
+
+type TimelineEvent = (
+    ForecastTimelineEvent | JournalTimelineEvent | ForecastReviewTimelineEvent
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -479,7 +504,27 @@ class NumericJournalTimelineEvent:
     corrections: tuple[JournalCorrection, ...] = ()
 
 
-type NumericTimelineEvent = NumericForecastTimelineEvent | NumericJournalTimelineEvent
+@dataclass(frozen=True, slots=True)
+class NumericForecastReviewTimelineEvent:
+    """One immutable Review anchored to an exact Numeric revision."""
+
+    review_id: int
+    prediction_id: int
+    created_at: datetime
+    numeric_forecast_revision_id: int
+    forecast_revision_sequence: int
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    note: str | None = None
+
+
+type NumericTimelineEvent = (
+    NumericForecastTimelineEvent
+    | NumericJournalTimelineEvent
+    | NumericForecastReviewTimelineEvent
+)
 
 
 @dataclass(frozen=True, slots=True)

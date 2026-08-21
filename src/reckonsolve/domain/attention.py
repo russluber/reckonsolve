@@ -33,6 +33,15 @@ class DashboardPrediction:
     numeric_upper_bound: FixedPrecisionValue | None = None
     numeric_confidence_percent: int | None = None
     numeric_unit: str | None = None
+    latest_review_at: datetime | None = None
+
+    @property
+    def attention_reference_at(self) -> datetime:
+        """Latest instant at which the current forecast was set or retained."""
+
+        if self.latest_review_at is None:
+            return self.latest_revision_at
+        return max(self.latest_revision_at, self.latest_review_at)
 
 
 @dataclass(frozen=True, slots=True)

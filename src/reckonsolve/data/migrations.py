@@ -1549,6 +1549,130 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=12,
+        name="add type-aware forecast reviews",
+        statements=(
+            """
+            CREATE TABLE forecast_reviews (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                forecast_revision_id INTEGER,
+                numeric_forecast_revision_id INTEGER,
+                created_at TEXT NOT NULL
+                    CHECK (
+                        length(created_at) = 27
+                        AND created_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(created_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(created_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(created_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(created_at, 1, 10),
+                            0
+                        )
+                    ),
+                note TEXT
+                    CHECK (note IS NULL OR (
+                        length(note) > 0
+                        AND note = trim(
+                            note,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(note, char(0)) = 0
+                    )),
+                FOREIGN KEY (prediction_id, forecast_revision_id)
+                    REFERENCES forecast_revisions(prediction_id, id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY (prediction_id, numeric_forecast_revision_id)
+                    REFERENCES numeric_forecast_revisions(prediction_id, id)
+                    ON DELETE CASCADE,
+                CHECK (
+                    (forecast_revision_id IS NOT NULL)
+                    != (numeric_forecast_revision_id IS NOT NULL)
+                )
+            ) STRICT
+            """,
+            """
+            CREATE INDEX forecast_reviews_by_prediction_binary_anchor
+            ON forecast_reviews (
+                prediction_id, forecast_revision_id, created_at, id
+            )
+            """,
+            """
+            CREATE INDEX forecast_reviews_by_prediction_numeric_anchor
+            ON forecast_reviews (
+                prediction_id, numeric_forecast_revision_id, created_at, id
+            )
+            """,
+            """
+            CREATE TRIGGER forecast_reviews_require_current_type_revision
+            BEFORE INSERT ON forecast_reviews
+            WHEN (
+                (SELECT prediction_type FROM predictions WHERE id = NEW.prediction_id)
+                    = 'binary'
+                AND (
+                    NEW.numeric_forecast_revision_id IS NOT NULL
+                    OR NEW.forecast_revision_id IS NOT (
+                        SELECT id FROM forecast_revisions
+                        WHERE prediction_id = NEW.prediction_id
+                        ORDER BY sequence DESC LIMIT 1
+                    )
+                )
+            ) OR (
+                (SELECT prediction_type FROM predictions WHERE id = NEW.prediction_id)
+                    = 'numeric'
+                AND (
+                    NEW.forecast_revision_id IS NOT NULL
+                    OR NEW.numeric_forecast_revision_id IS NOT (
+                        SELECT id FROM numeric_forecast_revisions
+                        WHERE prediction_id = NEW.prediction_id
+                        ORDER BY sequence DESC LIMIT 1
+                    )
+                )
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'forecast reviews must reference the current type-appropriate revision'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER forecast_reviews_require_open_prediction
+            BEFORE INSERT ON forecast_reviews
+            WHEN (
+                SELECT status FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'open'
+            BEGIN
+                SELECT RAISE(ABORT, 'forecast reviews require an open prediction');
+            END
+            """,
+            """
+            CREATE TRIGGER forecast_reviews_are_immutable
+            BEFORE UPDATE ON forecast_reviews
+            BEGIN SELECT RAISE(ABORT, 'saved forecast reviews are immutable'); END
+            """,
+            """
+            CREATE TRIGGER forecast_reviews_reject_history_replacement
+            BEFORE INSERT ON forecast_reviews
+            WHEN EXISTS (SELECT 1 FROM forecast_reviews WHERE id = NEW.id)
+            BEGIN SELECT RAISE(ABORT, 'saved forecast reviews are immutable'); END
+            """,
+            """
+            CREATE TRIGGER forecast_reviews_reject_direct_delete
+            BEFORE DELETE ON forecast_reviews
+            WHEN EXISTS (SELECT 1 FROM predictions WHERE id = OLD.prediction_id)
+            BEGIN SELECT RAISE(ABORT, 'saved forecast reviews are immutable'); END
+            """,
+        ),
+    ),
 )
 
 

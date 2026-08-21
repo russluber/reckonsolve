@@ -261,7 +261,8 @@ class DashboardScreen(QWidget):
         return (
             f"{prediction.question}\n"
             f"{_forecast_summary(prediction)}  |  {'  |  '.join(badges)}\n"
-            f"Forecast last updated {_format_local_timestamp(prediction.latest_revision_at)}"
+            "Forecast last considered "
+            f"{_format_local_timestamp(prediction.attention_reference_at)}"
         )
 
     @staticmethod
@@ -273,8 +274,8 @@ class DashboardScreen(QWidget):
             classifications.append("ready to resolve")
         return (
             f"{_forecast_summary(prediction)}. "
-            f"{', '.join(classifications)}. Forecast last updated "
-            f"{_format_local_timestamp(prediction.latest_revision_at)}."
+            f"{', '.join(classifications)}. Forecast last considered "
+            f"{_format_local_timestamp(prediction.attention_reference_at)}."
         )
 
     @staticmethod

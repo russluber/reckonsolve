@@ -330,7 +330,7 @@ Do not retrofit forecast reviews into the completed v0.1 schema history. Reviews
 
 After a revision is saved, the normal application must not edit or delete it in place. A new probability creates a new row/event.
 
-In v0.1, a normal revision must change the current probability. Submitting the same probability with new reasoning would falsely imply that the forecast changed; reasoning that leaves the probability unchanged belongs in a Journal entry once Milestone 5 adds that workflow. The dedicated **Still at 60%** Review remains deferred to v0.2. This rule compares against the current revision only: returning later to a probability used by an older, non-current revision remains a valid change and creates a new revision.
+In v0.1, a normal revision must change the current probability. Submitting the same probability with new reasoning would falsely imply that the forecast changed. A Journal entry records evidence or reasoning without asserting that the user deliberately re-evaluated the forecast; the v0.2 **Still at 60%** Review records that deliberate reconsideration while retaining the probability. This rule compares against the current revision only: returning later to a probability used by an older, non-current revision remains a valid change and creates a new revision.
 
 Example:
 
@@ -556,7 +556,7 @@ Adding a journal entry must not:
 
 Correcting a journal entry has the same three non-effects and must also leave the original timestamp and forecast-at-the-time revision reference unchanged.
 
-The last rule changes in v0.2 when explicit Forecast Reviews exist.
+In v0.2, an explicit Forecast Review—not ordinary Journal activity—records deliberate reconsideration of an unchanged forecast and resets the Needs Attention clock.
 
 ---
 
@@ -587,6 +587,7 @@ The chart must have an accessible summary of its revision sequence. The existing
 
 - Forecast revisions allowed.
 - New journal entries and transparent corrections to existing entries are allowed.
+- Forecast Reviews are allowed and retain the current forecast unchanged.
 - Can be resolved or marked invalid.
 
 ### 14.2 Locked
@@ -597,6 +598,7 @@ Because Forecast Deadline is a date-only value, its stored calendar date is incl
 
 - Normal forecast revisions are not allowed.
 - New journal entries and transparent corrections to existing entries remain allowed.
+- Forecast Reviews are not allowed; a Review must occur while the prediction is Open.
 - The prediction awaits an outcome.
 - It can be resolved or marked invalid.
 
@@ -607,6 +609,7 @@ An Open prediction with no forecast deadline remains Open until resolved or inva
 - Outcome is recorded as Yes or No.
 - No further forecast revisions are allowed.
 - No new journal entries are allowed, but transparent corrections to existing entries remain allowed.
+- No Forecast Reviews are allowed.
 - The prediction is eligible for scoring.
 - Resolution notes and a postmortem may be recorded.
 
@@ -615,6 +618,7 @@ An Open prediction with no forecast deadline remains Open until resolved or inva
 - The prediction is preserved.
 - No further forecast revisions are allowed.
 - No new journal entries are allowed, but transparent corrections to existing entries remain allowed.
+- No Forecast Reviews are allowed.
 - It is excluded from all scoring and calibration analytics.
 - An optional invalidation reason should be supported.
 
@@ -676,11 +680,11 @@ either row opens the matching type-specific Prediction Detail view.
 
 ### 16.1 Needs Attention
 
-In v0.1, a nonterminal prediction needs attention when its latest forecast revision is at least the configured stale threshold old. Freshness uses elapsed time between the latest ForecastRevision's canonical UTC instant and the current canonical UTC instant; local display formatting does not change that duration.
+In v0.2, a nonterminal prediction needs attention when the later of its latest eligible ForecastRevision or Forecast Review is at least the configured stale threshold old. Freshness uses elapsed time between that canonical UTC instant and the current canonical UTC instant; local display formatting does not change that duration.
 
-The interface should say "Forecast last updated," not "Last reviewed," because v0.1 does not record Reviews.
+The interface says **Forecast last considered** so the label remains accurate whether freshness came from a changed revision or a Review that retained the forecast.
 
-The v0.1 default stale threshold is **14 days**: fourteen complete 24-hour periods since the latest ForecastRevision. It is stored with the application data and adjustable through one minimal Settings control without introducing a general preferences framework. Adding or correcting Journal text does not reset this clock.
+The default stale threshold remains **14 days**: fourteen complete 24-hour periods since the later eligible Revision or Review. It is stored with the application data and adjustable through one minimal Settings control without introducing a general preferences framework. Adding or correcting Journal text does not reset this clock.
 
 ### 16.2 Ready to Resolve
 
@@ -803,11 +807,12 @@ The normal v0.1 UI permits permanent deletion only for an untouched Open predict
 - only the required initial ForecastRevision exists;
 - prediction metadata has not been changed after creation;
 - no Journal entry exists; and
-- no Definition history record exists.
+- no Definition history record exists; and
+- no Forecast Review exists.
 
 Initial rationale, metadata, and tags supplied during atomic creation do not by themselves make the prediction ineligible for deletion. A Forecast Deadline that has since passed does make it ineligible because the prediction is then Locked.
 
-Deletion requires an explicit permanent-action confirmation and rechecks eligibility inside the deletion transaction. Once a prediction is Locked, revised, edited, journaled, Resolved, or Invalid, the normal application rejects deletion. For a nonterminal prediction with meaningful history, the interface directs the user toward **Mark Invalid** so the record is preserved but excluded from scoring.
+Deletion requires an explicit permanent-action confirmation and rechecks eligibility inside the deletion transaction. Once a prediction is Locked, revised, edited, journaled, reviewed, Resolved, or Invalid, the normal application rejects deletion. For a nonterminal prediction with meaningful history, the interface directs the user toward **Mark Invalid** so the record is preserved but excluded from scoring.
 
 Resolved and Invalid predictions are never deletable from the normal v0.1 interface. The purpose is to protect honest history and calibration statistics, not to deny the user ownership of their underlying local database.
 
@@ -1079,6 +1084,7 @@ Highest-risk behavior should receive automated tests before visual polish:
 - verification that journal creation and correction do not create revisions, change probability, or reset Needs Attention;
 - probability-history marker selection and step geometry for one or many revisions, including 0%, 100%, equal timestamps, a nonconsecutive return to an earlier probability, and a regressing clock;
 - verification that Journal entries and corrections never appear as probability-history observations;
+- immutable type-aware Forecast Reviews, Open-only lifecycle enforcement, exact current-revision ownership, stale-context rejection, and Needs Attention reset without revision, chart, or scoring effects;
 - atomic creation of a Prediction, optional initial metadata and tags, and its first revision with optional rationale;
 - atomic protected-field metadata edits and definition-change records;
 - current-revision selection;
@@ -1110,7 +1116,7 @@ The application and project name is resolved as **Reckonsolve**. Metadata-edit s
 
 The installer format, signing approach, public distribution channel, and final original icon artwork remain intentionally unresolved until the user chooses to pursue normal Windows distribution. They are Later decisions rather than v0.1 acceptance blockers.
 
-The v0.2 numeric product contract is resolved in Section 30. Milestone 13 must choose and document a modest maximum supported decimal precision and its exact SQLite representation without changing the approved signed, fixed-precision semantics. Milestone 19 must settle whether a Forecast Review is allowed only while Open or may also be recorded while Locked; that choice must be recorded before Review behavior is implemented. Neither decision blocks starting Milestone 13.
+The v0.2 numeric product contract is resolved in Section 30. Numeric precision and storage are recorded in Section 30.2 and ADR 0009. Forecast Reviews are allowed only while Open, as recorded in Sections 14 and 30.8.
 
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
@@ -1171,7 +1177,7 @@ Confidence may be any whole percentage from 1 through 99. Zero and 100 are exclu
 
 Changing any of lower bound, median, upper bound, or confidence creates one new immutable Numeric ForecastRevision. One save changes all supplied forecast values atomically; it never edits an earlier revision in place.
 
-Submitting values identical to the current revision does not create a revision. Until Forecast Reviews are implemented, unchanged-belief reasoning belongs in a Journal entry. Once Reviews exist, the user may instead explicitly record that the current numeric interval was reconsidered and retained.
+Submitting values identical to the current revision does not create a revision. A Journal entry remains appropriate for evidence or reasoning that does not itself assert deliberate reconsideration. The dedicated Review action explicitly records that the current numeric interval was reconsidered and retained.
 
 The normal revision operation must enforce lifecycle eligibility and optimistic concurrency both before and inside its transaction. A Journal entry must reference the exact type-appropriate revision that was current when the entry was created. Journal entries, corrections, and Reviews never create chart observations or change numeric forecast values.
 
@@ -1194,9 +1200,9 @@ The unified timeline shows every numeric revision and its optional rationale, in
 
 Open, Locked, Resolved, Invalid, Forecast Deadline, Expected Resolution, Needs Attention, and Ready to Resolve retain their v0.1 meanings and become type-aware.
 
-- Open Numeric Predictions accept normal revisions and Journal entries.
-- Locked Numeric Predictions reject normal revisions but accept Journal entries.
-- Resolved and Invalid Numeric Predictions reject normal revisions and new Journal entries.
+- Open Numeric Predictions accept normal revisions, Journal entries, and Forecast Reviews.
+- Locked Numeric Predictions reject normal revisions and Forecast Reviews but accept Journal entries.
+- Resolved and Invalid Numeric Predictions reject normal revisions, new Journal entries, and Forecast Reviews.
 - Numeric resolution records the realized value at the Prediction's fixed precision, even when it falls outside the forecast interval.
 - Resolution notes and Postmortem remain optional.
 - Resolution captures exactly one final eligible Numeric ForecastRevision for scoring.
@@ -1241,7 +1247,9 @@ A Review does not create or modify a ForecastRevision, change probability or num
 
 For binary forecasts, the action may read **Still at 60%**. For numeric forecasts, it may read **Keep this interval**. After Reviews exist, Needs Attention uses the most recent eligible ForecastRevision or Forecast Review, whichever is later. Journal entries continue not to reset the Needs Attention clock.
 
-The allowed lifecycle states for creating a Review remain the one consequential v0.2 product choice to settle before Milestone 19. Full review sessions, prompted checklists, concealed prior forecasts, and anti-anchoring workflows remain Later.
+A Review may be created only while the Prediction is Open. Locked, Resolved, and Invalid Predictions reject it both before and inside the save transaction. The action carries the exact reviewed revision and metadata-version context so a concurrent forecast or proposition edit is rejected rather than attached to stale context. Multiple deliberate Reviews of the same still-current revision are valid because each records a separate reconsideration and refreshes Needs Attention.
+
+The Review note is optional. Cancelling creates no record. A saved Review is meaningful history, so the normal untouched-prediction Delete action is no longer available. Full review sessions, prompted checklists, concealed prior forecasts, and anti-anchoring workflows remain Later.
 
 ### 30.9 Implementation milestones
 
@@ -1303,7 +1311,7 @@ Acceptance demonstration:
 
 #### Milestone 19: Forecast Reviews
 
-- Resolve and record Review lifecycle eligibility before coding.
+- Permit Reviews only while Open and reject them while Locked, Resolved, or Invalid.
 - Add immutable type-aware Reviews referencing the exact current revision.
 - Show Reviews in the unified timeline without changing forecast values, revision history, charts, or scoring.
 - Update Needs Attention to use the later of the last eligible revision and Review while leaving Journal behavior unchanged.
@@ -1336,7 +1344,7 @@ v0.2 is not complete unless all of the following are true:
 11. Inclusive containment, median absolute error, and interval score are correct at boundaries and on both sides of a miss.
 12. Cross-unit containment calibration is clearly unitless, while raw numeric errors and scores are never misleadingly aggregated across unlike units.
 13. Forecast Reviews preserve exact context and change neither forecast history, chart observations, nor scoring observations.
-14. Needs Attention uses Forecast Reviews only according to the lifecycle policy approved before Milestone 19.
+14. Needs Attention uses the later of the latest eligible Revision or Open-state Review; Journal activity remains excluded.
 15. Backup, export, migration, restart, and the private frozen build preserve both forecast types and Reviews.
 16. Core workflows remain fully offline and single-user.
 

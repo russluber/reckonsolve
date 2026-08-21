@@ -158,8 +158,25 @@ class NumericJournalTimelineSnapshot(Protocol):
     corrections: tuple[JournalCorrectionSnapshot, ...]
 
 
+class NumericForecastReviewTimelineSnapshot(Protocol):
+    """One Numeric Forecast Review with its retained interval context."""
+
+    review_id: int
+    prediction_id: int
+    created_at: datetime
+    numeric_forecast_revision_id: int
+    forecast_revision_sequence: int
+    lower_bound: object
+    median_estimate: object
+    upper_bound: object
+    confidence_percent: int
+    note: str | None
+
+
 NumericTimelineSnapshot = (
-    NumericForecastTimelineSnapshot | NumericJournalTimelineSnapshot
+    NumericForecastTimelineSnapshot
+    | NumericJournalTimelineSnapshot
+    | NumericForecastReviewTimelineSnapshot
 )
 
 
@@ -232,7 +249,21 @@ class JournalTimelineSnapshot(Protocol):
     corrections: tuple[JournalCorrectionSnapshot, ...]
 
 
-TimelineSnapshot = ForecastTimelineSnapshot | JournalTimelineSnapshot
+class ForecastReviewTimelineSnapshot(Protocol):
+    """One Binary Forecast Review with its retained probability context."""
+
+    review_id: int
+    prediction_id: int
+    created_at: datetime
+    forecast_revision_id: int
+    forecast_revision_sequence: int
+    forecast_probability_percent: int
+    note: str | None
+
+
+TimelineSnapshot = (
+    ForecastTimelineSnapshot | JournalTimelineSnapshot | ForecastReviewTimelineSnapshot
+)
 
 
 class PredictionOperations(Protocol):
@@ -297,6 +328,16 @@ class PredictionOperations(Protocol):
         expected_metadata_version: int,
     ) -> JournalTimelineSnapshot:
         """Append reasoning tied to the exact forecast the user reviewed."""
+
+    def add_forecast_review(
+        self,
+        prediction_id: int,
+        *,
+        note: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> ForecastReviewTimelineSnapshot:
+        """Record deliberate retention of the current Binary forecast."""
 
     def correct_journal_entry(
         self,
@@ -393,6 +434,16 @@ class PredictionOperations(Protocol):
         expected_metadata_version: int,
     ) -> NumericJournalTimelineSnapshot:
         """Append a Numeric Journal entry tied to the reviewed interval."""
+
+    def add_numeric_forecast_review(
+        self,
+        prediction_id: int,
+        *,
+        note: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericForecastReviewTimelineSnapshot:
+        """Record deliberate retention of the current Numeric interval."""
 
     def correct_numeric_journal_entry(
         self,
@@ -1074,6 +1125,12 @@ class NumericPredictionDetailScreen(QWidget):
         self.add_journal_entry_button.setObjectName("addNumericJournalEntryButton")
         self.add_journal_entry_button.setAccessibleName("Add Numeric Journal entry")
         apply_lucide_icon(self.add_journal_entry_button, LucideIcon.CIRCLE_PLUS)
+        self.review_forecast_button = QPushButton("Keep this interval", actions)
+        self.review_forecast_button.setObjectName("reviewNumericForecastButton")
+        self.review_forecast_button.setAccessibleName(
+            "Record a Review retaining this numeric interval"
+        )
+        apply_lucide_icon(self.review_forecast_button, LucideIcon.CIRCLE_CHECK)
         self.resolve_button = QPushButton("Resolve", actions)
         self.resolve_button.setObjectName("resolveNumericPredictionButton")
         apply_lucide_icon(self.resolve_button, LucideIcon.CIRCLE_CHECK)
@@ -1085,6 +1142,7 @@ class NumericPredictionDetailScreen(QWidget):
         apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
         actions_layout.addWidget(self.revise_forecast_button)
         actions_layout.addWidget(self.add_journal_entry_button)
+        actions_layout.addWidget(self.review_forecast_button)
         actions_layout.addWidget(self.resolve_button)
         actions_layout.addWidget(self.mark_invalid_button)
         actions_layout.addWidget(self.delete_button)
@@ -1215,6 +1273,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.show_prediction(None)
         self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
         self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
+        self.review_forecast_button.clicked.connect(self.open_forecast_review)
         self.resolve_button.clicked.connect(self.open_resolve_prediction)
         self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
         self.delete_button.clicked.connect(self.delete_prediction)
@@ -1242,6 +1301,7 @@ class NumericPredictionDetailScreen(QWidget):
             self.timeline_error.setHidden(True)
             self.revise_forecast_button.setEnabled(False)
             self.add_journal_entry_button.setEnabled(False)
+            self.review_forecast_button.setEnabled(False)
             self.resolve_button.setEnabled(False)
             self.mark_invalid_button.setEnabled(False)
             self.delete_button.setEnabled(False)
@@ -1276,6 +1336,14 @@ class NumericPredictionDetailScreen(QWidget):
         )
         self.add_journal_entry_button.setEnabled(
             prediction.status in (PredictionStatus.OPEN, PredictionStatus.LOCKED)
+        )
+        self.review_forecast_button.setEnabled(
+            prediction.status is PredictionStatus.OPEN
+        )
+        self.review_forecast_button.setToolTip(
+            "Record deliberate reconsideration while keeping this interval unchanged."
+            if prediction.status is PredictionStatus.OPEN
+            else "Forecast Reviews can be recorded only while Open."
         )
         terminal_allowed = prediction.status in (
             PredictionStatus.OPEN,
@@ -1393,7 +1461,9 @@ class NumericPredictionDetailScreen(QWidget):
             return
         self._clear_timeline()
         for event in events:
-            if hasattr(event, "revision_id"):
+            if hasattr(event, "review_id"):
+                self.timeline_layout.addWidget(self._review_timeline_row(event))
+            elif hasattr(event, "revision_id"):
                 self.timeline_layout.addWidget(self._forecast_timeline_row(event))
             else:
                 self.timeline_layout.addWidget(self._journal_timeline_row(event))
@@ -1480,6 +1550,37 @@ class NumericPredictionDetailScreen(QWidget):
         layout.addWidget(correct)
         return row
 
+    def _review_timeline_row(
+        self,
+        event: NumericForecastReviewTimelineSnapshot,
+    ) -> QWidget:
+        row = QWidget(self.timeline_content)
+        row.setObjectName(f"numericTimelineReview{event.review_id}")
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        timestamp = QLabel(_format_local_timestamp(event.created_at), row)
+        timestamp.setTextFormat(Qt.TextFormat.PlainText)
+        heading = QLabel("REVIEW  INTERVAL RETAINED", row)
+        heading.setTextFormat(Qt.TextFormat.PlainText)
+        unit = self._prediction.unit if self._prediction else ""
+        context = QLabel(
+            f"{event.confidence_percent}% interval: {event.lower_bound} to "
+            f"{event.upper_bound} {unit}; Median: {event.median_estimate} {unit}",
+            row,
+        )
+        context.setTextFormat(Qt.TextFormat.PlainText)
+        context.setWordWrap(True)
+        layout.addWidget(timestamp)
+        layout.addWidget(heading)
+        layout.addWidget(context)
+        if event.note:
+            note = QLabel(event.note, row)
+            note.setObjectName(f"numericReviewNote{event.review_id}")
+            note.setTextFormat(Qt.TextFormat.PlainText)
+            note.setWordWrap(True)
+            layout.addWidget(note)
+        return row
+
     def open_revise_forecast(self) -> None:
         if self._prediction is None:
             return
@@ -1504,6 +1605,22 @@ class NumericPredictionDetailScreen(QWidget):
             return
         dialog = AddNumericJournalEntryDialog(self._operations, self._prediction, self)
         dialog.journal_saved.connect(lambda _entry: self.refresh())
+        dialog.open()
+
+    def open_forecast_review(self) -> None:
+        """Refresh, then offer a side-effect-free Open-only Review dialog."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        if (
+            self._prediction is None
+            or self._prediction.status is not PredictionStatus.OPEN
+        ):
+            self._show_error("Forecast Reviews can be recorded only while Open.")
+            return
+        dialog = ForecastReviewDialog(self._operations, self._prediction, self)
+        dialog.review_saved.connect(lambda _review: self.refresh())
         dialog.open()
 
     def open_resolve_prediction(self) -> None:
@@ -2566,6 +2683,126 @@ class CorrectNumericJournalEntryDialog(QDialog):
         self.form_error.setHidden(True)
 
 
+class ForecastReviewDialog(QDialog):
+    """Record deliberate reconsideration without changing the forecast."""
+
+    review_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: PredictionSnapshot | NumericPredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("forecastReviewDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setModal(True)
+        self.resize(540, 330)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_metadata_version = prediction.metadata_version
+        self._is_numeric = hasattr(prediction, "current_revision")
+        if self._is_numeric:
+            numeric = prediction
+            revision = numeric.current_revision
+            self._expected_revision_id = revision.revision_id
+            action_text = "Keep this interval"
+            context_text = _numeric_forecast_text(revision, numeric.unit)
+        else:
+            binary = prediction
+            self._expected_revision_id = binary.current_revision_id
+            action_text = f"Still at {binary.probability_percent}%"
+            context_text = f"{binary.probability_percent}%"
+        self.setWindowTitle(action_text)
+
+        title = QLabel(action_text, self)
+        title.setObjectName("forecastReviewTitle")
+        title_font = QFont(title.font())
+        title_font.setBold(True)
+        title.setFont(title_font)
+        explanation = QLabel(
+            "Record that you deliberately reconsidered this forecast and chose to "
+            "keep it unchanged.",
+            self,
+        )
+        explanation.setObjectName("forecastReviewExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+        context = QLabel(context_text, self)
+        context.setObjectName("forecastReviewContext")
+        context.setTextFormat(Qt.TextFormat.PlainText)
+        context.setWordWrap(True)
+
+        note_label = QLabel("Review note (optional)", self)
+        self.note_input = QPlainTextEdit(self)
+        self.note_input.setObjectName("forecastReviewNoteInput")
+        self.note_input.setAccessibleName("Optional Forecast Review note")
+        self.note_input.setPlaceholderText(
+            "What did you reconsider before retaining this forecast?"
+        )
+        self.note_input.setTabChangesFocus(True)
+        note_label.setBuddy(self.note_input)
+
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("forecastReviewError")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        save = self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        save.setObjectName("saveForecastReviewButton")
+        save.setText("Save Review")
+        save.setDefault(True)
+        apply_lucide_icon(save, LucideIcon.SAVE)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addWidget(context)
+        layout.addSpacing(8)
+        layout.addWidget(note_label)
+        layout.addWidget(self.note_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
+        self.note_input.installEventFilter(self._submit_key_filter)
+
+    def submit(self) -> None:
+        """Save one immutable Review while retaining expected failures inline."""
+
+        self.form_error.setHidden(True)
+        kwargs = {
+            "note": self.note_input.toPlainText(),
+            "expected_revision_id": self._expected_revision_id,
+            "expected_metadata_version": self._expected_metadata_version,
+        }
+        try:
+            if self._is_numeric:
+                review = self._operations.add_numeric_forecast_review(
+                    self._prediction_id,
+                    **kwargs,
+                )
+            else:
+                review = self._operations.add_forecast_review(
+                    self._prediction_id,
+                    **kwargs,
+                )
+        except ApplicationError as error:
+            self.form_error.setText(str(error))
+            self.form_error.setHidden(False)
+            return
+        self.review_saved.emit(review)
+        self.accept()
+
+
 class AddJournalEntryDialog(QDialog):
     """Append reasoning without changing the current forecast."""
 
@@ -3177,6 +3414,14 @@ class PredictionDetailScreen(QWidget):
         apply_lucide_icon(self.add_journal_entry_button, LucideIcon.NOTEBOOK_PEN)
         self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
         action_layout.addWidget(self.add_journal_entry_button)
+        self.review_forecast_button = QPushButton("Still at", action_row)
+        self.review_forecast_button.setObjectName("reviewForecastButton")
+        self.review_forecast_button.setAccessibleName(
+            "Record a Review retaining this probability"
+        )
+        apply_lucide_icon(self.review_forecast_button, LucideIcon.CIRCLE_CHECK)
+        self.review_forecast_button.clicked.connect(self.open_forecast_review)
+        action_layout.addWidget(self.review_forecast_button)
         self.resolve_button = QPushButton("Resolve", action_row)
         self.resolve_button.setObjectName("resolvePredictionButton")
         apply_lucide_icon(self.resolve_button, LucideIcon.CIRCLE_CHECK)
@@ -3380,6 +3625,7 @@ class PredictionDetailScreen(QWidget):
             self.probability_history_chart.clear()
             self.probability_history_chart.set_timeline_available(True)
             self.probability_history_chart.setHidden(True)
+            self.review_forecast_button.setEnabled(False)
             self.chart_placeholder.setText(
                 "No forecast revisions are available to chart."
             )
@@ -3395,6 +3641,17 @@ class PredictionDetailScreen(QWidget):
         self.question.setText(prediction.question)
         self.status.setText(prediction.status.value.upper())
         self.probability.setText(f"{prediction.probability_percent}%")
+        self.review_forecast_button.setText(
+            f"Still at {prediction.probability_percent}%"
+        )
+        self.review_forecast_button.setEnabled(
+            prediction.status is PredictionStatus.OPEN
+        )
+        self.review_forecast_button.setToolTip(
+            "Record deliberate reconsideration while keeping this probability."
+            if prediction.status is PredictionStatus.OPEN
+            else "Forecast Reviews can be recorded only while Open."
+        )
         revision_allowed = prediction.status is PredictionStatus.OPEN
         self.revise_forecast_button.setEnabled(revision_allowed)
         if revision_allowed:
@@ -3554,6 +3811,24 @@ class PredictionDetailScreen(QWidget):
         dialog.finished.connect(self._journal_dialog_finished)
         dialog.open()
 
+    def open_forecast_review(self) -> None:
+        """Refresh, then offer a side-effect-free Open-only Review dialog."""
+
+        if self._prediction is None:
+            return
+        try:
+            prediction = self._operations.get_prediction(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(prediction)
+        if prediction.status is not PredictionStatus.OPEN:
+            self._show_error("Forecast Reviews can be recorded only while Open.")
+            return
+        dialog = ForecastReviewDialog(self._operations, prediction, self)
+        dialog.review_saved.connect(self._review_saved)
+        dialog.open()
+
     def open_resolve_prediction(self) -> None:
         """Refresh reviewed context before opening the terminal resolution form."""
 
@@ -3692,6 +3967,10 @@ class PredictionDetailScreen(QWidget):
         if self._prediction is not None:
             self.show_prediction(self._prediction)
 
+    def _review_saved(self, _result: object) -> None:
+        if self._prediction is not None:
+            self.refresh()
+
     def _journal_correction_saved(self, _corrected: object) -> None:
         if self._prediction is None:
             return
@@ -3773,7 +4052,11 @@ class PredictionDetailScreen(QWidget):
 
         _clear_widget_layout(self.forecast_timeline_layout)
         for event in events:
-            if hasattr(event, "entry_id"):
+            if hasattr(event, "review_id"):
+                self.forecast_timeline_layout.addWidget(
+                    _forecast_review_widget(event, self.forecast_timeline)
+                )
+            elif hasattr(event, "entry_id"):
                 self.forecast_timeline_layout.addWidget(
                     _journal_entry_widget(
                         event,
@@ -4070,6 +4353,34 @@ def _journal_entry_widget(
 
     if entry.corrections:
         layout.addWidget(_journal_edit_history_widget(entry, frame))
+    return frame
+
+
+def _forecast_review_widget(
+    review: ForecastReviewTimelineSnapshot,
+    parent: QWidget,
+) -> QWidget:
+    frame = QFrame(parent)
+    frame.setObjectName(f"forecastReview{review.review_id}")
+    frame.setFrameShape(QFrame.Shape.StyledPanel)
+    layout = QVBoxLayout(frame)
+    timestamp = QLabel(_format_local_timestamp(review.created_at), frame)
+    timestamp.setTextFormat(Qt.TextFormat.PlainText)
+    heading = QLabel(
+        f"REVIEW  STILL AT {review.forecast_probability_percent}%",
+        frame,
+    )
+    heading.setObjectName(f"forecastReviewHeading{review.review_id}")
+    heading.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(timestamp)
+    layout.addWidget(heading)
+    if review.note:
+        note = QLabel(review.note, frame)
+        note.setObjectName(f"forecastReviewNote{review.review_id}")
+        note.setTextFormat(Qt.TextFormat.PlainText)
+        note.setWordWrap(True)
+        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(note)
     return frame
 
 

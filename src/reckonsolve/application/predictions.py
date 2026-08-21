@@ -23,6 +23,8 @@ from reckonsolve.data.numeric_predictions import (
 )
 from reckonsolve.data.predictions import (
     ForecastContextChangedError,
+    ForecastReviewContextChangedError,
+    ForecastReviewDisallowedError,
     ForecastRevisionDisallowedError,
     ForecastRevisionUnchangedError,
     JournalContextChangedError,
@@ -49,8 +51,10 @@ from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
     FixedPrecisionValue,
+    ForecastReviewTimelineEvent,
     ForecastRevision,
     JournalTimelineEvent,
+    NewForecastReview,
     NewForecastRevision,
     NewInvalidation,
     NewJournalCorrection,
@@ -60,6 +64,7 @@ from reckonsolve.domain.predictions import (
     NewNumericResolution,
     NewPrediction,
     NewResolution,
+    NumericForecastReviewTimelineEvent,
     NumericForecastRevision,
     NumericJournalTimelineEvent,
     NumericPrediction,
@@ -82,12 +87,14 @@ from reckonsolve.domain.transfer import (
 
 from .errors import (
     BackupError,
+    ConcurrentForecastReviewError,
     ConcurrentForecastUpdateError,
     ConcurrentJournalCorrectionError,
     ConcurrentJournalUpdateError,
     ConcurrentLifecycleUpdateError,
     ConcurrentPredictionUpdateError,
     CsvExportError,
+    ForecastReviewNotAllowedError,
     ForecastRevisionNotAllowedError,
     ForecastUnchangedError,
     JournalEntryNotAllowedError,
@@ -385,6 +392,59 @@ class PredictionOperations:
         if revisions is None:
             raise PredictionNotFoundError(prediction_id)
         return revisions
+
+    def add_numeric_forecast_review(
+        self,
+        prediction_id: int,
+        *,
+        note: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericForecastReviewTimelineEvent:
+        """Record that the current Numeric interval was deliberately retained."""
+
+        try:
+            review = NewForecastReview(note)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        current = self._numeric_repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision.revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentForecastReviewError(prediction_id)
+        now = as_utc(self._clock.now())
+        current_date = now.astimezone(self._local_timezone).date()
+        effective_status = display_status(
+            current.status,
+            current.forecast_deadline,
+            current_date,
+        )
+        if effective_status is not PredictionStatus.OPEN:
+            raise ForecastReviewNotAllowedError(effective_status)
+        try:
+            event = self._numeric_repository.add_forecast_review(
+                prediction_id,
+                review,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                created_at=now,
+                current_date=current_date,
+            )
+        except ForecastReviewContextChangedError as error:
+            raise ConcurrentForecastReviewError(prediction_id) from error
+        except ForecastReviewDisallowedError as error:
+            raise ForecastReviewNotAllowedError(error.status) from error
+        if event is None:
+            raise PredictionNotFoundError(prediction_id)
+        return event
 
     def add_numeric_journal_entry(
         self,
@@ -706,6 +766,59 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         return entry
 
+    def add_forecast_review(
+        self,
+        prediction_id: int,
+        *,
+        note: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> ForecastReviewTimelineEvent:
+        """Record that the current Binary probability was deliberately retained."""
+
+        try:
+            review = NewForecastReview(note)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        current = self._repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentForecastReviewError(prediction_id)
+        now = as_utc(self._clock.now())
+        current_date = now.astimezone(self._local_timezone).date()
+        effective_status = display_status(
+            current.status,
+            current.forecast_deadline,
+            current_date,
+        )
+        if effective_status is not PredictionStatus.OPEN:
+            raise ForecastReviewNotAllowedError(effective_status)
+        try:
+            event = self._repository.add_forecast_review(
+                prediction_id,
+                review,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                created_at=now,
+                current_date=current_date,
+            )
+        except ForecastReviewContextChangedError as error:
+            raise ConcurrentForecastReviewError(prediction_id) from error
+        except ForecastReviewDisallowedError as error:
+            raise ForecastReviewNotAllowedError(error.status) from error
+        if event is None:
+            raise PredictionNotFoundError(prediction_id)
+        return event
+
     def correct_journal_entry(
         self,
         prediction_id: int,
@@ -964,7 +1077,7 @@ class PredictionOperations:
                     if prediction.status is PredictionStatus.OPEN
                 ),
                 key=lambda prediction: (
-                    prediction.latest_revision_at,
+                    prediction.attention_reference_at,
                     prediction.prediction_id,
                 ),
                 reverse=True,
@@ -978,7 +1091,7 @@ class PredictionOperations:
                     if prediction.needs_attention
                 ),
                 key=lambda prediction: (
-                    prediction.latest_revision_at,
+                    prediction.attention_reference_at,
                     prediction.prediction_id,
                 ),
             )
@@ -1384,7 +1497,7 @@ class PredictionOperations:
             status=status,
             needs_attention=needs_attention(
                 status,
-                prediction.latest_revision_at,
+                prediction.attention_reference_at,
                 now,
                 stale_threshold_days,
             ),
