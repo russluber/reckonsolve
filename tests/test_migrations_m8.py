@@ -24,7 +24,7 @@ def test_v8_upgrade_preserves_data_and_starts_without_a_backup_time(tmp_path) ->
     SettingsRepository(old_database).set_stale_threshold_days(21)
     old_database.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:8])
 
     assert upgraded.schema_version == 8
     reopened = PredictionOperations(upgraded, FixedClock()).get_prediction(

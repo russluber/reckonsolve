@@ -918,6 +918,208 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=9,
+        name="add numeric prediction foundation",
+        statements=(
+            """
+            ALTER TABLE predictions
+            RENAME COLUMN prediction_type TO prediction_type_binary_legacy
+            """,
+            """
+            ALTER TABLE predictions
+            ADD COLUMN prediction_type TEXT NOT NULL DEFAULT 'binary'
+                CHECK (prediction_type IN ('binary', 'numeric'))
+            """,
+            """
+            ALTER TABLE predictions
+            ADD COLUMN numeric_unit TEXT
+                CHECK (
+                    (
+                        prediction_type = 'binary'
+                        AND numeric_unit IS NULL
+                    )
+                    OR (
+                        prediction_type = 'numeric'
+                        AND numeric_unit IS NOT NULL
+                        AND length(numeric_unit) > 0
+                        AND numeric_unit = trim(numeric_unit)
+                        AND instr(numeric_unit, char(0)) = 0
+                    )
+                )
+            """,
+            """
+            ALTER TABLE predictions
+            ADD COLUMN numeric_precision INTEGER
+                CHECK (
+                    (
+                        prediction_type = 'binary'
+                        AND numeric_precision IS NULL
+                    )
+                    OR (
+                        prediction_type = 'numeric'
+                        AND typeof(numeric_precision) = 'integer'
+                        AND numeric_precision BETWEEN 0 AND 6
+                    )
+                )
+            """,
+            """
+            ALTER TABLE predictions DROP COLUMN prediction_type_binary_legacy
+            """,
+            """
+            CREATE TRIGGER predictions_forecast_definition_is_immutable
+            BEFORE UPDATE OF prediction_type, numeric_unit, numeric_precision
+            ON predictions
+            WHEN OLD.prediction_type IS NOT NEW.prediction_type
+                OR OLD.numeric_unit IS NOT NEW.numeric_unit
+                OR OLD.numeric_precision IS NOT NEW.numeric_precision
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'prediction type, numeric unit, and precision are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER forecast_revisions_require_binary_prediction
+            BEFORE INSERT ON forecast_revisions
+            WHEN (
+                SELECT prediction_type
+                FROM predictions
+                WHERE id = NEW.prediction_id
+            ) IS NOT 'binary'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'binary revisions require a binary prediction'
+                );
+            END
+            """,
+            """
+            CREATE TABLE numeric_forecast_revisions (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                lower_scaled INTEGER NOT NULL
+                    CHECK (
+                        typeof(lower_scaled) = 'integer'
+                        AND lower_scaled BETWEEN
+                            -999999999999999999 AND 999999999999999999
+                    ),
+                median_scaled INTEGER NOT NULL
+                    CHECK (
+                        typeof(median_scaled) = 'integer'
+                        AND median_scaled BETWEEN
+                            -999999999999999999 AND 999999999999999999
+                    ),
+                upper_scaled INTEGER NOT NULL
+                    CHECK (
+                        typeof(upper_scaled) = 'integer'
+                        AND upper_scaled BETWEEN
+                            -999999999999999999 AND 999999999999999999
+                    ),
+                confidence_percent INTEGER NOT NULL
+                    CHECK (
+                        typeof(confidence_percent) = 'integer'
+                        AND confidence_percent BETWEEN 1 AND 99
+                    ),
+                created_at TEXT NOT NULL
+                    CHECK (
+                        length(created_at) = 27
+                        AND created_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(created_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(created_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(created_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(created_at, 1, 10),
+                            0
+                        )
+                    ),
+                sequence INTEGER NOT NULL
+                    CHECK (
+                        typeof(sequence) = 'integer'
+                        AND sequence >= 1
+                    ),
+                rationale TEXT
+                    CHECK (rationale IS NULL OR (
+                        length(rationale) > 0
+                        AND rationale = trim(rationale)
+                        AND instr(rationale, char(0)) = 0
+                    )),
+                UNIQUE (prediction_id, sequence),
+                UNIQUE (prediction_id, id),
+                CHECK (lower_scaled <= median_scaled),
+                CHECK (median_scaled <= upper_scaled)
+            ) STRICT
+            """,
+            """
+            CREATE INDEX numeric_forecast_revisions_latest_by_prediction
+            ON numeric_forecast_revisions (prediction_id, sequence DESC)
+            """,
+            """
+            CREATE TRIGGER numeric_forecast_revisions_require_numeric_prediction
+            BEFORE INSERT ON numeric_forecast_revisions
+            WHEN (
+                SELECT prediction_type
+                FROM predictions
+                WHERE id = NEW.prediction_id
+            ) IS NOT 'numeric'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'numeric revisions require a numeric prediction'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_forecast_revisions_are_immutable
+            BEFORE UPDATE ON numeric_forecast_revisions
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved numeric forecast revisions are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_forecast_revisions_reject_history_replacement
+            BEFORE INSERT ON numeric_forecast_revisions
+            WHEN EXISTS (
+                SELECT 1 FROM numeric_forecast_revisions WHERE id = NEW.id
+            )
+                OR EXISTS (
+                    SELECT 1
+                    FROM numeric_forecast_revisions
+                    WHERE prediction_id = NEW.prediction_id
+                        AND sequence = NEW.sequence
+                )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved numeric forecast revisions are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_forecast_revisions_reject_direct_delete
+            BEFORE DELETE ON numeric_forecast_revisions
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved numeric forecast revisions are immutable'
+                );
+            END
+            """,
+        ),
+    ),
 )
 
 

@@ -1,7 +1,9 @@
-"""Binary-prediction values and validation rules."""
+"""Binary and numeric prediction values and validation rules."""
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
 
@@ -22,11 +24,116 @@ class PredictionStatus(StrEnum):
     INVALID = "invalid"
 
 
+class PredictionType(StrEnum):
+    """The forecast model fixed for a Prediction's lifetime."""
+
+    BINARY = "binary"
+    NUMERIC = "numeric"
+
+
 class BinaryOutcome(StrEnum):
     """The factual Yes/No result of a resolved binary prediction."""
 
     YES = "yes"
     NO = "no"
+
+
+MIN_NUMERIC_DECIMAL_PLACES = 0
+MAX_NUMERIC_DECIMAL_PLACES = 6
+MAX_NUMERIC_SCALED_VALUE = 999_999_999_999_999_999
+_PLAIN_DECIMAL_PATTERN = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)")
+
+
+@dataclass(frozen=True, slots=True)
+class FixedPrecisionValue:
+    """One exact base-ten value represented as a signed scaled integer."""
+
+    scaled_value: int
+    decimal_places: int
+
+    def __post_init__(self) -> None:
+        _validate_decimal_places(self.decimal_places)
+        if isinstance(self.scaled_value, bool) or not isinstance(
+            self.scaled_value, int
+        ):
+            raise PredictionValidationError(
+                "Numeric values must use an exact scaled integer.",
+                field="scaled_value",
+            )
+        if abs(self.scaled_value) > MAX_NUMERIC_SCALED_VALUE:
+            raise PredictionValidationError(
+                "Numeric value is outside the supported range.",
+                field="scaled_value",
+            )
+
+    @classmethod
+    def from_value(
+        cls,
+        value: Decimal | int | str,
+        decimal_places: int,
+        *,
+        field: str = "value",
+    ) -> "FixedPrecisionValue":
+        """Normalize a plain decimal input without passing through float."""
+
+        _validate_decimal_places(decimal_places)
+        if isinstance(value, (bool, float)):
+            raise PredictionValidationError(
+                "Numeric values must be exact decimal numbers, not floats.",
+                field=field,
+            )
+        if isinstance(value, int):
+            decimal_value = Decimal(value)
+        elif isinstance(value, Decimal):
+            decimal_value = value
+        elif isinstance(value, str):
+            normalized = value.strip()
+            if not normalized or _PLAIN_DECIMAL_PATTERN.fullmatch(normalized) is None:
+                raise PredictionValidationError(
+                    "Numeric value must be a plain decimal number.",
+                    field=field,
+                )
+            decimal_value = Decimal(normalized)
+        else:
+            raise PredictionValidationError(
+                "Numeric value must be a plain decimal number.",
+                field=field,
+            )
+
+        if not decimal_value.is_finite():
+            raise PredictionValidationError(
+                "Numeric value must be finite.",
+                field=field,
+            )
+        quantum = Decimal(1).scaleb(-decimal_places)
+        try:
+            quantized = decimal_value.quantize(quantum)
+        except InvalidOperation as error:
+            raise PredictionValidationError(
+                "Numeric value is outside the supported range.",
+                field=field,
+            ) from error
+        if quantized != decimal_value:
+            raise PredictionValidationError(
+                f"Numeric value must use at most {decimal_places} decimal places.",
+                field=field,
+            )
+        scaled_value = int(quantized.scaleb(decimal_places))
+        if abs(scaled_value) > MAX_NUMERIC_SCALED_VALUE:
+            raise PredictionValidationError(
+                "Numeric value is outside the supported range.",
+                field=field,
+            )
+        return cls(scaled_value=scaled_value, decimal_places=decimal_places)
+
+    @property
+    def decimal_value(self) -> Decimal:
+        """Return the exact Decimal represented by this value."""
+
+        return Decimal(self.scaled_value).scaleb(-self.decimal_places)
+
+    def __str__(self) -> str:
+        return format(self.decimal_value, f".{self.decimal_places}f")
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +185,53 @@ class NewForecastRevision:
 
 
 @dataclass(frozen=True, slots=True)
+class NewNumericForecastRevision:
+    """Validated input for one central numeric prediction interval."""
+
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    rationale: str | None = None
+
+    def __post_init__(self) -> None:
+        _validate_numeric_interval(
+            self.lower_bound,
+            self.median_estimate,
+            self.upper_bound,
+            self.confidence_percent,
+        )
+        object.__setattr__(
+            self, "rationale", _optional_text(self.rationale, "rationale")
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NewNumericPrediction:
+    """Validated enduring numeric definition and sequence-one revision."""
+
+    question: str
+    unit: str
+    decimal_places: int
+    initial_revision: NewNumericForecastRevision
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "question", _required_text(self.question, "question"))
+        object.__setattr__(self, "unit", _required_unit(self.unit))
+        _validate_decimal_places(self.decimal_places)
+        if not isinstance(self.initial_revision, NewNumericForecastRevision):
+            raise PredictionValidationError(
+                "An initial numeric forecast is required.",
+                field="initial_revision",
+            )
+        if self.initial_revision.lower_bound.decimal_places != self.decimal_places:
+            raise PredictionValidationError(
+                "Numeric forecast values must match the Prediction precision.",
+                field="decimal_places",
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class NewJournalEntry:
     """Validated reasoning that leaves the current forecast unchanged."""
 
@@ -124,6 +278,32 @@ class NewResolution:
 
 
 @dataclass(frozen=True, slots=True)
+class NewNumericResolution:
+    """Validated realized numeric outcome and optional notes."""
+
+    actual_value: FixedPrecisionValue
+    resolution_notes: str | None = None
+    postmortem: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.actual_value, FixedPrecisionValue):
+            raise PredictionValidationError(
+                "A numeric actual value is required.",
+                field="actual_value",
+            )
+        object.__setattr__(
+            self,
+            "resolution_notes",
+            _optional_text(self.resolution_notes, "resolution_notes"),
+        )
+        object.__setattr__(
+            self,
+            "postmortem",
+            _optional_text(self.postmortem, "postmortem"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class NewInvalidation:
     """Validated reason for preserving a prediction outside scoring."""
 
@@ -154,6 +334,43 @@ class ForecastRevision:
     sequence: int
     created_at: datetime
     rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NumericForecastRevision:
+    """One immutable central numeric prediction interval."""
+
+    revision_id: int
+    prediction_id: int
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    sequence: int
+    created_at: datetime
+    rationale: str | None = None
+
+    def __post_init__(self) -> None:
+        _validate_numeric_interval(
+            self.lower_bound,
+            self.median_estimate,
+            self.upper_bound,
+            self.confidence_percent,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NumericPrediction:
+    """Current numeric state derived from its latest immutable revision."""
+
+    prediction_id: int
+    question: str
+    unit: str
+    decimal_places: int
+    status: PredictionStatus
+    created_at: datetime
+    updated_at: datetime
+    current_revision: NumericForecastRevision
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +425,20 @@ class Resolution:
     scoring_revision_id: int
     scoring_revision_sequence: int
     scoring_probability_percent: int
+    resolution_notes: str | None = None
+    postmortem: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NumericResolution:
+    """One immutable realized quantity and captured scoring interval."""
+
+    resolution_id: int
+    prediction_id: int
+    actual_value: FixedPrecisionValue
+    resolved_at: datetime
+    scoring_revision_id: int
+    scoring_revision_sequence: int
     resolution_notes: str | None = None
     postmortem: str | None = None
 
@@ -350,6 +581,74 @@ def display_status(
     ):
         return PredictionStatus.LOCKED
     return persisted_status
+
+
+def _validate_decimal_places(value: object) -> None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise PredictionValidationError(
+            "Decimal precision must be a whole number from 0 to 6.",
+            field="decimal_places",
+        )
+    if not MIN_NUMERIC_DECIMAL_PLACES <= value <= MAX_NUMERIC_DECIMAL_PLACES:
+        raise PredictionValidationError(
+            "Decimal precision must be between 0 and 6.",
+            field="decimal_places",
+        )
+
+
+def _validate_numeric_interval(
+    lower_bound: object,
+    median_estimate: object,
+    upper_bound: object,
+    confidence_percent: object,
+) -> None:
+    values = (lower_bound, median_estimate, upper_bound)
+    if any(not isinstance(value, FixedPrecisionValue) for value in values):
+        raise PredictionValidationError(
+            "Lower bound, median, and upper bound must be exact numeric values.",
+            field="interval",
+        )
+    lower = lower_bound
+    median = median_estimate
+    upper = upper_bound
+    assert isinstance(lower, FixedPrecisionValue)
+    assert isinstance(median, FixedPrecisionValue)
+    assert isinstance(upper, FixedPrecisionValue)
+    decimal_places = lower.decimal_places
+    if any(value.decimal_places != decimal_places for value in (median, upper)):
+        raise PredictionValidationError(
+            "Lower bound, median, and upper bound must use one precision.",
+            field="interval",
+        )
+    if not lower.scaled_value <= median.scaled_value <= upper.scaled_value:
+        raise PredictionValidationError(
+            "Numeric forecasts require lower bound <= median <= upper bound.",
+            field="interval",
+        )
+    if isinstance(confidence_percent, bool) or not isinstance(confidence_percent, int):
+        raise PredictionValidationError(
+            "Confidence must be a whole percentage from 1 to 99.",
+            field="confidence_percent",
+        )
+    if not 1 <= confidence_percent <= 99:
+        raise PredictionValidationError(
+            "Confidence must be between 1 and 99.",
+            field="confidence_percent",
+        )
+
+
+def _required_unit(value: object) -> str:
+    if not isinstance(value, str) or not (normalized := value.strip()):
+        raise PredictionValidationError(
+            "Unit is required.",
+            field="unit",
+        )
+    if "\x00" in normalized:
+        raise PredictionValidationError(
+            "Unit cannot contain the NUL control character.",
+            field="unit",
+        )
+    return normalized
 
 
 def _validate_probability(probability: object) -> None:

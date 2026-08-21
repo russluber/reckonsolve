@@ -4,7 +4,7 @@ Reckonsolve is a local-first personal forecasting journal for Windows. It is des
 
 > Reckonsolve now has isolated development data, local action icons, and a validated private Windows build, but it is not ready for normal distribution. Original application-icon artwork, an installer, signing, and public binaries remain deferred.
 
-The current application is the completed binary v0.1 baseline. Numeric interval forecasting and explicit Forecast Reviews now have an approved staged v0.2 plan, but they are not implemented yet.
+The current application is the completed binary v0.1 baseline. Milestone 13 has added the exact numeric domain and persistence foundation for the approved staged v0.2 plan, but numeric creation and display are intentionally not exposed until the next user-visible slice. Explicit Forecast Reviews also remain planned rather than implemented.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
