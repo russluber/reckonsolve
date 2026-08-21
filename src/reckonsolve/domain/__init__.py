@@ -1,6 +1,11 @@
 """Domain values and rules for Reckonsolve."""
 
-from .analytics import AnalyticsSource, ScoringObservation
+from .analytics import (
+    AnalyticsSource,
+    NumericAnalyticsSource,
+    NumericScoringObservation,
+    ScoringObservation,
+)
 from .attention import (
     DEFAULT_STALE_THRESHOLD_DAYS,
     MAX_STALE_THRESHOLD_DAYS,
@@ -65,6 +70,8 @@ __all__ = [
     "NewJournalEntry",
     "NewPrediction",
     "NewResolution",
+    "NumericAnalyticsSource",
+    "NumericScoringObservation",
     "Prediction",
     "PredictionBrowserItem",
     "PredictionBrowserSnapshot",

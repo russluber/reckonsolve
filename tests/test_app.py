@@ -30,9 +30,13 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
-from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
-from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
+from reckonsolve.ui.analytics_charts import (
+    BrierTrendChart,
+    CalibrationChart,
+    ContainmentCalibrationChart,
+)
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 
@@ -326,6 +330,106 @@ def test_analytics_score_resolved_predictions_and_filters_after_restart(
     assert mean.text() == "Mean Brier: 0.090"
     assert sum(item.count for item in calibration.bins) == 1
     assert len(trend.points) == 1
+    second.close()
+
+
+def test_numeric_analytics_filter_type_tag_and_unit_after_restart(
+    qtbot,
+    tmp_path,
+) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    first = create_runtime(database_path=path)
+    qtbot.addWidget(first.window)
+    operations = PredictionOperations(first.database)
+    days = operations.create_numeric_prediction(
+        "How many days will this take?",
+        "days",
+        0,
+        3,
+        7,
+        21,
+        80,
+        tags=("Work",),
+    )
+    operations.resolve_numeric_prediction(
+        days.prediction_id,
+        21,
+        expected_revision_id=days.current_revision.revision_id,
+        expected_metadata_version=days.metadata_version,
+    )
+    dollars = operations.create_numeric_prediction(
+        "How many USD will this cost?",
+        "USD",
+        0,
+        100,
+        150,
+        200,
+        80,
+        tags=("Money",),
+    )
+    operations.resolve_numeric_prediction(
+        dollars.prediction_id,
+        250,
+        expected_revision_id=dollars.current_revision.revision_id,
+        expected_metadata_version=dollars.metadata_version,
+    )
+    first.close()
+
+    second = create_runtime(database_path=path)
+    qtbot.addWidget(second.window)
+    second.window.show()
+    second.window.navigate_to("Analytics")
+    numeric_count = second.window.findChild(QLabel, "numericAnalyticsScoredCount")
+    containment = second.window.findChild(QLabel, "numericAnalyticsContainment")
+    raw_scope = second.window.findChild(QLabel, "numericAnalyticsRawScope")
+    chart = second.window.findChild(
+        ContainmentCalibrationChart,
+        "containmentCalibrationChart",
+    )
+    table = second.window.findChild(QTableWidget, "containmentCalibrationBinTable")
+    type_filter = second.window.findChild(QComboBox, "analyticsTypeFilter")
+    tag_filter = second.window.findChild(QComboBox, "analyticsTagFilter")
+    unit_filter = second.window.findChild(QComboBox, "analyticsUnitFilter")
+    assert numeric_count is not None
+    assert containment is not None
+    assert raw_scope is not None
+    assert chart is not None
+    assert table is not None
+    assert type_filter is not None
+    assert tag_filter is not None
+    assert unit_filter is not None
+    assert numeric_count.text() == "Scored Numeric Predictions: 2"
+    assert containment.text() == "Contained outcomes: 1 of 2 (50%)"
+    assert "will not average unlike units" in raw_scope.text()
+    assert sum(item.count for item in chart.bins) == 2
+    assert table.item(8, 1).text() == "2"
+    assert table.item(8, 3).text() == "50%"
+
+    type_filter.setCurrentIndex(type_filter.findData(PredictionType.NUMERIC))
+    days_index = unit_filter.findData("days")
+    assert unit_filter.isEnabled()
+    assert days_index >= 0
+    unit_filter.setCurrentIndex(days_index)
+    assert unit_filter.currentData() == "days"
+    analytics_error = second.window.findChild(QLabel, "analyticsError")
+    assert analytics_error is not None
+    assert analytics_error.isHidden(), analytics_error.text()
+
+    median_error = second.window.findChild(QLabel, "numericMeanMedianAbsoluteError")
+    width = second.window.findChild(QLabel, "numericMeanIntervalWidth")
+    interval_score = second.window.findChild(QLabel, "numericMeanIntervalScore")
+    assert median_error is not None
+    assert width is not None
+    assert interval_score is not None
+    assert numeric_count.text() == "Scored Numeric Predictions: 1"
+    assert median_error.text() == "Mean median absolute error: 14 days"
+    assert width.text() == "Mean interval width: 18 days"
+    assert interval_score.text() == "Mean interval score: 18 days"
+
+    unit_filter.setCurrentIndex(0)
+    tag_filter.setCurrentIndex(tag_filter.findData("Money"))
+    assert numeric_count.text() == "Scored Numeric Predictions: 1"
+    assert containment.text() == "Contained outcomes: 0 of 1 (0%)"
     second.close()
 
 

@@ -30,8 +30,12 @@ from pytestqt.qtbot import QtBot
 from reckonsolve.analytics import (
     AnalyticsSnapshot,
     AnalyticsSource,
+    ForecastAnalyticsSnapshot,
+    NumericAnalyticsSource,
+    NumericScoringObservation,
     ScoringObservation,
     summarize_analytics,
+    summarize_forecast_analytics,
 )
 from reckonsolve.application.errors import (
     ApplicationError,
@@ -56,7 +60,11 @@ from reckonsolve.domain.transfer import (
     DataManagementStatus,
 )
 from reckonsolve.ui import MainWindow
-from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
+from reckonsolve.ui.analytics_charts import (
+    BrierTrendChart,
+    CalibrationChart,
+    ContainmentCalibrationChart,
+)
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 EXPECTED_SCREEN_NAMES = (
@@ -382,8 +390,16 @@ class FakePredictionOperations:
         self.browser_calls: list[tuple[str, PredictionStatus | None, str | None]] = []
         self.browser_type_calls: list[PredictionType | None] = []
         self.analytics_source = AnalyticsSource(observations=(), available_tags=())
+        self.numeric_analytics_source = NumericAnalyticsSource(
+            observations=(),
+            available_tags=(),
+            available_units=(),
+        )
         self.analytics_error: ApplicationError | None = None
         self.analytics_calls: list[str | None] = []
+        self.forecast_analytics_calls: list[
+            tuple[PredictionType | None, str | None, str | None]
+        ] = []
         self.stale_threshold_days = 14
         self.threshold_get_calls = 0
         self.threshold_set_calls: list[int] = []
@@ -1253,6 +1269,25 @@ class FakePredictionOperations:
             raise self.analytics_error
         return summarize_analytics(self.analytics_source, tag=tag)
 
+    def get_forecast_analytics(
+        self,
+        *,
+        prediction_type: PredictionType | None = None,
+        tag: str | None = None,
+        unit: str | None = None,
+    ) -> ForecastAnalyticsSnapshot:
+        self.forecast_analytics_calls.append((prediction_type, tag, unit))
+        self.analytics_calls.append(tag)
+        if self.analytics_error is not None:
+            raise self.analytics_error
+        return summarize_forecast_analytics(
+            self.analytics_source,
+            self.numeric_analytics_source,
+            prediction_type=prediction_type,
+            tag=tag,
+            unit=unit,
+        )
+
     def get_stale_threshold_days(self) -> int:
         self.threshold_get_calls += 1
         if self.threshold_error is not None:
@@ -1508,6 +1543,138 @@ def test_analytics_reports_initial_and_stale_refresh_errors(qtbot: QtBot) -> Non
     )
     assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
         "Mean Brier: 0.160"
+    )
+
+
+def test_analytics_renders_unitless_numeric_containment_without_mixing_raw_units(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations()
+    operations.numeric_analytics_source = NumericAnalyticsSource(
+        observations=(
+            _numeric_scoring_observation(
+                1,
+                lower=0,
+                median=5,
+                upper=10,
+                actual=10,
+                confidence=80,
+                unit="days",
+                tags=("Work",),
+            ),
+            _numeric_scoring_observation(
+                2,
+                lower=100,
+                median=150,
+                upper=200,
+                actual=250,
+                confidence=80,
+                unit="USD",
+                tags=("Money",),
+            ),
+        ),
+        available_tags=("Money", "Work"),
+        available_units=("days", "USD"),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    window.navigate_to("Analytics")
+
+    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == (
+        "Scored Numeric Predictions: 2"
+    )
+    assert _required_child(window, QLabel, "numericAnalyticsContainment").text() == (
+        "Contained outcomes: 1 of 2 (50%)"
+    )
+    raw_scope = _required_child(window, QLabel, "numericAnalyticsRawScope")
+    assert "will not average unlike units" in raw_scope.text()
+    assert _required_child(window, QLabel, "numericMeanIntervalScore").text() == (
+        "Mean interval score: Not available"
+    )
+    table = _required_child(window, QTableWidget, "containmentCalibrationBinTable")
+    assert table.item(8, 0).text() == "80-89%"
+    assert table.item(8, 1).text() == "2"
+    assert table.item(8, 2).text() == "80%"
+    assert table.item(8, 3).text() == "50%"
+    chart = _required_child(
+        window,
+        ContainmentCalibrationChart,
+        "containmentCalibrationChart",
+    )
+    assert sum(item.count for item in chart.bins) == 2
+    unit_filter = _required_child(window, QComboBox, "analyticsUnitFilter")
+    assert not unit_filter.isEnabled()
+
+
+def test_numeric_type_and_exact_unit_filter_every_numeric_view(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    operations.numeric_analytics_source = NumericAnalyticsSource(
+        observations=(
+            _numeric_scoring_observation(
+                1,
+                lower=0,
+                median=5,
+                upper=10,
+                actual=8,
+                confidence=80,
+                unit="days",
+                tags=("Work",),
+            ),
+            _numeric_scoring_observation(
+                2,
+                lower=100,
+                median=150,
+                upper=200,
+                actual=250,
+                confidence=80,
+                unit="USD",
+                tags=("Work",),
+            ),
+        ),
+        available_tags=("Work",),
+        available_units=("days", "USD"),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Analytics")
+    type_filter = _required_child(window, QComboBox, "analyticsTypeFilter")
+    unit_filter = _required_child(window, QComboBox, "analyticsUnitFilter")
+
+    type_filter.setCurrentIndex(type_filter.findData(PredictionType.NUMERIC))
+    unit_filter.setCurrentIndex(unit_filter.findData("days"))
+
+    assert unit_filter.isEnabled()
+    assert operations.forecast_analytics_calls[-1] == (
+        PredictionType.NUMERIC,
+        None,
+        "days",
+    )
+    assert _required_child(window, QWidget, "analyticsBrierSummary").isHidden()
+    assert not _required_child(window, QWidget, "numericAnalyticsSummary").isHidden()
+    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == (
+        "Scored Numeric Predictions: 1"
+    )
+    assert _required_child(window, QLabel, "numericMeanMedianAbsoluteError").text() == (
+        "Mean median absolute error: 3 days"
+    )
+    assert _required_child(window, QLabel, "numericMeanIntervalWidth").text() == (
+        "Mean interval width: 10 days"
+    )
+    assert _required_child(window, QLabel, "numericMeanIntervalScore").text() == (
+        "Mean interval score: 10 days"
+    )
+    table = _required_child(window, QTableWidget, "containmentCalibrationBinTable")
+    assert table.item(8, 1).text() == "1"
+    assert table.item(8, 3).text() == "100%"
+
+    type_filter.setCurrentIndex(type_filter.findData(PredictionType.BINARY))
+    assert not unit_filter.isEnabled()
+    assert unit_filter.currentData() is None
+    assert operations.forecast_analytics_calls[-1] == (
+        PredictionType.BINARY,
+        None,
+        None,
     )
 
 
@@ -4914,6 +5081,33 @@ def _scoring_observation(
         scoring_revision_id=identifier,
         probability_percent=probability_percent,
         outcome=outcome,
+        tags=tags,
+    )
+
+
+def _numeric_scoring_observation(
+    identifier: int,
+    *,
+    lower: int,
+    median: int,
+    upper: int,
+    actual: int,
+    confidence: int,
+    unit: str,
+    tags: tuple[str, ...] = (),
+) -> NumericScoringObservation:
+    return NumericScoringObservation(
+        prediction_id=identifier,
+        question=f"Numeric Prediction {identifier}",
+        resolution_id=identifier,
+        resolved_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+        scoring_revision_id=identifier,
+        unit=unit,
+        lower_bound=FixedPrecisionValue(lower, 0),
+        median_estimate=FixedPrecisionValue(median, 0),
+        upper_bound=FixedPrecisionValue(upper, 0),
+        confidence_percent=confidence,
+        actual_value=FixedPrecisionValue(actual, 0),
         tags=tags,
     )
 

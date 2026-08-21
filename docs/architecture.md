@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 17 type-aware Dashboard and Prediction browser complete
+Status: Milestone 18 Numeric analytics complete
 Last reviewed: 2026-08-20
 
 This document describes how Reckonsolve is structured and how its implementation evolves from the completed binary v0.1 baseline through v0.2. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 17 completes the type-aware Dashboard and archive slice without changing completed Binary or Numeric lifecycle workflows. Both read models now project every current Prediction using the type-appropriate immutable revision; Numeric summaries retain interval, median, confidence, and unit rather than being forced through a percentage-only binary shape. Dashboard derives nonterminal attention buckets across both types, while Predictions combines question, lifecycle, forecast-type, and tag filters before routing the selected row to the matching Detail screen. Numeric analytics, type-aware export, and Review workflows remain deliberately absent until their later v0.2 milestones. The M12 private build and resource layer remain intact; original user-directed application artwork and normal public distribution remain deferred.
+Milestone 18 completes Numeric analytics without changing schema version 11 or the completed Binary scoring behavior. One consistent read captures each resolved Prediction's stored type-appropriate scoring revision and tags. Pure analytics derive Binary Brier views separately from Numeric inclusive containment, median absolute error, interval width, and proper interval score. Unitless containment may span units, while raw Numeric averages are withheld until one exact unit is selected. Type, tag, and unit filters define the same subset across every visible Numeric value. Type-aware export and Review workflows remain deliberately absent until their later v0.2 milestones. The M12 private build and resource layer remain intact; original user-directed application artwork and normal public distribution remain deferred.
 
 | Area | Current state |
 |---|---|
@@ -21,8 +21,8 @@ Milestone 17 completes the type-aware Dashboard and archive slice without changi
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
 | Schema | Version 11 preserves Binary terminal records and adds immutable Numeric Resolutions with exact actual values and scoring-revision ownership |
-| Domain and application operations | Complete Binary and Numeric creation, history, terminal lifecycle, type-aware Dashboard/archive queries, and guarded deletion; Numeric analytics and Reviews remain deferred |
-| Analytics | Exactly-once scoring selection, binary Brier, fixed-bin calibration, and cumulative resolution-time aggregation are implemented as pure calculations behind a read-only data source |
+| Domain and application operations | Complete Binary and Numeric creation, history, terminal lifecycle, type-aware Dashboard/archive/analytics queries, and guarded deletion; Reviews remain deferred |
+| Analytics | Exactly-once type-aware scoring selection, Binary Brier/reliability/trend, Numeric containment calibration, and exact-unit raw Numeric summaries are pure calculations behind one consistent read-only source |
 | Automated tests | Existing product coverage plus type-aware Dashboard/archive summaries, filters, routing, attention membership, Numeric lifecycle boundaries, and schema-v10-to-v11 compatibility |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and smoke-validated; original icon artwork, installer, signing, shortcuts, uninstall, updates, and public distribution remain deferred |
 
@@ -134,8 +134,11 @@ The analytics boundary contains:
 - final-eligible-revision selection;
 - per-prediction Brier calculation;
 - mean Brier calculation;
-- calibration bin assignment and aggregation; and
-- the explicitly labeled Brier-over-time series.
+- calibration bin assignment and aggregation;
+- the explicitly labeled Brier-over-time series;
+- inclusive Numeric interval containment and fixed confidence-bin aggregation;
+- Numeric median absolute error, interval width, and proper interval score; and
+- an exact-unit guard that prevents raw quantities from being averaged across unlike units.
 
 Analytics chart code consumes analytics results; it does not decide which forecasts count. The Prediction Detail probability-history chart is separate: it consumes every immutable revision for one Prediction through the existing application query and performs presentation-only projection.
 
@@ -184,6 +187,8 @@ src/reckonsolve/
     errors.py          expected user-presentable operation and concurrency errors
     predictions.py     Binary workflows plus complete staged Numeric lifecycle operations
   analytics/
+    numeric.py         pure Numeric containment, error, width, and interval-score calculations
+    overview.py        type-aware composition without cross-type or cross-unit scores
     scoring.py         pure exactly-once Brier, calibration, and trend calculations
   domain/
     analytics.py       captured resolved-forecast facts shared by data and analytics
@@ -193,7 +198,7 @@ src/reckonsolve/
     transfer.py        backup/export status and result values
   data/
     __init__.py        persistence package surface
-    analytics.py       read-only captured-scoring-revision source
+    analytics.py       one-snapshot Binary and Numeric captured-scoring-revision source
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
     numeric_predictions.py
@@ -204,9 +209,9 @@ src/reckonsolve/
   ui/
     __init__.py        UI package surface
     analytics_charts.py
-                       native reliability and cumulative Brier painting
+                       native Binary reliability, Numeric containment, and Brier-trend painting
     analytics_screen.py
-                       summary, common tag filter, bin table, and charts
+                       separate type views plus common type/tag and Numeric-unit filters
     dashboard.py       action buckets plus attention, backup, and export settings
     icons.py           palette-aware rendering for the selected Lucide resources
     main_window.py     navigation and screen coordination
@@ -297,6 +302,8 @@ Milestone 16 migrates to version 11 with a separate `numeric_resolutions` table.
 
 Milestone 17 needs no schema migration. The Dashboard and browser use type-aware, read-only projections that join each Binary Prediction to its highest-sequence `forecast_revisions` row and each Numeric Prediction to its highest-sequence `numeric_forecast_revisions` row. Both carry a forecast-type discriminant and either the Binary probability or the complete Numeric interval/median/confidence/unit summary. Application filtering derives Locked once against one local current date, then combines question, lifecycle, forecast type, and tag predicates without mutating persisted history. Type-aware navigation reloads the selected current record and sends it to the appropriate Detail widget.
 
+Milestone 18 also needs no schema migration. Binary `resolutions` and Numeric `numeric_resolutions` already own immutable composite references to their type-appropriate scoring revisions. The analytics repository reads both sources and their tag associations inside one SQLite transaction. Numeric fixed-precision scaled integers map back to exact `Decimal` values before pure calculations; no derived score is persisted. Containment and confidence are unitless, while raw Numeric means are emitted only after an exact stored unit label filters the source.
+
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
@@ -364,18 +371,21 @@ System-generated instants follow [ADR 0002](decisions/0002-canonical-utc-instant
 The implemented ordinary scoring pipeline is:
 
 ```text
-candidate prediction, resolution, and revision data
+resolved Prediction and captured type-appropriate scoring revision
   -> exclude Invalid and unresolved predictions
-  -> select one final eligible revision per prediction
-  -> pair probability with binary outcome
-  -> calculate Brier and calibration observations
-  -> aggregate for summaries and time series
+  -> validate exactly one observation per Prediction and Resolution
+  -> Binary: pair probability with outcome -> Brier/reliability/trend
+  -> Numeric: pair interval with actual -> containment/error/interval score
+  -> apply forecast-type, tag, and optional exact-unit filters
+  -> aggregate only type-compatible and unit-compatible measures
   -> render in the Analytics UI
 ```
 
 Selection logic and calculation logic require tests independent of chart widgets. Tag filtering should constrain the observation set before aggregation. Probability-history charts use all revisions for one prediction, while scoring uses exactly one eligible revision; these are separate data products and must not share misleading selection behavior.
 
-The source query returns each Resolution's captured scoring revision and associated tags in canonical resolution-time and identifier order. Pure analytics code validates unique Prediction and Resolution contributions, maps Yes to 1 and No to 0, calculates binary Brier on the 0-through-1 scale, applies the tag subset, and builds all outputs from that common filtered set. Calibration uses fixed `0-9%` through `90-100%` bands; occupied points use actual forecast means and observed Yes frequencies. The trend is the cumulative mean at each resolution. UI charts consume these results and cannot change selection or aggregation.
+One read transaction returns each Binary and Numeric Resolution's captured scoring revision and associated tags in canonical resolution-time and identifier order. Pure analytics validate unique Prediction and Resolution contributions. Binary calculations map Yes to 1 and No to 0, calculate Brier on the 0-through-1 scale, use fixed `0-9%` through `90-100%` probability bands, and retain the cumulative resolution-time trend. Numeric calculations treat both interval endpoints as inclusive, reuse the same ten bands for whole-number confidence, and report actual mean confidence, observed containment, and count. Median absolute error and interval width use exact base-ten values; proper interval score applies the confidence-dependent penalty on only the missed side.
+
+The type and tag filters apply before every type-specific output. Numeric **All units** may combine unitless containment observations but produces no raw-error summary. Selecting one exact unit filters the Numeric headline, table, chart, and mean raw metrics together. The **All types** view renders Binary and Numeric sections separately, and the unit selector is available only after choosing Numeric. Native UI charts consume calculated bins and cannot select observations or calculate scores.
 
 ## 12. UI data flow
 
@@ -403,7 +413,7 @@ Dashboard refreshes at startup, whenever it is entered, and once per minute whil
 
 Predictions refreshes whenever it is entered and once per minute while visible so its Open and Locked views remain correct across local-date boundaries. Question search trims surrounding whitespace and uses Unicode-aware case-insensitive substring matching over Question only; v0.1 does not silently extend this to Background, rationales, or Journal bodies. Status choices are All, Open, Locked, Resolved, and Invalid; forecast-type choices are All types, Binary, and Numeric. The single tag filter uses stable stored display spelling. All four filters combine using logical AND. Results show a type-appropriate current forecast, derived lifecycle status, associated tags, and latest forecast time, use explicit new-database and no-match empty states, and load current type-appropriate Prediction Detail before navigation. A failed initial query is not presented as an empty archive; a failed refresh retains earlier rows only with an explicit warning.
 
-Analytics refreshes whenever it is entered and on explicit refresh or tag change. Its scored count, mean Brier, reliability diagram, complete ten-row bin table, and cumulative trend always represent one common subset. Empty bins remain visible in the table with count zero but add no chart point. Both charts expose nonvisual summaries; the table makes calibration sparsity directly accessible. Empty All and empty filtered states are distinct, expected read failures are not shown as zero scores, and a failed refresh retains prior results only with a warning. Labels say lower Brier is better and explicitly avoid treating cumulative movement as proof of skill improvement.
+Analytics refreshes whenever it is entered and on explicit refresh or forecast-type, tag, or unit change. **All types** keeps Binary and Numeric results in separate labeled sections. Binary retains its scored count, mean Brier, reliability table/chart, and cumulative trend. Numeric shows scored count, overall containment, a complete confidence-bin table and native containment chart, and explanatory sparse-data language. The exact-unit selector is disabled outside the Numeric view; **All units** explicitly withholds raw averages, while one unit reveals mean median absolute error, interval width, and interval score with that unit printed beside every value. Empty bins remain visible with count zero but add no chart point. Charts expose nonvisual summaries, expected read failures are not shown as zero scores, and a failed refresh retains prior results only with a warning.
 
 Settings displays the canonical database path and last successful backup time alongside the existing attention threshold. **Back Up Now** and **Export CSV Bundle** use native save dialogs with timestamped suggestions. Cancel is side-effect free. Expected path, file, SQLite, or archive failures remain visible without replacing a previous destination artifact. Backup success updates the displayed time; CSV success reports the nine generated tables while continuing to label the ZIP as non-restorable analytical data.
 
@@ -444,7 +454,7 @@ This artifact is a development validation output, not a supported release. There
 
 ## 16. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 11, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M16 retain their historical, lifecycle, Dashboard, archive, analytics, transfer, packaging, fixed-precision Numeric, creation, revision, Journal, chart, and terminal-workflow coverage. M17 adds mixed-type Dashboard attention membership, archive type filtering with status/tag/search conjunction, type-appropriate interval/unit rendering, and Dashboard/archive navigation into Numeric Detail.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 11, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M17 retain their historical, lifecycle, Dashboard, archive, analytics, transfer, packaging, fixed-precision Numeric, creation, revision, Journal, chart, terminal-workflow, and type-aware navigation coverage. M18 adds independent exact Numeric scoring tests for inclusive boundaries, misses on both sides, 1%/99% confidence, sparse fixed bins, final captured-revision selection, lifecycle exclusions, mixed-unit containment, exact-unit aggregation guards, combined filters, native chart geometry/accessibility, and restart rendering.
 
 Most behavior should be verified below the GUI:
 
@@ -476,6 +486,6 @@ A normal installer, uninstall policy, code signing, public distribution channel,
 
 ## 19. Evolution into v0.2
 
-The approved v0.2 product plan adds one central numeric prediction interval per revision and explicit Forecast Reviews through Milestones 13 through 20. Milestone 17 is now implemented: type-aware Dashboard and archive read models preserve the clarity of both Binary probabilities and Numeric intervals, medians, confidence, and units. The application now covers Numeric creation, revision, Journal history, visualization, Open/Locked/Resolved/Invalid transitions, exact realized outcomes, guarded deletion, Dashboard attention, and archive browsing. Numeric analytics, export, and Review workflows remain later slices.
+The approved v0.2 product plan adds one central numeric prediction interval per revision and explicit Forecast Reviews through Milestones 13 through 20. Milestone 18 is now implemented: Numeric containment calibration and exact-unit raw scoring extend the type-aware forecasting loop without weakening Binary Brier analytics or combining unlike quantities. The application now covers Numeric creation, revision, Journal history, visualization, lifecycle, exact realized outcomes, guarded deletion, Dashboard attention, archive browsing, and analytics. Type-aware export and Review workflows remain later slices.
 
-The architecture will continue through implemented vertical slices rather than prebuilding the whole release. Milestone 18 next owns Numeric analytics on top of the completed type-aware forecasting loop. After each milestone, update this document to reflect actual modules, persistence behavior, and any recorded technical decisions; do not describe planned structures as already implemented.
+The architecture will continue through implemented vertical slices rather than prebuilding the whole release. Milestone 19 next owns immutable Forecast Reviews and their effect on Needs Attention. After each milestone, update this document to reflect actual modules, persistence behavior, and any recorded technical decisions; do not describe planned structures as already implemented.

@@ -1,7 +1,8 @@
-"""Focused Brier and calibration analytics screen."""
+"""Type-aware Binary and Numeric scoring analytics screen."""
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Protocol
 
 from PySide6.QtCore import QSignalBlocker, Qt
@@ -20,21 +21,37 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from reckonsolve.analytics import AnalyticsSnapshot
+from reckonsolve.analytics import (
+    AnalyticsSnapshot,
+    ForecastAnalyticsSnapshot,
+    NumericAnalyticsSnapshot,
+    NumericUnitSummary,
+)
 from reckonsolve.application.errors import ApplicationError
-from reckonsolve.ui.analytics_charts import BrierTrendChart, CalibrationChart
+from reckonsolve.domain.predictions import PredictionType
+from reckonsolve.ui.analytics_charts import (
+    BrierTrendChart,
+    CalibrationChart,
+    ContainmentCalibrationChart,
+)
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 
 
 class AnalyticsOperations(Protocol):
     """Application query used by the aggregate Analytics screen."""
 
-    def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
-        """Return all scoring views for one common subset."""
+    def get_forecast_analytics(
+        self,
+        *,
+        prediction_type: PredictionType | None = None,
+        tag: str | None = None,
+        unit: str | None = None,
+    ) -> ForecastAnalyticsSnapshot:
+        """Return separate type-aware views for one common filter subset."""
 
 
 class AnalyticsScreen(QWidget):
-    """Display exactly-once Brier, calibration, and cumulative performance."""
+    """Display Binary scoring and Numeric interval performance separately."""
 
     def __init__(
         self,
@@ -44,19 +61,29 @@ class AnalyticsScreen(QWidget):
         super().__init__(parent)
         self.setObjectName("analyticsScreen")
         self._operations = operations
-        self._loaded_snapshot: AnalyticsSnapshot | None = None
+        self._loaded_snapshot: ForecastAnalyticsSnapshot | None = None
 
         title = QLabel("Analytics", self)
         title.setObjectName("analyticsScreenTitle")
 
         introduction = QLabel(
             "Each resolved prediction contributes exactly one captured final "
-            "forecast. Invalid and unresolved predictions are excluded.",
+            "forecast. Binary and Numeric scores remain separate; Invalid and "
+            "unresolved predictions are excluded.",
             self,
         )
         introduction.setObjectName("analyticsIntroduction")
         introduction.setWordWrap(True)
         introduction.setTextFormat(Qt.TextFormat.PlainText)
+
+        type_label = QLabel("Forecast type", self)
+        self.type_filter = QComboBox(self)
+        self.type_filter.setObjectName("analyticsTypeFilter")
+        self.type_filter.setAccessibleName("Filter analytics by forecast type")
+        self.type_filter.addItem("All types", None)
+        self.type_filter.addItem("Binary", PredictionType.BINARY.value)
+        self.type_filter.addItem("Numeric", PredictionType.NUMERIC.value)
+        type_label.setBuddy(self.type_filter)
 
         tag_label = QLabel("Tag", self)
         self.tag_filter = QComboBox(self)
@@ -64,13 +91,29 @@ class AnalyticsScreen(QWidget):
         self.tag_filter.setAccessibleName("Filter analytics by tag")
         self.tag_filter.addItem("All tags", None)
         tag_label.setBuddy(self.tag_filter)
+
+        unit_label = QLabel("Numeric unit", self)
+        self.unit_filter = QComboBox(self)
+        self.unit_filter.setObjectName("analyticsUnitFilter")
+        self.unit_filter.setAccessibleName("Filter Numeric analytics by exact unit")
+        self.unit_filter.addItem("All units", None)
+        self.unit_filter.setEnabled(False)
+        self.unit_filter.setToolTip(
+            "Choose Numeric forecast type to enable exact-unit scoring."
+        )
+        unit_label.setBuddy(self.unit_filter)
+
         self.refresh_button = QPushButton("Refresh", self)
         self.refresh_button.setObjectName("refreshAnalyticsButton")
         apply_lucide_icon(self.refresh_button, LucideIcon.REFRESH)
 
         filter_layout = QHBoxLayout()
+        filter_layout.addWidget(type_label)
+        filter_layout.addWidget(self.type_filter)
         filter_layout.addWidget(tag_label)
         filter_layout.addWidget(self.tag_filter)
+        filter_layout.addWidget(unit_label)
+        filter_layout.addWidget(self.unit_filter)
         filter_layout.addWidget(self.refresh_button)
         filter_layout.addStretch()
 
@@ -80,28 +123,8 @@ class AnalyticsScreen(QWidget):
         self.error_label.setTextFormat(Qt.TextFormat.PlainText)
         self.error_label.setHidden(True)
 
-        summary = QGroupBox("Brier score", self)
-        summary.setObjectName("analyticsBrierSummary")
-        summary_layout = QVBoxLayout(summary)
-        self.scored_count = QLabel("Scored predictions: loading...", summary)
-        self.scored_count.setObjectName("analyticsScoredCount")
-        self.scored_count.setTextFormat(Qt.TextFormat.PlainText)
-        self.mean_brier = QLabel("Mean Brier: loading...", summary)
-        self.mean_brier.setObjectName("analyticsMeanBrier")
-        self.mean_brier.setTextFormat(Qt.TextFormat.PlainText)
-        lower_is_better = QLabel(
-            "Lower is better. A perfect forecast scores 0; a maximally wrong "
-            "forecast scores 1.",
-            summary,
-        )
-        lower_is_better.setObjectName("analyticsBrierDirection")
-        lower_is_better.setWordWrap(True)
-        lower_is_better.setTextFormat(Qt.TextFormat.PlainText)
-        summary_layout.addWidget(self.scored_count)
-        summary_layout.addWidget(self.mean_brier)
-        summary_layout.addWidget(lower_is_better)
-        summary.setHidden(True)
-        self.summary = summary
+        self.summary = self._create_binary_summary()
+        self.numeric_summary = self._create_numeric_summary()
 
         self.empty_label = QLabel(self)
         self.empty_label.setObjectName("analyticsEmpty")
@@ -112,61 +135,10 @@ class AnalyticsScreen(QWidget):
         content = QWidget(self)
         content.setObjectName("analyticsContent")
         content_layout = QVBoxLayout(content)
-
-        calibration_group = QGroupBox("Calibration / reliability", content)
-        calibration_group.setObjectName("analyticsCalibrationSection")
-        calibration_layout = QVBoxLayout(calibration_group)
-        calibration_explanation = QLabel(
-            "The diagonal is perfect calibration. Points use each occupied "
-            "bin's actual mean forecast and observed Yes frequency.",
-            calibration_group,
-        )
-        calibration_explanation.setWordWrap(True)
-        calibration_explanation.setTextFormat(Qt.TextFormat.PlainText)
-        self.calibration_chart = CalibrationChart(calibration_group)
-        self.calibration_table = QTableWidget(10, 4, calibration_group)
-        self.calibration_table.setObjectName("calibrationBinTable")
-        self.calibration_table.setAccessibleName(
-            "Calibration bins, counts, forecasts, and outcomes"
-        )
-        self.calibration_table.setHorizontalHeaderLabels(
-            ("Probability bin", "Count", "Mean forecast", "Observed Yes")
-        )
-        self.calibration_table.setEditTriggers(
-            QAbstractItemView.EditTrigger.NoEditTriggers
-        )
-        self.calibration_table.setSelectionMode(
-            QAbstractItemView.SelectionMode.NoSelection
-        )
-        self.calibration_table.verticalHeader().setVisible(False)
-        header = self.calibration_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header.setStretchLastSection(True)
-        calibration_layout.addWidget(calibration_explanation)
-        calibration_layout.addWidget(self.calibration_chart)
-        calibration_layout.addWidget(self.calibration_table)
-
-        trend_group = QGroupBox(
-            "Cumulative mean Brier by resolution time",
-            content,
-        )
-        trend_group.setObjectName("analyticsBrierTrendSection")
-        trend_layout = QVBoxLayout(trend_group)
-        trend_explanation = QLabel(
-            "Each point includes every prediction resolved up to that time. "
-            "Movement does not by itself prove skill improvement because forecast "
-            "difficulty and composition can change.",
-            trend_group,
-        )
-        trend_explanation.setObjectName("analyticsTrendExplanation")
-        trend_explanation.setWordWrap(True)
-        trend_explanation.setTextFormat(Qt.TextFormat.PlainText)
-        self.brier_trend_chart = BrierTrendChart(trend_group)
-        trend_layout.addWidget(trend_explanation)
-        trend_layout.addWidget(self.brier_trend_chart)
-
-        content_layout.addWidget(calibration_group)
-        content_layout.addWidget(trend_group)
+        self.binary_content = self._create_binary_content(content)
+        self.numeric_content = self._create_numeric_content(content)
+        content_layout.addWidget(self.binary_content)
+        content_layout.addWidget(self.numeric_content)
         content_layout.addStretch()
 
         self.scroll_area = QScrollArea(self)
@@ -180,29 +152,198 @@ class AnalyticsScreen(QWidget):
         layout.addWidget(introduction)
         layout.addLayout(filter_layout)
         layout.addWidget(self.error_label)
-        layout.addWidget(summary)
+        layout.addWidget(self.summary)
+        layout.addWidget(self.numeric_summary)
         layout.addWidget(self.empty_label)
         layout.addWidget(self.scroll_area, 1)
 
+        self.type_filter.currentIndexChanged.connect(self._forecast_type_changed)
         self.tag_filter.currentIndexChanged.connect(self.refresh)
+        self.unit_filter.currentIndexChanged.connect(self.refresh)
         self.refresh_button.clicked.connect(self.refresh)
+
+    def _create_binary_summary(self) -> QGroupBox:
+        summary = QGroupBox("Binary forecasts — Brier score", self)
+        summary.setObjectName("analyticsBrierSummary")
+        summary_layout = QVBoxLayout(summary)
+        self.scored_count = QLabel("Scored predictions: loading...", summary)
+        self.scored_count.setObjectName("analyticsScoredCount")
+        self.scored_count.setTextFormat(Qt.TextFormat.PlainText)
+        self.mean_brier = QLabel("Mean Brier: loading...", summary)
+        self.mean_brier.setObjectName("analyticsMeanBrier")
+        self.mean_brier.setTextFormat(Qt.TextFormat.PlainText)
+        direction = QLabel(
+            "Lower is better. A perfect Binary forecast scores 0; a maximally "
+            "wrong forecast scores 1.",
+            summary,
+        )
+        direction.setObjectName("analyticsBrierDirection")
+        direction.setWordWrap(True)
+        direction.setTextFormat(Qt.TextFormat.PlainText)
+        summary_layout.addWidget(self.scored_count)
+        summary_layout.addWidget(self.mean_brier)
+        summary_layout.addWidget(direction)
+        summary.setHidden(True)
+        return summary
+
+    def _create_numeric_summary(self) -> QGroupBox:
+        summary = QGroupBox("Numeric forecasts", self)
+        summary.setObjectName("numericAnalyticsSummary")
+        summary_layout = QVBoxLayout(summary)
+        self.numeric_scored_count = QLabel(
+            "Scored Numeric Predictions: loading...",
+            summary,
+        )
+        self.numeric_scored_count.setObjectName("numericAnalyticsScoredCount")
+        self.numeric_containment = QLabel("Contained outcomes: loading...", summary)
+        self.numeric_containment.setObjectName("numericAnalyticsContainment")
+        self.numeric_raw_scope = QLabel(summary)
+        self.numeric_raw_scope.setObjectName("numericAnalyticsRawScope")
+        self.numeric_raw_scope.setWordWrap(True)
+        self.numeric_median_error = QLabel(summary)
+        self.numeric_median_error.setObjectName("numericMeanMedianAbsoluteError")
+        self.numeric_interval_width = QLabel(summary)
+        self.numeric_interval_width.setObjectName("numericMeanIntervalWidth")
+        self.numeric_interval_score = QLabel(summary)
+        self.numeric_interval_score.setObjectName("numericMeanIntervalScore")
+        self.numeric_score_guidance = QLabel(
+            "Median absolute error measures the central estimate's miss. Interval "
+            "width measures range breadth. Interval score balances narrowness and "
+            "miss penalties; lower is better.",
+            summary,
+        )
+        self.numeric_score_guidance.setObjectName("numericScoreGuidance")
+        self.numeric_score_guidance.setWordWrap(True)
+        for label in (
+            self.numeric_scored_count,
+            self.numeric_containment,
+            self.numeric_raw_scope,
+            self.numeric_median_error,
+            self.numeric_interval_width,
+            self.numeric_interval_score,
+            self.numeric_score_guidance,
+        ):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            summary_layout.addWidget(label)
+        summary.setHidden(True)
+        return summary
+
+    def _create_binary_content(self, parent: QWidget) -> QGroupBox:
+        section = QGroupBox("Binary calibration and performance", parent)
+        section.setObjectName("binaryAnalyticsSection")
+        section_layout = QVBoxLayout(section)
+
+        calibration_group = QGroupBox("Calibration / reliability", section)
+        calibration_group.setObjectName("analyticsCalibrationSection")
+        calibration_layout = QVBoxLayout(calibration_group)
+        explanation = QLabel(
+            "The diagonal is perfect calibration. Points use each occupied "
+            "bin's actual mean forecast and observed Yes frequency.",
+            calibration_group,
+        )
+        explanation.setWordWrap(True)
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        self.calibration_chart = CalibrationChart(calibration_group)
+        self.calibration_table = _new_bin_table(
+            calibration_group,
+            object_name="calibrationBinTable",
+            accessible_name="Calibration bins, counts, forecasts, and outcomes",
+            headers=("Probability bin", "Count", "Mean forecast", "Observed Yes"),
+        )
+        calibration_layout.addWidget(explanation)
+        calibration_layout.addWidget(self.calibration_chart)
+        calibration_layout.addWidget(self.calibration_table)
+
+        trend_group = QGroupBox("Cumulative mean Brier by resolution time", section)
+        trend_group.setObjectName("analyticsBrierTrendSection")
+        trend_layout = QVBoxLayout(trend_group)
+        trend_explanation = QLabel(
+            "Each point includes every Binary Prediction resolved up to that time. "
+            "Movement does not by itself prove skill improvement because forecast "
+            "difficulty and composition can change.",
+            trend_group,
+        )
+        trend_explanation.setObjectName("analyticsTrendExplanation")
+        trend_explanation.setWordWrap(True)
+        trend_explanation.setTextFormat(Qt.TextFormat.PlainText)
+        self.brier_trend_chart = BrierTrendChart(trend_group)
+        trend_layout.addWidget(trend_explanation)
+        trend_layout.addWidget(self.brier_trend_chart)
+
+        section_layout.addWidget(calibration_group)
+        section_layout.addWidget(trend_group)
+        return section
+
+    def _create_numeric_content(self, parent: QWidget) -> QGroupBox:
+        section = QGroupBox("Numeric containment calibration", parent)
+        section.setObjectName("numericAnalyticsSection")
+        section_layout = QVBoxLayout(section)
+        explanation = QLabel(
+            "Containment asks whether the actual value fell inside the inclusive "
+            "interval. Confidence and containment are unitless, so this calibration "
+            "may combine units. Treat small bin counts as sparse evidence.",
+            section,
+        )
+        explanation.setObjectName("numericCalibrationExplanation")
+        explanation.setWordWrap(True)
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        self.containment_chart = ContainmentCalibrationChart(section)
+        self.containment_table = _new_bin_table(
+            section,
+            object_name="containmentCalibrationBinTable",
+            accessible_name=(
+                "Numeric confidence bins, counts, mean confidence, and containment"
+            ),
+            headers=(
+                "Confidence bin",
+                "Count",
+                "Mean confidence",
+                "Observed containment",
+            ),
+        )
+        section_layout.addWidget(explanation)
+        section_layout.addWidget(self.containment_chart)
+        section_layout.addWidget(self.containment_table)
+        return section
 
     def refresh(self) -> None:
         """Reload one coherent analytical subset and preserve honest error state."""
 
+        prediction_type = self._selected_type()
         selected_tag = self._selected_tag()
+        selected_unit = self._selected_unit()
         try:
-            snapshot = self._operations.get_analytics(tag=selected_tag)
+            snapshot = self._operations.get_forecast_analytics(
+                prediction_type=prediction_type,
+                tag=selected_tag,
+                unit=selected_unit,
+            )
             if selected_tag is not None and selected_tag.casefold() not in {
                 item.casefold() for item in snapshot.available_tags
             }:
                 with QSignalBlocker(self.tag_filter):
                     self.tag_filter.setCurrentIndex(0)
-                snapshot = self._operations.get_analytics(tag=None)
+                snapshot = self._operations.get_forecast_analytics(
+                    prediction_type=prediction_type,
+                    tag=None,
+                    unit=selected_unit,
+                )
+            if (
+                selected_unit is not None
+                and selected_unit not in snapshot.available_units
+            ):
+                with QSignalBlocker(self.unit_filter):
+                    self.unit_filter.setCurrentIndex(0)
+                snapshot = self._operations.get_forecast_analytics(
+                    prediction_type=prediction_type,
+                    tag=self._selected_tag(),
+                    unit=None,
+                )
         except ApplicationError as error:
             if self._loaded_snapshot is None:
                 self.error_label.setText(f"Analytics unavailable. {error}")
                 self.summary.setHidden(True)
+                self.numeric_summary.setHidden(True)
                 self.empty_label.setHidden(True)
                 self.scroll_area.setHidden(True)
             else:
@@ -216,12 +357,44 @@ class AnalyticsScreen(QWidget):
         self.error_label.setHidden(True)
         self._loaded_snapshot = snapshot
         self._update_tag_choices(snapshot.available_tags)
+        self._update_unit_choices(snapshot.available_units)
         self._render(snapshot)
 
-    def _render(self, snapshot: AnalyticsSnapshot) -> None:
-        count = snapshot.scored_prediction_count
-        self.summary.setHidden(False)
-        self.scored_count.setText(f"Scored predictions: {count}")
+    def _forecast_type_changed(self) -> None:
+        numeric_selected = self._selected_type() is PredictionType.NUMERIC
+        with QSignalBlocker(self.unit_filter):
+            if not numeric_selected:
+                self.unit_filter.setCurrentIndex(0)
+            self.unit_filter.setEnabled(numeric_selected)
+        self.refresh()
+
+    def _render(self, snapshot: ForecastAnalyticsSnapshot) -> None:
+        show_binary = snapshot.selected_type in (None, PredictionType.BINARY)
+        show_numeric = snapshot.selected_type in (None, PredictionType.NUMERIC)
+        self.summary.setHidden(not show_binary)
+        self.numeric_summary.setHidden(not show_numeric)
+        self.binary_content.setHidden(not show_binary)
+        self.numeric_content.setHidden(not show_numeric)
+        if show_binary:
+            self._render_binary(snapshot.binary)
+        if show_numeric:
+            self._render_numeric(snapshot.numeric)
+
+        count = (snapshot.binary.scored_prediction_count if show_binary else 0) + (
+            snapshot.numeric.scored_prediction_count if show_numeric else 0
+        )
+        if count == 0:
+            self.scroll_area.setHidden(True)
+            self.empty_label.setText(self._empty_message(snapshot.selected_type))
+            self.empty_label.setHidden(False)
+        else:
+            self.empty_label.setHidden(True)
+            self.scroll_area.setHidden(False)
+
+    def _render_binary(self, snapshot: AnalyticsSnapshot) -> None:
+        self.scored_count.setText(
+            f"Scored predictions: {snapshot.scored_prediction_count}"
+        )
         self.mean_brier.setText(
             "Mean Brier: Not available"
             if snapshot.mean_brier is None
@@ -229,41 +402,92 @@ class AnalyticsScreen(QWidget):
         )
         self.calibration_chart.set_bins(snapshot.calibration_bins)
         self.brier_trend_chart.set_points(snapshot.brier_trend)
-        self._render_calibration_table(snapshot)
-
-        if count == 0:
-            self.scroll_area.setHidden(True)
-            self.empty_label.setText(
-                "No scored predictions yet. Resolve a prediction to begin analytics."
-                if self._selected_tag() is None
-                else "No scored predictions match this tag."
-            )
-            self.empty_label.setHidden(False)
-        else:
-            self.empty_label.setHidden(True)
-            self.scroll_area.setHidden(False)
-
-    def _render_calibration_table(self, snapshot: AnalyticsSnapshot) -> None:
         for row, calibration_bin in enumerate(snapshot.calibration_bins):
-            values = (
-                calibration_bin.label,
-                str(calibration_bin.count),
+            _set_table_row(
+                self.calibration_table,
+                row,
                 (
-                    "Not available"
-                    if calibration_bin.mean_forecast_percent is None
-                    else _format_percent(calibration_bin.mean_forecast_percent)
-                ),
-                (
-                    "Not available"
-                    if calibration_bin.observed_yes_percent is None
-                    else _format_percent(calibration_bin.observed_yes_percent)
+                    calibration_bin.label,
+                    str(calibration_bin.count),
+                    _optional_percent(calibration_bin.mean_forecast_percent),
+                    _optional_percent(calibration_bin.observed_yes_percent),
                 ),
             )
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                if column in (1, 2, 3):
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.calibration_table.setItem(row, column, item)
+
+    def _render_numeric(self, snapshot: NumericAnalyticsSnapshot) -> None:
+        count = snapshot.scored_prediction_count
+        contained_count = sum(item.contained for item in snapshot.scored_predictions)
+        self.numeric_scored_count.setText(f"Scored Numeric Predictions: {count}")
+        self.numeric_containment.setText(
+            "Contained outcomes: Not available"
+            if count == 0
+            else (
+                f"Contained outcomes: {contained_count} of {count} "
+                f"({_format_percent(100 * contained_count / count)})"
+            )
+        )
+        summary = snapshot.unit_summary
+        if snapshot.selected_unit is None:
+            self.numeric_raw_scope.setText(
+                "Choose Numeric forecast type and one exact unit to compare median "
+                "error, interval width, and interval score. Reckonsolve will not "
+                "average unlike units."
+            )
+            self._set_raw_metrics(None)
+        elif summary is None:
+            self.numeric_raw_scope.setText(
+                f"No scored Numeric Predictions match unit: {snapshot.selected_unit}."
+            )
+            self._set_raw_metrics(None)
+        else:
+            self.numeric_raw_scope.setText(
+                f"Raw averages below use {summary.count} scored Prediction(s) with "
+                f"the exact unit: {summary.unit}. Lower interval score is better."
+            )
+            self._set_raw_metrics(summary)
+
+        self.containment_chart.set_bins(snapshot.calibration_bins)
+        for row, calibration_bin in enumerate(snapshot.calibration_bins):
+            _set_table_row(
+                self.containment_table,
+                row,
+                (
+                    calibration_bin.label,
+                    str(calibration_bin.count),
+                    _optional_percent(calibration_bin.mean_confidence_percent),
+                    _optional_percent(calibration_bin.observed_containment_percent),
+                ),
+            )
+
+    def _set_raw_metrics(self, summary: NumericUnitSummary | None) -> None:
+        if summary is None:
+            self.numeric_median_error.setText(
+                "Mean median absolute error: Not available"
+            )
+            self.numeric_interval_width.setText("Mean interval width: Not available")
+            self.numeric_interval_score.setText("Mean interval score: Not available")
+            return
+        unit = summary.unit
+        self.numeric_median_error.setText(
+            "Mean median absolute error: "
+            f"{_format_decimal(summary.mean_median_absolute_error)} {unit}"
+        )
+        self.numeric_interval_width.setText(
+            f"Mean interval width: {_format_decimal(summary.mean_interval_width)} {unit}"
+        )
+        self.numeric_interval_score.setText(
+            "Mean interval score: "
+            f"{_format_decimal(summary.mean_interval_score)} {unit}"
+        )
+
+    def _empty_message(self, prediction_type: PredictionType | None) -> str:
+        if self._selected_tag() is not None:
+            return "No scored predictions match these filters."
+        if prediction_type is PredictionType.BINARY:
+            return "No scored Binary Predictions yet. Resolve one to begin analytics."
+        if prediction_type is PredictionType.NUMERIC:
+            return "No scored Numeric Predictions yet. Resolve one to begin analytics."
+        return "No scored predictions yet. Resolve a prediction to begin analytics."
 
     def _update_tag_choices(self, tags: tuple[str, ...]) -> None:
         selected = self._selected_tag()
@@ -278,10 +502,72 @@ class AnalyticsScreen(QWidget):
                     selected_index = self.tag_filter.count() - 1
             self.tag_filter.setCurrentIndex(selected_index)
 
+    def _update_unit_choices(self, units: tuple[str, ...]) -> None:
+        selected = self._selected_unit()
+        with QSignalBlocker(self.unit_filter):
+            self.unit_filter.clear()
+            self.unit_filter.addItem("All units", None)
+            selected_index = 0
+            for unit in units:
+                self.unit_filter.addItem(unit, unit)
+                if unit == selected:
+                    selected_index = self.unit_filter.count() - 1
+            self.unit_filter.setCurrentIndex(selected_index)
+
+    def _selected_type(self) -> PredictionType | None:
+        value = self.type_filter.currentData()
+        return None if value is None else PredictionType(str(value))
+
     def _selected_tag(self) -> str | None:
         value = self.tag_filter.currentData()
         return None if value is None else str(value)
 
+    def _selected_unit(self) -> str | None:
+        value = self.unit_filter.currentData()
+        return None if value is None else str(value)
 
-def _format_percent(value: float) -> str:
-    return f"{value:.1f}".rstrip("0").rstrip(".") + "%"
+
+def _new_bin_table(
+    parent: QWidget,
+    *,
+    object_name: str,
+    accessible_name: str,
+    headers: tuple[str, str, str, str],
+) -> QTableWidget:
+    table = QTableWidget(10, 4, parent)
+    table.setObjectName(object_name)
+    table.setAccessibleName(accessible_name)
+    table.setHorizontalHeaderLabels(headers)
+    table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+    table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+    table.verticalHeader().setVisible(False)
+    header = table.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    header.setStretchLastSection(True)
+    return table
+
+
+def _set_table_row(
+    table: QTableWidget,
+    row: int,
+    values: tuple[str, str, str, str],
+) -> None:
+    for column, value in enumerate(values):
+        item = QTableWidgetItem(value)
+        if column in (1, 2, 3):
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        table.setItem(row, column, item)
+
+
+def _optional_percent(value: Decimal | float | None) -> str:
+    return "Not available" if value is None else _format_percent(value)
+
+
+def _format_percent(value: Decimal | float) -> str:
+    return f"{float(value):.1f}".rstrip("0").rstrip(".") + "%"
+
+
+def _format_decimal(value: Decimal) -> str:
+    if value == value.to_integral():
+        return format(value.quantize(Decimal(1)), "f")
+    return format(value.quantize(Decimal("0.001")), "f").rstrip("0").rstrip(".")

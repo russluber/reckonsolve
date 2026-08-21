@@ -8,7 +8,12 @@ from decimal import Decimal
 from pathlib import Path
 from zipfile import BadZipFile
 
-from reckonsolve.analytics import AnalyticsSnapshot, summarize_analytics
+from reckonsolve.analytics import (
+    AnalyticsSnapshot,
+    ForecastAnalyticsSnapshot,
+    summarize_analytics,
+    summarize_forecast_analytics,
+)
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
@@ -1091,6 +1096,51 @@ class PredictionOperations:
         return summarize_analytics(
             self._analytics_repository.get_source(),
             tag=tag,
+        )
+
+    def get_forecast_analytics(
+        self,
+        *,
+        prediction_type: PredictionType | None = None,
+        tag: str | None = None,
+        unit: str | None = None,
+    ) -> ForecastAnalyticsSnapshot:
+        """Return separate Binary and Numeric metrics for one filter subset."""
+
+        if prediction_type is not None and not isinstance(
+            prediction_type,
+            PredictionType,
+        ):
+            raise ValidationError(
+                "The analytics forecast-type filter is invalid.",
+                field="prediction_type",
+            )
+        if tag is not None and not isinstance(tag, str):
+            raise ValidationError(
+                "The analytics tag filter is invalid.",
+                field="tag",
+            )
+        if unit is not None and not isinstance(unit, str):
+            raise ValidationError(
+                "The analytics unit filter is invalid.",
+                field="unit",
+            )
+        normalized_unit = None if unit is None else unit.strip() or None
+        if (
+            normalized_unit is not None
+            and prediction_type is not PredictionType.NUMERIC
+        ):
+            raise ValidationError(
+                "Choose Numeric analytics before filtering by unit.",
+                field="unit",
+            )
+        binary_source, numeric_source = self._analytics_repository.get_sources()
+        return summarize_forecast_analytics(
+            binary_source,
+            numeric_source,
+            prediction_type=prediction_type,
+            tag=tag,
+            unit=normalized_unit,
         )
 
     def get_data_management_status(self) -> DataManagementStatus:

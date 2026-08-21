@@ -1225,6 +1225,8 @@ Median absolute error, interval width, and interval score retain the quantity's 
 
 All numeric analytics use exactly one final eligible revision per resolved Prediction. Tags and type/unit filters must define a consistent subset across headline numbers, tables, and charts.
 
+The Analytics screen keeps Binary and Numeric results in separate labeled sections when **All types** is selected; it never invents a score that combines the two forecast models. The exact-unit selector is enabled only for the **Numeric** forecast-type view. With **All units** selected, Numeric containment calibration may use the complete unitless subset, but median absolute error, interval width, and interval score summaries remain explicitly unavailable. Choosing one exact unit applies that unit before the Numeric headline, table, chart, and raw averages are calculated. Tag, forecast-type, and unit filters combine rather than describing mismatched subsets.
+
 ### 30.8 Forecast Reviews
 
 A Forecast Review is an immutable record that the user deliberately reconsidered the current forecast and retained it unchanged. It records:

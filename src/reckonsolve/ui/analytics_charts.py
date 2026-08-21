@@ -11,7 +11,11 @@ from PySide6.QtCore import QLineF, QRectF, QSize, Qt
 from PySide6.QtGui import QPainter, QPaintEvent, QPalette, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from reckonsolve.analytics import BrierTrendPoint, CalibrationBin
+from reckonsolve.analytics import (
+    BrierTrendPoint,
+    CalibrationBin,
+    ContainmentCalibrationBin,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +39,14 @@ class BrierTrendMarker:
     """One cumulative Brier observation projected over resolution time."""
 
     point: BrierTrendPoint
+    coordinate: ChartPoint
+
+
+@dataclass(frozen=True, slots=True)
+class ContainmentCalibrationMarker:
+    """One occupied confidence bin projected onto fixed percent axes."""
+
+    calibration_bin: ContainmentCalibrationBin
     coordinate: ChartPoint
 
 
@@ -107,6 +119,40 @@ def calculate_brier_trend_markers(
     return tuple(markers)
 
 
+def calculate_containment_calibration_markers(
+    bins: Iterable[ContainmentCalibrationBin],
+    plot_rect: QRectF,
+) -> tuple[ContainmentCalibrationMarker, ...]:
+    """Project occupied confidence means and containment rates."""
+
+    _validate_plot_rect(plot_rect)
+    markers: list[ContainmentCalibrationMarker] = []
+    for calibration_bin in bins:
+        if calibration_bin.count == 0:
+            continue
+        if (
+            calibration_bin.mean_confidence_percent is None
+            or calibration_bin.observed_containment_percent is None
+        ):
+            raise ValueError("Occupied containment bins require both means.")
+        markers.append(
+            ContainmentCalibrationMarker(
+                calibration_bin=calibration_bin,
+                coordinate=ChartPoint(
+                    x=plot_rect.left()
+                    + float(calibration_bin.mean_confidence_percent)
+                    / 100
+                    * plot_rect.width(),
+                    y=plot_rect.top()
+                    + (100 - float(calibration_bin.observed_containment_percent))
+                    / 100
+                    * plot_rect.height(),
+                ),
+            )
+        )
+    return tuple(markers)
+
+
 class CalibrationChart(QWidget):
     """Paint a fixed-scale reliability diagram and perfect-calibration line."""
 
@@ -169,6 +215,91 @@ class CalibrationChart(QWidget):
         painter.drawLine(plot.bottomLeft(), plot.topRight())
 
         markers = calculate_calibration_markers(self._bins, plot)
+        painter.setPen(QPen(palette.color(QPalette.ColorRole.Highlight), 2.0))
+        for previous, current in pairwise(markers):
+            painter.drawLine(
+                QLineF(
+                    previous.coordinate.x,
+                    previous.coordinate.y,
+                    current.coordinate.x,
+                    current.coordinate.y,
+                )
+            )
+        painter.setBrush(palette.color(QPalette.ColorRole.Highlight))
+        for marker in markers:
+            painter.drawEllipse(
+                QRectF(
+                    marker.coordinate.x - 5,
+                    marker.coordinate.y - 5,
+                    10,
+                    10,
+                )
+            )
+
+
+class ContainmentCalibrationChart(QWidget):
+    """Paint Numeric confidence against observed interval containment."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._bins: tuple[ContainmentCalibrationBin, ...] = ()
+        self.setObjectName("containmentCalibrationChart")
+        self.setAccessibleName("Numeric interval containment calibration diagram")
+        self.setAccessibleDescription("No scored Numeric Predictions are available.")
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+    @property
+    def bins(self) -> tuple[ContainmentCalibrationBin, ...]:
+        return self._bins
+
+    def set_bins(self, bins: Iterable[ContainmentCalibrationBin]) -> None:
+        self._bins = tuple(bins)
+        occupied = tuple(item for item in self._bins if item.count)
+        if not occupied:
+            description = "No scored Numeric Predictions are available."
+        else:
+            details = "; ".join(
+                f"{item.label}: {item.count} scored, mean confidence "
+                f"{item.mean_confidence_percent:.1f} percent, observed containment "
+                f"{item.observed_containment_percent:.1f} percent"
+                for item in occupied
+                if item.mean_confidence_percent is not None
+                and item.observed_containment_percent is not None
+            )
+            description = (
+                "Perfect containment calibration is the diagonal. Occupied bins: "
+                + details
+            )
+        self.setAccessibleDescription(description)
+        self.update()
+
+    def sizeHint(self) -> QSize:
+        return QSize(640, 300)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(340, 240)
+
+    def paintEvent(self, _event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        palette = self.palette()
+        painter.fillRect(self.rect(), palette.color(QPalette.ColorRole.Base))
+        plot = _plot_rect(self)
+        _paint_percent_axes(
+            painter,
+            palette,
+            plot,
+            x_title="Mean stated confidence",
+            y_title="Observed containment",
+        )
+
+        reference_pen = QPen(palette.color(QPalette.ColorRole.Mid), 1.5)
+        reference_pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(reference_pen)
+        painter.drawLine(plot.bottomLeft(), plot.topRight())
+
+        markers = calculate_containment_calibration_markers(self._bins, plot)
         painter.setPen(QPen(palette.color(QPalette.ColorRole.Highlight), 2.0))
         for previous, current in pairwise(markers):
             painter.drawLine(
