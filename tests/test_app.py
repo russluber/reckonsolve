@@ -43,14 +43,14 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 9
+    assert first_runtime.database.schema_version == 10
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 9
+    assert second_runtime.database.schema_version == 10
     second_runtime.close()
 
 
@@ -575,6 +575,102 @@ def test_numeric_create_close_reopen_displays_the_complete_interval(
     assert reopened_interval.text() == "80% interval: 120 to 240 pages"
     assert reopened_median.text() == "Median estimate: 180 pages"
     second_runtime.close()
+
+
+def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
+    qtbot,
+    tmp_path,
+) -> None:
+    """M15's visible flows preserve interval history across a real UI session."""
+
+    runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
+    qtbot.addWidget(runtime.window)
+    operations = PredictionOperations(runtime.database)
+    created = operations.create_numeric_prediction(
+        "How many pages will the second draft contain?",
+        "pages",
+        0,
+        "100",
+        "160",
+        "240",
+        80,
+    )
+    runtime.window.show()
+    runtime.window._prediction_detail_host.show_numeric_prediction(created)
+    runtime.window.navigate_to("Prediction Detail")
+
+    revise = runtime.window.findChild(QPushButton, "reviseNumericForecastButton")
+    assert revise is not None
+    qtbot.mouseClick(revise, Qt.MouseButton.LeftButton)
+    dialog = runtime.window.findChild(QDialog, "reviseNumericForecastDialog")
+    assert dialog is not None
+    lower = dialog.findChild(QLineEdit, "numericRevisionLowerBoundInput")
+    median = dialog.findChild(QLineEdit, "numericRevisionMedianEstimateInput")
+    upper = dialog.findChild(QLineEdit, "numericRevisionUpperBoundInput")
+    save_revision = dialog.findChild(QPushButton, "saveNumericForecastRevisionButton")
+    assert lower is not None
+    assert median is not None
+    assert upper is not None
+    assert save_revision is not None
+    lower.setText("120")
+    median.setText("180")
+    upper.setText("300")
+    qtbot.mouseClick(save_revision, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: dialog.isHidden())
+
+    journal = runtime.window.findChild(QPushButton, "addNumericJournalEntryButton")
+    assert journal is not None
+    qtbot.mouseClick(journal, Qt.MouseButton.LeftButton)
+    journal_dialog = runtime.window.findChild(QDialog, "addNumericJournalEntryDialog")
+    assert journal_dialog is not None
+    body = journal_dialog.findChild(QPlainTextEdit, "numericJournalEntryBodyInput")
+    save_journal = journal_dialog.findChild(
+        QPushButton, "saveNumericJournalEntryButton"
+    )
+    assert body is not None
+    assert save_journal is not None
+    body.setPlainText("The outline grew after reviewing the new chapter plan.")
+    qtbot.mouseClick(save_journal, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: journal_dialog.isHidden())
+
+    correct = runtime.window.findChild(
+        QPushButton,
+        "correctNumericJournalEntryButton1",
+    )
+    assert correct is not None
+    qtbot.mouseClick(correct, Qt.MouseButton.LeftButton)
+    correction_dialog = runtime.window.findChild(
+        QDialog,
+        "correctNumericJournalEntryDialog",
+    )
+    assert correction_dialog is not None
+    corrected_body = correction_dialog.findChild(
+        QPlainTextEdit,
+        "correctNumericJournalEntryBodyInput",
+    )
+    save_correction = correction_dialog.findChild(
+        QPushButton,
+        "saveNumericJournalCorrectionButton",
+    )
+    assert corrected_body is not None
+    assert save_correction is not None
+    corrected_body.setPlainText("The outline expanded after the chapter plan review.")
+    qtbot.mouseClick(save_correction, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: correction_dialog.isHidden())
+
+    revisions = operations.list_numeric_forecast_revisions(created.prediction_id)
+    timeline = operations.list_numeric_timeline(created.prediction_id)
+    chart = runtime.window.findChild(QWidget, "numericHistoryChart")
+    assert len(revisions) == 2
+    assert len(timeline) == 3
+    assert chart is not None
+    assert len(chart.samples) == 2
+    assert chart.samples[-1].median_estimate == 180.0
+    assert (
+        runtime.window.findChild(QLabel, "numericJournalBody1").text()
+        == "The outline expanded after the chapter plan review."
+    )
+    runtime.close()
 
 
 def test_edit_confirm_close_reopen_displays_metadata_and_history(

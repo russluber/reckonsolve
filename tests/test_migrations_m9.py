@@ -71,7 +71,7 @@ def test_v9_upgrade_preserves_existing_binary_data_and_behavior(tmp_path) -> Non
     )
     old_database.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:9])
     upgraded_operations = PredictionOperations(upgraded, FixedClock())
     reopened = upgraded_operations.get_prediction(created.prediction_id)
 

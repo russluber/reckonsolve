@@ -12,7 +12,10 @@ from reckonsolve.analytics import AnalyticsSnapshot, summarize_analytics
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
-from reckonsolve.data.numeric_predictions import NumericPredictionRepository
+from reckonsolve.data.numeric_predictions import (
+    NumericForecastRevisionUnchangedError,
+    NumericPredictionRepository,
+)
 from reckonsolve.data.predictions import (
     ForecastContextChangedError,
     ForecastRevisionDisallowedError,
@@ -51,7 +54,10 @@ from reckonsolve.domain.predictions import (
     NewNumericPrediction,
     NewPrediction,
     NewResolution,
+    NumericForecastRevision,
+    NumericJournalTimelineEvent,
     NumericPrediction,
+    NumericTimelineEvent,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
@@ -81,6 +87,7 @@ from .errors import (
     JournalEntryNotFoundError,
     LifecycleTransitionNotAllowedError,
     MeaningChangeConfirmationRequired,
+    NumericForecastUnchangedError,
     PredictionDeletionConfirmationRequired,
     PredictionDeletionNotAllowedError,
     PredictionNotFoundError,
@@ -89,7 +96,7 @@ from .errors import (
 
 
 class PredictionOperations:
-    """Coordinate Binary workflows and the staged Numeric creation slice."""
+    """Coordinate completed Binary workflows and staged Numeric workflows."""
 
     def __init__(
         self,
@@ -279,6 +286,77 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         return self._with_derived_status(updated, revised_at)
 
+    def revise_numeric_forecast(
+        self,
+        prediction_id: int,
+        lower_bound: Decimal | int | str,
+        median_estimate: Decimal | int | str,
+        upper_bound: Decimal | int | str,
+        confidence_percent: int,
+        *,
+        rationale: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericPrediction:
+        """Append a changed Numeric interval after rechecking reviewed context."""
+
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        current = self._numeric_repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        try:
+            new_revision = NewNumericForecastRevision(
+                FixedPrecisionValue.from_value(
+                    lower_bound,
+                    current.decimal_places,
+                    field="lower_bound",
+                ),
+                FixedPrecisionValue.from_value(
+                    median_estimate,
+                    current.decimal_places,
+                    field="median_estimate",
+                ),
+                FixedPrecisionValue.from_value(
+                    upper_bound,
+                    current.decimal_places,
+                    field="upper_bound",
+                ),
+                confidence_percent,
+                rationale,
+            )
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        if (
+            current.current_revision.revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentForecastUpdateError(prediction_id)
+
+        revised_at = as_utc(self._clock.now())
+        current_date = revised_at.astimezone(self._local_timezone).date()
+        try:
+            updated = self._numeric_repository.append_forecast_revision(
+                prediction_id,
+                new_revision,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                created_at=revised_at,
+                current_date=current_date,
+            )
+        except ForecastContextChangedError as error:
+            raise ConcurrentForecastUpdateError(prediction_id) from error
+        except NumericForecastRevisionUnchangedError as error:
+            raise NumericForecastUnchangedError() from error
+        except ForecastRevisionDisallowedError as error:
+            raise ForecastRevisionNotAllowedError(error.status) from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_numeric_status(updated, revised_at)
+
     def list_forecast_revisions(
         self,
         prediction_id: int,
@@ -289,6 +367,120 @@ class PredictionOperations:
         if revisions is None:
             raise PredictionNotFoundError(prediction_id)
         return revisions
+
+    def list_numeric_forecast_revisions(
+        self,
+        prediction_id: int,
+    ) -> tuple[NumericForecastRevision, ...]:
+        """Return one Numeric Prediction's immutable revisions in sequence order."""
+
+        revisions = self._numeric_repository.list_forecast_revisions(prediction_id)
+        if revisions is None:
+            raise PredictionNotFoundError(prediction_id)
+        return revisions
+
+    def add_numeric_journal_entry(
+        self,
+        prediction_id: int,
+        body: str,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericJournalTimelineEvent:
+        """Append reasoning tied to the reviewed current Numeric interval."""
+
+        try:
+            entry = NewJournalEntry(body)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        current = self._numeric_repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision.revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentJournalUpdateError(prediction_id)
+        now = as_utc(self._clock.now())
+        effective_status = display_status(
+            current.status,
+            current.forecast_deadline,
+            now.astimezone(self._local_timezone).date(),
+        )
+        if effective_status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
+            raise JournalEntryNotAllowedError(effective_status)
+        try:
+            event = self._numeric_repository.add_journal_entry(
+                prediction_id,
+                entry,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                created_at=now,
+                current_date=now.astimezone(self._local_timezone).date(),
+            )
+        except JournalContextChangedError as error:
+            raise ConcurrentJournalUpdateError(prediction_id) from error
+        except JournalEntryDisallowedError as error:
+            raise JournalEntryNotAllowedError(error.status) from error
+        if event is None:
+            raise PredictionNotFoundError(prediction_id)
+        return event
+
+    def correct_numeric_journal_entry(
+        self,
+        prediction_id: int,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> NumericJournalTimelineEvent:
+        """Append a transparent correction to a Numeric Journal entry."""
+
+        try:
+            correction = NewJournalCorrection(body)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(entry_id, "entry_id")
+        if expected_correction_id is not None:
+            self._validate_positive_token(
+                expected_correction_id,
+                "expected_correction_id",
+            )
+        current = self._numeric_repository.get_journal_entry(prediction_id, entry_id)
+        if current is None:
+            raise JournalEntryNotFoundError(entry_id)
+        if current.body == correction.body:
+            return current
+        corrected_at = as_utc(self._clock.now())
+        try:
+            updated = self._numeric_repository.append_journal_correction(
+                prediction_id,
+                entry_id,
+                correction,
+                expected_correction_id=expected_correction_id,
+                corrected_at=corrected_at,
+            )
+        except JournalCorrectionContextChangedError as error:
+            raise ConcurrentJournalCorrectionError(entry_id) from error
+        if updated is None:
+            raise JournalEntryNotFoundError(entry_id)
+        return updated
+
+    def list_numeric_timeline(
+        self,
+        prediction_id: int,
+    ) -> tuple[NumericTimelineEvent, ...]:
+        """Return Numeric revisions and anchored Journal entries causally."""
+
+        timeline = self._numeric_repository.list_timeline(prediction_id)
+        if timeline is None:
+            raise PredictionNotFoundError(prediction_id)
+        return timeline
 
     def add_journal_entry(
         self,

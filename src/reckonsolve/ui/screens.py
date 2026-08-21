@@ -46,6 +46,7 @@ from reckonsolve.domain.predictions import (
     PredictionType,
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
 
@@ -103,6 +104,47 @@ class NumericPredictionSnapshot(Protocol):
     expected_resolution: date | None
     tags: tuple[str, ...]
     metadata_version: int
+
+
+class NumericForecastTimelineSnapshot(Protocol):
+    """One immutable Numeric ForecastRevision prepared for the timeline."""
+
+    revision_id: int
+    prediction_id: int
+    created_at: datetime
+    sequence: int
+    lower_bound: object
+    median_estimate: object
+    upper_bound: object
+    confidence_percent: int
+    previous_lower_bound: object | None
+    previous_median_estimate: object | None
+    previous_upper_bound: object | None
+    previous_confidence_percent: int | None
+    rationale: str | None
+
+
+class NumericJournalTimelineSnapshot(Protocol):
+    """A Numeric Journal entry with its exact interval-at-the-time context."""
+
+    entry_id: int
+    prediction_id: int
+    created_at: datetime
+    body: str
+    original_body: str
+    numeric_forecast_revision_id: int
+    forecast_revision_sequence: int
+    lower_bound: object
+    median_estimate: object
+    upper_bound: object
+    confidence_percent: int
+    current_correction_id: int | None
+    corrections: tuple[JournalCorrectionSnapshot, ...]
+
+
+NumericTimelineSnapshot = (
+    NumericForecastTimelineSnapshot | NumericJournalTimelineSnapshot
+)
 
 
 class ResolutionSnapshot(Protocol):
@@ -299,6 +341,52 @@ class PredictionOperations(Protocol):
 
     def get_numeric_prediction(self, prediction_id: int) -> NumericPredictionSnapshot:
         """Return one Numeric Prediction with its current interval and metadata."""
+
+    def list_numeric_forecast_revisions(
+        self,
+        prediction_id: int,
+    ) -> tuple[NumericRevisionSnapshot, ...]:
+        """Return Numeric revisions in immutable sequence order."""
+
+    def revise_numeric_forecast(
+        self,
+        prediction_id: int,
+        lower_bound: object,
+        median_estimate: object,
+        upper_bound: object,
+        confidence_percent: int,
+        *,
+        rationale: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericPredictionSnapshot:
+        """Append one eligible, changed Numeric ForecastRevision."""
+
+    def add_numeric_journal_entry(
+        self,
+        prediction_id: int,
+        body: str,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericJournalTimelineSnapshot:
+        """Append a Numeric Journal entry tied to the reviewed interval."""
+
+    def correct_numeric_journal_entry(
+        self,
+        prediction_id: int,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> NumericJournalTimelineSnapshot:
+        """Append one transparent Numeric Journal correction."""
+
+    def list_numeric_timeline(
+        self,
+        prediction_id: int,
+    ) -> tuple[NumericTimelineSnapshot, ...]:
+        """Return Numeric Forecast and Journal events in causal order."""
 
     def update_metadata(
         self,
@@ -801,7 +889,7 @@ class NewPredictionScreen(QWidget):
 
 
 class NumericPredictionDetailScreen(QWidget):
-    """Present the current Numeric Prediction without exposing later workflows."""
+    """Present and extend the current Numeric Prediction's honest history."""
 
     def __init__(
         self,
@@ -919,9 +1007,53 @@ class NumericPredictionDetailScreen(QWidget):
             self.detail_content,
         )
 
+        actions = QWidget(self.detail_content)
+        actions.setObjectName("numericPredictionActions")
+        actions_layout = QHBoxLayout(actions)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        self.revise_forecast_button = QPushButton("Revise Interval", actions)
+        self.revise_forecast_button.setObjectName("reviseNumericForecastButton")
+        self.revise_forecast_button.setAccessibleName("Revise numeric interval")
+        apply_lucide_icon(self.revise_forecast_button, LucideIcon.PENCIL)
+        self.add_journal_entry_button = QPushButton("Add Journal Entry", actions)
+        self.add_journal_entry_button.setObjectName("addNumericJournalEntryButton")
+        self.add_journal_entry_button.setAccessibleName("Add Numeric Journal entry")
+        apply_lucide_icon(self.add_journal_entry_button, LucideIcon.CIRCLE_PLUS)
+        actions_layout.addWidget(self.revise_forecast_button)
+        actions_layout.addWidget(self.add_journal_entry_button)
+        actions_layout.addStretch()
+
+        history_label = QLabel("INTERVAL HISTORY", self.detail_content)
+        history_label.setObjectName("numericHistoryLabel")
+        history_font = QFont(history_label.font())
+        history_font.setBold(True)
+        history_label.setFont(history_font)
+        self.history_error = QLabel("", self.detail_content)
+        self.history_error.setObjectName("numericHistoryError")
+        self.history_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.history_error.setWordWrap(True)
+        self.history_error.setHidden(True)
+        self.history_chart = NumericHistoryChart(self.detail_content)
+
+        timeline_label = QLabel("TIMELINE", self.detail_content)
+        timeline_label.setObjectName("numericTimelineLabel")
+        timeline_font = QFont(timeline_label.font())
+        timeline_font.setBold(True)
+        timeline_label.setFont(timeline_font)
+        self.timeline_error = QLabel("", self.detail_content)
+        self.timeline_error.setObjectName("numericTimelineError")
+        self.timeline_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.timeline_error.setWordWrap(True)
+        self.timeline_error.setHidden(True)
+        self.timeline_content = QWidget(self.detail_content)
+        self.timeline_content.setObjectName("numericTimelineContent")
+        self.timeline_layout = QVBoxLayout(self.timeline_content)
+        self.timeline_layout.setContentsMargins(0, 0, 0, 0)
+        self.timeline_layout.setSpacing(8)
+
         self.next_steps = QLabel(
-            "Numeric revisions, Journal entries, resolution, and history "
-            "visualization are added in later v0.2 milestones.",
+            "Resolving Numeric outcomes, archive views, Dashboard support, and "
+            "analytics arrive in later v0.2 milestones.",
             self.detail_content,
         )
         self.next_steps.setObjectName("numericPredictionNextSteps")
@@ -943,7 +1075,16 @@ class NumericPredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.background_section)
         detail_layout.addWidget(self.resolution_criteria_section)
         detail_layout.addWidget(self.rationale_section)
+        detail_layout.addSpacing(10)
+        detail_layout.addWidget(actions)
         detail_layout.addSpacing(14)
+        detail_layout.addWidget(history_label)
+        detail_layout.addWidget(self.history_error)
+        detail_layout.addWidget(self.history_chart)
+        detail_layout.addSpacing(14)
+        detail_layout.addWidget(timeline_label)
+        detail_layout.addWidget(self.timeline_error)
+        detail_layout.addWidget(self.timeline_content)
         detail_layout.addWidget(self.next_steps)
         detail_layout.addStretch()
 
@@ -961,6 +1102,8 @@ class NumericPredictionDetailScreen(QWidget):
         layout.addWidget(scroll_area, 1)
 
         self.show_prediction(None)
+        self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
+        self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
 
     @property
     def prediction_id(self) -> int | None:
@@ -979,6 +1122,12 @@ class NumericPredictionDetailScreen(QWidget):
             self.status.clear()
             self.interval.clear()
             self.median.clear()
+            self.history_chart.clear()
+            self.history_error.setHidden(True)
+            self._clear_timeline()
+            self.timeline_error.setHidden(True)
+            self.revise_forecast_button.setEnabled(False)
+            self.add_journal_entry_button.setEnabled(False)
             self.detail_content.setHidden(True)
             self.empty_state.setHidden(False)
             return
@@ -1003,8 +1152,16 @@ class NumericPredictionDetailScreen(QWidget):
         self._show_optional_metadata(prediction)
         self.rationale.setText(revision.rationale or "")
         self.rationale_section.setHidden(not revision.rationale)
+        self.revise_forecast_button.setEnabled(
+            prediction.status is PredictionStatus.OPEN
+        )
+        self.add_journal_entry_button.setEnabled(
+            prediction.status in (PredictionStatus.OPEN, PredictionStatus.LOCKED)
+        )
         self.empty_state.setHidden(True)
         self.detail_content.setHidden(False)
+        self._load_history(prediction.prediction_id)
+        self._load_timeline(prediction.prediction_id)
 
     def refresh(self) -> None:
         """Reload the presented Numeric Prediction without hiding prior data on error."""
@@ -1041,6 +1198,145 @@ class NumericPredictionDetailScreen(QWidget):
     def _hide_error(self) -> None:
         self.detail_error.clear()
         self.detail_error.setHidden(True)
+
+    def _load_history(self, prediction_id: int) -> None:
+        try:
+            revisions = self._operations.list_numeric_forecast_revisions(prediction_id)
+        except ApplicationError as error:
+            self.history_error.setText(
+                f"Numeric interval history is unavailable. {error}"
+            )
+            self.history_error.setHidden(False)
+            return
+        self.history_chart.set_revisions(revisions)
+        self.history_error.setHidden(True)
+
+    def _load_timeline(self, prediction_id: int) -> None:
+        try:
+            events = self._operations.list_numeric_timeline(prediction_id)
+        except ApplicationError as error:
+            self.timeline_error.setText(f"Numeric timeline is unavailable. {error}")
+            self.timeline_error.setHidden(False)
+            return
+        self._clear_timeline()
+        for event in events:
+            if hasattr(event, "revision_id"):
+                self.timeline_layout.addWidget(self._forecast_timeline_row(event))
+            else:
+                self.timeline_layout.addWidget(self._journal_timeline_row(event))
+        if not events:
+            empty = QLabel("No Numeric ForecastRevisions have been recorded.")
+            empty.setObjectName("numericTimelineEmptyState")
+            empty.setTextFormat(Qt.TextFormat.PlainText)
+            self.timeline_layout.addWidget(empty)
+        self.timeline_error.setHidden(True)
+
+    def _clear_timeline(self) -> None:
+        while self.timeline_layout.count():
+            item = self.timeline_layout.takeAt(0)
+            if widget := item.widget():
+                widget.setParent(None)
+                widget.deleteLater()
+
+    def _forecast_timeline_row(self, event: NumericForecastTimelineSnapshot) -> QWidget:
+        row = QWidget(self.timeline_content)
+        row.setObjectName(f"numericTimelineForecast{event.revision_id}")
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        timestamp = QLabel(_format_local_timestamp(event.created_at), row)
+        timestamp.setTextFormat(Qt.TextFormat.PlainText)
+        values = QLabel(
+            f"FORECAST  {event.confidence_percent}% interval: "
+            f"{event.lower_bound} to {event.upper_bound} {self._prediction.unit if self._prediction else ''}; "
+            f"Median: {event.median_estimate}",
+            row,
+        )
+        values.setObjectName(f"numericForecastValues{event.revision_id}")
+        values.setTextFormat(Qt.TextFormat.PlainText)
+        values.setWordWrap(True)
+        layout.addWidget(timestamp)
+        layout.addWidget(values)
+        if event.rationale:
+            rationale = QLabel(event.rationale, row)
+            rationale.setObjectName(f"numericForecastRationale{event.revision_id}")
+            rationale.setTextFormat(Qt.TextFormat.PlainText)
+            rationale.setWordWrap(True)
+            layout.addWidget(rationale)
+        return row
+
+    def _journal_timeline_row(self, event: NumericJournalTimelineSnapshot) -> QWidget:
+        row = QWidget(self.timeline_content)
+        row.setObjectName(f"numericTimelineJournal{event.entry_id}")
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        timestamp = QLabel(_format_local_timestamp(event.created_at), row)
+        timestamp.setTextFormat(Qt.TextFormat.PlainText)
+        heading = QLabel("JOURNAL", row)
+        heading.setTextFormat(Qt.TextFormat.PlainText)
+        body = QLabel(event.body, row)
+        body.setObjectName(f"numericJournalBody{event.entry_id}")
+        body.setTextFormat(Qt.TextFormat.PlainText)
+        body.setWordWrap(True)
+        context = QLabel(
+            f"Forecast at the time: {event.confidence_percent}% interval: "
+            f"{event.lower_bound} to {event.upper_bound} {self._prediction.unit if self._prediction else ''}; "
+            f"Median: {event.median_estimate}",
+            row,
+        )
+        context.setTextFormat(Qt.TextFormat.PlainText)
+        context.setWordWrap(True)
+        layout.addWidget(timestamp)
+        layout.addWidget(heading)
+        layout.addWidget(body)
+        layout.addWidget(context)
+        if event.current_correction_id is not None:
+            edited = QLabel(
+                f"Edited {_format_local_timestamp(event.corrections[-1].corrected_at)}",
+                row,
+            )
+            edited.setTextFormat(Qt.TextFormat.PlainText)
+            layout.addWidget(edited)
+            layout.addWidget(_journal_edit_history_widget(event, row))
+        correct = QPushButton("Correct Entry", row)
+        correct.setObjectName(f"correctNumericJournalEntryButton{event.entry_id}")
+        correct.clicked.connect(
+            lambda _checked=False, current=event: self.open_correct_journal_entry(
+                current
+            )
+        )
+        layout.addWidget(correct)
+        return row
+
+    def open_revise_forecast(self) -> None:
+        if self._prediction is None:
+            return
+        self.refresh()
+        if (
+            self._prediction is None
+            or self._prediction.status is not PredictionStatus.OPEN
+        ):
+            return
+        dialog = ReviseNumericForecastDialog(self._operations, self._prediction, self)
+        dialog.revision_saved.connect(self.show_prediction)
+        dialog.open()
+
+    def open_add_journal_entry(self) -> None:
+        if self._prediction is None:
+            return
+        self.refresh()
+        if self._prediction is None or self._prediction.status not in (
+            PredictionStatus.OPEN,
+            PredictionStatus.LOCKED,
+        ):
+            return
+        dialog = AddNumericJournalEntryDialog(self._operations, self._prediction, self)
+        dialog.journal_saved.connect(lambda _entry: self.refresh())
+        dialog.open()
+
+    def open_correct_journal_entry(self, entry: NumericJournalTimelineSnapshot) -> None:
+        dialog = CorrectNumericJournalEntryDialog(self._operations, entry, self)
+        dialog.correction_saved.connect(lambda _entry: self.refresh())
+        dialog.open()
 
 
 class PredictionDetailHost(QWidget):
@@ -1501,6 +1797,324 @@ class ReviseForecastDialog(QDialog):
 
     def _update_endpoint_note(self, probability: int) -> None:
         self.endpoint_note.setHidden(probability not in (0, 100))
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
+
+
+class ReviseNumericForecastDialog(QDialog):
+    """Collect a changed numeric interval and append one immutable revision."""
+
+    revision_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: NumericPredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("reviseNumericForecastDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Revise Numeric Forecast")
+        self.setModal(True)
+        self.resize(560, 520)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision.revision_id
+        self._expected_metadata_version = prediction.metadata_version
+
+        title = QLabel("Revise Numeric Forecast", self)
+        title.setObjectName("reviseNumericForecastTitle")
+        current = QLabel(
+            _numeric_forecast_text(prediction.current_revision, prediction.unit),
+            self,
+        )
+        current.setObjectName("reviseNumericCurrentForecast")
+        current.setTextFormat(Qt.TextFormat.PlainText)
+        current.setWordWrap(True)
+
+        lower_label = QLabel("Lower bound", self)
+        self.lower_bound_input = QLineEdit(
+            str(prediction.current_revision.lower_bound), self
+        )
+        self.lower_bound_input.setObjectName("numericRevisionLowerBoundInput")
+        lower_label.setBuddy(self.lower_bound_input)
+        median_label = QLabel("Median estimate", self)
+        self.median_estimate_input = QLineEdit(
+            str(prediction.current_revision.median_estimate), self
+        )
+        self.median_estimate_input.setObjectName("numericRevisionMedianEstimateInput")
+        median_label.setBuddy(self.median_estimate_input)
+        upper_label = QLabel("Upper bound", self)
+        self.upper_bound_input = QLineEdit(
+            str(prediction.current_revision.upper_bound), self
+        )
+        self.upper_bound_input.setObjectName("numericRevisionUpperBoundInput")
+        upper_label.setBuddy(self.upper_bound_input)
+        confidence_label = QLabel("Confidence", self)
+        self.confidence_input = QSpinBox(self)
+        self.confidence_input.setObjectName("numericRevisionConfidenceInput")
+        self.confidence_input.setRange(1, 99)
+        self.confidence_input.setSingleStep(5)
+        self.confidence_input.setSuffix("%")
+        self.confidence_input.setValue(prediction.current_revision.confidence_percent)
+        confidence_label.setBuddy(self.confidence_input)
+
+        rationale_label = QLabel("What changed? (optional)", self)
+        self.rationale_input = QPlainTextEdit(self)
+        self.rationale_input.setObjectName("numericRevisionRationaleInput")
+        self.rationale_input.setAccessibleName("What changed")
+        self.rationale_input.setMaximumHeight(100)
+        self.rationale_input.setTabChangesFocus(True)
+        rationale_label.setBuddy(self.rationale_input)
+        helper = QLabel(
+            "This explanation stays attached to the new interval. To record a "
+            "thought without changing it, add a Journal entry.",
+            self,
+        )
+        helper.setObjectName("numericRevisionRationaleHelper")
+        helper.setTextFormat(Qt.TextFormat.PlainText)
+        helper.setWordWrap(True)
+
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("reviseNumericForecastError")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        save.setObjectName("saveNumericForecastRevisionButton")
+        save.setText("Save Revision")
+        apply_lucide_icon(save, LucideIcon.SAVE)
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setObjectName(
+            "cancelNumericForecastRevisionButton"
+        )
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(QLabel("Current forecast", self))
+        layout.addWidget(current)
+        layout.addSpacing(8)
+        for label, input_widget in (
+            (lower_label, self.lower_bound_input),
+            (median_label, self.median_estimate_input),
+            (upper_label, self.upper_bound_input),
+            (confidence_label, self.confidence_input),
+        ):
+            layout.addWidget(label)
+            layout.addWidget(input_widget)
+        layout.addWidget(rationale_label)
+        layout.addWidget(self.rationale_input)
+        layout.addWidget(helper)
+        layout.addWidget(self.form_error)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(self.submit)
+        buttons.rejected.connect(self.reject)
+        self.lower_bound_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.lower_bound_input.selectAll()
+
+    def submit(self) -> None:
+        self._hide_error()
+        try:
+            prediction = self._operations.revise_numeric_forecast(
+                self._prediction_id,
+                self.lower_bound_input.text(),
+                self.median_estimate_input.text(),
+                self.upper_bound_input.text(),
+                self.confidence_input.value(),
+                rationale=self.rationale_input.toPlainText(),
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.revision_saved.emit(prediction)
+        self.accept()
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
+
+
+class AddNumericJournalEntryDialog(QDialog):
+    """Append reasoning while preserving the current numeric interval."""
+
+    journal_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: NumericPredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("addNumericJournalEntryDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Add Journal Entry")
+        self.setModal(True)
+        self.resize(560, 390)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision.revision_id
+        self._expected_metadata_version = prediction.metadata_version
+        title = QLabel("Add Journal Entry", self)
+        context = QLabel(
+            f"Forecast at the time: {_numeric_forecast_text(prediction.current_revision, prediction.unit)}",
+            self,
+        )
+        context.setObjectName("numericJournalForecastAtTime")
+        context.setTextFormat(Qt.TextFormat.PlainText)
+        context.setWordWrap(True)
+        body_label = QLabel("Journal entry", self)
+        self.body_input = QPlainTextEdit(self)
+        self.body_input.setObjectName("numericJournalEntryBodyInput")
+        self.body_input.setAccessibleName("Journal entry")
+        self.body_input.setTabChangesFocus(True)
+        body_label.setBuddy(self.body_input)
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("addNumericJournalEntryError")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        save.setObjectName("saveNumericJournalEntryButton")
+        save.setText("Add Entry")
+        apply_lucide_icon(save, LucideIcon.SAVE)
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(context)
+        layout.addWidget(body_label)
+        layout.addWidget(self.body_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(self.submit)
+        buttons.rejected.connect(self.reject)
+        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
+        self.body_input.installEventFilter(self._submit_key_filter)
+        self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def submit(self) -> None:
+        self._hide_error()
+        if not self.body_input.toPlainText().strip():
+            self._show_error("Write a Journal entry before saving.")
+            return
+        try:
+            entry = self._operations.add_numeric_journal_entry(
+                self._prediction_id,
+                self.body_input.toPlainText(),
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.journal_saved.emit(entry)
+        self.accept()
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.form_error.clear()
+        self.form_error.setHidden(True)
+
+
+class CorrectNumericJournalEntryDialog(QDialog):
+    """Append a transparent correction to a Numeric Journal entry."""
+
+    correction_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        entry: NumericJournalTimelineSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("correctNumericJournalEntryDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Correct Journal Entry")
+        self.setModal(True)
+        self.resize(560, 390)
+        self._operations = operations
+        self._prediction_id = entry.prediction_id
+        self._entry_id = entry.entry_id
+        self._expected_correction_id = entry.current_correction_id
+        title = QLabel("Edit / Correct Journal Entry", self)
+        explanation = QLabel(
+            "Saving records a transparent correction. Earlier versions remain in history.",
+            self,
+        )
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+        self.body_input = QPlainTextEdit(self)
+        self.body_input.setObjectName("correctNumericJournalEntryBodyInput")
+        self.body_input.setPlainText(entry.body)
+        self.body_input.setTabChangesFocus(True)
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("correctNumericJournalEntryError")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        save.setObjectName("saveNumericJournalCorrectionButton")
+        save.setText("Save Correction")
+        apply_lucide_icon(save, LucideIcon.SAVE)
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addWidget(self.body_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(self.submit)
+        buttons.rejected.connect(self.reject)
+        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
+        self.body_input.installEventFilter(self._submit_key_filter)
+        self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.body_input.selectAll()
+
+    def submit(self) -> None:
+        self._hide_error()
+        if not self.body_input.toPlainText().strip():
+            self._show_error("Write the corrected Journal entry before saving.")
+            return
+        try:
+            correction = self._operations.correct_numeric_journal_entry(
+                self._prediction_id,
+                self._entry_id,
+                self.body_input.toPlainText(),
+                expected_correction_id=self._expected_correction_id,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.correction_saved.emit(correction)
+        self.accept()
 
     def _show_error(self, message: str) -> None:
         self.form_error.setText(message)
@@ -3118,6 +3732,18 @@ def _format_local_timestamp(value: datetime) -> str:
 
 def _format_date(value: date | None) -> str:
     return "" if value is None else value.strftime("%b %d, %Y")
+
+
+def _numeric_forecast_text(
+    revision: NumericRevisionSnapshot,
+    unit: str,
+) -> str:
+    """Format one Numeric ForecastRevision for plain-language UI context."""
+
+    return (
+        f"{revision.confidence_percent}% interval: {revision.lower_bound} to "
+        f"{revision.upper_bound} {unit}; Median: {revision.median_estimate} {unit}"
+    )
 
 
 def _history_value(value: str | date | None) -> str:

@@ -439,6 +439,47 @@ type TimelineEvent = ForecastTimelineEvent | JournalTimelineEvent
 
 
 @dataclass(frozen=True, slots=True)
+class NumericForecastTimelineEvent:
+    """One immutable Numeric ForecastRevision prepared for history display."""
+
+    revision_id: int
+    prediction_id: int
+    created_at: datetime
+    sequence: int
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    previous_lower_bound: FixedPrecisionValue | None
+    previous_median_estimate: FixedPrecisionValue | None
+    previous_upper_bound: FixedPrecisionValue | None
+    previous_confidence_percent: int | None
+    rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NumericJournalTimelineEvent:
+    """One Numeric Journal event anchored to its exact interval revision."""
+
+    entry_id: int
+    prediction_id: int
+    created_at: datetime
+    body: str
+    original_body: str
+    numeric_forecast_revision_id: int
+    forecast_revision_sequence: int
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    current_correction_id: int | None = None
+    corrections: tuple[JournalCorrection, ...] = ()
+
+
+type NumericTimelineEvent = NumericForecastTimelineEvent | NumericJournalTimelineEvent
+
+
+@dataclass(frozen=True, slots=True)
 class Resolution:
     """One immutable terminal outcome and its captured scoring forecast."""
 

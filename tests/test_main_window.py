@@ -154,6 +154,40 @@ class FakeNumericPrediction:
 
 
 @dataclass(frozen=True, slots=True)
+class FakeNumericForecastTimelineEvent:
+    revision_id: int
+    prediction_id: int
+    created_at: datetime
+    sequence: int
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    previous_lower_bound: FixedPrecisionValue | None
+    previous_median_estimate: FixedPrecisionValue | None
+    previous_upper_bound: FixedPrecisionValue | None
+    previous_confidence_percent: int | None
+    rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FakeNumericJournalTimelineEvent:
+    entry_id: int
+    prediction_id: int
+    created_at: datetime
+    body: str
+    original_body: str
+    numeric_forecast_revision_id: int
+    forecast_revision_sequence: int
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    current_correction_id: int | None = None
+    corrections: tuple[FakeJournalCorrection, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class FakeJournalCorrection:
     correction_id: int
     body: str
@@ -284,6 +318,10 @@ class FakePredictionOperations:
         self.create_calls: list[CreatePredictionCall] = []
         self.create_error: ApplicationError | None = None
         self.numeric_latest: FakeNumericPrediction | None = None
+        self.numeric_revisions: list[FakeNumericRevision] = []
+        self.numeric_journal_entries: list[FakeNumericJournalTimelineEvent] = []
+        self.numeric_revision_error: ApplicationError | None = None
+        self.numeric_timeline_error: ApplicationError | None = None
         self.numeric_create_calls: list[CreateNumericPredictionCall] = []
         self.numeric_create_error: ApplicationError | None = None
         self.revise_calls: list[ReviseForecastCall] = []
@@ -464,6 +502,7 @@ class FakePredictionOperations:
             tags=tags,
         )
         self.numeric_latest = prediction
+        self.numeric_revisions = [revision]
         return prediction
 
     def revise_forecast(
@@ -511,6 +550,47 @@ class FakePredictionOperations:
         )
         return self.latest
 
+    def revise_numeric_forecast(
+        self,
+        prediction_id: int,
+        lower_bound: object,
+        median_estimate: object,
+        upper_bound: object,
+        confidence_percent: int,
+        *,
+        rationale: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakeNumericPrediction:
+        if (
+            self.numeric_latest is None
+            or self.numeric_latest.prediction_id != prediction_id
+        ):
+            raise ApplicationError("Numeric Prediction not found.")
+        if self.numeric_revision_error is not None:
+            raise self.numeric_revision_error
+        current = self.numeric_latest.current_revision
+        revision = FakeNumericRevision(
+            revision_id=current.revision_id + 1,
+            prediction_id=prediction_id,
+            lower_bound=FixedPrecisionValue.from_value(
+                lower_bound, self.numeric_latest.decimal_places
+            ),
+            median_estimate=FixedPrecisionValue.from_value(
+                median_estimate, self.numeric_latest.decimal_places
+            ),
+            upper_bound=FixedPrecisionValue.from_value(
+                upper_bound, self.numeric_latest.decimal_places
+            ),
+            confidence_percent=confidence_percent,
+            sequence=current.sequence + 1,
+            created_at=datetime(2026, 8, 21, 19, 30, tzinfo=UTC),
+            rationale=(rationale or "").strip() or None,
+        )
+        self.numeric_revisions.append(revision)
+        self.numeric_latest = replace(self.numeric_latest, current_revision=revision)
+        return self.numeric_latest
+
     def list_forecast_revisions(
         self,
         prediction_id: int,
@@ -522,6 +602,133 @@ class FakePredictionOperations:
             revision
             for revision in self.revisions
             if revision.prediction_id == prediction_id
+        )
+
+    def list_numeric_forecast_revisions(
+        self,
+        prediction_id: int,
+    ) -> tuple[FakeNumericRevision, ...]:
+        if self.numeric_revision_error is not None:
+            raise self.numeric_revision_error
+        return tuple(
+            revision
+            for revision in self.numeric_revisions
+            if revision.prediction_id == prediction_id
+        )
+
+    def add_numeric_journal_entry(
+        self,
+        prediction_id: int,
+        body: str,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakeNumericJournalTimelineEvent:
+        if (
+            self.numeric_latest is None
+            or self.numeric_latest.prediction_id != prediction_id
+        ):
+            raise ApplicationError("Numeric Prediction not found.")
+        current = self.numeric_latest.current_revision
+        entry = FakeNumericJournalTimelineEvent(
+            entry_id=len(self.numeric_journal_entries) + 1,
+            prediction_id=prediction_id,
+            created_at=datetime(2026, 8, 21, 19, 30, tzinfo=UTC),
+            body=body.strip(),
+            original_body=body.strip(),
+            numeric_forecast_revision_id=current.revision_id,
+            forecast_revision_sequence=current.sequence,
+            lower_bound=current.lower_bound,
+            median_estimate=current.median_estimate,
+            upper_bound=current.upper_bound,
+            confidence_percent=current.confidence_percent,
+        )
+        self.numeric_journal_entries.append(entry)
+        return entry
+
+    def correct_numeric_journal_entry(
+        self,
+        prediction_id: int,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> FakeNumericJournalTimelineEvent:
+        for index, entry in enumerate(self.numeric_journal_entries):
+            if entry.prediction_id == prediction_id and entry.entry_id == entry_id:
+                correction_id = len(entry.corrections) + 1
+                correction = FakeJournalCorrection(
+                    correction_id=correction_id,
+                    body=body.strip(),
+                    corrected_at=datetime(2026, 8, 22, 19, 30, tzinfo=UTC),
+                )
+                updated = replace(
+                    entry,
+                    body=correction.body,
+                    current_correction_id=correction_id,
+                    corrections=(*entry.corrections, correction),
+                )
+                self.numeric_journal_entries[index] = updated
+                return updated
+        raise ApplicationError("Journal entry not found.")
+
+    def list_numeric_timeline(
+        self,
+        prediction_id: int,
+    ) -> tuple[FakeNumericForecastTimelineEvent | FakeNumericJournalTimelineEvent, ...]:
+        if self.numeric_timeline_error is not None:
+            raise self.numeric_timeline_error
+        previous: FakeNumericRevision | None = None
+        events: list[
+            FakeNumericForecastTimelineEvent | FakeNumericJournalTimelineEvent
+        ] = []
+        for revision in self.numeric_revisions:
+            if revision.prediction_id != prediction_id:
+                continue
+            events.append(
+                FakeNumericForecastTimelineEvent(
+                    revision_id=revision.revision_id,
+                    prediction_id=prediction_id,
+                    created_at=revision.created_at,
+                    sequence=revision.sequence,
+                    lower_bound=revision.lower_bound,
+                    median_estimate=revision.median_estimate,
+                    upper_bound=revision.upper_bound,
+                    confidence_percent=revision.confidence_percent,
+                    previous_lower_bound=None
+                    if previous is None
+                    else previous.lower_bound,
+                    previous_median_estimate=None
+                    if previous is None
+                    else previous.median_estimate,
+                    previous_upper_bound=None
+                    if previous is None
+                    else previous.upper_bound,
+                    previous_confidence_percent=None
+                    if previous is None
+                    else previous.confidence_percent,
+                    rationale=revision.rationale,
+                )
+            )
+            previous = revision
+        events.extend(
+            entry
+            for entry in self.numeric_journal_entries
+            if entry.prediction_id == prediction_id
+        )
+        return tuple(
+            sorted(
+                events,
+                key=lambda event: (
+                    event.sequence
+                    if isinstance(event, FakeNumericForecastTimelineEvent)
+                    else event.forecast_revision_sequence,
+                    0 if isinstance(event, FakeNumericForecastTimelineEvent) else 1,
+                    event.revision_id
+                    if isinstance(event, FakeNumericForecastTimelineEvent)
+                    else event.entry_id,
+                ),
+            )
         )
 
     def add_journal_entry(

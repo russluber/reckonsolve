@@ -99,6 +99,17 @@ class ForecastUnchangedError(ApplicationError):
         self.probability_percent = probability_percent
 
 
+class NumericForecastUnchangedError(ApplicationError):
+    """A normal Numeric revision must change at least one forecast value."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "The current interval, median estimate, and confidence are unchanged. "
+            "Change at least one value to save a revision. To record reasoning "
+            "without changing the forecast, add a Journal entry."
+        )
+
+
 class ForecastRevisionNotAllowedError(ApplicationError):
     """Lifecycle state does not permit another normal forecast revision."""
 

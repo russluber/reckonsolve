@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 14 Numeric Prediction creation and detail complete
+Status: Milestone 15 Numeric revisions, Journal history, and visualization complete
 Last reviewed: 2026-08-20
 
 This document describes how Reckonsolve is structured and how its implementation evolves from the completed binary v0.1 baseline through v0.2. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 14 exposes the first complete Numeric Prediction vertical slice without changing the completed Binary workflows. Exact signed decimal values use a bounded fixed-precision scaled-integer representation, and numeric interval revisions remain separate from binary forecast revisions. The application now creates a Numeric Prediction, its complete optional initial metadata and tags, and its first interval atomically; it displays that current interval and metadata after restart. Numeric revision, Journal, lifecycle, archive, analytics, and Review workflows remain deliberately absent until their later v0.2 milestones. The M12 private build and resource layer remain intact; original user-directed application artwork and normal public distribution remain deferred.
+Milestone 15 extends the first complete Numeric Prediction slice without changing the completed Binary workflows. Exact signed decimal values use a bounded fixed-precision scaled-integer representation, and numeric interval revisions remain separate from binary forecast revisions. Numeric Detail now appends changed intervals transactionally, records type-appropriate Journal entries and transparent corrections, renders their causal timeline, and paints an interval band with a distinct median history. Numeric lifecycle resolution, archive, Dashboard, analytics, and Review workflows remain deliberately absent until their later v0.2 milestones. The M12 private build and resource layer remain intact; original user-directed application artwork and normal public distribution remain deferred.
 
 | Area | Current state |
 |---|---|
@@ -20,10 +20,10 @@ Milestone 14 exposes the first complete Numeric Prediction vertical slice withou
 | UI | All six primary screens are functional; selected navigation and action icons are local, palette-aware Lucide SVGs rendered through QtSvg while visible text and accessible names remain authoritative |
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 9 preserves all binary tables and adds Numeric Prediction definition fields plus immutable numeric interval revisions |
-| Domain and application operations | Complete binary workflows plus Numeric creation and current-detail reads; later Numeric revision, Journal, lifecycle, archive, analytics, and Review operations remain deferred |
+| Schema | Version 10 preserves existing Binary Journal history while adding type-aware anchors for immutable Numeric Journal context |
+| Domain and application operations | Complete binary workflows plus Numeric creation, changed interval revisions, type-aware Journal/correction operations, and causal history reads; Numeric lifecycle, archive, analytics, and Review operations remain deferred |
 | Analytics | Exactly-once scoring selection, binary Brier, fixed-bin calibration, and cumulative resolution-time aggregation are implemented as pure calculations behind a read-only data source |
-| Automated tests | Existing product coverage plus exact signed numeric values, interval/confidence constraints, atomic complete Numeric creation, restart display, schema-v9 migration, rollback, immutability, and binary-data preservation |
+| Automated tests | Existing product coverage plus exact signed numeric values, interval/confidence constraints, atomic creation/revision/Journal behavior, causal history/chart display, schema-v9-to-v10 migration, rollback, immutability, and binary-data preservation |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and smoke-validated; original icon artwork, installer, signing, shortcuts, uninstall, updates, and public distribution remain deferred |
 
 The sections below distinguish the completed v0.1 application from the v0.2 boundaries implemented or still planned.
@@ -182,7 +182,7 @@ src/reckonsolve/
                        disposable frozen UI, core-loop, backup, and restart probe
   application/
     errors.py          expected user-presentable operation and concurrency errors
-    predictions.py     Binary workflows plus Numeric creation and current-detail reads
+    predictions.py     Binary workflows plus Numeric creation, revisions, and Journal operations
   analytics/
     scoring.py         pure exactly-once Brier, calibration, and trend calculations
   domain/
@@ -197,7 +197,7 @@ src/reckonsolve/
     database.py        connection ownership and transaction boundary
     migrations.py      ordered schema registry, validation, and migration runner
     numeric_predictions.py
-                       Numeric Prediction, complete initial details, and interval-revision persistence
+                       Numeric Prediction, immutable interval history, and type-aware Journal persistence
     predictions.py     purpose-specific prediction, history, terminal, tag, and deletion persistence
     settings.py        singleton attention and backup-status setting access
     transfer.py        verified SQLite backup and relational CSV ZIP creation
@@ -214,6 +214,8 @@ src/reckonsolve/
                        question search, status/tag filters, and archive navigation
     probability_history_chart.py
                        native probability-history projection and painting
+    numeric_history_chart.py
+                       native Numeric interval-band and median-history painting
     screens.py         Binary/Numeric creation, type-specific Detail, history, lifecycle, deletion, and metadata UI
     assets/icons/      pinned selected Lucide SVGs and their upstream license
 ```
@@ -288,6 +290,8 @@ Milestone 11 migrates the database to version 8 by adding a nullable canonical U
 Milestone 13 migrates the database to version 9 while preserving the existing binary schema and every historical row. `predictions.prediction_type` now admits `binary` and `numeric`; Numeric Predictions require an immutable unit label and decimal precision from zero through six, while Binary Predictions require both fields to remain null. Numeric interval revisions live in the parallel `numeric_forecast_revisions` table so the released binary table and its Journal and Resolution references remain untouched. Lower bound, central estimate, and upper bound are exact signed scaled integers at the parent Prediction's precision, with inclusive ordering and whole-number confidence from 1% through 99%. Type guards prevent revisions from crossing Prediction types, and the numeric table applies the same sequence, timestamp, update, direct-delete, and replacement protections as binary history. [ADR 0009](decisions/0009-scaled-integer-numeric-values.md) records the representation and migration boundary.
 
 Milestone 14 needs no schema migration because the existing parent `predictions` columns already hold the optional Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and reusable tag associations. Numeric creation writes the parent row, complete optional initial details, normalized tags, and sequence-one interval in one `BEGIN IMMEDIATE` transaction. Numeric reads map the same canonical metadata and tags, derive the inclusive date-only Locked display state, and return the latest interval by immutable sequence. The UI selects Binary by default, then routes a successfully created Numeric Prediction to a type-specific Detail screen. That screen deliberately exposes no Numeric revise, Journal, lifecycle, archive, chart, or analytics action before its owning milestone.
+
+Milestone 15 migrates to version 10 because the existing Journal schema could reference only a Binary ForecastRevision. The upgrade rebuilds the two Journal tables in one migration transaction, preserves every existing Binary entry and correction, and adds one nullable Numeric revision anchor with a constraint requiring exactly one type-appropriate anchor. Composite foreign keys and insert guards keep an entry owned by its Prediction and bound to that Prediction's transaction-current revision. Numeric revisions recheck their reviewed current-revision and metadata tokens, lifecycle, and changed interval inside `BEGIN IMMEDIATE`; an unchanged complete interval is rejected rather than becoming a fake revision. Numeric Detail uses the same application operations for revisions, Journals, transparent corrections, and a causal text timeline. Its native `QPainter` interval chart is presentation-only: it has one sample per immutable Numeric ForecastRevision, paints lower/upper bounds as a band and medians as a separate line, and never incorporates Journal activity.
 
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
@@ -413,7 +417,7 @@ Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled r
 
 An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
 
-Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 9 upgrade is tested from version 8 with an existing Binary Prediction and revision history, preserves the binary query path, adds no invented numeric rows, and rolls back completely if the type-column or numeric-table migration fails. M14 intentionally reuses that stable schema rather than adding a speculative migration. Earlier version-specific migration tests remain pinned to their historical targets, including the version 7-to-8 backup-setting checks. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. The version 9 upgrade is tested from version 8 with an existing Binary Prediction and revision history, preserves the binary query path, adds no invented numeric rows, and rolls back completely if the type-column or numeric-table migration fails. The version 10 upgrade preserves existing Binary Journal entries and corrections while rebuilding them with the type-aware anchor required for Numeric history; a failed upgrade leaves the version-9 schema and data intact. Earlier version-specific migration tests remain pinned to their historical targets, including the version 7-to-8 backup-setting checks. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
@@ -436,7 +440,7 @@ This artifact is a development validation output, not a supported release. There
 
 ## 16. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 9, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M10 retain their historical, lifecycle, Dashboard, archive, and analytics coverage. M11 adds v7-to-v8 migration safety, complete backup recovery, SQLite integrity verification, last-success persistence, live-database destination rejection, exact ZIP membership and CSV relationships, multiline/quoted text round trips, empty exports, failed-replacement preservation, cancel/error UI behavior, and end-to-end Settings recovery after restart. M12 adds exact icon-resource inventory and version checks, palette-dependent rendering, retained text/accessibility, stable/development path separation, disposable private-smoke safety, and a real relocated frozen-executable smoke run. M13 adds exact signed fixed-precision conversion, precision and magnitude boundaries, inclusive interval validation, confidence endpoints, type-specific persistence, binary-data-preserving v8-to-v9 migration, immutable numeric revisions, creation rollback, and reopen tests without exercising real user data. M14 adds complete atomic Numeric creation with optional initial details and tags, validation and rollback behavior, Binary-default type switching, type-specific Detail rendering, restart display, and refusal of incomplete pre-M20 CSV export.
+The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 10, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M10 retain their historical, lifecycle, Dashboard, archive, and analytics coverage. M11 adds v7-to-v8 migration safety, complete backup recovery, SQLite integrity verification, last-success persistence, live-database destination rejection, exact ZIP membership and CSV relationships, multiline/quoted text round trips, empty exports, failed-replacement preservation, cancel/error UI behavior, and end-to-end Settings recovery after restart. M12 adds exact icon-resource inventory and version checks, palette-dependent rendering, retained text/accessibility, stable/development path separation, disposable private-smoke safety, and a real relocated frozen-executable smoke run. M13 adds exact signed fixed-precision conversion, precision and magnitude boundaries, inclusive interval validation, confidence endpoints, type-specific persistence, binary-data-preserving v8-to-v9 migration, immutable numeric revisions, creation rollback, and reopen tests without exercising real user data. M14 adds complete atomic Numeric creation with optional initial details and tags, validation and rollback behavior, Binary-default type switching, type-specific Detail rendering, restart display, and refusal of incomplete pre-M20 CSV export. M15 adds interval append/unchanged/lifecycle/concurrency behavior, type-aware Journal anchors and corrections, binary-Journal-preserving v9-to-v10 upgrade safety, causal text timelines, native interval-band/median chart rendering, and end-to-end GUI refresh coverage.
 
 Most behavior should be verified below the GUI:
 
@@ -468,6 +472,6 @@ A normal installer, uninstall policy, code signing, public distribution channel,
 
 ## 19. Evolution into v0.2
 
-The approved v0.2 product plan adds one central numeric prediction interval per revision and explicit Forecast Reviews through Milestones 13 through 20. Milestone 14 is now implemented: schema version 9 has exact numeric definition and revision concepts plus type-safe persistence, and the application creates and displays complete initial Numeric Predictions. It has no Numeric revision, Journal, terminal lifecycle, archive, Dashboard, chart, analytics, or Review entity yet.
+The approved v0.2 product plan adds one central numeric prediction interval per revision and explicit Forecast Reviews through Milestones 13 through 20. Milestone 15 is now implemented: schema version 10 preserves Binary Journal records and supports exact type-aware Numeric Journal anchors; the application creates Numeric Predictions, appends changed intervals, records Numeric Journal/correction history, and displays causal timeline and interval/median history. Numeric terminal lifecycle, archive, Dashboard, analytics, and Review workflows remain later slices.
 
 The architecture will continue through implemented vertical slices rather than prebuilding the whole release. Milestone 15 owns Numeric interval revisions, rationale, and type-specific history on top of the M14 creation/detail boundary. After each milestone, update this document to reflect actual modules, persistence behavior, and any recorded technical decisions; do not describe planned structures as already implemented.
