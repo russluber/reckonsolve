@@ -43,14 +43,14 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 10
+    assert first_runtime.database.schema_version == 11
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 10
+    assert second_runtime.database.schema_version == 11
     second_runtime.close()
 
 
@@ -669,6 +669,156 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     assert (
         runtime.window.findChild(QLabel, "numericJournalBody1").text()
         == "The outline expanded after the chapter plan review."
+    )
+    runtime.close()
+
+
+def test_numeric_resolution_ui_persists_exact_terminal_information(
+    qtbot,
+    tmp_path,
+) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    runtime = create_runtime(database_path=path)
+    qtbot.addWidget(runtime.window)
+    operations = PredictionOperations(runtime.database)
+    created = operations.create_numeric_prediction(
+        "What will the signed quantity be?",
+        "units",
+        1,
+        "1.0",
+        "4.0",
+        "8.0",
+        80,
+    )
+    runtime.window.show()
+    runtime.window._prediction_detail_host.show_numeric_prediction(created)
+    runtime.window.navigate_to("Prediction Detail")
+
+    resolve = runtime.window.findChild(QPushButton, "resolveNumericPredictionButton")
+    assert resolve is not None
+    qtbot.mouseClick(resolve, Qt.MouseButton.LeftButton)
+    dialog = runtime.window.findChild(QDialog, "resolveNumericPredictionDialog")
+    assert dialog is not None
+    cancel = dialog.findChild(QPushButton, "cancelNumericResolutionButton")
+    assert cancel is not None
+    qtbot.mouseClick(cancel, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: dialog.isHidden())
+    with runtime.database.transaction() as connection:
+        assert (
+            connection.execute("SELECT COUNT(*) FROM numeric_resolutions").fetchone()[0]
+            == 0
+        )
+
+    qtbot.mouseClick(resolve, Qt.MouseButton.LeftButton)
+    dialog = runtime.window.findChild(QDialog, "resolveNumericPredictionDialog")
+    assert dialog is not None
+    actual = dialog.findChild(QLineEdit, "numericResolutionActualValueInput")
+    notes = dialog.findChild(QPlainTextEdit, "numericResolutionNotesInput")
+    postmortem = dialog.findChild(QPlainTextEdit, "numericResolutionPostmortemInput")
+    save = dialog.findChild(QPushButton, "saveNumericResolutionButton")
+    assert actual is not None
+    assert notes is not None
+    assert postmortem is not None
+    assert save is not None
+    actual.setText("-2.5")
+    notes.setPlainText("The certified final measurement.")
+    postmortem.setPlainText("The lower tail was too narrow.")
+    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: dialog.isHidden())
+
+    assert runtime.window.findChild(QLabel, "numericPredictionStatus").text() == (
+        "RESOLVED"
+    )
+    assert (
+        runtime.window.findChild(QLabel, "numericResolutionActualValue").text()
+        == "Actual value: -2.5 units"
+    )
+    assert not runtime.window.findChild(
+        QPushButton, "reviseNumericForecastButton"
+    ).isEnabled()
+    runtime.close()
+
+    reopened = create_runtime(database_path=path)
+    qtbot.addWidget(reopened.window)
+    reopened.window.show()
+    reopened.window.navigate_to("Prediction Detail")
+    assert (
+        reopened.window.findChild(QLabel, "numericResolutionActualValue").text()
+        == "Actual value: -2.5 units"
+    )
+    assert (
+        "revision 1"
+        in reopened.window.findChild(QLabel, "numericResolutionScoringForecast").text()
+    )
+    reopened.close()
+
+
+def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
+    qtbot,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
+    qtbot.addWidget(runtime.window)
+    operations = PredictionOperations(runtime.database)
+    invalid_candidate = operations.create_numeric_prediction(
+        "How many invalid units?", "units", 0, 1, 2, 3, 80
+    )
+    runtime.window.show()
+    runtime.window._prediction_detail_host.show_numeric_prediction(invalid_candidate)
+    runtime.window.navigate_to("Prediction Detail")
+    mark_invalid = runtime.window.findChild(
+        QPushButton, "markNumericPredictionInvalidButton"
+    )
+    assert mark_invalid is not None
+    qtbot.mouseClick(mark_invalid, Qt.MouseButton.LeftButton)
+    invalid_dialog = runtime.window.findChild(
+        QDialog, "markNumericPredictionInvalidDialog"
+    )
+    assert invalid_dialog is not None
+    reason = invalid_dialog.findChild(QPlainTextEdit, "numericInvalidationReasonInput")
+    save_invalid = invalid_dialog.findChild(
+        QPushButton, "saveNumericInvalidationButton"
+    )
+    assert reason is not None
+    assert save_invalid is not None
+    reason.setPlainText("The measurement became undefined.")
+    qtbot.mouseClick(save_invalid, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: invalid_dialog.isHidden())
+    assert runtime.window.findChild(QLabel, "numericPredictionStatus").text() == (
+        "INVALID"
+    )
+
+    disposable = operations.create_numeric_prediction(
+        "Delete this Numeric test record", "items", 0, 1, 2, 3, 80
+    )
+    runtime.window._prediction_detail_host.show_numeric_prediction(disposable)
+    delete = runtime.window.findChild(QPushButton, "deleteNumericPredictionButton")
+    assert delete is not None
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *_arguments: QMessageBox.StandardButton.Cancel,
+    )
+    qtbot.mouseClick(delete, Qt.MouseButton.LeftButton)
+    assert operations.get_numeric_prediction(disposable.prediction_id).question
+
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        lambda *_arguments: QMessageBox.StandardButton.Yes,
+    )
+    qtbot.mouseClick(delete, Qt.MouseButton.LeftButton)
+    with runtime.database.transaction() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM predictions WHERE id = ?",
+                (disposable.prediction_id,),
+            ).fetchone()[0]
+            == 0
+        )
+    assert runtime.window.findChild(QLabel, "numericPredictionStatus").text() == (
+        "INVALID"
     )
     runtime.close()
 

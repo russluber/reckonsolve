@@ -395,6 +395,9 @@ class NumericPrediction:
     expected_resolution: date | None = None
     tags: tuple[str, ...] = ()
     metadata_version: int = 1
+    resolution: "NumericResolution | None" = None
+    invalidation: "Invalidation | None" = None
+    deletion_allowed: bool = False
 
 
 @dataclass(frozen=True, slots=True)

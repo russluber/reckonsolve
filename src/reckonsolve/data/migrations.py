@@ -1358,6 +1358,197 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=11,
+        name="add numeric terminal lifecycle records",
+        statements=(
+            "DROP TRIGGER predictions_status_requires_terminal_record",
+            "DROP TRIGGER resolutions_require_open_prediction",
+            """
+            CREATE TRIGGER resolutions_require_open_prediction
+            BEFORE INSERT ON resolutions
+            WHEN (
+                SELECT prediction_type FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'binary'
+            OR (
+                SELECT status FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'open'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'binary resolution requires an open or locked binary prediction'
+                );
+            END
+            """,
+            """
+            CREATE TABLE numeric_resolutions (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL UNIQUE
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                actual_scaled INTEGER NOT NULL
+                    CHECK (
+                        typeof(actual_scaled) = 'integer'
+                        AND abs(actual_scaled) <= 999999999999999999
+                    ),
+                resolved_at TEXT NOT NULL
+                    CHECK (
+                        length(resolved_at) = 27
+                        AND resolved_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(resolved_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(resolved_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(resolved_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(resolved_at, 1, 10),
+                            0
+                        )
+                    ),
+                scoring_revision_id INTEGER NOT NULL,
+                resolution_notes TEXT
+                    CHECK (resolution_notes IS NULL OR (
+                        length(resolution_notes) > 0
+                        AND resolution_notes = trim(
+                            resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(resolution_notes, char(0)) = 0
+                    )),
+                postmortem TEXT
+                    CHECK (postmortem IS NULL OR (
+                        length(postmortem) > 0
+                        AND postmortem = trim(
+                            postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(postmortem, char(0)) = 0
+                    )),
+                FOREIGN KEY (prediction_id, scoring_revision_id)
+                    REFERENCES numeric_forecast_revisions(prediction_id, id)
+                    ON DELETE CASCADE
+            ) STRICT
+            """,
+            """
+            CREATE INDEX numeric_resolutions_by_resolved_at
+            ON numeric_resolutions (resolved_at, id)
+            """,
+            """
+            CREATE TRIGGER numeric_resolutions_require_open_prediction
+            BEFORE INSERT ON numeric_resolutions
+            WHEN (
+                SELECT prediction_type FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'numeric'
+            OR (
+                SELECT status FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'open'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'numeric resolution requires an open or locked numeric prediction'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolutions_require_current_scoring_revision
+            BEFORE INSERT ON numeric_resolutions
+            WHEN NEW.scoring_revision_id IS NOT (
+                SELECT id
+                FROM numeric_forecast_revisions
+                WHERE prediction_id = NEW.prediction_id
+                ORDER BY sequence DESC
+                LIMIT 1
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'numeric resolution must capture the current forecast revision'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolutions_mark_prediction_resolved
+            AFTER INSERT ON numeric_resolutions
+            BEGIN
+                UPDATE predictions
+                SET status = 'resolved', updated_at = NEW.resolved_at
+                WHERE id = NEW.prediction_id;
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolutions_are_immutable
+            BEFORE UPDATE ON numeric_resolutions
+            BEGIN
+                SELECT RAISE(ABORT, 'saved numeric resolutions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolutions_reject_history_replacement
+            BEFORE INSERT ON numeric_resolutions
+            WHEN EXISTS (SELECT 1 FROM numeric_resolutions WHERE id = NEW.id)
+                OR EXISTS (
+                    SELECT 1 FROM numeric_resolutions
+                    WHERE prediction_id = NEW.prediction_id
+                )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved numeric resolutions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolutions_reject_direct_delete
+            BEFORE DELETE ON numeric_resolutions
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved numeric resolutions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER predictions_status_requires_terminal_record
+            BEFORE UPDATE OF status ON predictions
+            WHEN OLD.status = 'open'
+                AND (
+                    (
+                        NEW.status = 'resolved'
+                        AND (
+                            (
+                                NEW.prediction_type = 'binary'
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM resolutions
+                                    WHERE prediction_id = NEW.id
+                                )
+                            )
+                            OR (
+                                NEW.prediction_type = 'numeric'
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM numeric_resolutions
+                                    WHERE prediction_id = NEW.id
+                                )
+                            )
+                        )
+                    )
+                    OR (
+                        NEW.status = 'invalid'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM prediction_invalidations
+                            WHERE prediction_id = NEW.id
+                        )
+                    )
+                )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'terminal status requires its immutable lifecycle record'
+                );
+            END
+            """,
+        ),
+    ),
 )
 
 

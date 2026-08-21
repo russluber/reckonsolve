@@ -88,7 +88,7 @@ class NumericRevisionSnapshot(Protocol):
 
 
 class NumericPredictionSnapshot(Protocol):
-    """Read-only Numeric Prediction data needed by the M14 detail screen."""
+    """Read-only Numeric Prediction data needed by the Detail screen."""
 
     prediction_id: int
     question: str
@@ -104,6 +104,22 @@ class NumericPredictionSnapshot(Protocol):
     expected_resolution: date | None
     tags: tuple[str, ...]
     metadata_version: int
+    resolution: NumericResolutionSnapshot | None
+    invalidation: InvalidationSnapshot | None
+    deletion_allowed: bool
+
+
+class NumericResolutionSnapshot(Protocol):
+    """Read-only exact Numeric Resolution shown on Prediction Detail."""
+
+    resolution_id: int
+    prediction_id: int
+    actual_value: object
+    resolved_at: datetime
+    scoring_revision_id: int
+    scoring_revision_sequence: int
+    resolution_notes: str | None
+    postmortem: str | None
 
 
 class NumericForecastTimelineSnapshot(Protocol):
@@ -387,6 +403,38 @@ class PredictionOperations(Protocol):
         prediction_id: int,
     ) -> tuple[NumericTimelineSnapshot, ...]:
         """Return Numeric Forecast and Journal events in causal order."""
+
+    def resolve_numeric_prediction(
+        self,
+        prediction_id: int,
+        actual_value: object,
+        *,
+        resolution_notes: str | None = None,
+        postmortem: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericPredictionSnapshot:
+        """Persist a Numeric outcome and exact scoring interval."""
+
+    def invalidate_numeric_prediction(
+        self,
+        prediction_id: int,
+        *,
+        reason: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericPredictionSnapshot:
+        """Preserve a Numeric Prediction as terminal and unscored."""
+
+    def delete_numeric_prediction(
+        self,
+        prediction_id: int,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        confirm_permanent_deletion: bool = False,
+    ) -> NumericPredictionSnapshot | None:
+        """Delete only an explicitly confirmed untouched Numeric Prediction."""
 
     def update_metadata(
         self,
@@ -1019,9 +1067,63 @@ class NumericPredictionDetailScreen(QWidget):
         self.add_journal_entry_button.setObjectName("addNumericJournalEntryButton")
         self.add_journal_entry_button.setAccessibleName("Add Numeric Journal entry")
         apply_lucide_icon(self.add_journal_entry_button, LucideIcon.CIRCLE_PLUS)
+        self.resolve_button = QPushButton("Resolve", actions)
+        self.resolve_button.setObjectName("resolveNumericPredictionButton")
+        apply_lucide_icon(self.resolve_button, LucideIcon.CIRCLE_CHECK)
+        self.mark_invalid_button = QPushButton("Mark Invalid", actions)
+        self.mark_invalid_button.setObjectName("markNumericPredictionInvalidButton")
+        apply_lucide_icon(self.mark_invalid_button, LucideIcon.BAN)
+        self.delete_button = QPushButton("Delete", actions)
+        self.delete_button.setObjectName("deleteNumericPredictionButton")
+        apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
         actions_layout.addWidget(self.revise_forecast_button)
         actions_layout.addWidget(self.add_journal_entry_button)
+        actions_layout.addWidget(self.resolve_button)
+        actions_layout.addWidget(self.mark_invalid_button)
+        actions_layout.addWidget(self.delete_button)
         actions_layout.addStretch()
+
+        self.resolution_section = QGroupBox("RESOLVED", self.detail_content)
+        self.resolution_section.setObjectName("numericResolutionSection")
+        resolution_layout = QVBoxLayout(self.resolution_section)
+        self.resolution_actual = QLabel("", self.resolution_section)
+        self.resolution_actual.setObjectName("numericResolutionActualValue")
+        self.resolution_actual.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_time = QLabel("", self.resolution_section)
+        self.resolution_time.setObjectName("numericResolutionTime")
+        self.resolution_time.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_scoring = QLabel("", self.resolution_section)
+        self.resolution_scoring.setObjectName("numericResolutionScoringForecast")
+        self.resolution_scoring.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_scoring.setWordWrap(True)
+        self.resolution_notes = QLabel("", self.resolution_section)
+        self.resolution_notes.setObjectName("numericResolutionNotes")
+        self.resolution_notes.setTextFormat(Qt.TextFormat.PlainText)
+        self.resolution_notes.setWordWrap(True)
+        self.postmortem = QLabel("", self.resolution_section)
+        self.postmortem.setObjectName("numericResolutionPostmortem")
+        self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
+        self.postmortem.setWordWrap(True)
+        resolution_layout.addWidget(self.resolution_actual)
+        resolution_layout.addWidget(self.resolution_time)
+        resolution_layout.addWidget(self.resolution_scoring)
+        resolution_layout.addWidget(self.resolution_notes)
+        resolution_layout.addWidget(self.postmortem)
+        self.resolution_section.setHidden(True)
+
+        self.invalidation_section = QGroupBox("INVALID", self.detail_content)
+        self.invalidation_section.setObjectName("numericInvalidationSection")
+        invalidation_layout = QVBoxLayout(self.invalidation_section)
+        self.invalidation_time = QLabel("", self.invalidation_section)
+        self.invalidation_time.setObjectName("numericInvalidationTime")
+        self.invalidation_time.setTextFormat(Qt.TextFormat.PlainText)
+        self.invalidation_reason = QLabel("", self.invalidation_section)
+        self.invalidation_reason.setObjectName("numericInvalidationReason")
+        self.invalidation_reason.setTextFormat(Qt.TextFormat.PlainText)
+        self.invalidation_reason.setWordWrap(True)
+        invalidation_layout.addWidget(self.invalidation_time)
+        invalidation_layout.addWidget(self.invalidation_reason)
+        self.invalidation_section.setHidden(True)
 
         history_label = QLabel("INTERVAL HISTORY", self.detail_content)
         history_label.setObjectName("numericHistoryLabel")
@@ -1052,8 +1154,8 @@ class NumericPredictionDetailScreen(QWidget):
         self.timeline_layout.setSpacing(8)
 
         self.next_steps = QLabel(
-            "Resolving Numeric outcomes, archive views, Dashboard support, and "
-            "analytics arrive in later v0.2 milestones.",
+            "Numeric archive views, Dashboard support, and analytics arrive in "
+            "later v0.2 milestones.",
             self.detail_content,
         )
         self.next_steps.setObjectName("numericPredictionNextSteps")
@@ -1075,6 +1177,8 @@ class NumericPredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.background_section)
         detail_layout.addWidget(self.resolution_criteria_section)
         detail_layout.addWidget(self.rationale_section)
+        detail_layout.addWidget(self.resolution_section)
+        detail_layout.addWidget(self.invalidation_section)
         detail_layout.addSpacing(10)
         detail_layout.addWidget(actions)
         detail_layout.addSpacing(14)
@@ -1104,6 +1208,9 @@ class NumericPredictionDetailScreen(QWidget):
         self.show_prediction(None)
         self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
         self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
+        self.resolve_button.clicked.connect(self.open_resolve_prediction)
+        self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
+        self.delete_button.clicked.connect(self.delete_prediction)
 
     @property
     def prediction_id(self) -> int | None:
@@ -1128,6 +1235,11 @@ class NumericPredictionDetailScreen(QWidget):
             self.timeline_error.setHidden(True)
             self.revise_forecast_button.setEnabled(False)
             self.add_journal_entry_button.setEnabled(False)
+            self.resolve_button.setEnabled(False)
+            self.mark_invalid_button.setEnabled(False)
+            self.delete_button.setEnabled(False)
+            self.resolution_section.setHidden(True)
+            self.invalidation_section.setHidden(True)
             self.detail_content.setHidden(True)
             self.empty_state.setHidden(False)
             return
@@ -1158,6 +1270,16 @@ class NumericPredictionDetailScreen(QWidget):
         self.add_journal_entry_button.setEnabled(
             prediction.status in (PredictionStatus.OPEN, PredictionStatus.LOCKED)
         )
+        terminal_allowed = prediction.status in (
+            PredictionStatus.OPEN,
+            PredictionStatus.LOCKED,
+        )
+        self.resolve_button.setEnabled(terminal_allowed)
+        self.mark_invalid_button.setEnabled(terminal_allowed)
+        self.delete_button.setEnabled(
+            prediction.status is PredictionStatus.OPEN and prediction.deletion_allowed
+        )
+        self._show_terminal_information(prediction)
         self.empty_state.setHidden(True)
         self.detail_content.setHidden(False)
         self._load_history(prediction.prediction_id)
@@ -1190,6 +1312,50 @@ class NumericPredictionDetailScreen(QWidget):
         self.background_section.setHidden(not prediction.background)
         self.resolution_criteria.setText(prediction.resolution_criteria or "")
         self.resolution_criteria_section.setHidden(not prediction.resolution_criteria)
+
+    def _show_terminal_information(
+        self,
+        prediction: NumericPredictionSnapshot,
+    ) -> None:
+        resolution = prediction.resolution
+        if resolution is None:
+            self.resolution_section.setHidden(True)
+        else:
+            self.resolution_actual.setText(
+                f"Actual value: {resolution.actual_value} {prediction.unit}"
+            )
+            self.resolution_time.setText(
+                f"Resolved {_format_local_timestamp(resolution.resolved_at)}"
+            )
+            self.resolution_scoring.setText(
+                f"Scoring interval (revision {resolution.scoring_revision_sequence}): "
+                f"{_numeric_forecast_text(prediction.current_revision, prediction.unit)}"
+            )
+            self.resolution_notes.setText(
+                ""
+                if not resolution.resolution_notes
+                else f"Resolution notes: {resolution.resolution_notes}"
+            )
+            self.resolution_notes.setHidden(not resolution.resolution_notes)
+            self.postmortem.setText(
+                ""
+                if not resolution.postmortem
+                else f"Postmortem: {resolution.postmortem}"
+            )
+            self.postmortem.setHidden(not resolution.postmortem)
+            self.resolution_section.setHidden(False)
+        invalidation = prediction.invalidation
+        if invalidation is None:
+            self.invalidation_section.setHidden(True)
+        else:
+            self.invalidation_time.setText(
+                f"Marked Invalid {_format_local_timestamp(invalidation.invalidated_at)}"
+            )
+            self.invalidation_reason.setText(
+                "" if not invalidation.reason else f"Reason: {invalidation.reason}"
+            )
+            self.invalidation_reason.setHidden(not invalidation.reason)
+            self.invalidation_section.setHidden(False)
 
     def _show_error(self, message: str) -> None:
         self.detail_error.setText(message)
@@ -1332,6 +1498,83 @@ class NumericPredictionDetailScreen(QWidget):
         dialog = AddNumericJournalEntryDialog(self._operations, self._prediction, self)
         dialog.journal_saved.connect(lambda _entry: self.refresh())
         dialog.open()
+
+    def open_resolve_prediction(self) -> None:
+        """Refresh reviewed Numeric context before opening terminal resolution."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        if self._prediction is None or self._prediction.status not in (
+            PredictionStatus.OPEN,
+            PredictionStatus.LOCKED,
+        ):
+            return
+        dialog = ResolveNumericPredictionDialog(
+            self._operations,
+            self._prediction,
+            self,
+        )
+        dialog.prediction_resolved.connect(self.show_prediction)
+        dialog.open()
+
+    def open_mark_invalid(self) -> None:
+        """Refresh reviewed Numeric context before opening terminal invalidation."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        if self._prediction is None or self._prediction.status not in (
+            PredictionStatus.OPEN,
+            PredictionStatus.LOCKED,
+        ):
+            return
+        dialog = MarkNumericPredictionInvalidDialog(
+            self._operations,
+            self._prediction,
+            self,
+        )
+        dialog.prediction_invalidated.connect(self.show_prediction)
+        dialog.open()
+
+    def delete_prediction(self) -> None:
+        """Confirm permanent deletion of refreshed untouched Numeric state."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        prediction = self._prediction
+        if (
+            prediction is None
+            or prediction.status is not PredictionStatus.OPEN
+            or not prediction.deletion_allowed
+        ):
+            self._show_error(
+                "Only an untouched Open prediction can be deleted. Use Mark "
+                "Invalid to preserve meaningful history outside scoring."
+            )
+            return
+        answer = QMessageBox.warning(
+            self,
+            "Permanently delete Numeric Prediction?",
+            "This permanently deletes the Numeric Prediction and its initial "
+            "interval. This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            latest = self._operations.delete_numeric_prediction(
+                prediction.prediction_id,
+                expected_revision_id=prediction.current_revision.revision_id,
+                expected_metadata_version=prediction.metadata_version,
+                confirm_permanent_deletion=True,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(latest)
 
     def open_correct_journal_entry(self, entry: NumericJournalTimelineSnapshot) -> None:
         dialog = CorrectNumericJournalEntryDialog(self._operations, entry, self)
@@ -2037,6 +2280,197 @@ class AddNumericJournalEntryDialog(QDialog):
     def _hide_error(self) -> None:
         self.form_error.clear()
         self.form_error.setHidden(True)
+
+
+class ResolveNumericPredictionDialog(QDialog):
+    """Record one exact, immutable Numeric outcome and scoring interval."""
+
+    prediction_resolved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: NumericPredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("resolveNumericPredictionDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Resolve Numeric Prediction")
+        self.setModal(True)
+        self.resize(580, 520)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision.revision_id
+        self._expected_metadata_version = prediction.metadata_version
+
+        title = QLabel("Resolve Numeric Prediction", self)
+        explanation = QLabel(
+            "Resolution records the realized quantity and captures the current "
+            "interval for scoring. This terminal decision cannot be reopened or "
+            "changed in v0.2.",
+            self,
+        )
+        explanation.setObjectName("resolveNumericPredictionExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+        reviewed = QLabel(
+            f"Scoring forecast: {_numeric_forecast_text(prediction.current_revision, prediction.unit)} "
+            f"(revision {prediction.current_revision.sequence})",
+            self,
+        )
+        reviewed.setObjectName("resolveNumericScoringForecast")
+        reviewed.setTextFormat(Qt.TextFormat.PlainText)
+        reviewed.setWordWrap(True)
+        actual_label = QLabel(f"Actual value ({prediction.unit})", self)
+        self.actual_value_input = QLineEdit(self)
+        self.actual_value_input.setObjectName("numericResolutionActualValueInput")
+        self.actual_value_input.setAccessibleName(f"Actual value in {prediction.unit}")
+        actual_label.setBuddy(self.actual_value_input)
+        notes_label = QLabel("Resolution notes (optional)", self)
+        self.resolution_notes_input = QPlainTextEdit(self)
+        self.resolution_notes_input.setObjectName("numericResolutionNotesInput")
+        self.resolution_notes_input.setMaximumHeight(100)
+        self.resolution_notes_input.setTabChangesFocus(True)
+        notes_label.setBuddy(self.resolution_notes_input)
+        postmortem_label = QLabel("Postmortem (optional)", self)
+        self.postmortem_input = QPlainTextEdit(self)
+        self.postmortem_input.setObjectName("numericResolutionPostmortemInput")
+        self.postmortem_input.setMaximumHeight(100)
+        self.postmortem_input.setTabChangesFocus(True)
+        postmortem_label.setBuddy(self.postmortem_input)
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("resolveNumericPredictionError")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        save.setObjectName("saveNumericResolutionButton")
+        save.setText("Resolve Prediction")
+        apply_lucide_icon(save, LucideIcon.CIRCLE_CHECK)
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setObjectName(
+            "cancelNumericResolutionButton"
+        )
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addWidget(reviewed)
+        layout.addSpacing(8)
+        layout.addWidget(actual_label)
+        layout.addWidget(self.actual_value_input)
+        layout.addWidget(notes_label)
+        layout.addWidget(self.resolution_notes_input)
+        layout.addWidget(postmortem_label)
+        layout.addWidget(self.postmortem_input)
+        layout.addWidget(self.form_error)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(self.submit)
+        buttons.rejected.connect(self.reject)
+        self.actual_value_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def submit(self) -> None:
+        self.form_error.setHidden(True)
+        try:
+            prediction = self._operations.resolve_numeric_prediction(
+                self._prediction_id,
+                self.actual_value_input.text(),
+                resolution_notes=self.resolution_notes_input.toPlainText(),
+                postmortem=self.postmortem_input.toPlainText(),
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self.form_error.setText(str(error))
+            self.form_error.setHidden(False)
+            return
+        self.prediction_resolved.emit(prediction)
+        self.accept()
+
+
+class MarkNumericPredictionInvalidDialog(QDialog):
+    """Record one immutable Numeric Invalid decision and optional reason."""
+
+    prediction_invalidated = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: NumericPredictionSnapshot,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("markNumericPredictionInvalidDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Mark Numeric Prediction Invalid")
+        self.setModal(True)
+        self.resize(560, 360)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._expected_revision_id = prediction.current_revision.revision_id
+        self._expected_metadata_version = prediction.metadata_version
+        title = QLabel("Mark Numeric Prediction Invalid", self)
+        explanation = QLabel(
+            "Invalid preserves this prediction and its complete history but "
+            "excludes it from scoring. This terminal decision cannot be reopened "
+            "or changed in v0.2.",
+            self,
+        )
+        explanation.setObjectName("markNumericInvalidExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+        reason_label = QLabel("Reason (optional)", self)
+        self.reason_input = QPlainTextEdit(self)
+        self.reason_input.setObjectName("numericInvalidationReasonInput")
+        self.reason_input.setTabChangesFocus(True)
+        reason_label.setBuddy(self.reason_input)
+        self.form_error = QLabel("", self)
+        self.form_error.setObjectName("markNumericPredictionInvalidError")
+        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.form_error.setWordWrap(True)
+        self.form_error.setHidden(True)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel,
+            self,
+        )
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        save.setObjectName("saveNumericInvalidationButton")
+        save.setText("Mark Invalid")
+        apply_lucide_icon(save, LucideIcon.BAN)
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setObjectName(
+            "cancelNumericInvalidationButton"
+        )
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addWidget(reason_label)
+        layout.addWidget(self.reason_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(buttons)
+        buttons.accepted.connect(self.submit)
+        buttons.rejected.connect(self.reject)
+        self.reason_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def submit(self) -> None:
+        self.form_error.setHidden(True)
+        try:
+            prediction = self._operations.invalidate_numeric_prediction(
+                self._prediction_id,
+                reason=self.reason_input.toPlainText(),
+                expected_revision_id=self._expected_revision_id,
+                expected_metadata_version=self._expected_metadata_version,
+            )
+        except ApplicationError as error:
+            self.form_error.setText(str(error))
+            self.form_error.setHidden(False)
+            return
+        self.prediction_invalidated.emit(prediction)
+        self.accept()
 
 
 class CorrectNumericJournalEntryDialog(QDialog):

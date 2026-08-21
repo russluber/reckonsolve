@@ -33,7 +33,7 @@ def test_v10_upgrade_preserves_binary_journal_and_correction_history(tmp_path) -
     )
     old_database.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:10])
     operations = PredictionOperations(upgraded, FixedClock(), UTC)
     timeline = operations.list_timeline(created.prediction_id)
     journal = next(

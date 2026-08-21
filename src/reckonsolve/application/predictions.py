@@ -52,6 +52,7 @@ from reckonsolve.domain.predictions import (
     NewJournalEntry,
     NewNumericForecastRevision,
     NewNumericPrediction,
+    NewNumericResolution,
     NewPrediction,
     NewResolution,
     NumericForecastRevision,
@@ -481,6 +482,175 @@ class PredictionOperations:
         if timeline is None:
             raise PredictionNotFoundError(prediction_id)
         return timeline
+
+    def resolve_numeric_prediction(
+        self,
+        prediction_id: int,
+        actual_value: Decimal | int | str,
+        *,
+        resolution_notes: str | None = None,
+        postmortem: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericPrediction:
+        """Resolve a Numeric Prediction and capture its exact scoring interval."""
+
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        current = self._numeric_repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        try:
+            resolution = NewNumericResolution(
+                actual_value=FixedPrecisionValue.from_value(
+                    actual_value,
+                    current.decimal_places,
+                    field="actual_value",
+                ),
+                resolution_notes=resolution_notes,
+                postmortem=postmortem,
+            )
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        if (
+            current.current_revision.revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentLifecycleUpdateError(prediction_id)
+        now = as_utc(self._clock.now())
+        effective_status = display_status(
+            current.status,
+            current.forecast_deadline,
+            now.astimezone(self._local_timezone).date(),
+        )
+        if effective_status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
+            raise LifecycleTransitionNotAllowedError("resolved", effective_status)
+        try:
+            updated = self._numeric_repository.resolve_prediction(
+                prediction_id,
+                resolution,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                resolved_at=now,
+            )
+        except LifecycleContextChangedError as error:
+            raise ConcurrentLifecycleUpdateError(prediction_id) from error
+        except LifecycleTransitionDisallowedError as error:
+            raise LifecycleTransitionNotAllowedError(
+                "resolved", error.status
+            ) from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_numeric_status(updated, now)
+
+    def invalidate_numeric_prediction(
+        self,
+        prediction_id: int,
+        *,
+        reason: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> NumericPrediction:
+        """Mark a Numeric Prediction terminal Invalid and outside scoring."""
+
+        try:
+            invalidation = NewInvalidation(reason)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        current = self._numeric_repository.get_prediction(prediction_id)
+        if current is None:
+            raise PredictionNotFoundError(prediction_id)
+        if (
+            current.current_revision.revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentLifecycleUpdateError(prediction_id)
+        now = as_utc(self._clock.now())
+        effective_status = display_status(
+            current.status,
+            current.forecast_deadline,
+            now.astimezone(self._local_timezone).date(),
+        )
+        if effective_status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
+            raise LifecycleTransitionNotAllowedError(
+                "marked Invalid",
+                effective_status,
+            )
+        try:
+            updated = self._numeric_repository.invalidate_prediction(
+                prediction_id,
+                invalidation,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                invalidated_at=now,
+            )
+        except LifecycleContextChangedError as error:
+            raise ConcurrentLifecycleUpdateError(prediction_id) from error
+        except LifecycleTransitionDisallowedError as error:
+            raise LifecycleTransitionNotAllowedError(
+                "marked Invalid",
+                error.status,
+            ) from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_numeric_status(updated, now)
+
+    def delete_numeric_prediction(
+        self,
+        prediction_id: int,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        confirm_permanent_deletion: bool = False,
+    ) -> NumericPrediction | None:
+        """Permanently delete only an explicitly confirmed untouched Numeric row."""
+
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version,
+            "expected_metadata_version",
+        )
+        if confirm_permanent_deletion is not True:
+            raise PredictionDeletionConfirmationRequired
+        current = self.get_numeric_prediction(prediction_id)
+        if (
+            current.current_revision.revision_id != expected_revision_id
+            or current.metadata_version != expected_metadata_version
+        ):
+            raise ConcurrentLifecycleUpdateError(prediction_id)
+        if not current.deletion_allowed:
+            reason = (
+                current.status.value
+                if current.status is not PredictionStatus.OPEN
+                else "meaningful_history"
+            )
+            raise PredictionDeletionNotAllowedError(reason)
+        now = as_utc(self._clock.now())
+        try:
+            deleted = self._numeric_repository.delete_prediction(
+                prediction_id,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                current_date=now.astimezone(self._local_timezone).date(),
+            )
+        except LifecycleContextChangedError as error:
+            raise ConcurrentLifecycleUpdateError(prediction_id) from error
+        except PredictionDeletionDisallowedError as error:
+            raise PredictionDeletionNotAllowedError(error.reason) from error
+        if not deleted:
+            raise PredictionNotFoundError(prediction_id)
+        latest = self._numeric_repository.get_latest_prediction()
+        return (
+            None if latest is None else self._with_derived_numeric_status(latest, now)
+        )
 
     def add_journal_entry(
         self,
@@ -1102,12 +1272,16 @@ class PredictionOperations:
         detail: NumericPrediction,
         now: datetime,
     ) -> NumericPrediction:
+        status = display_status(
+            detail.status,
+            detail.forecast_deadline,
+            now.astimezone(self._local_timezone).date(),
+        )
         return replace(
             detail,
-            status=display_status(
-                detail.status,
-                detail.forecast_deadline,
-                now.astimezone(self._local_timezone).date(),
+            status=status,
+            deletion_allowed=(
+                detail.deletion_allowed and status is PredictionStatus.OPEN
             ),
         )
 

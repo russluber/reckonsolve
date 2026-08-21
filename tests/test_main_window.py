@@ -151,6 +151,21 @@ class FakeNumericPrediction:
     expected_resolution: date | None = None
     tags: tuple[str, ...] = ()
     metadata_version: int = 1
+    resolution: FakeNumericResolution | None = None
+    invalidation: FakeInvalidation | None = None
+    deletion_allowed: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class FakeNumericResolution:
+    resolution_id: int
+    prediction_id: int
+    actual_value: FixedPrecisionValue
+    resolved_at: datetime
+    scoring_revision_id: int
+    scoring_revision_sequence: int
+    resolution_notes: str | None = None
+    postmortem: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -589,7 +604,96 @@ class FakePredictionOperations:
         )
         self.numeric_revisions.append(revision)
         self.numeric_latest = replace(self.numeric_latest, current_revision=revision)
+        self.numeric_latest = replace(self.numeric_latest, deletion_allowed=False)
         return self.numeric_latest
+
+    def resolve_numeric_prediction(
+        self,
+        prediction_id: int,
+        actual_value: object,
+        *,
+        resolution_notes: str | None = None,
+        postmortem: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakeNumericPrediction:
+        if (
+            self.numeric_latest is None
+            or self.numeric_latest.prediction_id != prediction_id
+        ):
+            raise ApplicationError("Numeric Prediction not found.")
+        resolution = FakeNumericResolution(
+            resolution_id=1,
+            prediction_id=prediction_id,
+            actual_value=FixedPrecisionValue.from_value(
+                actual_value,
+                self.numeric_latest.decimal_places,
+            ),
+            resolved_at=datetime(2026, 8, 23, 19, 30, tzinfo=UTC),
+            scoring_revision_id=self.numeric_latest.current_revision.revision_id,
+            scoring_revision_sequence=self.numeric_latest.current_revision.sequence,
+            resolution_notes=(resolution_notes or "").strip() or None,
+            postmortem=(postmortem or "").strip() or None,
+        )
+        self.numeric_latest = replace(
+            self.numeric_latest,
+            status=PredictionStatus.RESOLVED,
+            resolution=resolution,
+            deletion_allowed=False,
+        )
+        return self.numeric_latest
+
+    def invalidate_numeric_prediction(
+        self,
+        prediction_id: int,
+        *,
+        reason: str | None = None,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+    ) -> FakeNumericPrediction:
+        if (
+            self.numeric_latest is None
+            or self.numeric_latest.prediction_id != prediction_id
+        ):
+            raise ApplicationError("Numeric Prediction not found.")
+        self.numeric_latest = replace(
+            self.numeric_latest,
+            status=PredictionStatus.INVALID,
+            invalidation=FakeInvalidation(
+                invalidation_id=1,
+                prediction_id=prediction_id,
+                invalidated_at=datetime(2026, 8, 23, 19, 30, tzinfo=UTC),
+                reason=(reason or "").strip() or None,
+            ),
+            deletion_allowed=False,
+        )
+        return self.numeric_latest
+
+    def delete_numeric_prediction(
+        self,
+        prediction_id: int,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        confirm_permanent_deletion: bool = False,
+    ) -> FakeNumericPrediction | None:
+        if (
+            self.numeric_latest is None
+            or self.numeric_latest.prediction_id != prediction_id
+        ):
+            raise ApplicationError("Numeric Prediction not found.")
+        self.numeric_revisions = [
+            revision
+            for revision in self.numeric_revisions
+            if revision.prediction_id != prediction_id
+        ]
+        self.numeric_journal_entries = [
+            entry
+            for entry in self.numeric_journal_entries
+            if entry.prediction_id != prediction_id
+        ]
+        self.numeric_latest = None
+        return None
 
     def list_forecast_revisions(
         self,
@@ -644,6 +748,7 @@ class FakePredictionOperations:
             confidence_percent=current.confidence_percent,
         )
         self.numeric_journal_entries.append(entry)
+        self.numeric_latest = replace(self.numeric_latest, deletion_allowed=False)
         return entry
 
     def correct_numeric_journal_entry(
