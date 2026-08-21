@@ -380,6 +380,7 @@ class FakePredictionOperations:
         self.browser_snapshot: PredictionBrowserSnapshot | None = None
         self.browser_error: ApplicationError | None = None
         self.browser_calls: list[tuple[str, PredictionStatus | None, str | None]] = []
+        self.browser_type_calls: list[PredictionType | None] = []
         self.analytics_source = AnalyticsSource(observations=(), available_tags=())
         self.analytics_error: ApplicationError | None = None
         self.analytics_calls: list[str | None] = []
@@ -1086,6 +1087,14 @@ class FakePredictionOperations:
             raise ApplicationError("Numeric Prediction not found.")
         return self.numeric_latest
 
+    def get_prediction_for_navigation(
+        self,
+        prediction_id: int,
+    ) -> FakePrediction | FakeNumericPrediction:
+        if self.latest is not None and self.latest.prediction_id == prediction_id:
+            return self.get_prediction(prediction_id)
+        return self.get_numeric_prediction(prediction_id)
+
     def update_metadata(
         self,
         prediction_id: int,
@@ -1190,8 +1199,10 @@ class FakePredictionOperations:
         *,
         status: PredictionStatus | None = None,
         tag: str | None = None,
+        prediction_type: PredictionType | None = None,
     ) -> PredictionBrowserSnapshot:
         self.browser_calls.append((question_text, status, tag))
+        self.browser_type_calls.append(prediction_type)
         if self.browser_error is not None:
             raise self.browser_error
         if self.browser_snapshot is not None:
@@ -1225,6 +1236,10 @@ class FakePredictionOperations:
                 for prediction in source.predictions
                 if (not search_key or search_key in prediction.question.casefold())
                 and (status is None or prediction.status is status)
+                and (
+                    prediction_type is None
+                    or prediction.prediction_type is prediction_type
+                )
                 and (
                     tag_key is None
                     or tag_key in {item.casefold() for item in prediction.tags}
@@ -1665,6 +1680,118 @@ def test_prediction_browser_clears_a_filter_when_its_last_tag_is_removed(
         ("", None, "Temporary"),
         ("", None, None),
     ]
+
+
+def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
+    qtbot: QtBot,
+) -> None:
+    instant = datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
+    numeric_revision = FakeNumericRevision(
+        revision_id=20,
+        prediction_id=2,
+        lower_bound=FixedPrecisionValue(20, 1),
+        median_estimate=FixedPrecisionValue(40, 1),
+        upper_bound=FixedPrecisionValue(80, 1),
+        confidence_percent=80,
+        sequence=1,
+        created_at=instant,
+    )
+    numeric = FakeNumericPrediction(
+        prediction_id=2,
+        question="How many Numeric days?",
+        unit="days",
+        decimal_places=1,
+        status=PredictionStatus.OPEN,
+        created_at=instant,
+        updated_at=instant,
+        current_revision=numeric_revision,
+        tags=("Numbers",),
+    )
+    binary = PredictionBrowserItem(
+        prediction_id=1,
+        question="Will Binary remain visible?",
+        probability_percent=60,
+        status=PredictionStatus.OPEN,
+        created_at=instant,
+        latest_revision_at=instant,
+    )
+    numeric_item = PredictionBrowserItem(
+        prediction_id=numeric.prediction_id,
+        question=numeric.question,
+        probability_percent=None,
+        status=numeric.status,
+        created_at=instant,
+        latest_revision_at=instant,
+        tags=numeric.tags,
+        prediction_type=PredictionType.NUMERIC,
+        numeric_lower_bound=numeric_revision.lower_bound,
+        numeric_median_estimate=numeric_revision.median_estimate,
+        numeric_upper_bound=numeric_revision.upper_bound,
+        numeric_confidence_percent=numeric_revision.confidence_percent,
+        numeric_unit=numeric.unit,
+    )
+    operations = FakePredictionOperations()
+    operations.numeric_latest = numeric
+    operations.dashboard_snapshot = DashboardSnapshot(
+        stale_threshold_days=14,
+        open_predictions=(
+            DashboardPrediction(
+                prediction_id=numeric.prediction_id,
+                question=numeric.question,
+                probability_percent=None,
+                status=numeric.status,
+                latest_revision_at=instant,
+                prediction_type=PredictionType.NUMERIC,
+                numeric_lower_bound=numeric_revision.lower_bound,
+                numeric_median_estimate=numeric_revision.median_estimate,
+                numeric_upper_bound=numeric_revision.upper_bound,
+                numeric_confidence_percent=numeric_revision.confidence_percent,
+                numeric_unit=numeric.unit,
+            ),
+        ),
+        needs_attention_predictions=(),
+        ready_to_resolve_predictions=(),
+        locked_predictions=(),
+    )
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=(binary, numeric_item),
+        available_tags=("Numbers",),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    dashboard_row = _required_child(window, QPushButton, "dashboardOpenPrediction2")
+    assert "NUMERIC" in dashboard_row.text()
+    assert "80% interval: 2.0–8.0 days; median: 4.0 days" in dashboard_row.text()
+    qtbot.mouseClick(dashboard_row, Qt.MouseButton.LeftButton)
+    assert window.current_screen_name == "Prediction Detail"
+    assert _required_child(window, QLabel, "numericPredictionQuestion").text() == (
+        numeric.question
+    )
+
+    window.navigate_to("Predictions")
+    type_filter = _required_child(window, QComboBox, "predictionTypeFilter")
+    type_filter.setCurrentIndex(type_filter.findData(PredictionType.NUMERIC.value))
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+    assert results.count() == 1
+    assert "NUMERIC" in results.item(0).text()
+    assert "80% interval: 2.0–8.0 days; median: 4.0 days" in results.item(0).text()
+    assert operations.browser_type_calls[-1] is PredictionType.NUMERIC
+
+    results.itemActivated.emit(results.item(0))
+    assert window.current_screen_name == "Prediction Detail"
+    assert _required_child(window, QLabel, "numericPredictionQuestion").text() == (
+        numeric.question
+    )
+
+    window.navigate_to("Predictions")
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "clearPredictionFiltersButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert type_filter.currentData() is None
+    assert _required_child(window, QListWidget, "predictionBrowserResults").count() == 2
+    assert operations.browser_type_calls[-1] is None
 
 
 def test_prediction_browser_distinguishes_new_database_and_no_matches(

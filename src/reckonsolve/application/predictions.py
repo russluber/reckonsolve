@@ -1,4 +1,4 @@
-"""Application operations for binary predictions."""
+"""Application operations for Binary and Numeric Predictions."""
 
 import csv
 import sqlite3
@@ -62,6 +62,7 @@ from reckonsolve.domain.predictions import (
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
+    PredictionType,
     PredictionValidationError,
     TimelineEvent,
     changed_definition_fields,
@@ -1017,6 +1018,7 @@ class PredictionOperations:
         *,
         status: PredictionStatus | None = None,
         tag: str | None = None,
+        prediction_type: PredictionType | None = None,
     ) -> PredictionBrowserSnapshot:
         """Search and filter current prediction summaries for the archive."""
 
@@ -1034,6 +1036,14 @@ class PredictionOperations:
             raise ValidationError(
                 "The prediction tag filter is invalid.",
                 field="tag",
+            )
+        if prediction_type is not None and not isinstance(
+            prediction_type,
+            PredictionType,
+        ):
+            raise ValidationError(
+                "The forecast type filter is invalid.",
+                field="prediction_type",
             )
 
         search_key = question_text.strip().casefold()
@@ -1059,6 +1069,10 @@ class PredictionOperations:
                 for prediction in predictions
                 if (not search_key or search_key in prediction.question.casefold())
                 and (status is None or prediction.status is status)
+                and (
+                    prediction_type is None
+                    or prediction.prediction_type is prediction_type
+                )
                 and (
                     tag_key is None
                     or tag_key in {item.casefold() for item in prediction.tags}
@@ -1172,6 +1186,23 @@ class PredictionOperations:
         if detail is None:
             raise PredictionNotFoundError(prediction_id)
         return self._with_derived_numeric_status(detail, as_utc(self._clock.now()))
+
+    def get_prediction_for_navigation(
+        self,
+        prediction_id: int,
+    ) -> PredictionDetail | NumericPrediction:
+        """Load one current Prediction of either forecast type for Detail routing."""
+
+        detail = self._repository.get_prediction(prediction_id)
+        if detail is not None:
+            return self._with_derived_status(detail, as_utc(self._clock.now()))
+        numeric_detail = self._numeric_repository.get_prediction(prediction_id)
+        if numeric_detail is not None:
+            return self._with_derived_numeric_status(
+                numeric_detail,
+                as_utc(self._clock.now()),
+            )
+        raise PredictionNotFoundError(prediction_id)
 
     def update_metadata(
         self,

@@ -358,6 +358,12 @@ class PredictionOperations(Protocol):
     def get_numeric_prediction(self, prediction_id: int) -> NumericPredictionSnapshot:
         """Return one Numeric Prediction with its current interval and metadata."""
 
+    def get_prediction_for_navigation(
+        self,
+        prediction_id: int,
+    ) -> PredictionSnapshot | NumericPredictionSnapshot:
+        """Return one current Prediction of either type for Detail routing."""
+
     def list_numeric_forecast_revisions(
         self,
         prediction_id: int,
@@ -466,6 +472,7 @@ class PredictionOperations(Protocol):
         *,
         status: PredictionStatus | None = None,
         tag: str | None = None,
+        prediction_type: PredictionType | None = None,
     ) -> PredictionBrowserSnapshot:
         """Return filtered prediction summaries and available tags."""
 

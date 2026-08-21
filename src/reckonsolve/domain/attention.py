@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from .predictions import PredictionStatus
+from .predictions import FixedPrecisionValue, PredictionStatus, PredictionType
 
 DEFAULT_STALE_THRESHOLD_DAYS = 14
 MIN_STALE_THRESHOLD_DAYS = 1
@@ -20,13 +20,19 @@ class DashboardPrediction:
 
     prediction_id: int
     question: str
-    probability_percent: int
+    probability_percent: int | None
     status: PredictionStatus
     latest_revision_at: datetime
     forecast_deadline: date | None = None
     expected_resolution: date | None = None
     needs_attention: bool = False
     ready_to_resolve: bool = False
+    prediction_type: PredictionType = PredictionType.BINARY
+    numeric_lower_bound: FixedPrecisionValue | None = None
+    numeric_median_estimate: FixedPrecisionValue | None = None
+    numeric_upper_bound: FixedPrecisionValue | None = None
+    numeric_confidence_percent: int | None = None
+    numeric_unit: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

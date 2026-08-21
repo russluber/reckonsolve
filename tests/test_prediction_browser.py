@@ -6,7 +6,11 @@ import pytest
 from reckonsolve.application.errors import ValidationError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
-from reckonsolve.domain.predictions import BinaryOutcome, PredictionStatus
+from reckonsolve.domain.predictions import (
+    BinaryOutcome,
+    PredictionStatus,
+    PredictionType,
+)
 
 
 @dataclass(frozen=True)
@@ -275,4 +279,77 @@ def test_browser_reads_the_clock_once_and_rejects_invalid_filters(tmp_path) -> N
     assert search_error.value.field == "question_text"
     assert status_error.value.field == "status"
     assert tag_error.value.field == "tag"
+    with pytest.raises(ValidationError) as type_error:
+        operations.browse_predictions(prediction_type="numeric")  # type: ignore[arg-type]
+    assert type_error.value.field == "prediction_type"
+    database.close()
+
+
+def test_browser_mixes_types_and_filters_numeric_without_losing_type_or_unit(
+    tmp_path,
+) -> None:
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
+    binary = operations.create_prediction(
+        "Will Binary remain visible?", 35, tags=("Mixed",)
+    )
+    numeric = operations.create_numeric_prediction(
+        "How many Numeric items?",
+        "items",
+        0,
+        2,
+        5,
+        9,
+        90,
+        tags=("Mixed", "Numbers"),
+    )
+    resolved_numeric = operations.create_numeric_prediction(
+        "How many resolved Numeric items?",
+        "items",
+        0,
+        1,
+        2,
+        3,
+        80,
+        tags=("Numbers",),
+    )
+    operations.resolve_numeric_prediction(
+        resolved_numeric.prediction_id,
+        2,
+        expected_revision_id=resolved_numeric.current_revision.revision_id,
+        expected_metadata_version=resolved_numeric.metadata_version,
+    )
+
+    all_rows = operations.browse_predictions()
+    numeric_only = operations.browse_predictions(
+        status=PredictionStatus.OPEN,
+        tag="mixed",
+        prediction_type=PredictionType.NUMERIC,
+    )
+    selected = operations.get_prediction_for_navigation(numeric.prediction_id)
+    binary_selected = operations.get_prediction_for_navigation(binary.prediction_id)
+    resolved_numeric_only = operations.browse_predictions(
+        status=PredictionStatus.RESOLVED,
+        prediction_type=PredictionType.NUMERIC,
+    )
+
+    assert {item.prediction_type for item in all_rows.predictions} == {
+        PredictionType.BINARY,
+        PredictionType.NUMERIC,
+    }
+    assert tuple(item.prediction_id for item in numeric_only.predictions) == (
+        numeric.prediction_id,
+    )
+    row = numeric_only.predictions[0]
+    assert row.probability_percent is None
+    assert str(row.numeric_lower_bound) == "2"
+    assert str(row.numeric_median_estimate) == "5"
+    assert str(row.numeric_upper_bound) == "9"
+    assert row.numeric_confidence_percent == 90
+    assert row.numeric_unit == "items"
+    assert selected.decimal_places == 0
+    assert binary_selected.probability_percent == 35
+    assert tuple(item.prediction_id for item in resolved_numeric_only.predictions) == (
+        resolved_numeric.prediction_id,
+    )
     database.close()

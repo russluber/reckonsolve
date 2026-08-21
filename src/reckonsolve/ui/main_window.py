@@ -221,8 +221,14 @@ class MainWindow(QMainWindow):
             self._prediction_detail_host.show_prediction(prediction)
         self.navigate_to("Prediction Detail")
 
-    def _show_selected_prediction(self, prediction: PredictionSnapshot) -> None:
-        self._prediction_detail_host.show_prediction(prediction)
+    def _show_selected_prediction(
+        self,
+        prediction: PredictionSnapshot | NumericPredictionSnapshot,
+    ) -> None:
+        if hasattr(prediction, "decimal_places"):
+            self._prediction_detail_host.show_numeric_prediction(prediction)
+        else:
+            self._prediction_detail_host.show_prediction(prediction)
         self.navigate_to("Prediction Detail")
 
     def _refresh_navigation_icons(self) -> None:

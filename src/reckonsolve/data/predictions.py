@@ -12,6 +12,7 @@ from reckonsolve.domain.browser import (
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
+    FixedPrecisionValue,
     ForecastRevision,
     ForecastTimelineEvent,
     Invalidation,
@@ -26,6 +27,7 @@ from reckonsolve.domain.predictions import (
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
+    PredictionType,
     Resolution,
     TimelineEvent,
     changed_definition_fields,
@@ -669,10 +671,17 @@ class PredictionRepository:
                 SELECT
                     prediction.id AS prediction_id,
                     prediction.question,
+                    prediction.prediction_type,
                     prediction.status,
                     prediction.forecast_deadline,
                     prediction.expected_resolution,
                     current_revision.probability_percent,
+                    NULL AS numeric_lower_scaled,
+                    NULL AS numeric_median_scaled,
+                    NULL AS numeric_upper_scaled,
+                    NULL AS numeric_confidence_percent,
+                    NULL AS numeric_unit,
+                    NULL AS numeric_precision,
                     current_revision.created_at AS latest_revision_at
                 FROM predictions AS prediction
                 JOIN forecast_revisions AS current_revision
@@ -684,22 +693,39 @@ class PredictionRepository:
                         LIMIT 1
                     )
                 WHERE prediction.status = 'open'
+                    AND prediction.prediction_type = 'binary'
+                UNION ALL
+                SELECT
+                    prediction.id AS prediction_id,
+                    prediction.question,
+                    prediction.prediction_type,
+                    prediction.status,
+                    prediction.forecast_deadline,
+                    prediction.expected_resolution,
+                    NULL AS probability_percent,
+                    current_revision.lower_scaled AS numeric_lower_scaled,
+                    current_revision.median_scaled AS numeric_median_scaled,
+                    current_revision.upper_scaled AS numeric_upper_scaled,
+                    current_revision.confidence_percent AS numeric_confidence_percent,
+                    prediction.numeric_unit,
+                    prediction.numeric_precision,
+                    current_revision.created_at AS latest_revision_at
+                FROM predictions AS prediction
+                JOIN numeric_forecast_revisions AS current_revision
+                    ON current_revision.id = (
+                        SELECT candidate.id
+                        FROM numeric_forecast_revisions AS candidate
+                        WHERE candidate.prediction_id = prediction.id
+                        ORDER BY candidate.sequence DESC
+                        LIMIT 1
+                    )
+                WHERE prediction.status = 'open'
+                    AND prediction.prediction_type = 'numeric'
                 ORDER BY prediction.id
                 """
             ).fetchall()
 
-        return tuple(
-            DashboardPrediction(
-                prediction_id=int(row["prediction_id"]),
-                question=str(row["question"]),
-                probability_percent=int(row["probability_percent"]),
-                status=PredictionStatus(row["status"]),
-                latest_revision_at=parse_utc(str(row["latest_revision_at"])),
-                forecast_deadline=_parse_date(row["forecast_deadline"]),
-                expected_resolution=_parse_date(row["expected_resolution"]),
-            )
-            for row in rows
-        )
+        return tuple(_map_dashboard_prediction(row) for row in rows)
 
     def list_browser_predictions(self) -> PredictionBrowserSnapshot:
         """Load every prediction summary and every associated tag."""
@@ -710,10 +736,17 @@ class PredictionRepository:
                 SELECT
                     prediction.id AS prediction_id,
                     prediction.question,
+                    prediction.prediction_type,
                     prediction.status,
                     prediction.created_at,
                     prediction.forecast_deadline,
                     current_revision.probability_percent,
+                    NULL AS numeric_lower_scaled,
+                    NULL AS numeric_median_scaled,
+                    NULL AS numeric_upper_scaled,
+                    NULL AS numeric_confidence_percent,
+                    NULL AS numeric_unit,
+                    NULL AS numeric_precision,
                     current_revision.created_at AS latest_revision_at
                 FROM predictions AS prediction
                 JOIN forecast_revisions AS current_revision
@@ -724,7 +757,34 @@ class PredictionRepository:
                         ORDER BY candidate.sequence DESC
                         LIMIT 1
                     )
-                ORDER BY prediction.created_at DESC, prediction.id DESC
+                WHERE prediction.prediction_type = 'binary'
+                UNION ALL
+                SELECT
+                    prediction.id AS prediction_id,
+                    prediction.question,
+                    prediction.prediction_type,
+                    prediction.status,
+                    prediction.created_at,
+                    prediction.forecast_deadline,
+                    NULL AS probability_percent,
+                    current_revision.lower_scaled AS numeric_lower_scaled,
+                    current_revision.median_scaled AS numeric_median_scaled,
+                    current_revision.upper_scaled AS numeric_upper_scaled,
+                    current_revision.confidence_percent AS numeric_confidence_percent,
+                    prediction.numeric_unit,
+                    prediction.numeric_precision,
+                    current_revision.created_at AS latest_revision_at
+                FROM predictions AS prediction
+                JOIN numeric_forecast_revisions AS current_revision
+                    ON current_revision.id = (
+                        SELECT candidate.id
+                        FROM numeric_forecast_revisions AS candidate
+                        WHERE candidate.prediction_id = prediction.id
+                        ORDER BY candidate.sequence DESC
+                        LIMIT 1
+                    )
+                WHERE prediction.prediction_type = 'numeric'
+                ORDER BY 5 DESC, 1 DESC
                 """
             ).fetchall()
             tag_rows = connection.execute(
@@ -751,15 +811,9 @@ class PredictionRepository:
 
         return PredictionBrowserSnapshot(
             predictions=tuple(
-                PredictionBrowserItem(
-                    prediction_id=int(row["prediction_id"]),
-                    question=str(row["question"]),
-                    probability_percent=int(row["probability_percent"]),
-                    status=PredictionStatus(row["status"]),
-                    created_at=parse_utc(str(row["created_at"])),
-                    latest_revision_at=parse_utc(str(row["latest_revision_at"])),
-                    forecast_deadline=_parse_date(row["forecast_deadline"]),
-                    tags=tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
+                _map_browser_prediction(
+                    row,
+                    tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
                 )
                 for row in rows
             ),
@@ -1034,6 +1088,81 @@ def _map_prediction_detail(
         invalidation=invalidation,
         deletion_allowed=bool(row["deletion_allowed"]),
     )
+
+
+def _map_dashboard_prediction(row: sqlite3.Row) -> DashboardPrediction:
+    """Map one type-aware nonterminal summary from the shared read query."""
+
+    prediction_type = PredictionType(row["prediction_type"])
+    numeric_values = _map_numeric_summary_values(row, prediction_type)
+    return DashboardPrediction(
+        prediction_id=int(row["prediction_id"]),
+        question=str(row["question"]),
+        probability_percent=(
+            None
+            if prediction_type is PredictionType.NUMERIC
+            else int(row["probability_percent"])
+        ),
+        status=PredictionStatus(row["status"]),
+        latest_revision_at=parse_utc(str(row["latest_revision_at"])),
+        forecast_deadline=_parse_date(row["forecast_deadline"]),
+        expected_resolution=_parse_date(row["expected_resolution"]),
+        prediction_type=prediction_type,
+        **numeric_values,
+    )
+
+
+def _map_browser_prediction(
+    row: sqlite3.Row,
+    tags: tuple[str, ...],
+) -> PredictionBrowserItem:
+    """Map one type-aware archive summary from the shared read query."""
+
+    prediction_type = PredictionType(row["prediction_type"])
+    numeric_values = _map_numeric_summary_values(row, prediction_type)
+    return PredictionBrowserItem(
+        prediction_id=int(row["prediction_id"]),
+        question=str(row["question"]),
+        probability_percent=(
+            None
+            if prediction_type is PredictionType.NUMERIC
+            else int(row["probability_percent"])
+        ),
+        status=PredictionStatus(row["status"]),
+        created_at=parse_utc(str(row["created_at"])),
+        latest_revision_at=parse_utc(str(row["latest_revision_at"])),
+        forecast_deadline=_parse_date(row["forecast_deadline"]),
+        tags=tags,
+        prediction_type=prediction_type,
+        **numeric_values,
+    )
+
+
+def _map_numeric_summary_values(
+    row: sqlite3.Row,
+    prediction_type: PredictionType,
+) -> dict[str, FixedPrecisionValue | int | str | None]:
+    """Return populated Numeric summary fields only for Numeric rows."""
+
+    if prediction_type is PredictionType.BINARY:
+        return {}
+    decimal_places = int(row["numeric_precision"])
+    return {
+        "numeric_lower_bound": FixedPrecisionValue(
+            int(row["numeric_lower_scaled"]),
+            decimal_places,
+        ),
+        "numeric_median_estimate": FixedPrecisionValue(
+            int(row["numeric_median_scaled"]),
+            decimal_places,
+        ),
+        "numeric_upper_bound": FixedPrecisionValue(
+            int(row["numeric_upper_scaled"]),
+            decimal_places,
+        ),
+        "numeric_confidence_percent": int(row["numeric_confidence_percent"]),
+        "numeric_unit": str(row["numeric_unit"]),
+    }
 
 
 def _map_forecast_revision(row: sqlite3.Row) -> ForecastRevision:

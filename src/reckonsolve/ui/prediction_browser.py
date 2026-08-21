@@ -24,7 +24,7 @@ from reckonsolve.domain.browser import (
     PredictionBrowserItem,
     PredictionBrowserSnapshot,
 )
-from reckonsolve.domain.predictions import PredictionStatus
+from reckonsolve.domain.predictions import PredictionStatus, PredictionType
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 
 
@@ -43,10 +43,11 @@ class PredictionBrowserOperations(Protocol):
         *,
         status: PredictionStatus | None = None,
         tag: str | None = None,
+        prediction_type: PredictionType | None = None,
     ) -> PredictionBrowserSnapshot:
         """Return filtered current summaries and the associated tag choices."""
 
-    def get_prediction(
+    def get_prediction_for_navigation(
         self,
         prediction_id: int,
     ) -> PredictionBrowserDetailSnapshot:
@@ -105,6 +106,15 @@ class PredictionBrowserScreen(QWidget):
             self.status_filter.addItem(status.value.title(), status.value)
         status_label.setBuddy(self.status_filter)
 
+        type_label = QLabel("Forecast type", self)
+        self.type_filter = QComboBox(self)
+        self.type_filter.setObjectName("predictionTypeFilter")
+        self.type_filter.setAccessibleName("Filter predictions by forecast type")
+        self.type_filter.addItem("All types", None)
+        self.type_filter.addItem("Binary", PredictionType.BINARY.value)
+        self.type_filter.addItem("Numeric", PredictionType.NUMERIC.value)
+        type_label.setBuddy(self.type_filter)
+
         tag_label = QLabel("Tag", self)
         self.tag_filter = QComboBox(self)
         self.tag_filter.setObjectName("predictionTagFilter")
@@ -119,15 +129,24 @@ class PredictionBrowserScreen(QWidget):
         self.clear_button.setObjectName("clearPredictionFiltersButton")
         apply_lucide_icon(self.clear_button, LucideIcon.ERASER)
 
-        filters_layout = QHBoxLayout()
-        filters_layout.addWidget(search_label)
-        filters_layout.addWidget(self.search_input, 2)
-        filters_layout.addWidget(status_label)
-        filters_layout.addWidget(self.status_filter)
-        filters_layout.addWidget(tag_label)
-        filters_layout.addWidget(self.tag_filter)
-        filters_layout.addWidget(self.apply_button)
-        filters_layout.addWidget(self.clear_button)
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_input, 1)
+
+        filter_controls = QHBoxLayout()
+        filter_controls.addWidget(status_label)
+        filter_controls.addWidget(self.status_filter)
+        filter_controls.addWidget(type_label)
+        filter_controls.addWidget(self.type_filter)
+        filter_controls.addWidget(tag_label)
+        filter_controls.addWidget(self.tag_filter)
+        filter_controls.addWidget(self.apply_button)
+        filter_controls.addWidget(self.clear_button)
+        filter_controls.addStretch()
+
+        filters_layout = QVBoxLayout()
+        filters_layout.addLayout(search_layout)
+        filters_layout.addLayout(filter_controls)
 
         self.error_label = QLabel(self)
         self.error_label.setObjectName("predictionBrowserError")
@@ -177,6 +196,7 @@ class PredictionBrowserScreen(QWidget):
         self.clear_button.clicked.connect(self.clear_filters)
         self.search_input.returnPressed.connect(self.refresh)
         self.status_filter.currentIndexChanged.connect(self.refresh)
+        self.type_filter.currentIndexChanged.connect(self.refresh)
         self.tag_filter.currentIndexChanged.connect(self.refresh)
         self.results_list.currentItemChanged.connect(self._selection_changed)
         self.results_list.itemActivated.connect(self._open_item)
@@ -204,6 +224,7 @@ class PredictionBrowserScreen(QWidget):
                 self.search_input.text(),
                 status=self._selected_status(),
                 tag=selected_tag,
+                prediction_type=self._selected_prediction_type(),
             )
             if selected_tag is not None and selected_tag.casefold() not in {
                 item.casefold() for item in snapshot.available_tags
@@ -214,6 +235,7 @@ class PredictionBrowserScreen(QWidget):
                     self.search_input.text(),
                     status=self._selected_status(),
                     tag=None,
+                    prediction_type=self._selected_prediction_type(),
                 )
         except ApplicationError as error:
             if self._loaded_snapshot is None:
@@ -239,8 +261,13 @@ class PredictionBrowserScreen(QWidget):
         """Restore the unfiltered archive and query once."""
 
         self.search_input.clear()
-        with QSignalBlocker(self.status_filter), QSignalBlocker(self.tag_filter):
+        with (
+            QSignalBlocker(self.status_filter),
+            QSignalBlocker(self.type_filter),
+            QSignalBlocker(self.tag_filter),
+        ):
             self.status_filter.setCurrentIndex(0)
+            self.type_filter.setCurrentIndex(0)
             self.tag_filter.setCurrentIndex(0)
         self.refresh()
 
@@ -305,10 +332,15 @@ class PredictionBrowserScreen(QWidget):
         value = self.tag_filter.currentData()
         return None if value is None else str(value)
 
+    def _selected_prediction_type(self) -> PredictionType | None:
+        value = self.type_filter.currentData()
+        return None if value is None else PredictionType(str(value))
+
     def _has_active_filters(self) -> bool:
         return bool(
             self.search_input.text().strip()
             or self._selected_status() is not None
+            or self._selected_prediction_type() is not None
             or self._selected_tag() is not None
         )
 
@@ -327,7 +359,7 @@ class PredictionBrowserScreen(QWidget):
     def _open_item(self, item: QListWidgetItem) -> None:
         prediction_id = int(item.data(Qt.ItemDataRole.UserRole))
         try:
-            prediction = self._operations.get_prediction(prediction_id)
+            prediction = self._operations.get_prediction_for_navigation(prediction_id)
         except ApplicationError as error:
             self.error_label.setText(str(error))
             self.error_label.setHidden(False)
@@ -340,7 +372,7 @@ class PredictionBrowserScreen(QWidget):
         tags = "" if not prediction.tags else f"\nTags: {', '.join(prediction.tags)}"
         return (
             f"{prediction.question}\n"
-            f"{prediction.probability_percent}%  |  {prediction.status.value.upper()}"
+            f"{_forecast_summary(prediction)}  |  {prediction.status.value.upper()}"
             f"{tags}\n"
             f"Forecast updated {_format_local_timestamp(prediction.latest_revision_at)}"
         )
@@ -351,7 +383,7 @@ class PredictionBrowserScreen(QWidget):
             "" if not prediction.tags else f" Tags: {', '.join(prediction.tags)}."
         )
         return (
-            f"{prediction.probability_percent} percent. "
+            f"{_forecast_summary(prediction)}. "
             f"{prediction.status.value}. Forecast updated "
             f"{_format_local_timestamp(prediction.latest_revision_at)}.{tag_text}"
         )
@@ -359,3 +391,26 @@ class PredictionBrowserScreen(QWidget):
 
 def _format_local_timestamp(value: datetime) -> str:
     return value.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+
+
+def _forecast_summary(prediction: PredictionBrowserItem) -> str:
+    """Return an unambiguous compact current-forecast summary for a result."""
+
+    if prediction.prediction_type is PredictionType.BINARY:
+        if prediction.probability_percent is None:
+            raise ValueError("A Binary browser row requires a probability.")
+        return f"BINARY  {prediction.probability_percent}%"
+    if (
+        prediction.numeric_lower_bound is None
+        or prediction.numeric_median_estimate is None
+        or prediction.numeric_upper_bound is None
+        or prediction.numeric_confidence_percent is None
+        or prediction.numeric_unit is None
+    ):
+        raise ValueError("A Numeric browser row requires complete interval data.")
+    return (
+        f"NUMERIC  {prediction.numeric_confidence_percent}% interval: "
+        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
+        f"{prediction.numeric_unit}; median: "
+        f"{prediction.numeric_median_estimate} {prediction.numeric_unit}"
+    )

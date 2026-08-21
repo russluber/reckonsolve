@@ -673,6 +673,56 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     runtime.close()
 
 
+def test_dashboard_and_browser_open_type_aware_numeric_predictions(
+    qtbot,
+    tmp_path,
+) -> None:
+    runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
+    qtbot.addWidget(runtime.window)
+    operations = PredictionOperations(runtime.database)
+    operations.create_prediction("Will the Binary row remain clear?", 60)
+    numeric = operations.create_numeric_prediction(
+        "How many Numeric days?",
+        "days",
+        1,
+        "2.0",
+        "4.0",
+        "8.0",
+        80,
+    )
+    runtime.window.show()
+
+    runtime.window.navigate_to("New Prediction")
+    runtime.window.navigate_to("Dashboard")
+    dashboard_row = runtime.window.findChild(
+        QPushButton,
+        f"dashboardOpenPrediction{numeric.prediction_id}",
+    )
+    assert dashboard_row is not None
+    assert "NUMERIC" in dashboard_row.text()
+    assert "80% interval: 2.0–8.0 days; median: 4.0 days" in dashboard_row.text()
+    qtbot.mouseClick(dashboard_row, Qt.MouseButton.LeftButton)
+    assert runtime.window.current_screen_name == "Prediction Detail"
+    assert runtime.window.findChild(QLabel, "numericPredictionQuestion").text() == (
+        numeric.question
+    )
+
+    runtime.window.navigate_to("Predictions")
+    type_filter = runtime.window.findChild(QComboBox, "predictionTypeFilter")
+    results = runtime.window.findChild(QListWidget, "predictionBrowserResults")
+    assert type_filter is not None
+    assert results is not None
+    type_filter.setCurrentIndex(type_filter.findData("numeric"))
+    assert results.count() == 1
+    assert "NUMERIC" in results.item(0).text()
+    results.itemActivated.emit(results.item(0))
+    assert runtime.window.current_screen_name == "Prediction Detail"
+    assert runtime.window.findChild(QLabel, "numericPredictionQuestion").text() == (
+        numeric.question
+    )
+    runtime.close()
+
+
 def test_numeric_resolution_ui_persists_exact_terminal_information(
     qtbot,
     tmp_path,

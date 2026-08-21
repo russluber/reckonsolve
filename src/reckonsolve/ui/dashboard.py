@@ -28,6 +28,7 @@ from reckonsolve.domain.attention import (
     DashboardPrediction,
     DashboardSnapshot,
 )
+from reckonsolve.domain.predictions import PredictionType
 from reckonsolve.domain.transfer import (
     BackupResult,
     CsvExportResult,
@@ -48,7 +49,10 @@ class DashboardOperations(Protocol):
     def get_dashboard(self) -> DashboardSnapshot:
         """Return the current overlapping Dashboard buckets."""
 
-    def get_prediction(self, prediction_id: int) -> DashboardPredictionSnapshot:
+    def get_prediction_for_navigation(
+        self,
+        prediction_id: int,
+    ) -> DashboardPredictionSnapshot:
         """Return one current prediction for Detail navigation."""
 
 
@@ -94,8 +98,8 @@ class DashboardScreen(QWidget):
         title.setObjectName("dashboardScreenTitle")
 
         introduction = QLabel(
-            "Your active forecasts, with attention signals derived from the latest "
-            "forecast revision.",
+            "Your active Binary and Numeric forecasts, with attention signals "
+            "derived from the latest forecast revision.",
             self,
         )
         introduction.setObjectName("dashboardIntroduction")
@@ -239,7 +243,7 @@ class DashboardScreen(QWidget):
 
     def _open_prediction(self, prediction_id: int) -> None:
         try:
-            prediction = self._operations.get_prediction(prediction_id)
+            prediction = self._operations.get_prediction_for_navigation(prediction_id)
         except ApplicationError as error:
             self.error_label.setText(str(error))
             self.error_label.setHidden(False)
@@ -256,7 +260,7 @@ class DashboardScreen(QWidget):
             badges.append("READY TO RESOLVE")
         return (
             f"{prediction.question}\n"
-            f"{prediction.probability_percent}%  |  {'  |  '.join(badges)}\n"
+            f"{_forecast_summary(prediction)}  |  {'  |  '.join(badges)}\n"
             f"Forecast last updated {_format_local_timestamp(prediction.latest_revision_at)}"
         )
 
@@ -268,7 +272,7 @@ class DashboardScreen(QWidget):
         if prediction.ready_to_resolve:
             classifications.append("ready to resolve")
         return (
-            f"{prediction.probability_percent} percent. "
+            f"{_forecast_summary(prediction)}. "
             f"{', '.join(classifications)}. Forecast last updated "
             f"{_format_local_timestamp(prediction.latest_revision_at)}."
         )
@@ -526,3 +530,26 @@ class AttentionSettingsScreen(QWidget):
 
 def _format_local_timestamp(value: datetime) -> str:
     return value.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+
+
+def _forecast_summary(prediction: DashboardPrediction) -> str:
+    """Return an unambiguous compact current-forecast summary for a row."""
+
+    if prediction.prediction_type is PredictionType.BINARY:
+        if prediction.probability_percent is None:
+            raise ValueError("A Binary Dashboard row requires a probability.")
+        return f"BINARY  {prediction.probability_percent}%"
+    if (
+        prediction.numeric_lower_bound is None
+        or prediction.numeric_median_estimate is None
+        or prediction.numeric_upper_bound is None
+        or prediction.numeric_confidence_percent is None
+        or prediction.numeric_unit is None
+    ):
+        raise ValueError("A Numeric Dashboard row requires complete interval data.")
+    return (
+        f"NUMERIC  {prediction.numeric_confidence_percent}% interval: "
+        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
+        f"{prediction.numeric_unit}; median: "
+        f"{prediction.numeric_median_estimate} {prediction.numeric_unit}"
+    )

@@ -669,6 +669,11 @@ It should surface counts and useful entries for:
 - Ready to Resolve; and
 - Locked.
 
+Each Dashboard row must identify its forecast type. A Binary row shows its
+current Yes probability. A Numeric row shows its confidence interval, median,
+and unit; it must not resemble a percentage-only Binary forecast. Selecting
+either row opens the matching type-specific Prediction Detail view.
+
 ### 16.1 Needs Attention
 
 In v0.1, a nonterminal prediction needs attention when its latest forecast revision is at least the configured stale threshold old. Freshness uses elapsed time between the latest ForecastRevision's canonical UTC instant and the current canonical UTC instant; local display formatting does not change that duration.
@@ -702,6 +707,7 @@ The Predictions screen provides:
 
 - text search over question text;
 - status filter;
+- forecast-type filter;
 - tag filter;
 - a clear empty state; and
 - navigation to Prediction Detail.
@@ -709,7 +715,12 @@ The Predictions screen provides:
 At minimum, filters cover:
 
 - All, Open, Locked, Resolved, and Invalid; and
+- All types, Binary, and Numeric; and
 - individual tags.
+
+Search, status, forecast-type, and tag filters combine using logical AND. Each
+result identifies Binary or Numeric forecast type and presents the matching
+current forecast summary without obscuring a Numeric unit or interval.
 
 Full-text search across rationales, Background, and journal entries is Later unless it is nearly free within the chosen architecture.
 
@@ -1270,10 +1281,15 @@ Acceptance demonstration:
 
 #### Milestone 17: Type-aware Dashboard and Predictions browser
 
-- Render concise binary and numeric summaries without obscuring forecast type or unit.
-- Make search, status/tag filters, selection, and detail navigation work for both types.
-- Include Numeric Predictions correctly in Needs Attention, Ready to Resolve, and Locked sections.
-- Add a forecast-type filter where it materially reduces ambiguity.
+- Render concise explicitly labeled Binary and Numeric summaries; Numeric rows
+  show confidence interval, median, and unit rather than a percentage-only
+  surrogate.
+- Make search, status/type/tag filters, selection, and detail navigation work
+  for both types.
+- Include Numeric Predictions correctly in Needs Attention, Ready to Resolve,
+  and Locked sections.
+- Add the All types/Binary/Numeric forecast-type filter and combine it with
+  search, status, and tag filtering.
 
 #### Milestone 18: Numeric analytics
 

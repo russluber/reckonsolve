@@ -5,7 +5,11 @@ import pytest
 from reckonsolve.application.errors import ValidationError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
-from reckonsolve.domain.predictions import BinaryOutcome, PredictionStatus
+from reckonsolve.domain.predictions import (
+    BinaryOutcome,
+    PredictionStatus,
+    PredictionType,
+)
 
 NOW = datetime(2026, 8, 20, 18, 30, tzinfo=UTC)
 
@@ -239,4 +243,79 @@ def test_new_forecast_revision_resets_needs_attention(tmp_path) -> None:
         item.prediction_id
         for item in operations.get_dashboard().needs_attention_predictions
     }
+    database.close()
+
+
+def test_dashboard_includes_type_aware_numeric_rows_and_attention_buckets(
+    tmp_path,
+) -> None:
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    numeric = PredictionOperations(
+        database,
+        FixedClock(NOW - timedelta(days=20)),
+        UTC,
+    ).create_numeric_prediction(
+        "How many Numeric days remain?",
+        "days",
+        1,
+        "2.0",
+        "4.0",
+        "8.0",
+        80,
+        forecast_deadline=(NOW - timedelta(days=20)).date(),
+        expected_resolution=(NOW - timedelta(days=19)).date(),
+    )
+    binary = _create(database, "Fresh Binary companion", 1)
+    resolved_numeric = PredictionOperations(
+        database, FixedClock(NOW), UTC
+    ).create_numeric_prediction(
+        "How many terminal Numeric days?",
+        "days",
+        0,
+        1,
+        2,
+        3,
+        80,
+    )
+    PredictionOperations(database, FixedClock(NOW), UTC).resolve_numeric_prediction(
+        resolved_numeric.prediction_id,
+        2,
+        expected_revision_id=resolved_numeric.current_revision.revision_id,
+        expected_metadata_version=resolved_numeric.metadata_version,
+    )
+
+    snapshot = PredictionOperations(database, FixedClock(NOW), UTC).get_dashboard()
+
+    numeric_row = next(
+        item
+        for item in snapshot.locked_predictions
+        if item.prediction_id == numeric.prediction_id
+    )
+    assert numeric_row.prediction_type is PredictionType.NUMERIC
+    assert numeric_row.probability_percent is None
+    assert str(numeric_row.numeric_lower_bound) == "2.0"
+    assert str(numeric_row.numeric_median_estimate) == "4.0"
+    assert str(numeric_row.numeric_upper_bound) == "8.0"
+    assert numeric_row.numeric_confidence_percent == 80
+    assert numeric_row.numeric_unit == "days"
+    assert numeric_row.needs_attention
+    assert numeric_row.ready_to_resolve
+    assert numeric.prediction_id in {
+        item.prediction_id for item in snapshot.needs_attention_predictions
+    }
+    assert numeric.prediction_id in {
+        item.prediction_id for item in snapshot.ready_to_resolve_predictions
+    }
+    assert binary.prediction_id in {
+        item.prediction_id for item in snapshot.open_predictions
+    }
+    assert all(
+        resolved_numeric.prediction_id not in {item.prediction_id for item in bucket}
+        for bucket in (
+            snapshot.open_predictions,
+            snapshot.needs_attention_predictions,
+            snapshot.ready_to_resolve_predictions,
+            snapshot.locked_predictions,
+        )
+    )
     database.close()
