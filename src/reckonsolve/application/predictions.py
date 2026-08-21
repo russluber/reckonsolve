@@ -4,6 +4,7 @@ import csv
 import sqlite3
 from dataclasses import replace
 from datetime import date, datetime, tzinfo
+from decimal import Decimal
 from pathlib import Path
 from zipfile import BadZipFile
 
@@ -11,6 +12,7 @@ from reckonsolve.analytics import AnalyticsSnapshot, summarize_analytics
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
+from reckonsolve.data.numeric_predictions import NumericPredictionRepository
 from reckonsolve.data.predictions import (
     ForecastContextChangedError,
     ForecastRevisionDisallowedError,
@@ -38,14 +40,18 @@ from reckonsolve.domain.browser import PredictionBrowserSnapshot
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
+    FixedPrecisionValue,
     ForecastRevision,
     JournalTimelineEvent,
     NewForecastRevision,
     NewInvalidation,
     NewJournalCorrection,
     NewJournalEntry,
+    NewNumericForecastRevision,
+    NewNumericPrediction,
     NewPrediction,
     NewResolution,
+    NumericPrediction,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
@@ -83,7 +89,7 @@ from .errors import (
 
 
 class PredictionOperations:
-    """Coordinate complete prediction-creation and current-detail use cases."""
+    """Coordinate Binary workflows and the staged Numeric creation slice."""
 
     def __init__(
         self,
@@ -92,6 +98,7 @@ class PredictionOperations:
         local_timezone: tzinfo | None = None,
     ) -> None:
         self._repository = PredictionRepository(database)
+        self._numeric_repository = NumericPredictionRepository(database)
         self._analytics_repository = AnalyticsRepository(database)
         self._settings_repository = SettingsRepository(database)
         self._transfer_repository = DataTransferRepository(database)
@@ -139,6 +146,75 @@ class PredictionOperations:
             )
         return self._with_derived_status(
             self._repository.create_prediction(new_prediction, created_at),
+            created_at,
+        )
+
+    def create_numeric_prediction(
+        self,
+        question: str,
+        unit: str,
+        decimal_places: int,
+        lower_bound: Decimal | int | str,
+        median_estimate: Decimal | int | str,
+        upper_bound: Decimal | int | str,
+        confidence_percent: int,
+        *,
+        rationale: str | None = None,
+        background: str | None = None,
+        resolution_criteria: str | None = None,
+        forecast_deadline: date | None = None,
+        expected_resolution: date | None = None,
+        tags: tuple[str, ...] = (),
+    ) -> NumericPrediction:
+        """Create a complete Numeric Prediction and first interval atomically."""
+
+        try:
+            revision = NewNumericForecastRevision(
+                lower_bound=FixedPrecisionValue.from_value(
+                    lower_bound,
+                    decimal_places,
+                    field="lower_bound",
+                ),
+                median_estimate=FixedPrecisionValue.from_value(
+                    median_estimate,
+                    decimal_places,
+                    field="median_estimate",
+                ),
+                upper_bound=FixedPrecisionValue.from_value(
+                    upper_bound,
+                    decimal_places,
+                    field="upper_bound",
+                ),
+                confidence_percent=confidence_percent,
+                rationale=rationale,
+            )
+            new_prediction = NewNumericPrediction(
+                question=question,
+                unit=unit,
+                decimal_places=decimal_places,
+                initial_revision=revision,
+                background=background,
+                resolution_criteria=resolution_criteria,
+                forecast_deadline=forecast_deadline,
+                expected_resolution=expected_resolution,
+                tags=tags,
+            )
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+
+        created_at = as_utc(self._clock.now())
+        current_date = created_at.astimezone(self._local_timezone).date()
+        if (
+            new_prediction.forecast_deadline is not None
+            and new_prediction.forecast_deadline < current_date
+        ):
+            raise ValidationError(
+                "Forecast Deadline cannot be earlier than today when creating a "
+                "prediction.",
+                field="forecast_deadline",
+            )
+        return self._with_derived_numeric_status(
+            self._numeric_repository.create_prediction(new_prediction, created_at),
             created_at,
         )
 
@@ -487,6 +563,15 @@ class PredictionOperations:
         now = as_utc(self._clock.now())
         return self._with_derived_status(detail, now)
 
+    def get_latest_numeric_prediction(self) -> NumericPrediction | None:
+        """Return the most recently created Numeric Prediction, if one exists."""
+
+        detail = self._numeric_repository.get_latest_prediction()
+        if detail is None:
+            return None
+        now = as_utc(self._clock.now())
+        return self._with_derived_numeric_status(detail, now)
+
     def get_dashboard(self) -> DashboardSnapshot:
         """Return deterministic overlapping action buckets for nonterminal work."""
 
@@ -718,6 +803,14 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         return self._with_derived_status(detail, as_utc(self._clock.now()))
 
+    def get_numeric_prediction(self, prediction_id: int) -> NumericPrediction:
+        """Return one Numeric Prediction with current interval and metadata."""
+
+        detail = self._numeric_repository.get_prediction(prediction_id)
+        if detail is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_numeric_status(detail, as_utc(self._clock.now()))
+
     def update_metadata(
         self,
         prediction_id: int,
@@ -809,6 +902,20 @@ class PredictionOperations:
             status=status,
             deletion_allowed=(
                 detail.deletion_allowed and status is PredictionStatus.OPEN
+            ),
+        )
+
+    def _with_derived_numeric_status(
+        self,
+        detail: NumericPrediction,
+        now: datetime,
+    ) -> NumericPrediction:
+        return replace(
+            detail,
+            status=display_status(
+                detail.status,
+                detail.forecast_deadline,
+                now.astimezone(self._local_timezone).date(),
             ),
         )
 

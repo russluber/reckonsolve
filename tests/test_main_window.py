@@ -46,7 +46,9 @@ from reckonsolve.domain.browser import (
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
+    FixedPrecisionValue,
     PredictionStatus,
+    PredictionType,
 )
 from reckonsolve.domain.transfer import (
     BackupResult,
@@ -121,6 +123,37 @@ class FakeForecastRevision:
 
 
 @dataclass(frozen=True, slots=True)
+class FakeNumericRevision:
+    revision_id: int
+    prediction_id: int
+    lower_bound: FixedPrecisionValue
+    median_estimate: FixedPrecisionValue
+    upper_bound: FixedPrecisionValue
+    confidence_percent: int
+    sequence: int
+    created_at: datetime
+    rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FakeNumericPrediction:
+    prediction_id: int
+    question: str
+    unit: str
+    decimal_places: int
+    status: PredictionStatus
+    created_at: datetime
+    updated_at: datetime
+    current_revision: FakeNumericRevision
+    background: str | None = None
+    resolution_criteria: str | None = None
+    forecast_deadline: date | None = None
+    expected_resolution: date | None = None
+    tags: tuple[str, ...] = ()
+    metadata_version: int = 1
+
+
+@dataclass(frozen=True, slots=True)
 class FakeJournalCorrection:
     correction_id: int
     body: str
@@ -156,6 +189,23 @@ class FakeJournalTimelineEvent:
 class CreatePredictionCall:
     question: str
     probability_percent: int
+    rationale: str | None
+    background: str | None
+    resolution_criteria: str | None
+    forecast_deadline: date | None
+    expected_resolution: date | None
+    tags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CreateNumericPredictionCall:
+    question: str
+    unit: str
+    decimal_places: int
+    lower_bound: str
+    median_estimate: str
+    upper_bound: str
+    confidence_percent: int
     rationale: str | None
     background: str | None
     resolution_criteria: str | None
@@ -233,6 +283,9 @@ class FakePredictionOperations:
         self.latest = latest
         self.create_calls: list[CreatePredictionCall] = []
         self.create_error: ApplicationError | None = None
+        self.numeric_latest: FakeNumericPrediction | None = None
+        self.numeric_create_calls: list[CreateNumericPredictionCall] = []
+        self.numeric_create_error: ApplicationError | None = None
         self.revise_calls: list[ReviseForecastCall] = []
         self.revise_error: ApplicationError | None = None
         self.revisions: list[FakeForecastRevision] = []
@@ -343,6 +396,74 @@ class FakePredictionOperations:
                 rationale=prediction.current_rationale,
             )
         ]
+        return prediction
+
+    def create_numeric_prediction(
+        self,
+        question: str,
+        unit: str,
+        decimal_places: int,
+        lower_bound: object,
+        median_estimate: object,
+        upper_bound: object,
+        confidence_percent: int,
+        *,
+        rationale: str | None = None,
+        background: str | None = None,
+        resolution_criteria: str | None = None,
+        forecast_deadline: date | None = None,
+        expected_resolution: date | None = None,
+        tags: tuple[str, ...] = (),
+    ) -> FakeNumericPrediction:
+        self.numeric_create_calls.append(
+            CreateNumericPredictionCall(
+                question=question,
+                unit=unit,
+                decimal_places=decimal_places,
+                lower_bound=str(lower_bound),
+                median_estimate=str(median_estimate),
+                upper_bound=str(upper_bound),
+                confidence_percent=confidence_percent,
+                rationale=rationale,
+                background=background,
+                resolution_criteria=resolution_criteria,
+                forecast_deadline=forecast_deadline,
+                expected_resolution=expected_resolution,
+                tags=tags,
+            )
+        )
+        if self.numeric_create_error is not None:
+            raise self.numeric_create_error
+        revision = FakeNumericRevision(
+            revision_id=1,
+            prediction_id=99,
+            lower_bound=FixedPrecisionValue.from_value(lower_bound, decimal_places),
+            median_estimate=FixedPrecisionValue.from_value(
+                median_estimate,
+                decimal_places,
+            ),
+            upper_bound=FixedPrecisionValue.from_value(upper_bound, decimal_places),
+            confidence_percent=confidence_percent,
+            sequence=1,
+            created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+            rationale=(rationale or "").strip() or None,
+        )
+        prediction = FakeNumericPrediction(
+            prediction_id=99,
+            question=question.strip(),
+            unit=unit.strip(),
+            decimal_places=decimal_places,
+            status=PredictionStatus.OPEN,
+            created_at=revision.created_at,
+            updated_at=revision.created_at,
+            current_revision=revision,
+            background=(background or "").strip() or None,
+            resolution_criteria=(resolution_criteria or "").strip() or None,
+            forecast_deadline=forecast_deadline,
+            expected_resolution=expected_resolution,
+            tags=tags,
+        )
+        self.numeric_latest = prediction
         return prediction
 
     def revise_forecast(
@@ -636,11 +757,22 @@ class FakePredictionOperations:
     def get_latest_prediction(self) -> FakePrediction | None:
         return self.latest
 
+    def get_latest_numeric_prediction(self) -> FakeNumericPrediction | None:
+        return self.numeric_latest
+
     def get_prediction(self, prediction_id: int) -> FakePrediction:
         self.get_calls.append(prediction_id)
         if self.latest is None or self.latest.prediction_id != prediction_id:
             raise ApplicationError("Prediction not found.")
         return self.latest
+
+    def get_numeric_prediction(self, prediction_id: int) -> FakeNumericPrediction:
+        if (
+            self.numeric_latest is None
+            or self.numeric_latest.prediction_id != prediction_id
+        ):
+            raise ApplicationError("Numeric Prediction not found.")
+        return self.numeric_latest
 
     def update_metadata(
         self,
@@ -1701,6 +1833,185 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
     )
     assert not more_details.isChecked()
     assert more_details_content.isHidden()
+
+
+def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detail(
+    qtbot: QtBot,
+    window: MainWindow,
+    operations: FakePredictionOperations,
+) -> None:
+    window.show()
+    window.navigate_to("New Prediction")
+    prediction_type = _required_child(window, QComboBox, "predictionTypeInput")
+    binary_fields = _required_child(window, QWidget, "binaryForecastFields")
+    numeric_fields = _required_child(window, QWidget, "numericForecastFields")
+
+    assert prediction_type.currentData() == PredictionType.BINARY.value
+    assert not binary_fields.isHidden()
+    assert numeric_fields.isHidden()
+    prediction_type.setCurrentIndex(
+        prediction_type.findData(PredictionType.NUMERIC.value)
+    )
+    assert binary_fields.isHidden()
+    assert not numeric_fields.isHidden()
+
+    _required_child(window, QLineEdit, "questionInput").setText(
+        "How many days until the signed offer receives a response?"
+    )
+    _required_child(window, QLineEdit, "numericUnitInput").setText("days")
+    _required_child(window, QSpinBox, "numericPrecisionInput").setValue(1)
+    _required_child(window, QLineEdit, "numericLowerBoundInput").setText("3.0")
+    _required_child(window, QLineEdit, "numericMedianEstimateInput").setText("7.5")
+    _required_child(window, QLineEdit, "numericUpperBoundInput").setText("21.0")
+    confidence = _required_child(window, QSpinBox, "numericConfidenceInput")
+    assert confidence.minimum() == 1
+    assert confidence.maximum() == 99
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "numericConfidenceShortcut90"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    _required_child(window, QGroupBox, "newPredictionMoreDetailsGroup").setChecked(True)
+    _required_child(window, QPlainTextEdit, "initialRationaleInput").setPlainText(
+        "The normal response window is two weeks."
+    )
+    _required_child(window, QPlainTextEdit, "initialBackgroundInput").setPlainText(
+        "The offer was sent this morning."
+    )
+    _required_child(
+        window,
+        QPlainTextEdit,
+        "initialResolutionCriteriaInput",
+    ).setPlainText("Count complete calendar days before the first reply.")
+    _required_child(window, QCheckBox, "initialForecastDeadlineToggle").setChecked(True)
+    _required_child(window, QDateEdit, "initialForecastDeadlineInput").setDate(
+        QDate(2026, 8, 31)
+    )
+    _required_child(window, QCheckBox, "initialExpectedResolutionToggle").setChecked(
+        True
+    )
+    _required_child(window, QDateEdit, "initialExpectedResolutionInput").setDate(
+        QDate(2026, 9, 20)
+    )
+    _required_child(window, QLineEdit, "initialTagsInput").setText("offer, timing")
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "createPredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.numeric_create_calls == [
+        CreateNumericPredictionCall(
+            question="How many days until the signed offer receives a response?",
+            unit="days",
+            decimal_places=1,
+            lower_bound="3.0",
+            median_estimate="7.5",
+            upper_bound="21.0",
+            confidence_percent=90,
+            rationale="The normal response window is two weeks.",
+            background="The offer was sent this morning.",
+            resolution_criteria="Count complete calendar days before the first reply.",
+            forecast_deadline=date(2026, 8, 31),
+            expected_resolution=date(2026, 9, 20),
+            tags=("offer", "timing"),
+        )
+    ]
+    assert operations.create_calls == []
+    assert window.current_screen_name == "Prediction Detail"
+    assert _required_child(window, QLabel, "numericPredictionQuestion").text() == (
+        "How many days until the signed offer receives a response?"
+    )
+    assert _required_child(window, QLabel, "numericCurrentInterval").text() == (
+        "90% interval: 3.0 to 21.0 days"
+    )
+    assert _required_child(window, QLabel, "numericCurrentMedian").text() == (
+        "Median estimate: 7.5 days"
+    )
+    assert _required_child(window, QLabel, "numericPredictionStatus").text() == "OPEN"
+    assert _required_child(window, QLabel, "numericForecastDeadlineValue").text() == (
+        "Aug 31, 2026"
+    )
+    assert _required_child(window, QLabel, "numericExpectedResolutionValue").text() == (
+        "Sep 20, 2026"
+    )
+    assert _required_child(window, QLabel, "numericInitialRationaleValue").text() == (
+        "The normal response window is two weeks."
+    )
+    assert (
+        "later v0.2 milestones"
+        in _required_child(
+            window,
+            QLabel,
+            "numericPredictionNextSteps",
+        ).text()
+    )
+
+    window.navigate_to("New Prediction")
+    assert prediction_type.currentData() == PredictionType.BINARY.value
+    assert _required_child(window, QLineEdit, "numericUnitInput").text() == ""
+    assert _required_child(window, QSpinBox, "numericConfidenceInput").value() == 80
+
+
+def test_numeric_creation_failure_keeps_the_form_values_for_correction(
+    qtbot: QtBot,
+    window: MainWindow,
+    operations: FakePredictionOperations,
+) -> None:
+    operations.numeric_create_error = ApplicationError(
+        "Numeric forecasts require lower bound <= median <= upper bound."
+    )
+    window.navigate_to("New Prediction")
+    prediction_type = _required_child(window, QComboBox, "predictionTypeInput")
+    prediction_type.setCurrentIndex(
+        prediction_type.findData(PredictionType.NUMERIC.value)
+    )
+    _required_child(window, QLineEdit, "questionInput").setText("How many days?")
+    _required_child(window, QLineEdit, "numericUnitInput").setText("days")
+    _required_child(window, QLineEdit, "numericLowerBoundInput").setText("8")
+    _required_child(window, QLineEdit, "numericMedianEstimateInput").setText("3")
+    _required_child(window, QLineEdit, "numericUpperBoundInput").setText("10")
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "createPredictionButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert window.current_screen_name == "New Prediction"
+    assert _required_child(window, QLabel, "predictionFormError").text() == (
+        "Numeric forecasts require lower bound <= median <= upper bound."
+    )
+    assert (
+        _required_child(window, QLineEdit, "numericMedianEstimateInput").text() == "3"
+    )
+    assert _required_child(window, QLineEdit, "numericUnitInput").text() == "days"
+
+
+def test_prediction_detail_prefers_the_newer_numeric_prediction_when_times_tie(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations(FakePrediction(7, "Binary first?", 60))
+    numeric = operations.create_numeric_prediction(
+        "Numeric later?",
+        "days",
+        0,
+        1,
+        2,
+        3,
+        80,
+    )
+    operations.numeric_latest = replace(
+        numeric,
+        created_at=operations.latest.created_at,
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    window.navigate_to("Prediction Detail")
+
+    assert _required_child(window, QLabel, "numericPredictionQuestion").text() == (
+        "Numeric later?"
+    )
 
 
 def test_more_details_date_controls_are_visually_unset_until_enabled(

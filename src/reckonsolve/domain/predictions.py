@@ -214,6 +214,11 @@ class NewNumericPrediction:
     unit: str
     decimal_places: int
     initial_revision: NewNumericForecastRevision
+    background: str | None = None
+    resolution_criteria: str | None = None
+    forecast_deadline: date | None = None
+    expected_resolution: date | None = None
+    tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "question", _required_text(self.question, "question"))
@@ -229,6 +234,19 @@ class NewNumericPrediction:
                 "Numeric forecast values must match the Prediction precision.",
                 field="decimal_places",
             )
+        object.__setattr__(
+            self,
+            "background",
+            _optional_text(self.background, "background"),
+        )
+        object.__setattr__(
+            self,
+            "resolution_criteria",
+            _optional_text(self.resolution_criteria, "resolution_criteria"),
+        )
+        _validate_date_only(self.forecast_deadline, "forecast_deadline")
+        _validate_date_only(self.expected_resolution, "expected_resolution")
+        object.__setattr__(self, "tags", _normalize_tags(self.tags))
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,6 +389,12 @@ class NumericPrediction:
     created_at: datetime
     updated_at: datetime
     current_revision: NumericForecastRevision
+    background: str | None = None
+    resolution_criteria: str | None = None
+    forecast_deadline: date | None = None
+    expected_resolution: date | None = None
+    tags: tuple[str, ...] = ()
+    metadata_version: int = 1
 
 
 @dataclass(frozen=True, slots=True)

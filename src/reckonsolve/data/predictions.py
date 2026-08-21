@@ -137,7 +137,7 @@ class PredictionRepository:
             if prediction_id is None:
                 raise sqlite3.DatabaseError("SQLite did not return a prediction ID.")
 
-            _replace_tags(connection, prediction_id, new_prediction.tags)
+            replace_tags(connection, prediction_id, new_prediction.tags)
             connection.execute(
                 """
                 INSERT INTO forecast_revisions (
@@ -163,7 +163,7 @@ class PredictionRepository:
                 )
             detail = _map_prediction_detail(
                 row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
 
         return detail
@@ -187,7 +187,7 @@ class PredictionRepository:
                 return None
             current = _map_prediction_detail(
                 row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
             if (
                 current.current_revision_id != expected_revision_id
@@ -234,7 +234,7 @@ class PredictionRepository:
                 )
             detail = _map_prediction_detail(
                 updated_row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
 
         return detail
@@ -405,7 +405,7 @@ class PredictionRepository:
                 return None
             current = _map_prediction_detail(
                 row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
             if (
                 current.current_revision_id != expected_revision_id
@@ -445,7 +445,7 @@ class PredictionRepository:
                 )
             updated = _map_prediction_detail(
                 updated_row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
 
         return updated
@@ -467,7 +467,7 @@ class PredictionRepository:
                 return None
             current = _map_prediction_detail(
                 row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
             if (
                 current.current_revision_id != expected_revision_id
@@ -501,7 +501,7 @@ class PredictionRepository:
                 )
             updated = _map_prediction_detail(
                 updated_row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
 
         return updated
@@ -654,7 +654,7 @@ class PredictionRepository:
                 if row is None
                 else _map_prediction_detail(
                     row,
-                    _select_tags(connection, int(row["prediction_id"])),
+                    select_tags(connection, int(row["prediction_id"])),
                 )
             )
 
@@ -776,7 +776,7 @@ class PredictionRepository:
                 if row is None
                 else _map_prediction_detail(
                     row,
-                    _select_tags(connection, prediction_id),
+                    select_tags(connection, prediction_id),
                 )
             )
 
@@ -800,7 +800,7 @@ class PredictionRepository:
                 return None
             current = _map_prediction_detail(
                 row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
             if (
                 current.metadata_version != expected_metadata_version
@@ -837,7 +837,7 @@ class PredictionRepository:
             )
             if connection.execute("SELECT changes()").fetchone()[0] != 1:
                 raise PredictionChangedError
-            _replace_tags(connection, prediction_id, update.tags)
+            replace_tags(connection, prediction_id, update.tags)
             if definition_fields:
                 connection.execute(
                     """
@@ -872,7 +872,7 @@ class PredictionRepository:
                 )
             detail = _map_prediction_detail(
                 updated_row,
-                _select_tags(connection, prediction_id),
+                select_tags(connection, prediction_id),
             )
 
         return detail
@@ -1125,7 +1125,7 @@ def _timeline_sort_key(event: TimelineEvent) -> tuple[object, ...]:
     )
 
 
-def _select_tags(
+def select_tags(
     connection: sqlite3.Connection,
     prediction_id: int,
 ) -> tuple[str, ...]:
@@ -1142,7 +1142,7 @@ def _select_tags(
     return tuple(str(row[0]) for row in rows)
 
 
-def _replace_tags(
+def replace_tags(
     connection: sqlite3.Connection,
     prediction_id: int,
     tags: tuple[str, ...],

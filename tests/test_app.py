@@ -508,6 +508,75 @@ def test_create_close_reopen_displays_persisted_prediction(qtbot, tmp_path) -> N
     second_runtime.close()
 
 
+def test_numeric_create_close_reopen_displays_the_complete_interval(
+    qtbot, tmp_path
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    first_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(first_runtime.window)
+    first_runtime.window.show()
+    first_runtime.window.navigate_to("New Prediction")
+
+    prediction_type = first_runtime.window.findChild(QComboBox, "predictionTypeInput")
+    question = first_runtime.window.findChild(QLineEdit, "questionInput")
+    unit = first_runtime.window.findChild(QLineEdit, "numericUnitInput")
+    precision = first_runtime.window.findChild(QSpinBox, "numericPrecisionInput")
+    lower = first_runtime.window.findChild(QLineEdit, "numericLowerBoundInput")
+    median = first_runtime.window.findChild(QLineEdit, "numericMedianEstimateInput")
+    upper = first_runtime.window.findChild(QLineEdit, "numericUpperBoundInput")
+    confidence = first_runtime.window.findChild(QSpinBox, "numericConfidenceInput")
+    create = first_runtime.window.findChild(QPushButton, "createPredictionButton")
+    assert prediction_type is not None
+    assert question is not None
+    assert unit is not None
+    assert precision is not None
+    assert lower is not None
+    assert median is not None
+    assert upper is not None
+    assert confidence is not None
+    assert create is not None
+    prediction_type.setCurrentIndex(prediction_type.findData("numeric"))
+    question.setText("How many pages will the manuscript contain?")
+    unit.setText("pages")
+    precision.setValue(0)
+    lower.setText("120")
+    median.setText("180")
+    upper.setText("240")
+    confidence.setValue(80)
+    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+
+    assert first_runtime.window.current_screen_name == "Prediction Detail"
+    assert (
+        first_runtime.window.findChild(QLabel, "numericCurrentInterval").text()
+        == "80% interval: 120 to 240 pages"
+    )
+    first_runtime.close()
+
+    second_runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(second_runtime.window)
+    second_runtime.window.show()
+    second_runtime.window.navigate_to("Prediction Detail")
+    reopened_question = second_runtime.window.findChild(
+        QLabel,
+        "numericPredictionQuestion",
+    )
+    reopened_interval = second_runtime.window.findChild(
+        QLabel,
+        "numericCurrentInterval",
+    )
+    reopened_median = second_runtime.window.findChild(
+        QLabel,
+        "numericCurrentMedian",
+    )
+    assert reopened_question is not None
+    assert reopened_interval is not None
+    assert reopened_median is not None
+    assert reopened_question.text() == "How many pages will the manuscript contain?"
+    assert reopened_interval.text() == "80% interval: 120 to 240 pages"
+    assert reopened_median.text() == "Median estimate: 180 pages"
+    second_runtime.close()
+
+
 def test_edit_confirm_close_reopen_displays_metadata_and_history(
     qtbot,
     tmp_path,

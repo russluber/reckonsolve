@@ -25,6 +25,9 @@ from reckonsolve.ui.icons import (
 from reckonsolve.ui.prediction_browser import PredictionBrowserScreen
 from reckonsolve.ui.screens import (
     NewPredictionScreen,
+    NumericPredictionDetailScreen,
+    NumericPredictionSnapshot,
+    PredictionDetailHost,
     PredictionDetailScreen,
     PredictionOperations,
     PredictionSnapshot,
@@ -100,6 +103,14 @@ class MainWindow(QMainWindow):
 
         self._new_prediction_screen = NewPredictionScreen(operations)
         self._prediction_detail_screen = PredictionDetailScreen(operations)
+        self._numeric_prediction_detail_screen = NumericPredictionDetailScreen(
+            operations
+        )
+        self._prediction_detail_host = PredictionDetailHost(
+            operations,
+            self._prediction_detail_screen,
+            self._numeric_prediction_detail_screen,
+        )
         self._dashboard_screen = DashboardScreen(operations)
         self._prediction_browser_screen = PredictionBrowserScreen(operations)
         self._analytics_screen = AnalyticsScreen(operations)
@@ -117,7 +128,7 @@ class MainWindow(QMainWindow):
             elif screen_name == "New Prediction":
                 screen = self._new_prediction_screen
             elif screen_name == "Prediction Detail":
-                screen = self._prediction_detail_screen
+                screen = self._prediction_detail_host
             elif screen_name == "Predictions":
                 screen = self._prediction_browser_screen
             elif screen_name == "Analytics":
@@ -191,7 +202,7 @@ class MainWindow(QMainWindow):
         elif self.current_screen_name == "New Prediction":
             self._new_prediction_screen.focus_question()
         elif self.current_screen_name == "Prediction Detail":
-            self._prediction_detail_screen.refresh()
+            self._prediction_detail_host.refresh()
         elif self.current_screen_name == "Predictions":
             self._prediction_browser_screen.refresh()
             self._prediction_browser_screen.focus_search()
@@ -200,12 +211,18 @@ class MainWindow(QMainWindow):
         elif self.current_screen_name == "Settings":
             self._settings_screen.refresh()
 
-    def _show_created_prediction(self, prediction: PredictionSnapshot) -> None:
-        self._prediction_detail_screen.show_prediction(prediction)
+    def _show_created_prediction(
+        self,
+        prediction: PredictionSnapshot | NumericPredictionSnapshot,
+    ) -> None:
+        if hasattr(prediction, "decimal_places"):
+            self._prediction_detail_host.show_numeric_prediction(prediction)
+        else:
+            self._prediction_detail_host.show_prediction(prediction)
         self.navigate_to("Prediction Detail")
 
     def _show_selected_prediction(self, prediction: PredictionSnapshot) -> None:
-        self._prediction_detail_screen.show_prediction(prediction)
+        self._prediction_detail_host.show_prediction(prediction)
         self.navigate_to("Prediction Detail")
 
     def _refresh_navigation_icons(self) -> None:

@@ -206,6 +206,27 @@ def test_empty_csv_bundle_has_every_header_and_no_data_rows(tmp_path) -> None:
     database.close()
 
 
+def test_csv_export_refuses_to_silently_omit_numeric_interval_data(tmp_path) -> None:
+    database = Database.open(tmp_path / "source.sqlite3")
+    operations = PredictionOperations(database, FixedClock())
+    operations.create_numeric_prediction(
+        "How many days will the reply take?",
+        "days",
+        0,
+        1,
+        3,
+        7,
+        80,
+    )
+    destination = tmp_path / "numeric-export.zip"
+
+    with pytest.raises(CsvExportError, match="does not yet include Numeric Prediction"):
+        operations.export_csv_bundle(destination)
+
+    assert not destination.exists()
+    database.close()
+
+
 def test_failed_csv_export_preserves_existing_destination_and_source(
     tmp_path,
     monkeypatch,

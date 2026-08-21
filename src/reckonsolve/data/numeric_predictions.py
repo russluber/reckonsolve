@@ -1,7 +1,7 @@
 """Purpose-specific SQLite access for the M13 numeric foundation."""
 
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
 
 from reckonsolve.clock import format_utc, parse_utc
 from reckonsolve.domain.predictions import (
@@ -13,10 +13,11 @@ from reckonsolve.domain.predictions import (
 )
 
 from .database import Database
+from .predictions import replace_tags, select_tags
 
 
 class NumericPredictionRepository:
-    """Persist required numeric state without exposing it to the v0.1 UI."""
+    """Persist and read Numeric Prediction creation state and intervals."""
 
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -40,9 +41,13 @@ class NumericPredictionRepository:
                     created_at,
                     updated_at,
                     numeric_unit,
-                    numeric_precision
+                    numeric_precision,
+                    background,
+                    resolution_criteria,
+                    forecast_deadline,
+                    expected_resolution
                 )
-                VALUES (?, 'numeric', ?, ?, ?, ?, ?)
+                VALUES (?, 'numeric', ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     new_prediction.question,
@@ -51,11 +56,16 @@ class NumericPredictionRepository:
                     timestamp,
                     new_prediction.unit,
                     new_prediction.decimal_places,
+                    new_prediction.background,
+                    new_prediction.resolution_criteria,
+                    _format_date(new_prediction.forecast_deadline),
+                    _format_date(new_prediction.expected_resolution),
                 ),
             )
             prediction_id = prediction_cursor.lastrowid
             if prediction_id is None:
                 raise sqlite3.DatabaseError("SQLite did not return a prediction ID.")
+            replace_tags(connection, prediction_id, new_prediction.tags)
 
             revision_cursor = connection.execute(
                 """
@@ -89,7 +99,10 @@ class NumericPredictionRepository:
                 raise sqlite3.DatabaseError(
                     "The created numeric prediction could not be loaded."
                 )
-            created = _map_numeric_prediction(row)
+            created = _map_numeric_prediction(
+                row,
+                select_tags(connection, prediction_id),
+            )
 
         return created
 
@@ -98,7 +111,33 @@ class NumericPredictionRepository:
 
         with self._database.transaction() as connection:
             row = _select_numeric_prediction(connection, prediction_id)
-        return None if row is None else _map_numeric_prediction(row)
+            tags = () if row is None else select_tags(connection, prediction_id)
+        return None if row is None else _map_numeric_prediction(row, tags)
+
+    def get_latest_prediction(self) -> NumericPrediction | None:
+        """Load the newest numeric Prediction and its current revision."""
+
+        with self._database.transaction() as connection:
+            prediction_row = connection.execute(
+                """
+                SELECT id
+                FROM predictions
+                WHERE prediction_type = 'numeric'
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            row = (
+                None
+                if prediction_row is None
+                else _select_numeric_prediction(connection, int(prediction_row["id"]))
+            )
+            tags = (
+                ()
+                if row is None
+                else select_tags(connection, int(row["prediction_id"]))
+            )
+        return None if row is None else _map_numeric_prediction(row, tags)
 
     def list_forecast_revisions(
         self,
@@ -149,6 +188,11 @@ SELECT
     prediction.updated_at,
     prediction.numeric_unit,
     prediction.numeric_precision,
+    prediction.metadata_version,
+    prediction.background,
+    prediction.resolution_criteria,
+    prediction.forecast_deadline,
+    prediction.expected_resolution,
     current_revision.id AS revision_id,
     current_revision.lower_scaled,
     current_revision.median_scaled,
@@ -180,7 +224,10 @@ def _select_numeric_prediction(
     ).fetchone()
 
 
-def _map_numeric_prediction(row: sqlite3.Row) -> NumericPrediction:
+def _map_numeric_prediction(
+    row: sqlite3.Row,
+    tags: tuple[str, ...] = (),
+) -> NumericPrediction:
     decimal_places = int(row["numeric_precision"])
     return NumericPrediction(
         prediction_id=int(row["prediction_id"]),
@@ -191,6 +238,12 @@ def _map_numeric_prediction(row: sqlite3.Row) -> NumericPrediction:
         created_at=parse_utc(str(row["created_at"])),
         updated_at=parse_utc(str(row["updated_at"])),
         current_revision=_map_numeric_revision(row, decimal_places),
+        background=_optional_string(row["background"]),
+        resolution_criteria=_optional_string(row["resolution_criteria"]),
+        forecast_deadline=_parse_date(row["forecast_deadline"]),
+        expected_resolution=_parse_date(row["expected_resolution"]),
+        tags=tags,
+        metadata_version=int(row["metadata_version"]),
     )
 
 
@@ -218,3 +271,15 @@ def _map_numeric_revision(
         created_at=parse_utc(str(row["revision_created_at"])),
         rationale=None if row["rationale"] is None else str(row["rationale"]),
     )
+
+
+def _format_date(value: date | None) -> str | None:
+    return None if value is None else value.isoformat()
+
+
+def _parse_date(value: object) -> date | None:
+    return None if value is None else date.fromisoformat(str(value))
+
+
+def _optional_string(value: object) -> str | None:
+    return None if value is None else str(value)

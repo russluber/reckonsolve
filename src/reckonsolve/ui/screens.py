@@ -10,6 +10,7 @@ from PySide6.QtCore import QDate, QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QFont, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDateEdit,
     QDialog,
     QDialogButtonBox,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -41,6 +43,7 @@ from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
     PredictionStatus,
+    PredictionType,
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
@@ -67,6 +70,39 @@ class PredictionSnapshot(Protocol):
     resolution: ResolutionSnapshot | None
     invalidation: InvalidationSnapshot | None
     deletion_allowed: bool
+
+
+class NumericRevisionSnapshot(Protocol):
+    """Read-only current Numeric ForecastRevision values for detail display."""
+
+    revision_id: int
+    prediction_id: int
+    lower_bound: object
+    median_estimate: object
+    upper_bound: object
+    confidence_percent: int
+    sequence: int
+    created_at: datetime
+    rationale: str | None
+
+
+class NumericPredictionSnapshot(Protocol):
+    """Read-only Numeric Prediction data needed by the M14 detail screen."""
+
+    prediction_id: int
+    question: str
+    unit: str
+    decimal_places: int
+    status: PredictionStatus
+    created_at: datetime
+    updated_at: datetime
+    current_revision: NumericRevisionSnapshot
+    background: str | None
+    resolution_criteria: str | None
+    forecast_deadline: date | None
+    expected_resolution: date | None
+    tags: tuple[str, ...]
+    metadata_version: int
 
 
 class ResolutionSnapshot(Protocol):
@@ -158,6 +194,25 @@ class PredictionOperations(Protocol):
     ) -> PredictionSnapshot:
         """Create a prediction and its initial revision atomically."""
 
+    def create_numeric_prediction(
+        self,
+        question: str,
+        unit: str,
+        decimal_places: int,
+        lower_bound: object,
+        median_estimate: object,
+        upper_bound: object,
+        confidence_percent: int,
+        *,
+        rationale: str | None = None,
+        background: str | None = None,
+        resolution_criteria: str | None = None,
+        forecast_deadline: date | None = None,
+        expected_resolution: date | None = None,
+        tags: tuple[str, ...] = (),
+    ) -> NumericPredictionSnapshot:
+        """Create a Numeric Prediction and its first interval atomically."""
+
     def revise_forecast(
         self,
         prediction_id: int,
@@ -236,8 +291,14 @@ class PredictionOperations(Protocol):
     def get_latest_prediction(self) -> PredictionSnapshot | None:
         """Return the most recently created prediction, if one exists."""
 
+    def get_latest_numeric_prediction(self) -> NumericPredictionSnapshot | None:
+        """Return the most recently created Numeric Prediction, if one exists."""
+
     def get_prediction(self, prediction_id: int) -> PredictionSnapshot:
         """Return one prediction with its current forecast and metadata."""
+
+    def get_numeric_prediction(self, prediction_id: int) -> NumericPredictionSnapshot:
+        """Return one Numeric Prediction with its current interval and metadata."""
 
     def update_metadata(
         self,
@@ -311,11 +372,27 @@ class NewPredictionScreen(QWidget):
         self.question_input.setClearButtonEnabled(True)
         question_label.setBuddy(self.question_input)
 
-        probability_label = QLabel("Probability", self)
+        prediction_type_label = QLabel("Forecast type", self)
+        prediction_type_label.setObjectName("predictionTypeLabel")
+        self._make_primary_label(prediction_type_label)
+
+        self.prediction_type_input = QComboBox(self)
+        self.prediction_type_input.setObjectName("predictionTypeInput")
+        self.prediction_type_input.setAccessibleName("Forecast type")
+        self.prediction_type_input.addItem("Binary (Yes/No)", PredictionType.BINARY)
+        self.prediction_type_input.addItem("Numeric interval", PredictionType.NUMERIC)
+        prediction_type_label.setBuddy(self.prediction_type_input)
+
+        self.binary_forecast_fields = QWidget(self)
+        self.binary_forecast_fields.setObjectName("binaryForecastFields")
+        binary_fields_layout = QVBoxLayout(self.binary_forecast_fields)
+        binary_fields_layout.setContentsMargins(0, 0, 0, 0)
+
+        probability_label = QLabel("Probability", self.binary_forecast_fields)
         probability_label.setObjectName("probabilityLabel")
         self._make_primary_label(probability_label)
 
-        self.probability_input = QSpinBox(self)
+        self.probability_input = QSpinBox(self.binary_forecast_fields)
         self.probability_input.setObjectName("probabilityInput")
         self.probability_input.setAccessibleName("Prediction probability")
         self.probability_input.setRange(0, 100)
@@ -323,7 +400,7 @@ class NewPredictionScreen(QWidget):
         self.probability_input.setValue(50)
         probability_label.setBuddy(self.probability_input)
 
-        shortcuts = QWidget(self)
+        shortcuts = QWidget(self.binary_forecast_fields)
         shortcuts.setObjectName("probabilityShortcuts")
         shortcuts_layout = QHBoxLayout(shortcuts)
         shortcuts_layout.setContentsMargins(0, 0, 0, 0)
@@ -342,10 +419,105 @@ class NewPredictionScreen(QWidget):
 
         self.endpoint_note = QLabel(
             "0% and 100% express absolute certainty.",
-            self,
+            self.binary_forecast_fields,
         )
         self.endpoint_note.setObjectName("probabilityEndpointNote")
         self.endpoint_note.setWordWrap(True)
+
+        binary_fields_layout.addWidget(probability_label)
+        binary_fields_layout.addWidget(self.probability_input)
+        binary_fields_layout.addWidget(shortcuts)
+        binary_fields_layout.addWidget(self.endpoint_note)
+
+        self.numeric_forecast_fields = QWidget(self)
+        self.numeric_forecast_fields.setObjectName("numericForecastFields")
+        numeric_fields_layout = QVBoxLayout(self.numeric_forecast_fields)
+        numeric_fields_layout.setContentsMargins(0, 0, 0, 0)
+
+        unit_label = QLabel("Unit", self.numeric_forecast_fields)
+        unit_label.setObjectName("numericUnitLabel")
+        self._make_primary_label(unit_label)
+        self.numeric_unit_input = QLineEdit(self.numeric_forecast_fields)
+        self.numeric_unit_input.setObjectName("numericUnitInput")
+        self.numeric_unit_input.setAccessibleName("Numeric forecast unit")
+        self.numeric_unit_input.setPlaceholderText("For example: days, books, USD")
+        self.numeric_unit_input.setClearButtonEnabled(True)
+        unit_label.setBuddy(self.numeric_unit_input)
+
+        precision_label = QLabel("Decimal places", self.numeric_forecast_fields)
+        precision_label.setObjectName("numericPrecisionLabel")
+        self.numeric_precision_input = QSpinBox(self.numeric_forecast_fields)
+        self.numeric_precision_input.setObjectName("numericPrecisionInput")
+        self.numeric_precision_input.setAccessibleName("Numeric decimal places")
+        self.numeric_precision_input.setRange(0, 6)
+        self.numeric_precision_input.setValue(0)
+        precision_label.setBuddy(self.numeric_precision_input)
+
+        lower_label = QLabel("Lower bound", self.numeric_forecast_fields)
+        lower_label.setObjectName("numericLowerBoundLabel")
+        self.numeric_lower_bound_input = QLineEdit(self.numeric_forecast_fields)
+        self.numeric_lower_bound_input.setObjectName("numericLowerBoundInput")
+        self.numeric_lower_bound_input.setAccessibleName("Numeric lower bound")
+        self.numeric_lower_bound_input.setPlaceholderText("For example: 3")
+        lower_label.setBuddy(self.numeric_lower_bound_input)
+
+        median_label = QLabel("Median estimate", self.numeric_forecast_fields)
+        median_label.setObjectName("numericMedianEstimateLabel")
+        self.numeric_median_estimate_input = QLineEdit(self.numeric_forecast_fields)
+        self.numeric_median_estimate_input.setObjectName("numericMedianEstimateInput")
+        self.numeric_median_estimate_input.setAccessibleName("Numeric median estimate")
+        self.numeric_median_estimate_input.setPlaceholderText("For example: 7")
+        median_label.setBuddy(self.numeric_median_estimate_input)
+
+        upper_label = QLabel("Upper bound", self.numeric_forecast_fields)
+        upper_label.setObjectName("numericUpperBoundLabel")
+        self.numeric_upper_bound_input = QLineEdit(self.numeric_forecast_fields)
+        self.numeric_upper_bound_input.setObjectName("numericUpperBoundInput")
+        self.numeric_upper_bound_input.setAccessibleName("Numeric upper bound")
+        self.numeric_upper_bound_input.setPlaceholderText("For example: 21")
+        upper_label.setBuddy(self.numeric_upper_bound_input)
+
+        confidence_label = QLabel("Confidence", self.numeric_forecast_fields)
+        confidence_label.setObjectName("numericConfidenceLabel")
+        self.numeric_confidence_input = QSpinBox(self.numeric_forecast_fields)
+        self.numeric_confidence_input.setObjectName("numericConfidenceInput")
+        self.numeric_confidence_input.setAccessibleName("Numeric interval confidence")
+        self.numeric_confidence_input.setRange(1, 99)
+        self.numeric_confidence_input.setSingleStep(5)
+        self.numeric_confidence_input.setSuffix("%")
+        self.numeric_confidence_input.setValue(80)
+        confidence_label.setBuddy(self.numeric_confidence_input)
+
+        numeric_shortcuts = QWidget(self.numeric_forecast_fields)
+        numeric_shortcuts.setObjectName("numericConfidenceShortcuts")
+        numeric_shortcuts_layout = QHBoxLayout(numeric_shortcuts)
+        numeric_shortcuts_layout.setContentsMargins(0, 0, 0, 0)
+        numeric_shortcuts_layout.setSpacing(6)
+        for confidence in (50, 80, 90, 95):
+            shortcut = QPushButton(f"{confidence}%", numeric_shortcuts)
+            shortcut.setObjectName(f"numericConfidenceShortcut{confidence}")
+            shortcut.setAccessibleName(f"Set confidence to {confidence}%")
+            shortcut.clicked.connect(
+                lambda _checked=False, value=confidence: (
+                    self.numeric_confidence_input.setValue(value)
+                )
+            )
+            numeric_shortcuts_layout.addWidget(shortcut)
+        numeric_shortcuts_layout.addStretch()
+
+        numeric_fields_layout.addWidget(unit_label)
+        numeric_fields_layout.addWidget(self.numeric_unit_input)
+        numeric_fields_layout.addWidget(precision_label)
+        numeric_fields_layout.addWidget(self.numeric_precision_input)
+        numeric_fields_layout.addWidget(lower_label)
+        numeric_fields_layout.addWidget(self.numeric_lower_bound_input)
+        numeric_fields_layout.addWidget(median_label)
+        numeric_fields_layout.addWidget(self.numeric_median_estimate_input)
+        numeric_fields_layout.addWidget(upper_label)
+        numeric_fields_layout.addWidget(self.numeric_upper_bound_input)
+        numeric_fields_layout.addWidget(confidence_label)
+        numeric_fields_layout.addWidget(self.numeric_confidence_input)
+        numeric_fields_layout.addWidget(numeric_shortcuts)
 
         self.more_details = QGroupBox("More details", self)
         self.more_details.setObjectName("newPredictionMoreDetailsGroup")
@@ -462,10 +634,11 @@ class NewPredictionScreen(QWidget):
         layout.addWidget(question_label)
         layout.addWidget(self.question_input)
         layout.addSpacing(14)
-        layout.addWidget(probability_label)
-        layout.addWidget(self.probability_input)
-        layout.addWidget(shortcuts)
-        layout.addWidget(self.endpoint_note)
+        layout.addWidget(prediction_type_label)
+        layout.addWidget(self.prediction_type_input)
+        layout.addSpacing(10)
+        layout.addWidget(self.binary_forecast_fields)
+        layout.addWidget(self.numeric_forecast_fields)
         layout.addSpacing(10)
         layout.addWidget(self.more_details)
         layout.addWidget(self.form_error)
@@ -481,8 +654,19 @@ class NewPredictionScreen(QWidget):
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.addWidget(scroll_area)
 
-        self.setTabOrder(self.question_input, self.probability_input)
-        self.setTabOrder(self.probability_input, self.more_details)
+        self.setTabOrder(self.question_input, self.prediction_type_input)
+        self.setTabOrder(self.prediction_type_input, self.probability_input)
+        self.setTabOrder(self.probability_input, self.numeric_unit_input)
+        self.setTabOrder(self.numeric_unit_input, self.numeric_precision_input)
+        self.setTabOrder(self.numeric_precision_input, self.numeric_lower_bound_input)
+        self.setTabOrder(
+            self.numeric_lower_bound_input, self.numeric_median_estimate_input
+        )
+        self.setTabOrder(
+            self.numeric_median_estimate_input, self.numeric_upper_bound_input
+        )
+        self.setTabOrder(self.numeric_upper_bound_input, self.numeric_confidence_input)
+        self.setTabOrder(self.numeric_confidence_input, self.more_details)
         self.setTabOrder(self.more_details, self.rationale_input)
         self.setTabOrder(self.rationale_input, self.background_input)
         self.setTabOrder(self.background_input, self.resolution_criteria_input)
@@ -506,9 +690,13 @@ class NewPredictionScreen(QWidget):
         self.setTabOrder(self.tags_input, self.create_button)
 
         self.probability_input.valueChanged.connect(self._update_endpoint_note)
+        self.prediction_type_input.currentIndexChanged.connect(
+            self._update_forecast_type
+        )
         self.question_input.returnPressed.connect(self.submit)
         self.create_button.clicked.connect(self.submit)
         self._update_endpoint_note(self.probability_input.value())
+        self._update_forecast_type(self.prediction_type_input.currentIndex())
 
     def focus_question(self) -> None:
         """Put keyboard focus at the start of the creation flow."""
@@ -524,22 +712,37 @@ class NewPredictionScreen(QWidget):
             return
 
         try:
-            prediction = self._operations.create_prediction(
-                question=question,
-                probability_percent=self.probability_input.value(),
-                rationale=self.rationale_input.toPlainText(),
-                background=self.background_input.toPlainText(),
-                resolution_criteria=self.resolution_criteria_input.toPlainText(),
-                forecast_deadline=_optional_date(
+            details = {
+                "rationale": self.rationale_input.toPlainText(),
+                "background": self.background_input.toPlainText(),
+                "resolution_criteria": self.resolution_criteria_input.toPlainText(),
+                "forecast_deadline": _optional_date(
                     self.forecast_deadline_toggle,
                     self.forecast_deadline_input,
                 ),
-                expected_resolution=_optional_date(
+                "expected_resolution": _optional_date(
                     self.expected_resolution_toggle,
                     self.expected_resolution_input,
                 ),
-                tags=_parse_tags(self.tags_input.text()),
-            )
+                "tags": _parse_tags(self.tags_input.text()),
+            }
+            if self._is_numeric_type():
+                prediction = self._operations.create_numeric_prediction(
+                    question,
+                    self.numeric_unit_input.text(),
+                    self.numeric_precision_input.value(),
+                    self.numeric_lower_bound_input.text(),
+                    self.numeric_median_estimate_input.text(),
+                    self.numeric_upper_bound_input.text(),
+                    self.numeric_confidence_input.value(),
+                    **details,
+                )
+            else:
+                prediction = self._operations.create_prediction(
+                    question=question,
+                    probability_percent=self.probability_input.value(),
+                    **details,
+                )
         except ApplicationError as error:
             self._show_error(str(error))
             return
@@ -549,7 +752,14 @@ class NewPredictionScreen(QWidget):
 
     def _reset_form(self) -> None:
         self.question_input.clear()
+        self.prediction_type_input.setCurrentIndex(0)
         self.probability_input.setValue(50)
+        self.numeric_unit_input.clear()
+        self.numeric_precision_input.setValue(0)
+        self.numeric_lower_bound_input.clear()
+        self.numeric_median_estimate_input.clear()
+        self.numeric_upper_bound_input.clear()
+        self.numeric_confidence_input.setValue(80)
         self.rationale_input.clear()
         self.background_input.clear()
         self.resolution_criteria_input.clear()
@@ -568,7 +778,18 @@ class NewPredictionScreen(QWidget):
         label.setFont(font)
 
     def _update_endpoint_note(self, probability: int) -> None:
-        self.endpoint_note.setHidden(probability not in (0, 100))
+        self.endpoint_note.setHidden(
+            self._is_numeric_type() or probability not in (0, 100)
+        )
+
+    def _update_forecast_type(self, _index: int) -> None:
+        is_numeric = self._is_numeric_type()
+        self.binary_forecast_fields.setHidden(is_numeric)
+        self.numeric_forecast_fields.setHidden(not is_numeric)
+        self._update_endpoint_note(self.probability_input.value())
+
+    def _is_numeric_type(self) -> bool:
+        return self.prediction_type_input.currentData() == PredictionType.NUMERIC.value
 
     def _show_error(self, message: str) -> None:
         self.form_error.setText(message)
@@ -577,6 +798,326 @@ class NewPredictionScreen(QWidget):
     def _hide_error(self) -> None:
         self.form_error.clear()
         self.form_error.setHidden(True)
+
+
+class NumericPredictionDetailScreen(QWidget):
+    """Present the current Numeric Prediction without exposing later workflows."""
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("numericPredictionDetailScreen")
+        self._operations = operations
+        self._prediction: NumericPredictionSnapshot | None = None
+
+        title = QLabel("Prediction Detail", self)
+        title.setObjectName("numericPredictionDetailScreenTitle")
+        title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+        self.empty_state = QLabel(
+            "No Numeric Prediction has been created yet.",
+            self,
+        )
+        self.empty_state.setObjectName("numericPredictionDetailEmptyState")
+        self.empty_state.setWordWrap(True)
+
+        self.detail_error = QLabel("", self)
+        self.detail_error.setObjectName("numericPredictionDetailError")
+        self.detail_error.setAccessibleName("Numeric Prediction Detail error")
+        self.detail_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.detail_error.setWordWrap(True)
+        self.detail_error.setHidden(True)
+
+        self.detail_content = QWidget(self)
+        self.detail_content.setObjectName("numericPredictionDetailContent")
+        detail_layout = QVBoxLayout(self.detail_content)
+        detail_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.question = QLabel("", self.detail_content)
+        self.question.setObjectName("numericPredictionQuestion")
+        self.question.setTextFormat(Qt.TextFormat.PlainText)
+        self.question.setWordWrap(True)
+        question_font = QFont(self.question.font())
+        question_font.setPointSize(question_font.pointSize() + 2)
+        question_font.setBold(True)
+        self.question.setFont(question_font)
+
+        self.tags = QLabel("", self.detail_content)
+        self.tags.setObjectName("numericPredictionTags")
+        self.tags.setTextFormat(Qt.TextFormat.PlainText)
+        self.tags.setWordWrap(True)
+
+        self.status = QLabel("", self.detail_content)
+        self.status.setObjectName("numericPredictionStatus")
+        self.status.setTextFormat(Qt.TextFormat.PlainText)
+
+        forecast_label = QLabel("Current Forecast", self.detail_content)
+        forecast_label.setObjectName("numericCurrentForecastLabel")
+        forecast_font = QFont(forecast_label.font())
+        forecast_font.setBold(True)
+        forecast_label.setFont(forecast_font)
+
+        self.interval = QLabel("", self.detail_content)
+        self.interval.setObjectName("numericCurrentInterval")
+        self.interval.setTextFormat(Qt.TextFormat.PlainText)
+        self.interval.setWordWrap(True)
+        interval_font = QFont(self.interval.font())
+        interval_font.setPointSize(interval_font.pointSize() + 1)
+        interval_font.setBold(True)
+        self.interval.setFont(interval_font)
+
+        self.median = QLabel("", self.detail_content)
+        self.median.setObjectName("numericCurrentMedian")
+        self.median.setTextFormat(Qt.TextFormat.PlainText)
+        self.median.setWordWrap(True)
+
+        self.unit_row, self.unit = _detail_value_row(
+            "Unit",
+            "numericUnitRow",
+            "numericUnitValue",
+            self.detail_content,
+        )
+        self.precision_row, self.precision = _detail_value_row(
+            "Decimal places",
+            "numericPrecisionRow",
+            "numericPrecisionValue",
+            self.detail_content,
+        )
+        self.forecast_deadline_row, self.forecast_deadline = _detail_value_row(
+            "Forecast deadline",
+            "numericForecastDeadlineRow",
+            "numericForecastDeadlineValue",
+            self.detail_content,
+        )
+        self.expected_resolution_row, self.expected_resolution = _detail_value_row(
+            "Expected resolution",
+            "numericExpectedResolutionRow",
+            "numericExpectedResolutionValue",
+            self.detail_content,
+        )
+        self.background_section, self.background = _detail_text_section(
+            "BACKGROUND",
+            "numericBackgroundSection",
+            "numericBackgroundValue",
+            self.detail_content,
+        )
+        self.resolution_criteria_section, self.resolution_criteria = (
+            _detail_text_section(
+                "RESOLUTION CRITERIA",
+                "numericResolutionCriteriaSection",
+                "numericResolutionCriteriaValue",
+                self.detail_content,
+            )
+        )
+        self.rationale_section, self.rationale = _detail_text_section(
+            "INITIAL RATIONALE",
+            "numericInitialRationaleSection",
+            "numericInitialRationaleValue",
+            self.detail_content,
+        )
+
+        self.next_steps = QLabel(
+            "Numeric revisions, Journal entries, resolution, and history "
+            "visualization are added in later v0.2 milestones.",
+            self.detail_content,
+        )
+        self.next_steps.setObjectName("numericPredictionNextSteps")
+        self.next_steps.setTextFormat(Qt.TextFormat.PlainText)
+        self.next_steps.setWordWrap(True)
+
+        detail_layout.addWidget(self.question)
+        detail_layout.addWidget(self.tags)
+        detail_layout.addWidget(self.status)
+        detail_layout.addSpacing(14)
+        detail_layout.addWidget(forecast_label)
+        detail_layout.addWidget(self.interval)
+        detail_layout.addWidget(self.median)
+        detail_layout.addWidget(self.unit_row)
+        detail_layout.addWidget(self.precision_row)
+        detail_layout.addSpacing(10)
+        detail_layout.addWidget(self.forecast_deadline_row)
+        detail_layout.addWidget(self.expected_resolution_row)
+        detail_layout.addWidget(self.background_section)
+        detail_layout.addWidget(self.resolution_criteria_section)
+        detail_layout.addWidget(self.rationale_section)
+        detail_layout.addSpacing(14)
+        detail_layout.addWidget(self.next_steps)
+        detail_layout.addStretch()
+
+        scroll_area = QScrollArea(self)
+        scroll_area.setObjectName("numericPredictionDetailScrollArea")
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setWidget(self.detail_content)
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(title)
+        layout.addWidget(self.empty_state)
+        layout.addWidget(self.detail_error)
+        layout.addWidget(scroll_area, 1)
+
+        self.show_prediction(None)
+
+    @property
+    def prediction_id(self) -> int | None:
+        """Return the Numeric Prediction currently presented by the screen."""
+
+        return None if self._prediction is None else self._prediction.prediction_id
+
+    def show_prediction(self, prediction: NumericPredictionSnapshot | None) -> None:
+        """Present one Numeric Prediction or the honest empty state."""
+
+        self._prediction = prediction
+        self._hide_error()
+        if prediction is None:
+            self.question.clear()
+            self.tags.clear()
+            self.status.clear()
+            self.interval.clear()
+            self.median.clear()
+            self.detail_content.setHidden(True)
+            self.empty_state.setHidden(False)
+            return
+
+        revision = prediction.current_revision
+        self.question.setText(prediction.question)
+        self.tags.setText("  ".join(f"#{tag}" for tag in prediction.tags))
+        self.tags.setHidden(not prediction.tags)
+        self.status.setText(prediction.status.value.upper())
+        self.interval.setText(
+            f"{revision.confidence_percent}% interval: "
+            f"{revision.lower_bound} to {revision.upper_bound} {prediction.unit}"
+        )
+        self.median.setText(
+            f"Median estimate: {revision.median_estimate} {prediction.unit}"
+        )
+        self.unit.setText(prediction.unit)
+        decimal_label = (
+            "decimal place" if prediction.decimal_places == 1 else "decimal places"
+        )
+        self.precision.setText(f"{prediction.decimal_places} {decimal_label}")
+        self._show_optional_metadata(prediction)
+        self.rationale.setText(revision.rationale or "")
+        self.rationale_section.setHidden(not revision.rationale)
+        self.empty_state.setHidden(True)
+        self.detail_content.setHidden(False)
+
+    def refresh(self) -> None:
+        """Reload the presented Numeric Prediction without hiding prior data on error."""
+
+        try:
+            prediction = (
+                self._operations.get_latest_numeric_prediction()
+                if self._prediction is None
+                else self._operations.get_numeric_prediction(
+                    self._prediction.prediction_id
+                )
+            )
+        except ApplicationError as error:
+            self._show_error(
+                f"Numeric Prediction Detail could not be refreshed. {error}"
+            )
+            return
+        self.show_prediction(prediction)
+
+    def _show_optional_metadata(self, prediction: NumericPredictionSnapshot) -> None:
+        self.forecast_deadline.setText(_format_date(prediction.forecast_deadline))
+        self.forecast_deadline_row.setHidden(prediction.forecast_deadline is None)
+        self.expected_resolution.setText(_format_date(prediction.expected_resolution))
+        self.expected_resolution_row.setHidden(prediction.expected_resolution is None)
+        self.background.setText(prediction.background or "")
+        self.background_section.setHidden(not prediction.background)
+        self.resolution_criteria.setText(prediction.resolution_criteria or "")
+        self.resolution_criteria_section.setHidden(not prediction.resolution_criteria)
+
+    def _show_error(self, message: str) -> None:
+        self.detail_error.setText(message)
+        self.detail_error.setHidden(False)
+
+    def _hide_error(self) -> None:
+        self.detail_error.clear()
+        self.detail_error.setHidden(True)
+
+
+class PredictionDetailHost(QWidget):
+    """Keep one primary Detail navigation slot while selecting forecast type."""
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        binary_detail: PredictionDetailScreen,
+        numeric_detail: NumericPredictionDetailScreen,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("predictionDetailHost")
+        self._operations = operations
+        self._binary_detail = binary_detail
+        self._numeric_detail = numeric_detail
+        self._current_type: PredictionType | None = None
+
+        self._stack = QStackedWidget(self)
+        self._stack.addWidget(binary_detail)
+        self._stack.addWidget(numeric_detail)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._stack)
+
+    def show_prediction(self, prediction: PredictionSnapshot | None) -> None:
+        """Select and present the existing Binary detail screen."""
+
+        self._current_type = PredictionType.BINARY
+        self._binary_detail.show_prediction(prediction)
+        self._stack.setCurrentWidget(self._binary_detail)
+
+    def show_numeric_prediction(
+        self,
+        prediction: NumericPredictionSnapshot | None,
+    ) -> None:
+        """Select and present the staged Numeric detail screen."""
+
+        self._current_type = PredictionType.NUMERIC
+        self._numeric_detail.show_prediction(prediction)
+        self._stack.setCurrentWidget(self._numeric_detail)
+
+    def show_latest_prediction(self) -> None:
+        """Present the latest persisted forecast type after app restart."""
+
+        binary = self._operations.get_latest_prediction()
+        get_latest_numeric = getattr(
+            self._operations,
+            "get_latest_numeric_prediction",
+            lambda: None,
+        )
+        numeric = get_latest_numeric()
+        if numeric is not None and (
+            binary is None
+            or (numeric.created_at, numeric.prediction_id)
+            > (binary.created_at, binary.prediction_id)
+        ):
+            self.show_numeric_prediction(numeric)
+            return
+        self._current_type = PredictionType.BINARY
+        self._stack.setCurrentWidget(self._binary_detail)
+        if binary is None:
+            self._binary_detail.show_prediction(None)
+        else:
+            self._binary_detail.refresh()
+
+    def refresh(self) -> None:
+        """Refresh the selected detail type, or select the latest at first visit."""
+
+        if self._current_type is PredictionType.BINARY:
+            self._binary_detail.refresh()
+        elif self._current_type is PredictionType.NUMERIC:
+            self._numeric_detail.refresh()
+        else:
+            self.show_latest_prediction()
 
 
 class EditPredictionDetailsDialog(QDialog):

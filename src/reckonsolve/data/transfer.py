@@ -286,6 +286,20 @@ class DataTransferRepository:
 
     def _read_csv_contents(self) -> tuple[_CsvContents, ...]:
         with self._database.transaction() as connection:
+            numeric_prediction = connection.execute(
+                """
+                SELECT 1
+                FROM predictions
+                WHERE prediction_type = 'numeric'
+                LIMIT 1
+                """
+            ).fetchone()
+            if numeric_prediction is not None:
+                raise ValueError(
+                    "CSV export does not yet include Numeric Prediction interval "
+                    "data. Create a backup for a complete recovery copy; "
+                    "type-aware CSV export arrives in M20."
+                )
             return tuple(
                 _CsvContents(
                     table=table,
