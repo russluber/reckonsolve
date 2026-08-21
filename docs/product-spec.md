@@ -842,7 +842,7 @@ Minimum UI:
 
 CSV is a portable analytical representation, not a complete relational restoration format.
 
-v0.1 exports one timestamp-named ZIP bundle containing `predictions.csv`, `forecast_revisions.csv`, `definition_changes.csv`, `journal_entries.csv`, `journal_corrections.csv`, `resolutions.csv`, `invalidations.csv`, `tags.csv`, and `prediction_tags.csv`, plus `README.txt`. Stable identifiers and relationship columns preserve the joins among Predictions, ForecastRevisions, Journal entries and corrections, terminal records, and tags rather than flattening away repeated history.
+The v0.2 CSV ZIP is format version 2 and contains `predictions.csv`, `forecast_revisions.csv`, `numeric_forecast_revisions.csv`, `definition_changes.csv`, `journal_entries.csv`, `journal_corrections.csv`, `forecast_reviews.csv`, `resolutions.csv`, `numeric_resolutions.csv`, `invalidations.csv`, `tags.csv`, and `prediction_tags.csv`, plus `README.txt`. Stable identifiers and relationship columns preserve the joins among Binary and Numeric Predictions, their type-appropriate ForecastRevisions, Journal entries and corrections, Forecast Reviews, terminal records, and tags rather than flattening away repeated history. Numeric values remain exact scaled integers paired with the parent Prediction's fixed precision; they are not silently converted through binary floating point.
 
 The README documents every file and column, relationship keys, null handling, timestamp and date conventions, and how current forecasts and corrected Journal bodies are derived. CSV files use UTF-8, standard quoting, and Windows-friendly line endings. Canonical instants remain UTC text and date-only values remain ISO calendar dates. Optional nulls are represented by documented blank fields; legitimate stored text is preserved without analytical rewriting.
 
@@ -1031,7 +1031,7 @@ Acceptance demonstration:
 ### Milestone 11: Backup and CSV export
 
 - Produce a verified, consistent, recoverable SQLite backup at a user-selected destination and persist its last successful time.
-- Export a documented nine-table CSV ZIP without erasing historical structure.
+- Export a documented relational CSV ZIP without erasing historical structure.
 - Preserve an existing destination artifact when backup or export generation fails.
 
 ### Milestone 12: Visual identity and private release readiness
@@ -1319,10 +1319,10 @@ Acceptance demonstration:
 
 #### Milestone 20: v0.2 portability and hardening
 
-- Extend backup/recovery verification across Binary, Numeric, and Review records.
-- Extend the documented CSV ZIP format with type-specific numeric and Review data while preserving honest relational history.
-- Exercise migrations from a real v0.1-shaped database through every v0.2 schema version.
-- Run the complete automated suite and private frozen-build smoke workflow across both forecast types.
+- Verify backup and restart recovery across Binary, Numeric, and Review records.
+- Extend the documented CSV ZIP to format version 2 with twelve relational CSV files, including type-specific Numeric revisions and outcomes plus Forecast Reviews.
+- Exercise a real v0.1-shaped schema-version-8 database through every v0.2 schema version while preserving Binary history.
+- Run the complete automated suite and private frozen-build smoke workflow across both forecast types and Reviews.
 - Align README, architecture, decision records, and user-facing export documentation with implemented v0.2 behavior.
 
 An installer, code signing, automatic updates, and public binary distribution remain separate Later work.

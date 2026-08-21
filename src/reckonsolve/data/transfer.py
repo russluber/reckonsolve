@@ -44,6 +44,8 @@ _CSV_TABLES = (
             "resolution_criteria",
             "forecast_deadline",
             "expected_resolution",
+            "numeric_unit",
+            "numeric_precision",
         ),
         """
         SELECT
@@ -57,7 +59,9 @@ _CSV_TABLES = (
             background,
             resolution_criteria,
             forecast_deadline,
-            expected_resolution
+            expected_resolution,
+            numeric_unit,
+            numeric_precision
         FROM predictions
         ORDER BY id
         """,
@@ -81,6 +85,34 @@ _CSV_TABLES = (
             rationale,
             created_at AS created_at_utc
         FROM forecast_revisions
+        ORDER BY prediction_id, sequence, id
+        """,
+    ),
+    _CsvTable(
+        "numeric_forecast_revisions.csv",
+        (
+            "numeric_revision_id",
+            "prediction_id",
+            "sequence",
+            "lower_scaled",
+            "median_scaled",
+            "upper_scaled",
+            "confidence_percent",
+            "rationale",
+            "created_at_utc",
+        ),
+        """
+        SELECT
+            id AS numeric_revision_id,
+            prediction_id,
+            sequence,
+            lower_scaled,
+            median_scaled,
+            upper_scaled,
+            confidence_percent,
+            rationale,
+            created_at AS created_at_utc
+        FROM numeric_forecast_revisions
         ORDER BY prediction_id, sequence, id
         """,
     ),
@@ -118,6 +150,7 @@ _CSV_TABLES = (
             "journal_entry_id",
             "prediction_id",
             "forecast_revision_id",
+            "numeric_forecast_revision_id",
             "original_body",
             "created_at_utc",
         ),
@@ -126,6 +159,7 @@ _CSV_TABLES = (
             id AS journal_entry_id,
             prediction_id,
             forecast_revision_id,
+            numeric_forecast_revision_id,
             body AS original_body,
             created_at AS created_at_utc
         FROM journal_entries
@@ -155,6 +189,28 @@ _CSV_TABLES = (
         """,
     ),
     _CsvTable(
+        "forecast_reviews.csv",
+        (
+            "forecast_review_id",
+            "prediction_id",
+            "forecast_revision_id",
+            "numeric_forecast_revision_id",
+            "created_at_utc",
+            "note",
+        ),
+        """
+        SELECT
+            id AS forecast_review_id,
+            prediction_id,
+            forecast_revision_id,
+            numeric_forecast_revision_id,
+            created_at AS created_at_utc,
+            note
+        FROM forecast_reviews
+        ORDER BY prediction_id, created_at, id
+        """,
+    ),
+    _CsvTable(
         "resolutions.csv",
         (
             "resolution_id",
@@ -175,6 +231,30 @@ _CSV_TABLES = (
             resolution_notes,
             postmortem
         FROM resolutions
+        ORDER BY id
+        """,
+    ),
+    _CsvTable(
+        "numeric_resolutions.csv",
+        (
+            "numeric_resolution_id",
+            "prediction_id",
+            "actual_scaled",
+            "resolved_at_utc",
+            "scoring_numeric_revision_id",
+            "resolution_notes",
+            "postmortem",
+        ),
+        """
+        SELECT
+            id AS numeric_resolution_id,
+            prediction_id,
+            actual_scaled,
+            resolved_at AS resolved_at_utc,
+            scoring_revision_id AS scoring_numeric_revision_id,
+            resolution_notes,
+            postmortem
+        FROM numeric_resolutions
         ORDER BY id
         """,
     ),
@@ -286,20 +366,6 @@ class DataTransferRepository:
 
     def _read_csv_contents(self) -> tuple[_CsvContents, ...]:
         with self._database.transaction() as connection:
-            numeric_prediction = connection.execute(
-                """
-                SELECT 1
-                FROM predictions
-                WHERE prediction_type = 'numeric'
-                LIMIT 1
-                """
-            ).fetchone()
-            if numeric_prediction is not None:
-                raise ValueError(
-                    "CSV export does not yet include Numeric Prediction interval "
-                    "data. Create a backup for a complete recovery copy; "
-                    "type-aware CSV export arrives in M20."
-                )
             return tuple(
                 _CsvContents(
                     table=table,
@@ -369,7 +435,7 @@ def _export_readme(exported_at: datetime) -> str:
     return f"""Reckonsolve CSV Export Bundle
 ==============================
 
-Format version: 1
+Format version: 2
 Exported at (UTC): {format_utc(exported_at)}
 
 Purpose
@@ -394,10 +460,21 @@ Files and relationships
 predictions.csv
   One current Prediction row. persisted_status is open, resolved, or invalid;
   Locked remains derived from an open row and its inclusive forecast_deadline.
+  prediction_type is binary or numeric. numeric_unit and numeric_precision are
+  blank for Binary rows and define the enduring Numeric quantity. Numeric scaled
+  values in the related files equal the displayed value multiplied by
+  10^numeric_precision; do not parse them as binary floating-point values.
 
 forecast_revisions.csv
   Every immutable ForecastRevision. prediction_id joins predictions.csv. The
-  highest sequence is the current forecast; probability_percent remains 0-100.
+  highest sequence is the current Binary forecast; probability_percent remains
+  0-100. It contains only Binary Prediction rows.
+
+numeric_forecast_revisions.csv
+  Every immutable Numeric ForecastRevision. prediction_id joins a Numeric row in
+  predictions.csv. lower_scaled, median_scaled, and upper_scaled use that
+  Prediction's numeric_precision; the highest sequence is the current Numeric
+  interval. confidence_percent is a whole percentage from 1 through 99.
 
 definition_changes.csv
   Every immutable protected-definition snapshot. prediction_id joins
@@ -406,7 +483,8 @@ definition_changes.csv
 
 journal_entries.csv
   Every original Journal entry. prediction_id joins predictions.csv and
-  forecast_revision_id identifies the forecast current when it was written.
+  exactly one of forecast_revision_id or numeric_forecast_revision_id identifies
+  the type-appropriate forecast current when it was written.
 
 journal_corrections.csv
   Every immutable Journal body correction. journal_entry_id joins
@@ -414,9 +492,21 @@ journal_corrections.csv
   there is no correction, original_body remains current.
 
 resolutions.csv
-  One immutable outcome for each Resolved Prediction. prediction_id joins
+  One immutable Yes/No outcome for each resolved Binary Prediction. prediction_id joins
   predictions.csv and scoring_revision_id identifies the exact ForecastRevision
   used for Brier and calibration scoring.
+
+numeric_resolutions.csv
+  One immutable outcome for each resolved Numeric Prediction. prediction_id joins
+  predictions.csv and scoring_numeric_revision_id identifies the exact Numeric
+  ForecastRevision used for Numeric scoring. actual_scaled uses the parent
+  Prediction's numeric_precision.
+
+forecast_reviews.csv
+  Every immutable deliberate reconsideration that retained the current forecast.
+  prediction_id joins predictions.csv and exactly one of forecast_revision_id or
+  numeric_forecast_revision_id identifies the type-appropriate reviewed forecast.
+  Reviews are not ForecastRevisions and do not add scoring observations.
 
 invalidations.csv
   One immutable invalidation record for each Invalid Prediction. Invalid

@@ -13,7 +13,7 @@ A direct filesystem copy can capture an inconsistent SQLite file when transactio
 
 Backup uses Python's binding to the [SQLite online backup API](https://www.sqlite.org/backup.html), which produces a consistent snapshot of a live source. The operation writes a uniquely named temporary database in the selected destination directory, verifies SQLite quick check, foreign keys, and Reckonsolve schema version, closes it, and atomically replaces the selected destination. It rejects the canonical database itself, including an equivalent hard link. Only after installation succeeds does schema version 8 persist the canonical UTC last-successful-backup time.
 
-CSV export reads all source tables inside one explicit transaction, then closes the transaction before serialization. It writes nine UTF-8-with-BOM, fully quoted CSV files with CRLF rows into one ZIP: Predictions, ForecastRevisions, definition changes, Journal entries, Journal corrections, Resolutions, Invalidations, tags, and Prediction-tag links. Stable identifiers retain relational joins. An included README is the format-version-one data dictionary and explains nulls, time/date semantics, current-value derivation, scoring-revision selection, and spreadsheet treatment of formula-like free text.
+CSV export reads all source tables inside one explicit transaction, then closes the transaction before serialization. Format version 1 wrote nine UTF-8-with-BOM, fully quoted CSV files with CRLF rows for the Binary historical relationships. M20 extends the same relational design to format version 2 with twelve files: Predictions, Binary ForecastRevisions, Numeric ForecastRevisions, definition changes, Journal entries, Journal corrections, Forecast Reviews, Binary Resolutions, Numeric Resolutions, Invalidations, tags, and Prediction-tag links. Stable identifiers retain relational joins. The Numeric files preserve signed scaled integers and rely on each parent Prediction's exported fixed precision rather than converting values through binary floating point. An included README is the data dictionary and explains nulls, time/date semantics, type-appropriate current-value derivation, scoring-revision selection, and spreadsheet treatment of formula-like free text.
 
 The ZIP is written, reopened, checked for exact membership and corrupt entries, and atomically installed through a same-directory temporary file. CSV export does not persist export state, include application settings, or claim restoration capability. Both implementations use only `sqlite3`, `csv`, `zipfile`, and other Python standard-library facilities.
 
@@ -22,8 +22,8 @@ The ZIP is written, reopened, checked for exact membership and corrupt entries, 
 - Backup remains correct if the database is open and avoids dependence on SQLite journal mode or sidecar-file copying.
 - A failed backup or export leaves an existing destination untouched until a complete replacement is ready.
 - The SQLite artifact is the recovery contract; the CSV ZIP remains intentionally analytical.
-- Every historical one-to-many relationship is available without one enormous duplicated table.
-- Consumers must join CSV files by documented identifiers and derive current Forecast or Journal text according to the README.
+- Every Binary and Numeric historical one-to-many relationship is available without one enormous duplicated table.
+- Consumers must join CSV files by documented identifiers and derive current type-appropriate Forecast or Journal text according to the README.
 - The last backup time requires a small schema migration, while CSV export requires no persisted state.
 - Exporting all rows into memory is proportionate to a personal local journal; a demonstrated scale problem would justify streaming from a dedicated consistent read connection later.
 
