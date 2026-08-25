@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline and v0.2 Product Specification
+## v0.1 Baseline, v0.2 Specification, and v0.3 Product Contract
 
-Status: v0.2 source release implemented; Later scope requires explicit planning and authorization
+Status: v0.2 source release implemented; v0.3 CLI companion approved for staged implementation
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -23,7 +23,7 @@ Build a local-first personal forecasting journal that lets one person:
 
 The product is not merely a database of current probabilities. Its defining value is an honest historical record of what the user believed, why they believed it, and how those beliefs changed.
 
-The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior.
+The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface.
 
 ---
 
@@ -1118,6 +1118,8 @@ The installer format, signing approach, public distribution channel, and final o
 
 The v0.2 numeric product contract is resolved in Section 30. Numeric precision and storage are recorded in Section 30.2 and ADR 0009. Forecast Reviews are allowed only while Open, as recorded in Sections 14 and 30.8.
 
+The v0.3 CLI product contract, command identities, shared-data behavior, interaction model, and staged implementation plan are resolved in Section 31. Logo artwork, normal binary distribution, and automation-oriented CLI features remain deferred.
+
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
 ---
@@ -1360,7 +1362,231 @@ v0.2 is not complete unless all of the following are true:
 
 ---
 
-## 31. Instruction to coding agents
+## 31. v0.3 CLI companion product contract and milestone plan
+
+v0.3 adds a source-distributed command-line companion to the completed desktop application. It is an additive interface to the existing product, not a replacement for the GUI and not a second forecasting system. The desktop interface must retain every completed v0.2 workflow and invariant.
+
+The v0.3 user outcome is:
+
+> A Prediction created or changed through either the desktop app or the matching CLI appears through the other interface because both use the same canonical local database and the same application operations.
+
+This user experience is **shared local data**, not synchronization in the replication sense. v0.3 introduces no copy, merge, synchronization ledger, background process, server, account, or network dependency.
+
+### 31.1 Shared-data and architecture contract
+
+The desktop interface and CLI are two presentation layers over the same application and persistence boundaries:
+
+```text
+PySide6 desktop UI ---+
+                      +--> Application operations --> Domain and analytics rules
+Terminal CLI ---------+                |
+                                       +--> SQLite data access --> Canonical database
+```
+
+Requirements:
+
+- The CLI invokes the existing purpose-specific application operations and read models. It must not duplicate lifecycle, validation, concurrency, historical-integrity, scoring-selection, backup, or export rules.
+- The CLI must not issue ad hoc SQL or treat the current forecast as independently mutable state.
+- Each command opens the database selected by its application identity, applies the same migration registry and startup validation as the desktop app, performs its work, and closes the connection deterministically.
+- A CLI invocation must never silently recreate, replace, copy, merge, or repair an unrecognized or incompatible database.
+- The normal user-facing CLI does not select an arbitrary database. Tests may inject an explicit temporary database through an internal composition boundary and must never discover or open either real user database.
+- No CLI-specific schema or persistence table should be added unless a later milestone demonstrates a correctness need. Interface state, prompt progress, and display preferences are not canonical product data.
+- Core behavior remains fully offline and single-user.
+
+### 31.2 Command identities and data locations
+
+The four source entry points have deliberately paired identities:
+
+| Command | Interface | Identity and canonical data |
+|---|---|---|
+| `reckonsolve` | Stable GUI | Reckonsolve at `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3` |
+| `reckonsolve-cli` | Stable CLI | The same stable Reckonsolve database |
+| `reckonsolve-dev` | Development GUI | Reckonsolve Dev at `%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3` |
+| `reckonsolve-cli-dev` | Development CLI | The same isolated Reckonsolve Dev database |
+
+The CLI command selects its identity before resolving its path. Stable and development data remain isolated: no command falls back between them or automatically copies or migrates records from one identity to the other. The CLI is console-native and must not open a Qt window or require construction of the desktop UI.
+
+During source development, the expected commands are `uv run reckonsolve-cli-dev ...` and `uv run reckonsolve-dev`. The stable CLI entry point exists for the same installed source environment as `reckonsolve`; a separately packaged CLI executable is not a v0.3 requirement.
+
+### 31.3 Command surface
+
+v0.3 supports this coherent command family:
+
+```text
+reckonsolve-cli list [filters]
+reckonsolve-cli show PREDICTION_ID
+reckonsolve-cli create binary
+reckonsolve-cli create numeric
+reckonsolve-cli revise PREDICTION_ID
+reckonsolve-cli journal PREDICTION_ID
+reckonsolve-cli review PREDICTION_ID
+reckonsolve-cli resolve PREDICTION_ID
+reckonsolve-cli invalidate PREDICTION_ID
+reckonsolve-cli delete PREDICTION_ID
+reckonsolve-cli backup [DESTINATION]
+reckonsolve-cli export-csv [DESTINATION]
+```
+
+`PREDICTION_ID` is the existing stable integer identifier. v0.3 does not add mutable aliases, slugs, or a second identifier namespace. The development command exposes the same subcommands and behavior under `reckonsolve-cli-dev`.
+
+Every command and subcommand provides useful `--help`. The exact spelling of individual filter flags and prompts may be refined during its owning milestone, but the workflows and semantics in this section are binding.
+
+### 31.4 Read workflows and textual history
+
+`list` is side-effect free. Its default view includes every Prediction in deterministic newest-created-first order. Each row must make the following immediately legible:
+
+- stable Prediction identifier;
+- forecast type;
+- derived lifecycle status;
+- Question;
+- type-appropriate current forecast summary;
+- tags when present; and
+- Needs Attention and Ready to Resolve indicators when applicable.
+
+The command supports question-text search plus lifecycle-status, forecast-type, and single-tag filtering. These filters use the same meanings and logical-AND composition as the desktop Predictions browser. Empty databases and no-match results are distinguished from read failures.
+
+`show PREDICTION_ID` is also side-effect free. It displays the current type-aware Prediction detail, nonempty optional metadata, dates, tags, lifecycle or terminal facts, and the complete exact textual history available in the desktop interface. That history includes immutable Binary or Numeric revisions, rationales, Journal entries and their correction status/history, Forecast Reviews, and Definition history. Stored instants display in the computer's local time; date-only values retain their saved calendar dates. Numeric values retain the Prediction's exact fixed precision and unit.
+
+Terminal charts are not required. The textual history must remain sufficient to recover forecast values, order, timestamps, retained Review context, and type-appropriate resolution information without a visual plot.
+
+### 31.5 Interactive mutation model
+
+All v0.3 mutation commands are human-directed interactive workflows. They may accept the Prediction identifier or artifact destination as an argument, but they prompt for the substantive values needed to create historical or terminal records. v0.3 does not provide scripting-oriented noninteractive mutation flags.
+
+Requirements:
+
+- Intermediate prompts never write partial state. One completed application operation performs the mutation atomically after input is validated.
+- Optional rationale, notes, metadata, dates, and tags remain skippable wherever the desktop contract makes them optional.
+- Cancelling, pressing Ctrl+C, reaching end-of-input before submission, or declining a required confirmation creates no record and reports cancellation without a traceback.
+- Ordinary validation errors are explained in plain language and permit a safe retry when practical. Expected not-found, lifecycle, stale-context, lock-contention, path, migration, and storage failures produce a nonzero exit status without an unhandled traceback.
+- Consequential terminal actions show the reviewed current forecast and explain their one-way v0.2 semantics before confirmation. Permanent deletion requires its own explicit confirmation.
+- Mutations carry and transactionally recheck the same current-revision, metadata-version, and lifecycle context required by their underlying application operations. The CLI never weakens optimistic concurrency to make a command appear successful.
+
+Machine-readable JSON output, output stability intended as a public scripting API, shell completion, and bulk or piped mutation workflows are deferred. Human-readable output may evolve within v0.3 while remaining calm, concise, and usable in ordinary Windows terminals.
+
+### 31.6 Creation and active forecasting workflows
+
+`create binary` prompts for Question and whole-number probability from 0% through 100%. `create numeric` prompts for Question, unit, decimal precision, exact lower bound, median, upper bound, and whole-number confidence from 1% through 99%. Both flows offer the existing optional rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags without making them boilerplate. Creation persists the Prediction, first type-appropriate ForecastRevision, metadata, and tags in the existing atomic operation.
+
+`revise PREDICTION_ID` infers the immutable forecast type and shows the reviewed current forecast before asking for a replacement. Binary and Numeric validation, rationale behavior, unchanged-submission rejection, Open-only revision eligibility, deadline handling, append-only history, and stale-context checks remain exactly as specified for the desktop app.
+
+`journal PREDICTION_ID` records a required Journal body against the exact current type-appropriate revision. It is available while Open or Locked, creates no ForecastRevision, changes no forecast value, and does not reset Needs Attention.
+
+`review PREDICTION_ID` shows the current type-appropriate forecast, accepts an optional note, and records an immutable Review of the unchanged revision. It is available only while Open, creates no ForecastRevision or chart/scoring observation, and resets Needs Attention under the existing rule.
+
+These commands use the same operation result and refreshed read model that the desktop interface would use. Repeating a command after success must not duplicate the earlier mutation automatically; a new invocation represents a new explicit user action.
+
+### 31.7 Lifecycle and data-management workflows
+
+`resolve PREDICTION_ID` infers forecast type and requires a type-appropriate outcome: Yes or No for Binary, or one exact realized value at the Prediction's fixed precision for Numeric. Optional factual Resolution notes and Postmortem remain separate. The command captures exactly one final eligible scoring revision and preserves the existing one-way terminal contract.
+
+`invalidate PREDICTION_ID` accepts an optional reason, explains that the Prediction will remain in history and be excluded from scoring, and requires confirmation before the existing atomic invalidation operation runs.
+
+`delete PREDICTION_ID` is available only for a transaction-current untouched Open Prediction under Section 19. It explains that deletion is permanent, requires explicit confirmation, and rechecks all eligibility inside the deletion transaction. Meaningful, Locked, Resolved, or Invalid history is rejected rather than erased.
+
+`backup` and `export-csv` invoke the existing complete SQLite-backup and relational CSV-ZIP operations. A destination may be supplied or prompted for. Cancel or failure must not replace an existing artifact, and only a successfully installed and verified backup advances the saved last-successful-backup time. CLI export remains CSV format version 2 unless the underlying product export contract is separately revised.
+
+### 31.8 Multiple-process and refresh behavior
+
+The GUI and CLI may be open at the same time, with each process owning its own SQLite connection. Simultaneous reads are supported. Sequential writes are the normal and recommended workflow.
+
+Every write retains SQLite's bounded busy handling, immediate transaction boundary, database constraints, and application-level stale-context rechecks. If another process holds the write lock or changes the reviewed Prediction first, the command must fail clearly and leave canonical data intact; it must not silently overwrite, merge, or indefinitely retry. The user can inspect the current record and deliberately run the action again.
+
+v0.3 does not promise push-based live updates to an already rendered GUI screen. A CLI change appears when the desktop app next starts, navigates, or performs its normal refresh; a GUI change appears on the next CLI invocation. No file watcher, daemon, inter-process message bus, or synchronization service is introduced.
+
+### 31.9 Output and compatibility requirements
+
+- Read results go to standard output; expected errors and cancellation explanations use standard error where appropriate.
+- Success exits with status zero. Validation, not-found, lifecycle, concurrency, database, and artifact failures exit nonzero. A detailed public exit-code taxonomy is not part of v0.3.
+- Free text is treated as text, not terminal markup. The CLI must not interpret Question, rationale, Journal, Review, notes, or Postmortem content as commands or formatting instructions.
+- Output must remain understandable without ANSI color and usable in PowerShell and Windows Terminal. Decorative color may not be the only carrier of meaning.
+- Exact historical timestamps, date-only semantics, whole-number probabilities and confidence, and fixed-precision Numeric quantities must not be rounded or reformatted misleadingly.
+- Existing v0.2 databases must open without reinterpretation or data loss. If v0.3 requires no schema change, the schema remains version 12; any demonstrated migration need must follow the existing immutable migration discipline.
+- Desktop behavior, backup recoverability, CSV format honesty, and the private GUI smoke build must remain intact throughout v0.3.
+
+### 31.10 Implementation milestones
+
+#### Milestone 21: CLI foundation, identity, and read model
+
+- Add `reckonsolve-cli` and `reckonsolve-cli-dev` source entry points with shared command composition and paired stable/development identities.
+- Open, validate, migrate, and close the identity-selected database without constructing the PySide6 interface.
+- Implement command help, version reporting, `list`, its combined filters, and type-aware `show` with complete textual history.
+- Preserve unambiguous empty, no-match, not-found, startup-failure, and expected-error output.
+- Prove stable/development path selection, explicit temporary-path test injection, read-only behavior, exact Numeric formatting, local-time display, and GUI/CLI visibility against one shared temporary database.
+
+Acceptance demonstration:
+
+> Create Binary and Numeric Predictions through existing application operations -> run the matching CLI list and show commands -> both current forecasts and their full histories appear exactly, while the other identity's database remains untouched.
+
+#### Milestone 22: Type-aware interactive creation
+
+- Implement `create binary` and `create numeric` through existing atomic application operations.
+- Preserve the Binary quick path, exact Numeric validation, optional details, tags, deadlines, and cancellation behavior.
+- Return the new stable Prediction identifier and a concise type-appropriate forecast summary after success.
+- Prove that CLI-created records survive restart and appear unchanged in the matching desktop interface.
+
+Acceptance demonstration:
+
+> Create one Binary and one Numeric Prediction through `reckonsolve-cli-dev` -> open `reckonsolve-dev` -> both records, first revisions, optional details, and tags appear in the GUI.
+
+#### Milestone 23: Revisions, Journal entries, and Forecast Reviews
+
+- Implement type-aware `revise`, `journal`, and `review` commands.
+- Show reviewed context before mutation and reuse all existing unchanged-value, lifecycle, deadline, immutable-history, anchor, Review, freshness, and optimistic-concurrency rules.
+- Keep Ctrl+C, end-of-input, validation failure, and rejected stale context side-effect free.
+- Prove GUI-to-CLI and CLI-to-GUI timeline visibility for both forecast types without adding false revision, history-chart, or scoring observations.
+
+#### Milestone 24: Terminal lifecycle and guarded deletion
+
+- Implement type-aware `resolve`, `invalidate`, and `delete` commands with plain-language confirmation.
+- Preserve final eligible scoring-revision capture, exact Numeric outcomes, optional Resolution notes/Postmortem, Invalid exclusion, and one-way terminal behavior.
+- Enforce untouched-Open deletion eligibility inside the transaction and direct meaningful history toward Invalid rather than erasure.
+- Test cancellation, deadline boundaries, stale context, lock contention, terminal rejection, restart, and both forecast types.
+
+#### Milestone 25: Backup, export, cross-interface hardening, and v0.3 closure
+
+- Implement CLI backup and CSV export through the existing verified transfer operations.
+- Exercise source and destination failure safety, canonical-database destination rejection, last-successful-backup behavior, and format-version-two export contents.
+- Add independent-connection tests for simultaneous reads, sequential cross-interface writes, write-lock failure, stale reviewed context, restart, migration, and stable/development isolation.
+- Run the complete automated suite and the existing private GUI frozen-build smoke workflow so the additive CLI cannot regress v0.2.
+- Align README, architecture, decision records when warranted, command help, and release documentation with the implemented source CLI.
+- Close v0.3 as a source release; do not turn this milestone into a separately packaged CLI binary, installer, signing, or public binary-distribution project.
+
+### 31.11 v0.3 acceptance criteria
+
+v0.3 is not complete unless all of the following are true:
+
+1. `reckonsolve-cli` and `reckonsolve` open the same stable canonical database, while both development commands share a separate development database.
+2. A record created or changed in the GUI is visible on the next matching CLI invocation, and a record created or changed in the CLI is visible on the next matching GUI load or refresh.
+3. `list` and `show` represent Binary and Numeric forecasts, lifecycle, tags, attention indicators, exact history, and terminal facts without rewriting or flattening them.
+4. Read commands never mutate product data, including timestamps, settings, or migration state when no migration is pending.
+5. CLI Binary and Numeric creation use the same required fields, optionality, exactness, and atomicity as desktop creation.
+6. CLI revisions append exactly one changed type-appropriate ForecastRevision; unchanged, cancelled, stale, Locked, and terminal attempts append none.
+7. CLI Journal entries retain their exact current revision context and do not change forecasts or freshness.
+8. CLI Forecast Reviews are Open-only, retain an unchanged exact forecast context, reset freshness, and create no revision, chart, or scoring observation.
+9. CLI Resolution captures exactly one final eligible type-appropriate scoring revision and preserves exact Numeric outcomes.
+10. CLI Invalidation preserves history and excludes the Prediction from scoring; guarded deletion removes only an explicitly confirmed untouched Open Prediction.
+11. Expected validation, lifecycle, concurrency, startup, migration, path, backup, and export failures are clear, nonzero, and historically safe.
+12. Simultaneous reads and normal sequential GUI/CLI writes preserve one canonical history; conflicting writes never silently overwrite or merge records.
+13. CLI backup is recoverable and CLI CSV export retains the complete v0.2 relational format and safety guarantees.
+14. All automated checks and the existing private GUI smoke build pass without using either real user database.
+15. All v0.2 desktop workflows and records retain their prior behavior.
+16. The complete v0.3 source workflow remains offline and single-user.
+
+### 31.12 Explicitly outside v0.3
+
+- Original Reckonsolve logo or application-icon artwork.
+- A separately frozen or installed CLI executable, installer integration, shell shortcuts, code signing, automatic updates, or public binary distribution.
+- Live GUI refresh triggered by CLI writes, file watching, a resident daemon, inter-process messaging, database replication, merge logic, cloud sync, or hosted storage.
+- JSON or Markdown export, machine-readable command output, a stable scripting API, noninteractive mutation flags, bulk import, or piped batch operations.
+- Shell completion, a curses/Textual-style TUI, interactive terminal charts, or reproducing the desktop Analytics screen in the terminal.
+- CLI metadata editing, Definition-history creation, Journal-entry correction, settings editing, or terminal-record correction/reopening.
+- An arbitrary normal-user database selector or automatic movement between stable and development data.
+- New forecast models, scoring methods, notifications, reminders, or any other Later feature not explicitly promoted in this section.
+
+---
+
+## 32. Instruction to coding agents
 
 Before implementing a milestone:
 
