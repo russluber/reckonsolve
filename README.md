@@ -49,6 +49,15 @@ uv run ruff format --check .
 
 `uv run reckonsolve-dev` is the normal source-development command. Its window title says **Reckonsolve Dev**, and it creates or opens an isolated development database, applies pending schema migrations, and keeps that database available until shutdown. `uv run reckonsolve` remains the stable-channel entry point and must not be used as an interchangeable development command because it opens the stable database location.
 
+For user-wide access from PowerShell, Command Prompt, Windows Terminal, or Git Bash, install one non-editable snapshot from the repository root:
+
+```powershell
+uv tool install .
+uv tool update-shell
+```
+
+After reopening the shell, `reckonsolve` launches the stable GUI, while `rsc` is the short form of `reckonsolve-cli`. The development shorthand is `rscd` for `reckonsolve-cli-dev`. The long names remain available. Reinstall a later checked-out release with `uv tool install --force .`; a non-editable tool snapshot does not silently follow subsequent source changes.
+
 The matching CLI reads and changes records in that same development data without opening a window:
 
 ```powershell

@@ -1,3 +1,6 @@
+import tomllib
+from pathlib import Path
+
 import pytest
 
 import reckonsolve.app
@@ -32,3 +35,15 @@ def test_development_entry_point_uses_isolated_identity(monkeypatch) -> None:
 
     assert exit_info.value.code == 29
     assert calls == [DEVELOPMENT_APPLICATION]
+
+
+def test_short_cli_scripts_delegate_to_the_existing_cli_entry_points() -> None:
+    project = tomllib.loads(
+        (Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    scripts = project["project"]["scripts"]
+
+    assert scripts["rsc"] == scripts["reckonsolve-cli"] == "reckonsolve:main_cli"
+    assert (
+        scripts["rscd"] == scripts["reckonsolve-cli-dev"] == "reckonsolve:main_cli_dev"
+    )

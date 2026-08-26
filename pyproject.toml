@@ -15,6 +15,8 @@ reckonsolve = "reckonsolve:main"
 reckonsolve-cli = "reckonsolve:main_cli"
 reckonsolve-cli-dev = "reckonsolve:main_cli_dev"
 reckonsolve-dev = "reckonsolve:main_dev"
+rsc = "reckonsolve:main_cli"
+rscd = "reckonsolve:main_cli_dev"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

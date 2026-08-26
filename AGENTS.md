@@ -52,7 +52,7 @@ Milestones 13 through 20 in `docs/product-spec.md` are complete. Preserve the co
 
 v0.3 adds:
 
-- paired `reckonsolve-cli` and `reckonsolve-cli-dev` source commands sharing their matching GUI database identities;
+- paired `reckonsolve-cli` and `reckonsolve-cli-dev` source commands, plus their `rsc` and `rscd` executable shortcuts, sharing their matching GUI database identities;
 - standard-library command parsing with no new production dependency;
 - type-aware, side-effect-free `list` with combined Question/status/type/tag filters and attention indicators;
 - type-aware `show` with exact current detail, terminal facts, timeline, Journal correction history, Reviews, and Definition history;

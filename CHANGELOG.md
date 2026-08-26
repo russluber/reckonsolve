@@ -4,6 +4,10 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
+### Added
+
+- Cross-shell `rsc` and `rscd` executable shortcuts for the stable and development CLI companions while retaining the descriptive command names.
+
 ## 0.3.0 - 2026-08-25
 
 ### Added
