@@ -9,6 +9,12 @@ All notable changes to Reckonsolve are documented here.
 - Cross-shell `rsc` and `rscd` executable shortcuts for the stable and development CLI companions while retaining the descriptive command names.
 - Milestone 26's schema-version-13 append-only foundation for Binary and Numeric Resolution corrections, Invalidation-reason corrections, and Postmortem completion facts.
 - Effective terminal-history derivation with optimistic correction tokens, exact Numeric snapshots, immutable original terminal facts, and corrected-outcome selection for ordinary analytics.
+- Milestone 27 desktop workflows for correcting Binary and exact Numeric Resolution facts, adding or revising a Postmortem after resolution, and correcting or clearing an Invalid reason without reopening the Prediction.
+- Effective terminal summaries plus collapsed, complete original-to-current correction history on Binary and Numeric Prediction Detail.
+
+### Changed
+
+- Every terminal correction now receives a deliberate confirmation; score-affecting outcome or actual-value changes are identified explicitly and require a nonempty explanation.
 
 ## 0.3.0 - 2026-08-25
 

@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.3. The approved next development target is v0.4, whose contract and Milestones 26 through 31 are defined in Section 32 of `docs/product-spec.md`. Milestone 26 is complete; Milestones 27 through 31 remain.
+The completed source release is v0.3. The approved next development target is v0.4, whose contract and Milestones 26 through 31 are defined in Section 32 of `docs/product-spec.md`. Milestones 26 and 27 are complete; Milestones 28 through 31 remain.
 
 The v0.1 baseline includes:
 
@@ -67,7 +67,7 @@ v0.3 adds:
 
 Milestones 21 through 25 in `docs/product-spec.md` are complete. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem. Treat any post-v0.3 feature work as a new explicitly authorized milestone or coherent vertical slice.
 
-v0.4 Milestone 26 adds the schema-version-13 domain and persistence foundation for historically honest terminal-record corrections, later and versioned Postmortems, and Postmortem completion. The Needs Postmortem queue, resolved-prediction scorecards, paired initial-versus-final update analytics, and associated CLI-read and export hardening remain in Milestones 27 through 31. Implement them only through their explicitly authorized milestones. Preserve original terminal records, timestamps, scoring-revision capture, and one-observation-per-Prediction scoring throughout.
+v0.4 Milestone 26 adds the schema-version-13 domain and persistence foundation for historically honest terminal-record corrections, later and versioned Postmortems, and Postmortem completion. Milestone 27 exposes confirmed desktop correction workflows for Binary and Numeric Resolutions and Invalid reasons, including later Postmortems, effective terminal display, and complete collapsed audit history. The Needs Postmortem queue, resolved-prediction scorecards, paired initial-versus-final update analytics, and associated CLI-read and export hardening remain in Milestones 28 through 31. Implement them only through their explicitly authorized milestones. Preserve original terminal records, timestamps, scoring-revision capture, and one-observation-per-Prediction scoring throughout.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 

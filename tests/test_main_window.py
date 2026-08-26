@@ -49,10 +49,16 @@ from reckonsolve.domain.browser import (
 )
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
+    BinaryResolutionHistory,
     DefinitionChange,
     FixedPrecisionValue,
+    Invalidation,
+    InvalidationHistory,
+    NumericResolution,
+    NumericResolutionHistory,
     PredictionStatus,
     PredictionType,
+    Resolution,
 )
 from reckonsolve.domain.transfer import (
     BackupResult,
@@ -1102,6 +1108,70 @@ class FakePredictionOperations:
         ):
             raise ApplicationError("Numeric Prediction not found.")
         return self.numeric_latest
+
+    def get_binary_resolution_history(
+        self,
+        prediction_id: int,
+    ) -> BinaryResolutionHistory:
+        prediction = self.get_prediction(prediction_id)
+        if prediction.resolution is None:
+            raise ApplicationError("Binary Resolution not found.")
+        resolution = prediction.resolution
+        return BinaryResolutionHistory(
+            original=Resolution(
+                resolution_id=resolution.resolution_id,
+                prediction_id=resolution.prediction_id,
+                outcome=resolution.outcome,
+                resolved_at=resolution.resolved_at,
+                scoring_revision_id=resolution.scoring_revision_id,
+                scoring_revision_sequence=resolution.scoring_revision_sequence,
+                scoring_probability_percent=resolution.scoring_probability_percent,
+                resolution_notes=resolution.resolution_notes,
+                postmortem=resolution.postmortem,
+            )
+        )
+
+    def get_numeric_resolution_history(
+        self,
+        prediction_id: int,
+    ) -> NumericResolutionHistory:
+        prediction = self.get_numeric_prediction(prediction_id)
+        if prediction.resolution is None:
+            raise ApplicationError("Numeric Resolution not found.")
+        resolution = prediction.resolution
+        return NumericResolutionHistory(
+            original=NumericResolution(
+                resolution_id=resolution.resolution_id,
+                prediction_id=resolution.prediction_id,
+                actual_value=resolution.actual_value,
+                resolved_at=resolution.resolved_at,
+                scoring_revision_id=resolution.scoring_revision_id,
+                scoring_revision_sequence=resolution.scoring_revision_sequence,
+                resolution_notes=resolution.resolution_notes,
+                postmortem=resolution.postmortem,
+            )
+        )
+
+    def get_invalidation_history(self, prediction_id: int) -> InvalidationHistory:
+        if self.latest is not None and self.latest.prediction_id == prediction_id:
+            invalidation = self.latest.invalidation
+        elif (
+            self.numeric_latest is not None
+            and self.numeric_latest.prediction_id == prediction_id
+        ):
+            invalidation = self.numeric_latest.invalidation
+        else:
+            raise ApplicationError("Prediction not found.")
+        if invalidation is None:
+            raise ApplicationError("Invalidation not found.")
+        return InvalidationHistory(
+            original=Invalidation(
+                invalidation_id=invalidation.invalidation_id,
+                prediction_id=invalidation.prediction_id,
+                invalidated_at=invalidation.invalidated_at,
+                reason=invalidation.reason,
+            )
+        )
 
     def get_prediction_for_navigation(
         self,

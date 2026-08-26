@@ -41,9 +41,17 @@ from reckonsolve.domain.predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
     BinaryOutcome,
+    BinaryResolutionHistory,
     DefinitionChange,
+    FixedPrecisionValue,
+    InvalidationHistory,
+    InvalidationReasonCorrection,
+    NumericResolutionCorrection,
+    NumericResolutionHistory,
     PredictionStatus,
     PredictionType,
+    PredictionValidationError,
+    ResolutionCorrection,
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
@@ -370,6 +378,54 @@ class PredictionOperations(Protocol):
         expected_metadata_version: int,
     ) -> PredictionSnapshot:
         """Preserve a prediction as terminal and excluded from scoring."""
+
+    def get_binary_resolution_history(
+        self,
+        prediction_id: int,
+    ) -> BinaryResolutionHistory:
+        """Return original, effective, and corrected Binary Resolution facts."""
+
+    def get_numeric_resolution_history(
+        self,
+        prediction_id: int,
+    ) -> NumericResolutionHistory:
+        """Return original, effective, and corrected Numeric Resolution facts."""
+
+    def get_invalidation_history(self, prediction_id: int) -> InvalidationHistory:
+        """Return original, effective, and corrected Invalidation reasons."""
+
+    def correct_binary_resolution(
+        self,
+        prediction_id: int,
+        outcome: BinaryOutcome,
+        *,
+        resolution_notes: str | None,
+        postmortem: str | None,
+        correction_reason: str | None = None,
+        expected_correction_id: int | None,
+    ) -> BinaryResolutionHistory:
+        """Append one audited Binary Resolution correction."""
+
+    def correct_numeric_resolution(
+        self,
+        prediction_id: int,
+        actual_value: object,
+        *,
+        resolution_notes: str | None,
+        postmortem: str | None,
+        correction_reason: str | None = None,
+        expected_correction_id: int | None,
+    ) -> NumericResolutionHistory:
+        """Append one audited exact Numeric Resolution correction."""
+
+    def correct_invalidation_reason(
+        self,
+        prediction_id: int,
+        reason: str | None,
+        *,
+        expected_correction_id: int | None,
+    ) -> InvalidationHistory:
+        """Append one audited Invalidation-reason correction."""
 
     def delete_prediction(
         self,
@@ -1006,6 +1062,8 @@ class NumericPredictionDetailScreen(QWidget):
         self.setObjectName("numericPredictionDetailScreen")
         self._operations = operations
         self._prediction: NumericPredictionSnapshot | None = None
+        self._resolution_history: NumericResolutionHistory | None = None
+        self._invalidation_history: InvalidationHistory | None = None
 
         title = QLabel("Prediction Detail", self)
         title.setObjectName("numericPredictionDetailScreenTitle")
@@ -1169,11 +1227,35 @@ class NumericPredictionDetailScreen(QWidget):
         self.postmortem.setObjectName("numericResolutionPostmortem")
         self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem.setWordWrap(True)
+        self.correct_resolution_button = QPushButton(
+            "Correct Resolution",
+            self.resolution_section,
+        )
+        self.correct_resolution_button.setObjectName("correctNumericResolutionButton")
+        self.correct_resolution_button.setAccessibleName(
+            "Correct Numeric Resolution or Postmortem"
+        )
+        self.correct_resolution_button.setToolTip(
+            "Correct the actual value or notes, or add or correct the Postmortem. "
+            "The original Resolution remains in history."
+        )
+        apply_lucide_icon(self.correct_resolution_button, LucideIcon.PENCIL)
+        self.resolution_history = _collapsible_history_group(
+            "Resolution correction history",
+            "numericResolutionCorrectionHistory",
+            self.resolution_section,
+        )
         resolution_layout.addWidget(self.resolution_actual)
         resolution_layout.addWidget(self.resolution_time)
         resolution_layout.addWidget(self.resolution_scoring)
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem)
+        resolution_layout.addWidget(
+            self.correct_resolution_button,
+            0,
+            Qt.AlignmentFlag.AlignLeft,
+        )
+        resolution_layout.addWidget(self.resolution_history)
         self.resolution_section.setHidden(True)
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
@@ -1186,8 +1268,30 @@ class NumericPredictionDetailScreen(QWidget):
         self.invalidation_reason.setObjectName("numericInvalidationReason")
         self.invalidation_reason.setTextFormat(Qt.TextFormat.PlainText)
         self.invalidation_reason.setWordWrap(True)
+        self.correct_invalidation_button = QPushButton(
+            "Correct Reason",
+            self.invalidation_section,
+        )
+        self.correct_invalidation_button.setObjectName(
+            "correctNumericInvalidationReasonButton"
+        )
+        self.correct_invalidation_button.setToolTip(
+            "Append a correction while preserving the original Invalid reason."
+        )
+        apply_lucide_icon(self.correct_invalidation_button, LucideIcon.PENCIL)
+        self.invalidation_history = _collapsible_history_group(
+            "Invalidation correction history",
+            "numericInvalidationCorrectionHistory",
+            self.invalidation_section,
+        )
         invalidation_layout.addWidget(self.invalidation_time)
         invalidation_layout.addWidget(self.invalidation_reason)
+        invalidation_layout.addWidget(
+            self.correct_invalidation_button,
+            0,
+            Qt.AlignmentFlag.AlignLeft,
+        )
+        invalidation_layout.addWidget(self.invalidation_history)
         self.invalidation_section.setHidden(True)
 
         history_label = QLabel("INTERVAL HISTORY", self.detail_content)
@@ -1277,6 +1381,10 @@ class NumericPredictionDetailScreen(QWidget):
         self.resolve_button.clicked.connect(self.open_resolve_prediction)
         self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
         self.delete_button.clicked.connect(self.delete_prediction)
+        self.correct_resolution_button.clicked.connect(self.open_correct_resolution)
+        self.correct_invalidation_button.clicked.connect(
+            self.open_correct_invalidation_reason
+        )
 
     @property
     def prediction_id(self) -> int | None:
@@ -1305,6 +1413,10 @@ class NumericPredictionDetailScreen(QWidget):
             self.resolve_button.setEnabled(False)
             self.mark_invalid_button.setEnabled(False)
             self.delete_button.setEnabled(False)
+            self.correct_resolution_button.setEnabled(False)
+            self.correct_invalidation_button.setEnabled(False)
+            self._resolution_history = None
+            self._invalidation_history = None
             self.resolution_section.setHidden(True)
             self.invalidation_section.setHidden(True)
             self.detail_content.setHidden(True)
@@ -1394,10 +1506,32 @@ class NumericPredictionDetailScreen(QWidget):
     ) -> None:
         resolution = prediction.resolution
         if resolution is None:
+            self._resolution_history = None
+            self.correct_resolution_button.setEnabled(False)
+            self.resolution_history.setHidden(True)
             self.resolution_section.setHidden(True)
         else:
+            try:
+                history = self._operations.get_numeric_resolution_history(
+                    prediction.prediction_id
+                )
+            except ApplicationError as error:
+                effective = resolution
+                self._resolution_history = None
+                self.correct_resolution_button.setEnabled(False)
+                self.resolution_history.setHidden(True)
+                self._show_error(f"Resolution history is unavailable. {error}")
+            else:
+                effective = history.effective
+                self._resolution_history = history
+                self.correct_resolution_button.setEnabled(True)
+                _show_numeric_resolution_correction_history(
+                    self.resolution_history,
+                    history,
+                    prediction.unit,
+                )
             self.resolution_actual.setText(
-                f"Actual value: {resolution.actual_value} {prediction.unit}"
+                f"Actual value: {effective.actual_value} {prediction.unit}"
             )
             self.resolution_time.setText(
                 f"Resolved {_format_local_timestamp(resolution.resolved_at)}"
@@ -1408,28 +1542,51 @@ class NumericPredictionDetailScreen(QWidget):
             )
             self.resolution_notes.setText(
                 ""
-                if not resolution.resolution_notes
-                else f"Resolution notes: {resolution.resolution_notes}"
+                if not effective.resolution_notes
+                else f"Resolution notes: {effective.resolution_notes}"
             )
-            self.resolution_notes.setHidden(not resolution.resolution_notes)
+            self.resolution_notes.setHidden(not effective.resolution_notes)
             self.postmortem.setText(
                 ""
-                if not resolution.postmortem
-                else f"Postmortem: {resolution.postmortem}"
+                if not effective.postmortem
+                else f"Postmortem: {effective.postmortem}"
             )
-            self.postmortem.setHidden(not resolution.postmortem)
+            self.postmortem.setHidden(not effective.postmortem)
             self.resolution_section.setHidden(False)
         invalidation = prediction.invalidation
         if invalidation is None:
+            self._invalidation_history = None
+            self.correct_invalidation_button.setEnabled(False)
+            self.invalidation_history.setHidden(True)
             self.invalidation_section.setHidden(True)
         else:
+            try:
+                invalidation_history = self._operations.get_invalidation_history(
+                    prediction.prediction_id
+                )
+            except ApplicationError as error:
+                effective_invalidation = invalidation
+                self._invalidation_history = None
+                self.correct_invalidation_button.setEnabled(False)
+                self.invalidation_history.setHidden(True)
+                self._show_error(f"Invalidation history is unavailable. {error}")
+            else:
+                effective_invalidation = invalidation_history.effective
+                self._invalidation_history = invalidation_history
+                self.correct_invalidation_button.setEnabled(True)
+                _show_invalidation_correction_history(
+                    self.invalidation_history,
+                    invalidation_history,
+                )
             self.invalidation_time.setText(
                 f"Marked Invalid {_format_local_timestamp(invalidation.invalidated_at)}"
             )
             self.invalidation_reason.setText(
-                "" if not invalidation.reason else f"Reason: {invalidation.reason}"
+                ""
+                if not effective_invalidation.reason
+                else f"Reason: {effective_invalidation.reason}"
             )
-            self.invalidation_reason.setHidden(not invalidation.reason)
+            self.invalidation_reason.setHidden(not effective_invalidation.reason)
             self.invalidation_section.setHidden(False)
 
     def _show_error(self, message: str) -> None:
@@ -1703,6 +1860,42 @@ class NumericPredictionDetailScreen(QWidget):
     def open_correct_journal_entry(self, entry: NumericJournalTimelineSnapshot) -> None:
         dialog = CorrectNumericJournalEntryDialog(self._operations, entry, self)
         dialog.correction_saved.connect(lambda _entry: self.refresh())
+        dialog.open()
+
+    def open_correct_resolution(self) -> None:
+        """Refresh, then correct the effective Numeric Resolution append-only."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        history = self._resolution_history
+        prediction = self._prediction
+        if history is None or prediction is None:
+            return
+        dialog = CorrectNumericResolutionDialog(
+            self._operations,
+            prediction,
+            history,
+            self,
+        )
+        dialog.correction_saved.connect(lambda _history: self.refresh())
+        dialog.open()
+
+    def open_correct_invalidation_reason(self) -> None:
+        """Refresh, then correct the effective Invalid reason append-only."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        history = self._invalidation_history
+        if history is None:
+            return
+        dialog = CorrectInvalidationReasonDialog(
+            self._operations,
+            history,
+            self,
+        )
+        dialog.correction_saved.connect(lambda _history: self.refresh())
         dialog.open()
 
 
@@ -2431,8 +2624,9 @@ class ResolveNumericPredictionDialog(QDialog):
         title = QLabel("Resolve Numeric Prediction", self)
         explanation = QLabel(
             "Resolution records the realized quantity and captures the current "
-            "interval for scoring. This terminal decision cannot be reopened or "
-            "changed in v0.2.",
+            "interval for scoring. The terminal decision cannot be reopened; an "
+            "honest mistake in its facts can later be corrected with visible "
+            "history.",
             self,
         )
         explanation.setObjectName("resolveNumericPredictionExplanation")
@@ -2540,8 +2734,8 @@ class MarkNumericPredictionInvalidDialog(QDialog):
         title = QLabel("Mark Numeric Prediction Invalid", self)
         explanation = QLabel(
             "Invalid preserves this prediction and its complete history but "
-            "excludes it from scoring. This terminal decision cannot be reopened "
-            "or changed in v0.2.",
+            "excludes it from scoring. The terminal decision cannot be reopened; "
+            "its reason can later be corrected with visible history.",
             self,
         )
         explanation.setObjectName("markNumericInvalidExplanation")
@@ -2595,6 +2789,423 @@ class MarkNumericPredictionInvalidDialog(QDialog):
             return
         self.prediction_invalidated.emit(prediction)
         self.accept()
+
+
+class CorrectBinaryResolutionDialog(QDialog):
+    """Append one confirmed Binary Resolution correction snapshot."""
+
+    correction_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        history: BinaryResolutionHistory,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("correctBinaryResolutionDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Correct Resolution")
+        self.setModal(True)
+        self.resize(600, 620)
+        self._operations = operations
+        self._prediction_id = history.original.prediction_id
+        self._expected_correction_id = history.current_correction_id
+        self._current = history.effective
+
+        title = QLabel("Correct Resolution", self)
+        explanation = QLabel(
+            "This appends a transparent correction. The original Resolution, "
+            "resolution time, scoring forecast, and every earlier correction "
+            "remain in history.",
+            self,
+        )
+        explanation.setObjectName("binaryResolutionCorrectionExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+
+        outcome_label = QLabel("Effective outcome", self)
+        self.outcome_yes = QRadioButton("Yes", self)
+        self.outcome_yes.setObjectName("correctResolutionOutcomeYes")
+        self.outcome_no = QRadioButton("No", self)
+        self.outcome_no.setObjectName("correctResolutionOutcomeNo")
+        if self._current.outcome is BinaryOutcome.YES:
+            self.outcome_yes.setChecked(True)
+        else:
+            self.outcome_no.setChecked(True)
+        outcome_row = QWidget(self)
+        outcome_layout = QHBoxLayout(outcome_row)
+        outcome_layout.setContentsMargins(0, 0, 0, 0)
+        outcome_layout.addWidget(self.outcome_yes)
+        outcome_layout.addWidget(self.outcome_no)
+        outcome_layout.addStretch()
+
+        self.score_change_notice = QLabel(
+            "Changing the outcome changes this Prediction's Brier score and "
+            "calibration result. A correction explanation is required.",
+            self,
+        )
+        self.score_change_notice.setObjectName("binaryResolutionScoreChangeNotice")
+        self.score_change_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.score_change_notice.setWordWrap(True)
+
+        notes_label = QLabel("Resolution notes (optional)", self)
+        self.notes_input = QPlainTextEdit(self)
+        self.notes_input.setObjectName("correctResolutionNotesInput")
+        self.notes_input.setPlainText(self._current.resolution_notes or "")
+        self.notes_input.setMaximumHeight(110)
+        self.notes_input.setTabChangesFocus(True)
+        notes_label.setBuddy(self.notes_input)
+
+        postmortem_label = QLabel("Postmortem (optional)", self)
+        self.postmortem_input = QPlainTextEdit(self)
+        self.postmortem_input.setObjectName("correctResolutionPostmortemInput")
+        self.postmortem_input.setPlainText(self._current.postmortem or "")
+        self.postmortem_input.setMaximumHeight(110)
+        self.postmortem_input.setTabChangesFocus(True)
+        postmortem_label.setBuddy(self.postmortem_input)
+
+        reason_label = QLabel("Correction explanation", self)
+        self.reason_input = QLineEdit(self)
+        self.reason_input.setObjectName("binaryOutcomeCorrectionReasonInput")
+        self.reason_input.setPlaceholderText(
+            "Required only when changing Yes to No or No to Yes"
+        )
+        reason_label.setBuddy(self.reason_input)
+
+        self.form_error = _dialog_error_label(
+            "correctBinaryResolutionError",
+            self,
+        )
+        self.buttons = _save_cancel_buttons(
+            "saveBinaryResolutionCorrectionButton",
+            "Save Correction",
+            self,
+        )
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addSpacing(8)
+        layout.addWidget(outcome_label)
+        layout.addWidget(outcome_row)
+        layout.addWidget(self.score_change_notice)
+        layout.addWidget(notes_label)
+        layout.addWidget(self.notes_input)
+        layout.addWidget(postmortem_label)
+        layout.addWidget(self.postmortem_input)
+        layout.addWidget(reason_label)
+        layout.addWidget(self.reason_input)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.outcome_yes.toggled.connect(self._update_score_change_notice)
+        self.outcome_no.toggled.connect(self._update_score_change_notice)
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self._update_score_change_notice()
+
+    def submit(self) -> None:
+        self.form_error.setHidden(True)
+        outcome = (
+            BinaryOutcome.YES if self.outcome_yes.isChecked() else BinaryOutcome.NO
+        )
+        notes = _normalized_optional_text(self.notes_input.toPlainText())
+        postmortem = _normalized_optional_text(self.postmortem_input.toPlainText())
+        correction_reason = _normalized_optional_text(self.reason_input.text())
+        outcome_changed = outcome is not self._current.outcome
+        if (
+            outcome is self._current.outcome
+            and notes == self._current.resolution_notes
+            and postmortem == self._current.postmortem
+        ):
+            self._show_error(
+                "Change the outcome, Resolution notes, or Postmortem before saving."
+            )
+            return
+        if outcome_changed and correction_reason is None:
+            self._show_error("Explain why the recorded outcome is being corrected.")
+            self.reason_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+            return
+        if not _confirm_terminal_correction(self, score_affecting=outcome_changed):
+            return
+        try:
+            history = self._operations.correct_binary_resolution(
+                self._prediction_id,
+                outcome,
+                resolution_notes=notes,
+                postmortem=postmortem,
+                correction_reason=correction_reason,
+                expected_correction_id=self._expected_correction_id,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.correction_saved.emit(history)
+        self.accept()
+
+    def _update_score_change_notice(self) -> None:
+        selected = (
+            BinaryOutcome.YES if self.outcome_yes.isChecked() else BinaryOutcome.NO
+        )
+        self.score_change_notice.setHidden(selected is self._current.outcome)
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+
+class CorrectNumericResolutionDialog(QDialog):
+    """Append one confirmed exact Numeric Resolution correction snapshot."""
+
+    correction_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        prediction: NumericPredictionSnapshot,
+        history: NumericResolutionHistory,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("correctNumericResolutionDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Correct Numeric Resolution")
+        self.setModal(True)
+        self.resize(600, 620)
+        self._operations = operations
+        self._prediction_id = prediction.prediction_id
+        self._unit = prediction.unit
+        self._decimal_places = prediction.decimal_places
+        self._expected_correction_id = history.current_correction_id
+        self._current = history.effective
+
+        title = QLabel("Correct Numeric Resolution", self)
+        explanation = QLabel(
+            "This appends a transparent correction. The original Resolution, "
+            "resolution time, scoring interval, and every earlier correction "
+            "remain in history.",
+            self,
+        )
+        explanation.setObjectName("numericResolutionCorrectionExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+
+        actual_label = QLabel(f"Effective actual value ({prediction.unit})", self)
+        self.actual_value_input = QLineEdit(self)
+        self.actual_value_input.setObjectName("correctNumericActualValueInput")
+        self.actual_value_input.setText(str(self._current.actual_value))
+        actual_label.setBuddy(self.actual_value_input)
+        self.score_change_notice = QLabel(
+            "Changing the actual value changes containment, error, and interval "
+            "score results. A correction explanation is required.",
+            self,
+        )
+        self.score_change_notice.setObjectName("numericResolutionScoreChangeNotice")
+        self.score_change_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.score_change_notice.setWordWrap(True)
+
+        notes_label = QLabel("Resolution notes (optional)", self)
+        self.notes_input = QPlainTextEdit(self)
+        self.notes_input.setObjectName("correctNumericResolutionNotesInput")
+        self.notes_input.setPlainText(self._current.resolution_notes or "")
+        self.notes_input.setMaximumHeight(110)
+        self.notes_input.setTabChangesFocus(True)
+        notes_label.setBuddy(self.notes_input)
+
+        postmortem_label = QLabel("Postmortem (optional)", self)
+        self.postmortem_input = QPlainTextEdit(self)
+        self.postmortem_input.setObjectName("correctNumericResolutionPostmortemInput")
+        self.postmortem_input.setPlainText(self._current.postmortem or "")
+        self.postmortem_input.setMaximumHeight(110)
+        self.postmortem_input.setTabChangesFocus(True)
+        postmortem_label.setBuddy(self.postmortem_input)
+
+        reason_label = QLabel("Correction explanation", self)
+        self.reason_input = QLineEdit(self)
+        self.reason_input.setObjectName("numericOutcomeCorrectionReasonInput")
+        self.reason_input.setPlaceholderText(
+            "Required only when changing the actual value"
+        )
+        reason_label.setBuddy(self.reason_input)
+
+        self.form_error = _dialog_error_label(
+            "correctNumericResolutionError",
+            self,
+        )
+        self.buttons = _save_cancel_buttons(
+            "saveNumericResolutionCorrectionButton",
+            "Save Correction",
+            self,
+        )
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addSpacing(8)
+        layout.addWidget(actual_label)
+        layout.addWidget(self.actual_value_input)
+        layout.addWidget(self.score_change_notice)
+        layout.addWidget(notes_label)
+        layout.addWidget(self.notes_input)
+        layout.addWidget(postmortem_label)
+        layout.addWidget(self.postmortem_input)
+        layout.addWidget(reason_label)
+        layout.addWidget(self.reason_input)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+
+        self.actual_value_input.textChanged.connect(self._update_score_change_notice)
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+        self._update_score_change_notice()
+
+    def submit(self) -> None:
+        self.form_error.setHidden(True)
+        try:
+            actual_value = FixedPrecisionValue.from_value(
+                self.actual_value_input.text(),
+                self._decimal_places,
+                field="actual_value",
+            )
+        except PredictionValidationError as error:
+            self._show_error(str(error))
+            return
+        notes = _normalized_optional_text(self.notes_input.toPlainText())
+        postmortem = _normalized_optional_text(self.postmortem_input.toPlainText())
+        correction_reason = _normalized_optional_text(self.reason_input.text())
+        actual_changed = actual_value != self._current.actual_value
+        if (
+            not actual_changed
+            and notes == self._current.resolution_notes
+            and postmortem == self._current.postmortem
+        ):
+            self._show_error(
+                "Change the actual value, Resolution notes, or Postmortem before "
+                "saving."
+            )
+            return
+        if actual_changed and correction_reason is None:
+            self._show_error(
+                "Explain why the recorded actual value is being corrected."
+            )
+            self.reason_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+            return
+        if not _confirm_terminal_correction(self, score_affecting=actual_changed):
+            return
+        try:
+            history = self._operations.correct_numeric_resolution(
+                self._prediction_id,
+                self.actual_value_input.text(),
+                resolution_notes=notes,
+                postmortem=postmortem,
+                correction_reason=correction_reason,
+                expected_correction_id=self._expected_correction_id,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.correction_saved.emit(history)
+        self.accept()
+
+    def _update_score_change_notice(self) -> None:
+        try:
+            proposed = FixedPrecisionValue.from_value(
+                self.actual_value_input.text(),
+                self._decimal_places,
+                field="actual_value",
+            )
+        except PredictionValidationError:
+            self.score_change_notice.setHidden(False)
+            return
+        self.score_change_notice.setHidden(proposed == self._current.actual_value)
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
+
+
+class CorrectInvalidationReasonDialog(QDialog):
+    """Append one confirmed Invalidation-reason correction."""
+
+    correction_saved = Signal(object)
+
+    def __init__(
+        self,
+        operations: PredictionOperations,
+        history: InvalidationHistory,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("correctInvalidationReasonDialog")
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.setWindowTitle("Correct Invalid Reason")
+        self.setModal(True)
+        self.resize(560, 390)
+        self._operations = operations
+        self._prediction_id = history.original.prediction_id
+        self._expected_correction_id = history.current_correction_id
+        self._current_reason = history.effective.reason
+
+        title = QLabel("Correct Invalid Reason", self)
+        explanation = QLabel(
+            "This appends a transparent correction. The Prediction remains "
+            "Invalid, and its original reason, invalidation time, and every "
+            "earlier correction remain in history.",
+            self,
+        )
+        explanation.setObjectName("invalidationReasonCorrectionExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+        reason_label = QLabel("Effective reason (optional)", self)
+        self.reason_input = QPlainTextEdit(self)
+        self.reason_input.setObjectName("correctInvalidationReasonInput")
+        self.reason_input.setPlainText(self._current_reason or "")
+        self.reason_input.setTabChangesFocus(True)
+        reason_label.setBuddy(self.reason_input)
+        self.form_error = _dialog_error_label(
+            "correctInvalidationReasonError",
+            self,
+        )
+        self.buttons = _save_cancel_buttons(
+            "saveInvalidationReasonCorrectionButton",
+            "Save Correction",
+            self,
+        )
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(explanation)
+        layout.addWidget(reason_label)
+        layout.addWidget(self.reason_input, 1)
+        layout.addWidget(self.form_error)
+        layout.addWidget(self.buttons)
+        self.buttons.accepted.connect(self.submit)
+        self.buttons.rejected.connect(self.reject)
+
+    def submit(self) -> None:
+        self.form_error.setHidden(True)
+        reason = _normalized_optional_text(self.reason_input.toPlainText())
+        if reason == self._current_reason:
+            self._show_error("Change or clear the Invalid reason before saving.")
+            return
+        if not _confirm_terminal_correction(self, score_affecting=False):
+            return
+        try:
+            history = self._operations.correct_invalidation_reason(
+                self._prediction_id,
+                reason,
+                expected_correction_id=self._expected_correction_id,
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.correction_saved.emit(history)
+        self.accept()
+
+    def _show_error(self, message: str) -> None:
+        self.form_error.setText(message)
+        self.form_error.setHidden(False)
 
 
 class CorrectNumericJournalEntryDialog(QDialog):
@@ -3074,8 +3685,8 @@ class ResolvePredictionDialog(QDialog):
         title.setObjectName("resolvePredictionTitle")
         explanation = QLabel(
             "Resolution records a final Yes/No outcome and the current forecast "
-            "for scoring. This terminal decision cannot be reopened or changed "
-            "in v0.1.",
+            "for scoring. The terminal decision cannot be reopened; an honest "
+            "mistake in its facts can later be corrected with visible history.",
             self,
         )
         explanation.setObjectName("resolvePredictionExplanation")
@@ -3239,7 +3850,8 @@ class MarkInvalidDialog(QDialog):
         title.setObjectName("markInvalidTitle")
         explanation = QLabel(
             "Invalid keeps the prediction and its complete history but excludes it "
-            "from scoring. This terminal decision cannot be reopened in v0.1.",
+            "from scoring. The terminal decision cannot be reopened; its reason "
+            "can later be corrected with visible history.",
             self,
         )
         explanation.setObjectName("markInvalidExplanation")
@@ -3337,6 +3949,9 @@ class PredictionDetailScreen(QWidget):
         self._journal_correction_dialog: CorrectJournalEntryDialog | None = None
         self._resolution_dialog: ResolvePredictionDialog | None = None
         self._invalidation_dialog: MarkInvalidDialog | None = None
+        self._terminal_correction_dialog: QDialog | None = None
+        self._resolution_history: BinaryResolutionHistory | None = None
+        self._invalidation_history: InvalidationHistory | None = None
         self._chart_prediction_id: int | None = None
 
         title = QLabel("Prediction Detail", self)
@@ -3495,6 +4110,24 @@ class PredictionDetailScreen(QWidget):
         self.postmortem.setObjectName("predictionPostmortem")
         self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem.setWordWrap(True)
+        self.correct_resolution_button = QPushButton(
+            "Correct Resolution",
+            self.resolution_section,
+        )
+        self.correct_resolution_button.setObjectName("correctResolutionButton")
+        self.correct_resolution_button.setAccessibleName(
+            "Correct Binary Resolution or Postmortem"
+        )
+        self.correct_resolution_button.setToolTip(
+            "Correct the outcome or notes, or add or correct the Postmortem. "
+            "The original Resolution remains in history."
+        )
+        apply_lucide_icon(self.correct_resolution_button, LucideIcon.PENCIL)
+        self.resolution_history = _collapsible_history_group(
+            "Resolution correction history",
+            "resolutionCorrectionHistory",
+            self.resolution_section,
+        )
         resolution_layout.addWidget(self.resolution_outcome)
         resolution_layout.addWidget(self.resolution_resolved_at)
         resolution_layout.addWidget(self.resolution_scoring_forecast)
@@ -3502,6 +4135,12 @@ class PredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem_heading)
         resolution_layout.addWidget(self.postmortem)
+        resolution_layout.addWidget(
+            self.correct_resolution_button,
+            0,
+            Qt.AlignmentFlag.AlignLeft,
+        )
+        resolution_layout.addWidget(self.resolution_history)
         self.resolution_section.setHidden(True)
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
@@ -3521,9 +4160,31 @@ class PredictionDetailScreen(QWidget):
         self.invalidation_reason.setObjectName("predictionInvalidationReason")
         self.invalidation_reason.setTextFormat(Qt.TextFormat.PlainText)
         self.invalidation_reason.setWordWrap(True)
+        self.correct_invalidation_button = QPushButton(
+            "Correct Reason",
+            self.invalidation_section,
+        )
+        self.correct_invalidation_button.setObjectName(
+            "correctInvalidationReasonButton"
+        )
+        self.correct_invalidation_button.setToolTip(
+            "Append a correction while preserving the original Invalid reason."
+        )
+        apply_lucide_icon(self.correct_invalidation_button, LucideIcon.PENCIL)
+        self.invalidation_history = _collapsible_history_group(
+            "Invalidation correction history",
+            "invalidationCorrectionHistory",
+            self.invalidation_section,
+        )
         invalidation_layout.addWidget(self.invalidated_at)
         invalidation_layout.addWidget(self.invalidation_reason_heading)
         invalidation_layout.addWidget(self.invalidation_reason)
+        invalidation_layout.addWidget(
+            self.correct_invalidation_button,
+            0,
+            Qt.AlignmentFlag.AlignLeft,
+        )
+        invalidation_layout.addWidget(self.invalidation_history)
         self.invalidation_section.setHidden(True)
 
         self.definition_history = QGroupBox("Definition history", self.detail_content)
@@ -3606,6 +4267,11 @@ class PredictionDetailScreen(QWidget):
         layout.addWidget(self.detail_error)
         layout.addWidget(scroll_area, 1)
 
+        self.correct_resolution_button.clicked.connect(self.open_correct_resolution)
+        self.correct_invalidation_button.clicked.connect(
+            self.open_correct_invalidation_reason
+        )
+
         self.show_prediction(self._operations.get_latest_prediction())
 
     @property
@@ -3634,6 +4300,10 @@ class PredictionDetailScreen(QWidget):
             self.detail_content.setHidden(True)
             self.empty_state.setHidden(False)
             self.definition_history.setHidden(True)
+            self.correct_resolution_button.setEnabled(False)
+            self.correct_invalidation_button.setEnabled(False)
+            self._resolution_history = None
+            self._invalidation_history = None
             self.resolution_section.setHidden(True)
             self.invalidation_section.setHidden(True)
             return
@@ -3875,6 +4545,40 @@ class PredictionDetailScreen(QWidget):
         dialog.finished.connect(self._invalidation_dialog_finished)
         dialog.open()
 
+    def open_correct_resolution(self) -> None:
+        """Refresh, then correct the effective Binary Resolution append-only."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        history = self._resolution_history
+        if history is None:
+            return
+        dialog = CorrectBinaryResolutionDialog(self._operations, history, self)
+        self._terminal_correction_dialog = dialog
+        dialog.correction_saved.connect(lambda _history: self.refresh())
+        dialog.finished.connect(self._terminal_correction_dialog_finished)
+        dialog.open()
+
+    def open_correct_invalidation_reason(self) -> None:
+        """Refresh, then correct the effective Invalid reason append-only."""
+
+        if self._prediction is None:
+            return
+        self.refresh()
+        history = self._invalidation_history
+        if history is None:
+            return
+        dialog = CorrectInvalidationReasonDialog(
+            self._operations,
+            history,
+            self,
+        )
+        self._terminal_correction_dialog = dialog
+        dialog.correction_saved.connect(lambda _history: self.refresh())
+        dialog.finished.connect(self._terminal_correction_dialog_finished)
+        dialog.open()
+
     def delete_prediction(self) -> None:
         """Confirm and permanently delete only refreshed untouched Open state."""
 
@@ -3963,6 +4667,9 @@ class PredictionDetailScreen(QWidget):
     def _invalidation_dialog_finished(self, _result: int) -> None:
         self._invalidation_dialog = None
 
+    def _terminal_correction_dialog_finished(self, _result: int) -> None:
+        self._terminal_correction_dialog = None
+
     def _journal_saved(self, _result: object) -> None:
         if self._prediction is not None:
             self.show_prediction(self._prediction)
@@ -3987,13 +4694,31 @@ class PredictionDetailScreen(QWidget):
         self.resolution_criteria_section.setHidden(not prediction.resolution_criteria)
 
     def _show_terminal_information(self, prediction: PredictionSnapshot) -> None:
-        """Render immutable terminal facts without inventing absent notes."""
+        """Render latest effective facts plus inspectable append-only history."""
 
         resolution = prediction.resolution
         self.resolution_section.setHidden(resolution is None)
         if resolution is not None:
+            try:
+                history = self._operations.get_binary_resolution_history(
+                    prediction.prediction_id
+                )
+            except ApplicationError as error:
+                self._resolution_history = None
+                effective = resolution
+                self.correct_resolution_button.setEnabled(False)
+                self.resolution_history.setHidden(True)
+                self._show_error(f"Resolution history is unavailable. {error}")
+            else:
+                effective = history.effective
+                self._resolution_history = history
+                self.correct_resolution_button.setEnabled(True)
+                _show_binary_resolution_correction_history(
+                    self.resolution_history,
+                    history,
+                )
             self.resolution_outcome.setText(
-                f"Outcome: {resolution.outcome.value.capitalize()}"
+                f"Outcome: {effective.outcome.value.capitalize()}"
             )
             self.resolution_resolved_at.setText(
                 f"Resolved: {_format_local_timestamp(resolution.resolved_at)}"
@@ -4002,26 +4727,52 @@ class PredictionDetailScreen(QWidget):
                 f"Scoring forecast: {resolution.scoring_probability_percent}% "
                 f"(revision {resolution.scoring_revision_sequence})"
             )
-            self.resolution_notes.setText(resolution.resolution_notes or "")
-            has_notes = resolution.resolution_notes is not None
+            self.resolution_notes.setText(effective.resolution_notes or "")
+            has_notes = effective.resolution_notes is not None
             self.resolution_notes_heading.setHidden(not has_notes)
             self.resolution_notes.setHidden(not has_notes)
-            self.postmortem.setText(resolution.postmortem or "")
-            has_postmortem = resolution.postmortem is not None
+            self.postmortem.setText(effective.postmortem or "")
+            has_postmortem = effective.postmortem is not None
             self.postmortem_heading.setHidden(not has_postmortem)
             self.postmortem.setHidden(not has_postmortem)
+        else:
+            self._resolution_history = None
+            self.correct_resolution_button.setEnabled(False)
+            self.resolution_history.setHidden(True)
 
         invalidation = prediction.invalidation
         self.invalidation_section.setHidden(invalidation is None)
         if invalidation is not None:
+            try:
+                history = self._operations.get_invalidation_history(
+                    prediction.prediction_id
+                )
+            except ApplicationError as error:
+                self._invalidation_history = None
+                effective_invalidation = invalidation
+                self.correct_invalidation_button.setEnabled(False)
+                self.invalidation_history.setHidden(True)
+                self._show_error(f"Invalidation history is unavailable. {error}")
+            else:
+                effective_invalidation = history.effective
+                self._invalidation_history = history
+                self.correct_invalidation_button.setEnabled(True)
+                _show_invalidation_correction_history(
+                    self.invalidation_history,
+                    history,
+                )
             self.invalidated_at.setText(
                 f"Marked Invalid: "
                 f"{_format_local_timestamp(invalidation.invalidated_at)}"
             )
-            self.invalidation_reason.setText(invalidation.reason or "")
-            has_reason = invalidation.reason is not None
+            self.invalidation_reason.setText(effective_invalidation.reason or "")
+            has_reason = effective_invalidation.reason is not None
             self.invalidation_reason_heading.setHidden(not has_reason)
             self.invalidation_reason.setHidden(not has_reason)
+        else:
+            self._invalidation_history = None
+            self.correct_invalidation_button.setEnabled(False)
+            self.invalidation_history.setHidden(True)
 
     def _load_definition_history(self, prediction_id: int) -> None:
         try:
@@ -4212,6 +4963,334 @@ def _detail_text_section(
     layout.addWidget(heading)
     layout.addWidget(value)
     return section, value
+
+
+def _collapsible_history_group(
+    title: str,
+    object_name: str,
+    parent: QWidget,
+) -> QGroupBox:
+    group = QGroupBox(title, parent)
+    group.setObjectName(object_name)
+    group.setCheckable(True)
+    group.setChecked(False)
+    content = QWidget(group)
+    content.setObjectName(f"{object_name}Content")
+    content_layout = QVBoxLayout(content)
+    content_layout.setContentsMargins(4, 4, 4, 4)
+    layout = QVBoxLayout(group)
+    layout.addWidget(content)
+    group.toggled.connect(content.setVisible)
+    content.setHidden(True)
+    group.setHidden(True)
+    return group
+
+
+def _history_content(group: QGroupBox) -> tuple[QWidget, QVBoxLayout]:
+    content = group.findChild(QWidget, f"{group.objectName()}Content")
+    if content is None or not isinstance(content.layout(), QVBoxLayout):
+        raise RuntimeError("Terminal correction history content is unavailable.")
+    return content, content.layout()
+
+
+def _show_binary_resolution_correction_history(
+    group: QGroupBox,
+    history: BinaryResolutionHistory,
+) -> None:
+    content, layout = _history_content(group)
+    _clear_widget_layout(layout)
+    layout.addWidget(
+        _terminal_history_frame(
+            "Original Resolution",
+            history.original.resolved_at,
+            (
+                ("Outcome", history.original.outcome.value.capitalize()),
+                ("Resolution notes", history.original.resolution_notes),
+                ("Postmortem", history.original.postmortem),
+            ),
+            "binaryResolutionOriginal",
+            content,
+        )
+    )
+    for correction in history.corrections:
+        layout.addWidget(_binary_resolution_correction_frame(correction, content))
+    _finish_terminal_history_group(group, len(history.corrections))
+
+
+def _show_numeric_resolution_correction_history(
+    group: QGroupBox,
+    history: NumericResolutionHistory,
+    unit: str,
+) -> None:
+    content, layout = _history_content(group)
+    _clear_widget_layout(layout)
+    layout.addWidget(
+        _terminal_history_frame(
+            "Original Resolution",
+            history.original.resolved_at,
+            (
+                ("Actual value", f"{history.original.actual_value} {unit}"),
+                ("Resolution notes", history.original.resolution_notes),
+                ("Postmortem", history.original.postmortem),
+            ),
+            "numericResolutionOriginal",
+            content,
+        )
+    )
+    for correction in history.corrections:
+        layout.addWidget(
+            _numeric_resolution_correction_frame(correction, unit, content)
+        )
+    _finish_terminal_history_group(group, len(history.corrections))
+
+
+def _show_invalidation_correction_history(
+    group: QGroupBox,
+    history: InvalidationHistory,
+) -> None:
+    content, layout = _history_content(group)
+    _clear_widget_layout(layout)
+    layout.addWidget(
+        _terminal_history_frame(
+            "Original Invalidation",
+            history.original.invalidated_at,
+            (("Reason", history.original.reason),),
+            "invalidationOriginal",
+            content,
+        )
+    )
+    for correction in history.corrections:
+        layout.addWidget(_invalidation_correction_frame(correction, content))
+    _finish_terminal_history_group(group, len(history.corrections))
+
+
+def _finish_terminal_history_group(group: QGroupBox, correction_count: int) -> None:
+    suffix = "correction" if correction_count == 1 else "corrections"
+    base_title = (
+        "Invalidation correction history"
+        if "Invalidation" in group.objectName() or "invalidation" in group.objectName()
+        else "Resolution correction history"
+    )
+    group.setTitle(f"{base_title} ({correction_count} {suffix})")
+    group.setChecked(False)
+    content, _layout = _history_content(group)
+    content.setHidden(True)
+    group.setHidden(correction_count == 0)
+
+
+def _terminal_history_frame(
+    heading_text: str,
+    timestamp: datetime,
+    values: tuple[tuple[str, object | None], ...],
+    object_name: str,
+    parent: QWidget,
+) -> QFrame:
+    frame = QFrame(parent)
+    frame.setObjectName(object_name)
+    frame.setFrameShape(QFrame.Shape.StyledPanel)
+    layout = QVBoxLayout(frame)
+    heading = QLabel(
+        f"{heading_text} · {_format_local_timestamp(timestamp)}",
+        frame,
+    )
+    heading.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(heading)
+    for label, value in values:
+        item = QLabel(f"{label}: {_terminal_history_value(value)}", frame)
+        item.setTextFormat(Qt.TextFormat.PlainText)
+        item.setWordWrap(True)
+        item.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(item)
+    return frame
+
+
+def _binary_resolution_correction_frame(
+    correction: ResolutionCorrection,
+    parent: QWidget,
+) -> QFrame:
+    values = {
+        "outcome": (
+            correction.old_outcome.value.capitalize(),
+            correction.new_outcome.value.capitalize(),
+        ),
+        "resolution_notes": (
+            correction.old_resolution_notes,
+            correction.new_resolution_notes,
+        ),
+        "postmortem": (correction.old_postmortem, correction.new_postmortem),
+    }
+    return _terminal_correction_frame(
+        correction.correction_id,
+        correction.sequence,
+        correction.corrected_at,
+        correction.changed_fields,
+        values,
+        correction.correction_reason,
+        "resolutionCorrection",
+        parent,
+    )
+
+
+def _numeric_resolution_correction_frame(
+    correction: NumericResolutionCorrection,
+    unit: str,
+    parent: QWidget,
+) -> QFrame:
+    values = {
+        "actual_value": (
+            f"{correction.old_actual_value} {unit}",
+            f"{correction.new_actual_value} {unit}",
+        ),
+        "resolution_notes": (
+            correction.old_resolution_notes,
+            correction.new_resolution_notes,
+        ),
+        "postmortem": (correction.old_postmortem, correction.new_postmortem),
+    }
+    return _terminal_correction_frame(
+        correction.correction_id,
+        correction.sequence,
+        correction.corrected_at,
+        correction.changed_fields,
+        values,
+        correction.correction_reason,
+        "numericResolutionCorrection",
+        parent,
+    )
+
+
+def _invalidation_correction_frame(
+    correction: InvalidationReasonCorrection,
+    parent: QWidget,
+) -> QFrame:
+    return _terminal_correction_frame(
+        correction.correction_id,
+        correction.sequence,
+        correction.corrected_at,
+        ("reason",),
+        {"reason": (correction.old_reason, correction.new_reason)},
+        None,
+        "invalidationReasonCorrection",
+        parent,
+    )
+
+
+def _terminal_correction_frame(
+    correction_id: int,
+    sequence: int,
+    corrected_at: datetime,
+    changed_fields: tuple[str, ...],
+    values: dict[str, tuple[object | None, object | None]],
+    correction_reason: str | None,
+    object_name_prefix: str,
+    parent: QWidget,
+) -> QFrame:
+    frame = QFrame(parent)
+    frame.setObjectName(f"{object_name_prefix}{correction_id}")
+    frame.setFrameShape(QFrame.Shape.StyledPanel)
+    layout = QVBoxLayout(frame)
+    heading = QLabel(
+        f"Correction {sequence} · {_format_local_timestamp(corrected_at)}",
+        frame,
+    )
+    heading.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(heading)
+    for field_name in changed_fields:
+        old_value, new_value = values[field_name]
+        change = QLabel(
+            f"{_terminal_field_label(field_name)}: "
+            f"{_terminal_history_value(old_value)} "
+            f"\N{RIGHTWARDS ARROW} {_terminal_history_value(new_value)}",
+            frame,
+        )
+        change.setObjectName(
+            f"{object_name_prefix}{correction_id}{_object_name_part(field_name)}"
+        )
+        change.setTextFormat(Qt.TextFormat.PlainText)
+        change.setWordWrap(True)
+        change.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(change)
+    if correction_reason is not None:
+        reason = QLabel(f"Explanation: {correction_reason}", frame)
+        reason.setObjectName(f"{object_name_prefix}{correction_id}Reason")
+        reason.setTextFormat(Qt.TextFormat.PlainText)
+        reason.setWordWrap(True)
+        reason.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(reason)
+    return frame
+
+
+def _dialog_error_label(object_name: str, parent: QWidget) -> QLabel:
+    error = QLabel("", parent)
+    error.setObjectName(object_name)
+    error.setTextFormat(Qt.TextFormat.PlainText)
+    error.setWordWrap(True)
+    error.setHidden(True)
+    return error
+
+
+def _save_cancel_buttons(
+    save_object_name: str,
+    save_text: str,
+    parent: QWidget,
+) -> QDialogButtonBox:
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel,
+        parent,
+    )
+    save = buttons.button(QDialogButtonBox.StandardButton.Save)
+    save.setObjectName(save_object_name)
+    save.setText(save_text)
+    save.setDefault(True)
+    apply_lucide_icon(save, LucideIcon.SAVE)
+    return buttons
+
+
+def _confirm_terminal_correction(
+    parent: QWidget,
+    *,
+    score_affecting: bool,
+) -> bool:
+    if score_affecting:
+        title = "Confirm score-affecting correction"
+        message = (
+            "This correction changes the recorded outcome and recomputes scoring "
+            "and calibration from that effective value. The original outcome and "
+            "scoring ForecastRevision remain in history. Save this correction?"
+        )
+    else:
+        title = "Confirm terminal correction"
+        message = (
+            "This appends a correction while preserving the original terminal "
+            "record and every earlier version. Save this correction?"
+        )
+    answer = QMessageBox.warning(
+        parent,
+        title,
+        message,
+        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+        QMessageBox.StandardButton.Cancel,
+    )
+    return answer == QMessageBox.StandardButton.Yes
+
+
+def _normalized_optional_text(value: str | None) -> str | None:
+    normalized = (value or "").strip()
+    return normalized or None
+
+
+def _terminal_history_value(value: object | None) -> str:
+    return "Not set" if value is None or value == "" else str(value)
+
+
+def _terminal_field_label(field_name: str) -> str:
+    return {
+        "outcome": "Outcome",
+        "actual_value": "Actual value",
+        "resolution_notes": "Resolution notes",
+        "postmortem": "Postmortem",
+        "reason": "Reason",
+    }[field_name]
 
 
 def _definition_change_widget(
