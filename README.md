@@ -6,6 +6,8 @@ Reckonsolve is a local-first personal forecasting journal for Windows. It record
 
 The completed binary v0.1 baseline remains intact. The staged v0.2 plan is complete: Binary and Numeric Prediction Detail record immutable Forecast Reviews while Open, using **Still at N%** or **Keep this interval**. Each Review preserves the exact retained revision, appears in the timeline, and refreshes Needs Attention without fabricating a revision, chart point, or scoring observation. Type-aware recovery, CSV export, migration, and private-build smoke coverage preserve both forecast models and Reviews.
 
+v0.3 development has begun with a read-only command-line companion. `reckonsolve-cli-dev` shares the isolated development database used by `reckonsolve-dev`; the stable `reckonsolve-cli` command likewise shares the stable GUI database. M21 supports filtered Prediction listings and complete type-aware textual detail/history. Creation and other CLI mutations arrive in later v0.3 milestones.
+
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
 Journal entries record evidence or reasoning without changing the forecast. Forecast Reviews instead record that the user deliberately reconsidered the current forecast and retained it unchanged; an optional Review note can preserve that context. Each event keeps its exact type-appropriate forecast anchor, and revisions, Journals, and Reviews appear together in one timeline. Saved Journal text can be transparently corrected: the timeline marks it **Edited** and retains the original and every prior version in a collapsed edit history. Individual Journal entries and saved Reviews cannot be deleted.
@@ -28,7 +30,7 @@ The M12 visual pass uses a deliberately small, offline subset of Lucide icons wh
 
 ## Documentation
 
-- [Product specification](docs/product-spec.md) — implemented v0.1 behavior and the approved v0.2 contract, milestones, and acceptance criteria
+- [Product specification](docs/product-spec.md) — implemented v0.1/v0.2 behavior and the approved v0.3 CLI contract, milestones, and acceptance criteria
 - [Architecture](docs/architecture.md) — current implementation state and intended technical boundaries
 - [Architecture decision records](docs/decisions/README.md) — durable reasoning for consequential technical choices
 
@@ -39,12 +41,25 @@ Reckonsolve uses Python 3.13, PySide6, SQLite, and `uv`.
 ```powershell
 uv sync --locked
 uv run reckonsolve-dev
+uv run reckonsolve-cli-dev --help
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 ```
 
 `uv run reckonsolve-dev` is the normal source-development command. Its window title says **Reckonsolve Dev**, and it creates or opens an isolated development database, applies pending schema migrations, and keeps that database available until shutdown. `uv run reckonsolve` remains the stable-channel entry point and must not be used as an interchangeable development command because it opens the stable database location.
+
+The matching M21 CLI reads that same development data without opening a window:
+
+```powershell
+uv run reckonsolve-cli-dev list
+uv run reckonsolve-cli-dev list --search "temperature" --status open --type numeric --tag Personal
+uv run reckonsolve-cli-dev show 12
+```
+
+`list` defaults to every Prediction and supports case-insensitive Question search plus combined status, forecast-type, and tag filters. Rows identify stable IDs, current type-appropriate forecasts, tags, and attention indicators. `show` accepts one stable Prediction ID and prints current metadata, lifecycle or terminal facts, exact Binary or Numeric history, Journal correction history, Forecast Reviews, and Definition history. Use `uv run reckonsolve-cli-dev --help` or a subcommand's `--help` for the complete syntax.
+
+M21 commands are read-only. Use the GUI for creation and changes until their owning v0.3 milestones are implemented. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
 
 ## Private Windows build
 
@@ -71,6 +86,8 @@ Source-development runs instead use:
 ```
 
 Each directory is selected through Qt's per-user local application-data location after its visible application identity is set. Reckonsolve never silently copies the stable database into the development location. Automated tests and frozen-build smoke checks inject temporary database paths and do not open either real user database. The application is local-only and does not require network access.
+
+The paired CLI commands resolve these exact same locations. This is direct shared local data, not a background synchronization or replication system: a GUI change appears on the next matching CLI invocation, and an M21 CLI read never creates a second database copy.
 
 ## License
 

@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: Milestone 20 v0.2 portability and hardening complete
-Last reviewed: 2026-08-20
+Status: Milestone 21 v0.3 CLI foundation and read model complete
+Last reviewed: 2026-08-25
 
-This document describes how Reckonsolve is structured and how its implementation evolves from the completed binary v0.1 baseline through v0.2. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+This document describes how Reckonsolve is structured and how its implementation evolves from the completed binary v0.1 baseline through v0.2 and into the staged v0.3 CLI companion. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 20 completes v0.2 portability and hardening without a schema change. The CSV ZIP is now format version 2 with twelve relational files spanning Binary and Numeric rows, type-appropriate revisions and resolutions, Forecast Reviews, and the existing historical relationships. Online SQLite backup, direct version-8-to-12 migration/restart tests, and the private frozen smoke workflow all preserve both forecast types and Reviews. The M12 private build and resource layer remain intact; original user-directed application artwork and normal public distribution remain deferred.
+Milestone 21 adds the first v0.3 command-line vertical slice without a schema change or production dependency. Paired stable and development CLI entry points select the same identity-specific databases as their GUI counterparts, compose the existing application operations without constructing desktop widgets, and provide type-aware `list` and `show` reads. The complete v0.2 persistence, transfer, analytics, UI, and private-build behavior remains intact.
 
 | Area | Current state |
 |---|---|
@@ -15,15 +15,15 @@ Milestone 20 completes v0.2 portability and hardening without a schema change. T
 | Runtime dependency | PySide6 |
 | Development tools | pytest, pytest-qt, and Ruff; pinned PyInstaller exists only in the separate `packaging` dependency group |
 | Python package | `src/reckonsolve/` |
-| Entry points | `reckonsolve` and `python -m reckonsolve` use the stable identity; `reckonsolve-dev` uses the visibly separate development identity; the private frozen entry adds only its disposable build-smoke path |
-| Application runtime | `ApplicationRuntime` owns the `QApplication`, open `Database`, and `MainWindow`; startup composes concrete prediction operations and shutdown closes persistence |
+| Entry points | `reckonsolve` and `python -m reckonsolve` use the stable GUI identity; `reckonsolve-dev` uses the development GUI identity; `reckonsolve-cli` and `reckonsolve-cli-dev` are the paired read-only M21 terminal entry points; the private frozen entry adds only its disposable build-smoke path |
+| Application runtime | `ApplicationRuntime` owns the GUI application, `Database`, and `MainWindow`; `CliRuntime` owns one command's database and operations without constructing the desktop UI; both close persistence deterministically |
 | UI | All six primary screens are functional; selected navigation and action icons are local, palette-aware Lucide SVGs rendered through QtSvg while visible text and accessible names remain authoritative |
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
 | Schema | Version 12 adds immutable type-aware Forecast Reviews while preserving every Binary and Numeric historical record |
-| Domain and application operations | Complete Binary and Numeric creation, revision, Journal, Review, terminal lifecycle, type-aware Dashboard/archive/analytics queries, guarded deletion, backup, and relational CSV export |
+| Domain and application operations | Complete Binary and Numeric creation, revision, Journal, Review, terminal lifecycle, type-aware Dashboard/archive/analytics queries, guarded deletion, backup, and relational CSV export; M21 CLI reads reuse these operations without direct SQL |
 | Analytics | Exactly-once type-aware scoring selection, Binary Brier/reliability/trend, Numeric containment calibration, and exact-unit raw Numeric summaries are pure calculations behind one consistent read-only source |
-| Automated tests | Complete v0.1/v0.2 coverage plus type-aware export, backup/recovery, real v8-to-v12 upgrades, restart, Reviews, and private frozen smoke across both forecast types |
+| Automated tests | Complete v0.1/v0.2 coverage plus M21 paired-identity, read-only CLI, exact text-history, error-safety, and shared-temporary-database coverage |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and smoke-validated; original icon artwork, installer, signing, shortcuts, uninstall, updates, and public distribution remain deferred |
 
 The sections below distinguish the completed v0.1 application from the v0.2 boundaries implemented or still planned.
@@ -176,9 +176,10 @@ Milestone 14 implements this package structure:
 
 ```text
 src/reckonsolve/
-  __init__.py          stable `main()` and isolated-development `main_dev()` entry points
+  __init__.py          paired stable/development GUI and CLI entry-point delegates
   __main__.py          `python -m reckonsolve` entry point
   app.py               QApplication composition, runtime ownership, and startup errors
+  cli.py               argparse composition, paired CLI runtime, and human-readable M21 list/show presentation
   clock.py             injectable clock and canonical UTC instant conversion
   identity.py          stable and visible development application identities
   paths.py             per-user and explicitly injected database paths
@@ -247,6 +248,10 @@ The package-level entry point delegates immediately to `app.py`. Startup current
 The production runner catches expected path, migration, operating-system, and SQLite startup failures and presents a fatal database error. It does not replace or silently recreate an existing database. The runner's `finally` cleanup closes the database after the Qt event loop ends or if showing the window fails; close is idempotent.
 
 `create_runtime()` accepts both an explicit identity and database path. Normal source work uses `reckonsolve-dev`, whose title and application name are **Reckonsolve Dev**; stable entry points retain **Reckonsolve**. Because path resolution happens only after setting that identity, Qt supplies distinct per-user directories without an ad hoc environment override. No startup path copies or migrates data between those channels. Tests never discover or open either real user database. The clock and application operations are composed at this boundary rather than through global state or widget-side service lookup; later operations should follow the same pattern.
+
+M21 adds a parallel console composition in `cli.py`. `reckonsolve-cli` selects the stable **Reckonsolve** identity, while `reckonsolve-cli-dev` selects **Reckonsolve Dev**; each then resolves the same path its matching GUI uses. One invocation opens and migrates a `Database`, constructs `PredictionOperations`, dispatches one parsed command, and closes the database in `finally`. Help and version reporting finish before runtime composition and therefore open no database. Expected application, path, migration, operating-system, and SQLite failures return a clear nonzero result without replacing existing data.
+
+The CLI uses the standard-library `argparse` module rather than adding a production dependency. Its presentation functions consume the existing archive, Dashboard-attention, type-aware Detail, timeline, and Definition-history read models. `list` combines the same Question, derived-status, forecast-type, and tag filters as the desktop browser, then adds Needs Attention and Ready to Resolve labels from the existing Dashboard query. `show` selects Binary or Numeric detail by stable Prediction identifier and renders optional metadata, terminal facts, exact fixed-precision values, every timeline event, Journal correction history, Reviews, and Definition changes. Terminal control characters in stored free text are escaped before output; stored instants use local ISO text with their offset and microsecond precision. No CLI function executes SQL or persists presentation state.
 
 ## 8. Persistence model
 
@@ -460,7 +465,7 @@ This artifact is a development validation output, not a supported release. There
 
 ## 16. Testing strategy
 
-The suite covers package entry points, runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 12, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M18 retain their historical, lifecycle, Dashboard, archive, analytics, transfer, packaging, fixed-precision Numeric, creation, revision, Journal, chart, terminal-workflow, type-aware navigation, and Numeric scoring coverage. M19 adds Review tests for both types, Open-only lifecycle enforcement, independent-connection concurrency, cancellation, immutable context, timeline rendering, restart, deletion eligibility, Needs Attention reset, and chart/revision non-effects. M20 adds format-version-two CSV relationship coverage, type-aware backup recovery, a direct real-v8-to-v12 upgrade/recovery path, and Binary/Numeric/Review private-smoke verification.
+The suite covers package entry points, GUI and CLI runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 12, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M18 retain their historical, lifecycle, Dashboard, archive, analytics, transfer, packaging, fixed-precision Numeric, creation, revision, Journal, chart, terminal-workflow, type-aware navigation, and Numeric scoring coverage. M19 adds Review tests for both types, Open-only lifecycle enforcement, independent-connection concurrency, cancellation, immutable context, timeline rendering, restart, deletion eligibility, Needs Attention reset, and chart/revision non-effects. M20 adds format-version-two CSV relationship coverage, type-aware backup recovery, a direct real-v8-to-v12 upgrade/recovery path, and Binary/Numeric/Review private-smoke verification. M21 adds temporary-database tests for paired CLI identities, side-effect-free help/version and reads, combined archive filters, attention labels, complete Binary/Numeric text history, exact decimal and local-time output, safe terminal text, not-found behavior, and rejection of an unrecognized database without replacement.
 
 Most behavior should be verified below the GUI:
 
@@ -495,3 +500,9 @@ A normal installer, uninstall policy, code signing, public distribution channel,
 The approved v0.2 product plan adds one central numeric prediction interval per revision and explicit Forecast Reviews through Milestones 13 through 20. M20 completes the plan: Open-only immutable Reviews preserve exact Binary or Numeric forecast context and refresh Needs Attention without altering revision history, charts, or scoring; version-two relational export and complete backup/migration/private-build recovery coverage preserve those records across every supported local path. The application now covers the complete type-aware forecasting, Journal, Review, lifecycle, Dashboard, archive, analytics, and portability loop.
 
 The architecture will continue through implemented vertical slices rather than prebuilding later scope. After each milestone, update this document to reflect actual modules, persistence behavior, and any recorded technical decisions; do not describe planned structures as already implemented.
+
+## 20. Evolution into v0.3
+
+The approved v0.3 plan adds a human-directed CLI companion through Milestones 21 through 25. M21 implements only the shared-data foundation and read model: paired source entry points, identity-selected database composition, `--help`, `--version`, filtered `list`, and complete type-aware `show`. The commands use the existing version-12 schema and application operations, so a GUI-created record is visible to the matching CLI and the CLI does not establish a second source of truth.
+
+Mutation commands, CLI backup/export, and the corresponding cross-process hardening remain owned by M22 through M25. The CLI is currently source-distributed through `uv`; a separately frozen executable, installer integration, noninteractive scripting API, terminal analytics, live inter-process refresh, and logo work remain outside v0.3.

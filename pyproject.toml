@@ -12,6 +12,8 @@ dependencies = [
 
 [project.scripts]
 reckonsolve = "reckonsolve:main"
+reckonsolve-cli = "reckonsolve:main_cli"
+reckonsolve-cli-dev = "reckonsolve:main_cli_dev"
 reckonsolve-dev = "reckonsolve:main_dev"
 
 [build-system]

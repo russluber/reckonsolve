@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.2. The next development target has not yet been selected.
+The completed source release is v0.2. The active development target is the staged v0.3 CLI companion defined in Section 31 of `docs/product-spec.md`; Milestone 21 is complete and Milestone 22 is next.
 
 The v0.1 baseline includes:
 
@@ -48,7 +48,16 @@ v0.2 adds:
 - Forecast Reviews that retain an unchanged Binary or Numeric forecast without creating a fake revision; and
 - type-aware backup, CSV export, migration, and private-build hardening.
 
-Milestones 13 through 20 in `docs/product-spec.md` are complete. Preserve the completed Binary and Numeric behavior rather than redesigning it incidentally. Treat any post-v0.2 feature work as a new explicitly authorized milestone or coherent vertical slice.
+Milestones 13 through 20 in `docs/product-spec.md` are complete. Preserve the completed Binary and Numeric behavior rather than redesigning it incidentally.
+
+v0.3 Milestone 21 adds:
+
+- paired `reckonsolve-cli` and `reckonsolve-cli-dev` source commands sharing their matching GUI database identities;
+- standard-library command parsing with no new production dependency;
+- type-aware, side-effect-free `list` with combined Question/status/type/tag filters and attention indicators; and
+- type-aware `show` with exact current detail, terminal facts, timeline, Journal correction history, Reviews, and Definition history.
+
+Implement the remaining v0.3 behavior only through its authorized Milestones 22 through 25. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 
@@ -57,7 +66,7 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Use Python managed by `uv`.
 - Build the desktop interface with PySide6.
 - Use SQLite as the canonical data store.
-- Target native Windows development and eventual packaging; v0.2 does not require a normal installer or public binary distribution.
+- Target native Windows development and eventual packaging; v0.3 does not require a normal installer, separately packaged CLI executable, or public binary distribution.
 - Keep core behavior fully functional offline.
 - Keep the architecture proportionate to a single-user local desktop application.
 - Do not add an ORM, migration framework, GUI framework, charting library, packaging system, or other production dependency casually. Prefer existing dependencies; when a new dependency is necessary, explain the need and tradeoff.
@@ -65,7 +74,7 @@ Do not implement other Later features unless the user explicitly changes the sco
 
 ## Architecture Boundaries
 
-- Keep UI code thin. Widgets and dialogs should invoke application/domain operations rather than contain persistence or scoring rules.
+- Keep presentation code thin. Widgets, dialogs, and CLI commands should invoke application/domain operations rather than contain persistence or scoring rules.
 - Keep domain rules independently testable without launching the GUI.
 - Isolate SQLite access behind a clear data-access boundary.
 - Keep analytics code separate from presentation code.
