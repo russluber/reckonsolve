@@ -20,7 +20,10 @@ from reckonsolve.cli_creation import (
     create_interactively,
 )
 from reckonsolve.cli_mutations import (
+    delete_interactively,
+    invalidate_interactively,
     journal_interactively,
+    resolve_interactively,
     review_interactively,
     revise_interactively,
 )
@@ -171,6 +174,27 @@ def run(
                 PromptSession(input_stream, output, errors),
             )
             return 0
+        if arguments.command == "resolve":
+            resolve_interactively(
+                runtime.operations,
+                arguments.prediction_id,
+                PromptSession(input_stream, output, errors),
+            )
+            return 0
+        if arguments.command == "invalidate":
+            invalidate_interactively(
+                runtime.operations,
+                arguments.prediction_id,
+                PromptSession(input_stream, output, errors),
+            )
+            return 0
+        if arguments.command == "delete":
+            delete_interactively(
+                runtime.operations,
+                arguments.prediction_id,
+                PromptSession(input_stream, output, errors),
+            )
+            return 0
         parser.error("A command is required.")
     except (CliInputCancelled, KeyboardInterrupt):
         print("Cancelled. No changes were made.", file=errors)
@@ -316,6 +340,48 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
         ),
     )
     review_parser.add_argument(
+        "prediction_id",
+        type=_positive_prediction_id,
+        metavar="PREDICTION_ID",
+    )
+
+    resolve_parser = commands.add_parser(
+        "resolve",
+        help="Resolve a Binary or Numeric Prediction permanently.",
+        description=(
+            "Show the current forecast, collect a type-appropriate terminal "
+            "outcome and optional notes, then require confirmation."
+        ),
+    )
+    resolve_parser.add_argument(
+        "prediction_id",
+        type=_positive_prediction_id,
+        metavar="PREDICTION_ID",
+    )
+
+    invalidate_parser = commands.add_parser(
+        "invalidate",
+        help="Preserve a Prediction as Invalid and exclude it from scoring.",
+        description=(
+            "Show the current forecast, collect an optional reason, and require "
+            "confirmation before recording the terminal Invalid decision."
+        ),
+    )
+    invalidate_parser.add_argument(
+        "prediction_id",
+        type=_positive_prediction_id,
+        metavar="PREDICTION_ID",
+    )
+
+    delete_parser = commands.add_parser(
+        "delete",
+        help="Permanently delete one untouched Open Prediction.",
+        description=(
+            "Show the current forecast and require explicit confirmation before "
+            "permanently deleting eligible untouched Open history."
+        ),
+    )
+    delete_parser.add_argument(
         "prediction_id",
         type=_positive_prediction_id,
         metavar="PREDICTION_ID",

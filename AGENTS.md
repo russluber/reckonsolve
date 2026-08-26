@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.2. The active development target is the staged v0.3 CLI companion defined in Section 31 of `docs/product-spec.md`; Milestones 21 through 23 are complete and Milestone 24 is next.
+The completed source release is v0.2. The active development target is the staged v0.3 CLI companion defined in Section 31 of `docs/product-spec.md`; Milestones 21 through 24 are complete and Milestone 25 is next.
 
 The v0.1 baseline includes:
 
@@ -50,7 +50,7 @@ v0.2 adds:
 
 Milestones 13 through 20 in `docs/product-spec.md` are complete. Preserve the completed Binary and Numeric behavior rather than redesigning it incidentally.
 
-v0.3 Milestones 21 through 23 add:
+v0.3 Milestones 21 through 24 add:
 
 - paired `reckonsolve-cli` and `reckonsolve-cli-dev` source commands sharing their matching GUI database identities;
 - standard-library command parsing with no new production dependency;
@@ -59,10 +59,11 @@ v0.3 Milestones 21 through 23 add:
 - interactive `create binary` and `create numeric` workflows using the existing atomic application operations;
 - GUI-matching defaults of 50% Binary probability, zero Numeric decimal places, and 80% Numeric confidence;
 - optional initial rationale, metadata, dates, and tags with cancellation and validation guaranteed not to create partial history;
-- type-aware interactive `revise`, `journal`, and `review` commands that display current context and reuse the existing immutable-history, lifecycle, deadline, anchor, freshness, and optimistic-concurrency operations; and
-- intentionally single-line CLI rationale, Journal, and Review-note prompts without restricting multiline desktop or canonical stored text.
+- type-aware interactive `revise`, `journal`, and `review` commands that display current context and reuse the existing immutable-history, lifecycle, deadline, anchor, freshness, and optimistic-concurrency operations;
+- intentionally single-line CLI rationale, Journal, and Review-note prompts without restricting multiline desktop or canonical stored text; and
+- confirmed type-aware `resolve`, `invalidate`, and guarded `delete` commands that preserve exact scoring-revision capture, Numeric precision, Invalid exclusion, one-way terminal state, and untouched-Open deletion rules.
 
-Implement the remaining v0.3 behavior only through its authorized Milestones 24 and 25. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem.
+Implement the remaining v0.3 behavior only through its authorized Milestone 25. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 

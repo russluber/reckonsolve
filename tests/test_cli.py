@@ -104,7 +104,14 @@ def test_cli_version_and_help_do_not_open_a_database(tmp_path, capsys) -> None:
     assert "numeric" in create_help_output.out
     assert not database_path.exists()
 
-    for command in ("revise", "journal", "review"):
+    for command in (
+        "revise",
+        "journal",
+        "review",
+        "resolve",
+        "invalidate",
+        "delete",
+    ):
         with pytest.raises(SystemExit) as mutation_help_exit:
             run([command, "--help"], database_path=database_path)
         mutation_help_output = capsys.readouterr()
@@ -993,8 +1000,11 @@ def test_cli_journal_does_not_refresh_attention_but_review_does(
     database.close()
 
 
-@pytest.mark.parametrize("command", ("revise", "journal", "review"))
-def test_cli_active_mutation_eof_cancels_without_history(
+@pytest.mark.parametrize(
+    "command",
+    ("revise", "journal", "review", "resolve", "invalidate", "delete"),
+)
+def test_cli_mutation_eof_cancels_without_history(
     tmp_path,
     command,
 ) -> None:
@@ -1205,4 +1215,544 @@ def test_cli_active_commands_respect_derived_lock_boundaries(
     assert operations.get_prediction(created.prediction_id).status.value == "locked"
     assert len(operations.list_forecast_revisions(created.prediction_id)) == 1
     assert len(operations.list_timeline(created.prediction_id)) == 2
+    database.close()
+
+
+def test_cli_resolves_binary_with_confirmation_and_final_scoring_revision(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    created = operations.create_prediction("Will the CLI resolution be Yes?", 60)
+    revised = operations.revise_forecast(
+        created.prediction_id,
+        35,
+        expected_revision_id=created.current_revision_id,
+        expected_metadata_version=created.metadata_version,
+    )
+    database.close()
+    output = StringIO()
+    errors = StringIO()
+
+    result = run(
+        ["resolve", str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO(
+            "maybe\nyes\nCertified public result\nI updated too slowly\nperhaps\ny\n"
+        ),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == 0
+    assert "Current forecast: 35% Yes" in output.getvalue()
+    assert "cannot be reopened or changed" in output.getvalue()
+    assert "Resolved Prediction #" in output.getvalue()
+    assert "Outcome: Yes" in output.getvalue()
+    assert "Enter yes or no." in errors.getvalue()
+    assert "Enter y or n." in errors.getvalue()
+
+    database = Database.open(database_path)
+    resolved = PredictionOperations(database).get_prediction(created.prediction_id)
+    assert resolved.status.value == "resolved"
+    assert resolved.resolution is not None
+    assert resolved.resolution.outcome is BinaryOutcome.YES
+    assert resolved.resolution.scoring_revision_id == revised.current_revision_id
+    assert resolved.resolution.scoring_probability_percent == 35
+    assert resolved.resolution.resolution_notes == "Certified public result"
+    assert resolved.resolution.postmortem == "I updated too slowly"
+    assert PredictionOperations(database).get_analytics().scored_prediction_count == 1
+    database.close()
+
+
+def test_cli_resolves_numeric_with_exact_validation_and_optional_text(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_numeric_prediction(
+        "What exact quantity will resolve?",
+        "widgets",
+        2,
+        "-5.00",
+        "1.25",
+        "8.50",
+        85,
+    )
+    database.close()
+    output = StringIO()
+    errors = StringIO()
+
+    result = run(
+        ["resolve", str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO("\n1.234\n-2.5\nMeasured directly\n\nyes\n"),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == 0
+    assert "Actual value (widgets):" in output.getvalue()
+    assert "Outcome: -2.50 widgets" in output.getvalue()
+    assert "Actual value is required." in errors.getvalue()
+    assert "Invalid actual value:" in errors.getvalue()
+
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    resolved = operations.get_numeric_prediction(created.prediction_id)
+    assert resolved.status.value == "resolved"
+    assert resolved.resolution is not None
+    assert str(resolved.resolution.actual_value) == "-2.50"
+    assert (
+        resolved.resolution.scoring_revision_id == created.current_revision.revision_id
+    )
+    assert resolved.resolution.resolution_notes == "Measured directly"
+    assert resolved.resolution.postmortem is None
+    assert operations.get_forecast_analytics().numeric.scored_prediction_count == 1
+    database.close()
+
+
+@pytest.mark.parametrize("prediction_type", ("binary", "numeric"))
+def test_cli_invalidation_preserves_both_forecast_types_outside_scoring(
+    tmp_path,
+    prediction_type,
+) -> None:
+    database_path = tmp_path / f"{prediction_type}.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    if prediction_type == "binary":
+        created = operations.create_prediction("Will this become Invalid?", 45)
+    else:
+        created = operations.create_numeric_prediction(
+            "How many invalid quantities will remain?",
+            "items",
+            0,
+            "1",
+            "3",
+            "8",
+            70,
+        )
+    database.close()
+    output = StringIO()
+
+    assert (
+        run(
+            ["invalidate", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("The event became undefined\ny\n"),
+            stdout=output,
+        )
+        == 0
+    )
+    assert "preserves this prediction and its complete history" in output.getvalue()
+    assert "excluded from scoring" in output.getvalue()
+
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    invalid = operations.get_prediction_for_navigation(created.prediction_id)
+    assert invalid.status.value == "invalid"
+    assert invalid.invalidation is not None
+    assert invalid.invalidation.reason == "The event became undefined"
+    assert invalid.resolution is None
+    analytics = operations.get_forecast_analytics()
+    assert analytics.binary.scored_prediction_count == 0
+    assert analytics.numeric.scored_prediction_count == 0
+    database.close()
+
+
+@pytest.mark.parametrize("prediction_type", ("binary", "numeric"))
+def test_cli_permanently_deletes_only_confirmed_untouched_open_predictions(
+    tmp_path,
+    prediction_type,
+) -> None:
+    database_path = tmp_path / f"{prediction_type}.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    operations.create_prediction("Will a survivor remain?", 50)
+    if prediction_type == "binary":
+        target = operations.create_prediction("Will this disposable row go?", 50)
+    else:
+        target = operations.create_numeric_prediction(
+            "How many disposable rows will go?",
+            "rows",
+            0,
+            "1",
+            "2",
+            "3",
+            80,
+        )
+    database.close()
+    output = StringIO()
+
+    assert (
+        run(
+            ["delete", str(target.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("yes\n"),
+            stdout=output,
+        )
+        == 0
+    )
+    assert "cannot be undone" in output.getvalue()
+    assert f"Deleted Prediction #{target.prediction_id} permanently." in (
+        output.getvalue()
+    )
+
+    database = Database.open(database_path)
+    assert target.prediction_id not in {
+        item.prediction_id
+        for item in PredictionOperations(database).browse_predictions().predictions
+    }
+    database.close()
+
+
+@pytest.mark.parametrize(
+    ("command", "command_input"),
+    (
+        ("resolve", "yes\nFactual result\nReflection\nno\n"),
+        ("invalidate", "Optional reason\n\n"),
+        ("delete", "n\n"),
+    ),
+)
+def test_cli_declined_terminal_confirmation_cancels_without_changes(
+    tmp_path,
+    command,
+    command_input,
+) -> None:
+    database_path = tmp_path / f"{command}.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will declining confirmation preserve this row?",
+        52,
+    )
+    before = PredictionOperations(database).get_prediction(created.prediction_id)
+    database.close()
+    errors = StringIO()
+
+    result = run(
+        [command, str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO(command_input),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 130
+    assert errors.getvalue() == "Cancelled. No changes were made.\n"
+    database = Database.open(database_path)
+    after = PredictionOperations(database).get_prediction(created.prediction_id)
+    assert after == before
+    database.close()
+
+
+@pytest.mark.parametrize("prediction_type", ("binary", "numeric"))
+def test_cli_delete_directs_meaningful_history_to_invalid(
+    tmp_path,
+    prediction_type,
+) -> None:
+    database_path = tmp_path / f"{prediction_type}.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    if prediction_type == "binary":
+        created = operations.create_prediction("Will revised history survive?", 40)
+        operations.revise_forecast(
+            created.prediction_id,
+            60,
+            expected_revision_id=created.current_revision_id,
+            expected_metadata_version=created.metadata_version,
+        )
+    else:
+        created = operations.create_numeric_prediction(
+            "How many journaled records survive?",
+            "records",
+            0,
+            "1",
+            "2",
+            "4",
+            80,
+        )
+        operations.add_numeric_journal_entry(
+            created.prediction_id,
+            "Meaningful evidence",
+            expected_revision_id=created.current_revision.revision_id,
+            expected_metadata_version=created.metadata_version,
+        )
+    database.close()
+    errors = StringIO()
+
+    result = run(
+        ["delete", str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO("yes\n"),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "Mark this prediction Invalid" in errors.getvalue()
+    database = Database.open(database_path)
+    assert PredictionOperations(database).get_prediction_for_navigation(
+        created.prediction_id
+    )
+    database.close()
+
+
+@pytest.mark.parametrize(
+    ("prediction_type", "command"),
+    (
+        ("binary", "resolve"),
+        ("binary", "invalidate"),
+        ("numeric", "resolve"),
+        ("numeric", "invalidate"),
+    ),
+)
+def test_cli_locked_predictions_allow_both_terminal_decisions(
+    tmp_path,
+    monkeypatch,
+    prediction_type,
+    command,
+) -> None:
+    database_path = tmp_path / f"{prediction_type}-{command}.sqlite3"
+    created_at = NOW - timedelta(days=3)
+    database = Database.open(database_path)
+    operations = PredictionOperations(
+        database,
+        FixedClock(created_at),
+        local_timezone=UTC,
+    )
+    deadline = (created_at + timedelta(days=1)).date()
+    if prediction_type == "binary":
+        created = operations.create_prediction(
+            "Will this Locked Binary terminate?",
+            65,
+            forecast_deadline=deadline,
+        )
+    else:
+        created = operations.create_numeric_prediction(
+            "How many Locked Numeric values terminate?",
+            "values",
+            0,
+            "1",
+            "5",
+            "9",
+            80,
+            forecast_deadline=deadline,
+        )
+    database.close()
+    monkeypatch.setattr(
+        reckonsolve.cli,
+        "PredictionOperations",
+        lambda database: PredictionOperations(
+            database,
+            FixedClock(NOW),
+            local_timezone=UTC,
+        ),
+    )
+    if command == "invalidate":
+        command_input = "Deadline made it unresolvable\ny\n"
+    elif prediction_type == "binary":
+        command_input = "no\n\n\ny\n"
+    else:
+        command_input = "6\n\n\ny\n"
+
+    assert (
+        run(
+            [command, str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO(command_input),
+            stdout=StringIO(),
+        )
+        == 0
+    )
+    database = Database.open(database_path)
+    terminal = PredictionOperations(
+        database,
+        FixedClock(NOW),
+        local_timezone=UTC,
+    ).get_prediction_for_navigation(created.prediction_id)
+    assert terminal.status.value == ("resolved" if command == "resolve" else "invalid")
+    database.close()
+
+
+@pytest.mark.parametrize("command", ("resolve", "invalidate", "delete"))
+def test_cli_rejects_every_terminal_action_after_resolution(
+    tmp_path,
+    command,
+) -> None:
+    database_path = tmp_path / f"{command}.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    created = operations.create_prediction(
+        "Will terminal CLI decisions remain one-way?",
+        70,
+    )
+    resolved = operations.resolve_prediction(
+        created.prediction_id,
+        BinaryOutcome.YES,
+        expected_revision_id=created.current_revision_id,
+        expected_metadata_version=created.metadata_version,
+    )
+    database.close()
+    errors = StringIO()
+
+    result = run(
+        [command, str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO("yes\n\n\nyes\n"),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "Resolved" in errors.getvalue() or "Terminal prediction history" in (
+        errors.getvalue()
+    )
+    database = Database.open(database_path)
+    current = PredictionOperations(database).get_prediction(created.prediction_id)
+    assert current == resolved
+    database.close()
+
+
+@pytest.mark.parametrize(
+    ("command", "command_input"),
+    (
+        ("resolve", "yes\n\n\ny\n"),
+        ("invalidate", "Reason reviewed locally\ny\n"),
+    ),
+)
+def test_cli_terminal_commands_reject_stale_reviewed_forecast(
+    tmp_path,
+    command,
+    command_input,
+) -> None:
+    database_path = tmp_path / f"{command}.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will a concurrent forecast block termination?",
+        25,
+    )
+    database.close()
+
+    class ConcurrentRevisionInput(StringIO):
+        changed = False
+
+        def readline(self, *args, **kwargs) -> str:
+            if not self.changed:
+                self.changed = True
+                concurrent_database = Database.open(database_path)
+                concurrent_operations = PredictionOperations(concurrent_database)
+                current = concurrent_operations.get_prediction(created.prediction_id)
+                concurrent_operations.revise_forecast(
+                    created.prediction_id,
+                    55,
+                    expected_revision_id=current.current_revision_id,
+                    expected_metadata_version=current.metadata_version,
+                )
+                concurrent_database.close()
+            return super().readline(*args, **kwargs)
+
+    errors = StringIO()
+    result = run(
+        [command, str(created.prediction_id)],
+        database_path=database_path,
+        stdin=ConcurrentRevisionInput(command_input),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "changed before the lifecycle action could be saved" in errors.getvalue()
+    database = Database.open(database_path)
+    current = PredictionOperations(database).get_prediction(created.prediction_id)
+    assert current.status.value == "open"
+    assert current.probability_percent == 55
+    database.close()
+
+
+def test_cli_delete_rechecks_untouched_history_after_confirmation_prompt(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will concurrent history block deletion?",
+        50,
+    )
+    database.close()
+
+    class ConcurrentJournalInput(StringIO):
+        changed = False
+
+        def readline(self, *args, **kwargs) -> str:
+            if not self.changed:
+                self.changed = True
+                concurrent_database = Database.open(database_path)
+                concurrent_operations = PredictionOperations(concurrent_database)
+                current = concurrent_operations.get_prediction(created.prediction_id)
+                concurrent_operations.add_journal_entry(
+                    created.prediction_id,
+                    "Meaningful history from another interface",
+                    expected_revision_id=current.current_revision_id,
+                    expected_metadata_version=current.metadata_version,
+                )
+                concurrent_database.close()
+            return super().readline(*args, **kwargs)
+
+    errors = StringIO()
+    result = run(
+        ["delete", str(created.prediction_id)],
+        database_path=database_path,
+        stdin=ConcurrentJournalInput("yes\n"),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "Mark this prediction Invalid" in errors.getvalue()
+    database = Database.open(database_path)
+    assert len(PredictionOperations(database).list_timeline(created.prediction_id)) == 2
+    database.close()
+
+
+def test_cli_terminal_write_lock_failure_is_clear_and_preserves_state(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will lock contention leave this prediction Open?",
+        50,
+    )
+    database.close()
+    runtime = reckonsolve.cli.create_runtime(database_path=database_path)
+    runtime.database._require_connection().execute("PRAGMA busy_timeout = 1")
+    locker = Database.open(database_path)
+    lock_context = locker.transaction()
+    lock_context.__enter__()
+    monkeypatch.setattr(
+        reckonsolve.cli,
+        "create_runtime",
+        lambda **_kwargs: runtime,
+    )
+    errors = StringIO()
+    try:
+        result = run(
+            ["invalidate", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("Lock test\ny\n"),
+            stdout=StringIO(),
+            stderr=errors,
+        )
+    finally:
+        lock_context.__exit__(None, None, None)
+        locker.close()
+
+    assert result == 1
+    assert "locked" in errors.getvalue().casefold()
+    database = Database.open(database_path)
+    current = PredictionOperations(database).get_prediction(created.prediction_id)
+    assert current.status.value == "open"
+    assert current.invalidation is None
     database.close()
