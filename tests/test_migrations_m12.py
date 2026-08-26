@@ -28,7 +28,7 @@ def test_v12_upgrade_preserves_v11_data_and_adds_review_table(tmp_path) -> None:
         )
     old.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:12])
     assert upgraded.schema_version == 12
     with upgraded.transaction() as connection:
         assert (

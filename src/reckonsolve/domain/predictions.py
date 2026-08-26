@@ -1,7 +1,7 @@
 """Binary and numeric prediction values and validation rules."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -342,6 +342,80 @@ class NewInvalidation:
 
 
 @dataclass(frozen=True, slots=True)
+class NewResolutionCorrection:
+    """Proposed effective values for an audited Binary Resolution correction."""
+
+    outcome: BinaryOutcome
+    resolution_notes: str | None = None
+    postmortem: str | None = None
+    correction_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.outcome, BinaryOutcome):
+            raise PredictionValidationError(
+                "Outcome must be Yes or No.",
+                field="outcome",
+            )
+        object.__setattr__(
+            self,
+            "resolution_notes",
+            _optional_text(self.resolution_notes, "resolution_notes"),
+        )
+        object.__setattr__(
+            self,
+            "postmortem",
+            _optional_text(self.postmortem, "postmortem"),
+        )
+        object.__setattr__(
+            self,
+            "correction_reason",
+            _optional_text(self.correction_reason, "correction_reason"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NewNumericResolutionCorrection:
+    """Proposed effective values for an audited Numeric Resolution correction."""
+
+    actual_value: FixedPrecisionValue
+    resolution_notes: str | None = None
+    postmortem: str | None = None
+    correction_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.actual_value, FixedPrecisionValue):
+            raise PredictionValidationError(
+                "A numeric actual value is required.",
+                field="actual_value",
+            )
+        object.__setattr__(
+            self,
+            "resolution_notes",
+            _optional_text(self.resolution_notes, "resolution_notes"),
+        )
+        object.__setattr__(
+            self,
+            "postmortem",
+            _optional_text(self.postmortem, "postmortem"),
+        )
+        object.__setattr__(
+            self,
+            "correction_reason",
+            _optional_text(self.correction_reason, "correction_reason"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NewInvalidationReasonCorrection:
+    """Proposed effective reason for an audited Invalidation correction."""
+
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "reason", _optional_text(self.reason, "reason"))
+
+
+@dataclass(frozen=True, slots=True)
 class Prediction:
     """The stable identity and lifecycle facts of a binary prediction."""
 
@@ -564,6 +638,235 @@ class Invalidation:
     prediction_id: int
     invalidated_at: datetime
     reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ResolutionCorrection:
+    """One immutable before/after Binary Resolution correction snapshot."""
+
+    correction_id: int
+    prediction_id: int
+    resolution_id: int
+    sequence: int
+    corrected_at: datetime
+    old_outcome: BinaryOutcome
+    new_outcome: BinaryOutcome
+    old_resolution_notes: str | None
+    new_resolution_notes: str | None
+    old_postmortem: str | None
+    new_postmortem: str | None
+    changed_fields: tuple[str, ...]
+    correction_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NumericResolutionCorrection:
+    """One immutable before/after Numeric Resolution correction snapshot."""
+
+    correction_id: int
+    prediction_id: int
+    resolution_id: int
+    sequence: int
+    corrected_at: datetime
+    old_actual_value: FixedPrecisionValue
+    new_actual_value: FixedPrecisionValue
+    old_resolution_notes: str | None
+    new_resolution_notes: str | None
+    old_postmortem: str | None
+    new_postmortem: str | None
+    changed_fields: tuple[str, ...]
+    correction_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidationReasonCorrection:
+    """One immutable before/after Invalidation reason correction."""
+
+    correction_id: int
+    prediction_id: int
+    invalidation_id: int
+    sequence: int
+    corrected_at: datetime
+    old_reason: str | None
+    new_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PostmortemCompletion:
+    """One immutable fact that an empty Postmortem was deliberately skipped."""
+
+    completion_id: int
+    prediction_id: int
+    completed_at: datetime
+
+
+class TerminalHistoryIntegrityError(RuntimeError):
+    """Persisted terminal correction history is not a contiguous snapshot chain."""
+
+
+@dataclass(frozen=True, slots=True)
+class BinaryResolutionHistory:
+    """Original Binary Resolution plus its complete correction chain."""
+
+    original: Resolution
+    corrections: tuple[ResolutionCorrection, ...] = ()
+    postmortem_completion: PostmortemCompletion | None = None
+
+    @property
+    def effective(self) -> Resolution:
+        return derive_effective_resolution(self.original, self.corrections)
+
+    @property
+    def current_correction_id(self) -> int | None:
+        return None if not self.corrections else self.corrections[-1].correction_id
+
+
+@dataclass(frozen=True, slots=True)
+class NumericResolutionHistory:
+    """Original Numeric Resolution plus its complete correction chain."""
+
+    original: NumericResolution
+    corrections: tuple[NumericResolutionCorrection, ...] = ()
+    postmortem_completion: PostmortemCompletion | None = None
+
+    @property
+    def effective(self) -> NumericResolution:
+        return derive_effective_numeric_resolution(self.original, self.corrections)
+
+    @property
+    def current_correction_id(self) -> int | None:
+        return None if not self.corrections else self.corrections[-1].correction_id
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidationHistory:
+    """Original Invalidation plus its complete reason-correction chain."""
+
+    original: Invalidation
+    corrections: tuple[InvalidationReasonCorrection, ...] = ()
+
+    @property
+    def effective(self) -> Invalidation:
+        return derive_effective_invalidation(self.original, self.corrections)
+
+    @property
+    def current_correction_id(self) -> int | None:
+        return None if not self.corrections else self.corrections[-1].correction_id
+
+
+RESOLUTION_CORRECTION_FIELDS = (
+    "outcome",
+    "resolution_notes",
+    "postmortem",
+)
+NUMERIC_RESOLUTION_CORRECTION_FIELDS = (
+    "actual_value",
+    "resolution_notes",
+    "postmortem",
+)
+
+
+def changed_resolution_fields(
+    current: Resolution,
+    proposed: NewResolutionCorrection,
+) -> tuple[str, ...]:
+    """Return Binary terminal fields changed by a normalized proposal."""
+
+    return tuple(
+        field_name
+        for field_name in RESOLUTION_CORRECTION_FIELDS
+        if getattr(current, field_name) != getattr(proposed, field_name)
+    )
+
+
+def changed_numeric_resolution_fields(
+    current: NumericResolution,
+    proposed: NewNumericResolutionCorrection,
+) -> tuple[str, ...]:
+    """Return Numeric terminal fields changed by a normalized proposal."""
+
+    return tuple(
+        field_name
+        for field_name in NUMERIC_RESOLUTION_CORRECTION_FIELDS
+        if getattr(current, field_name) != getattr(proposed, field_name)
+    )
+
+
+def derive_effective_resolution(
+    original: Resolution,
+    corrections: tuple[ResolutionCorrection, ...],
+) -> Resolution:
+    """Replay a contiguous Binary correction chain without mutating its origin."""
+
+    current = original
+    for expected_sequence, correction in enumerate(corrections, start=1):
+        if (
+            correction.prediction_id != original.prediction_id
+            or correction.resolution_id != original.resolution_id
+            or correction.sequence != expected_sequence
+            or correction.old_outcome is not current.outcome
+            or correction.old_resolution_notes != current.resolution_notes
+            or correction.old_postmortem != current.postmortem
+        ):
+            raise TerminalHistoryIntegrityError(
+                "Binary Resolution correction history is inconsistent."
+            )
+        current = replace(
+            current,
+            outcome=correction.new_outcome,
+            resolution_notes=correction.new_resolution_notes,
+            postmortem=correction.new_postmortem,
+        )
+    return current
+
+
+def derive_effective_numeric_resolution(
+    original: NumericResolution,
+    corrections: tuple[NumericResolutionCorrection, ...],
+) -> NumericResolution:
+    """Replay a contiguous Numeric correction chain with exact values."""
+
+    current = original
+    for expected_sequence, correction in enumerate(corrections, start=1):
+        if (
+            correction.prediction_id != original.prediction_id
+            or correction.resolution_id != original.resolution_id
+            or correction.sequence != expected_sequence
+            or correction.old_actual_value != current.actual_value
+            or correction.old_resolution_notes != current.resolution_notes
+            or correction.old_postmortem != current.postmortem
+        ):
+            raise TerminalHistoryIntegrityError(
+                "Numeric Resolution correction history is inconsistent."
+            )
+        current = replace(
+            current,
+            actual_value=correction.new_actual_value,
+            resolution_notes=correction.new_resolution_notes,
+            postmortem=correction.new_postmortem,
+        )
+    return current
+
+
+def derive_effective_invalidation(
+    original: Invalidation,
+    corrections: tuple[InvalidationReasonCorrection, ...],
+) -> Invalidation:
+    """Replay a contiguous Invalidation reason-correction chain."""
+
+    current = original
+    for expected_sequence, correction in enumerate(corrections, start=1):
+        if (
+            correction.prediction_id != original.prediction_id
+            or correction.invalidation_id != original.invalidation_id
+            or correction.sequence != expected_sequence
+            or correction.old_reason != current.reason
+        ):
+            raise TerminalHistoryIntegrityError(
+                "Invalidation correction history is inconsistent."
+            )
+        current = replace(current, reason=correction.new_reason)
+    return current
 
 
 @dataclass(frozen=True, slots=True)

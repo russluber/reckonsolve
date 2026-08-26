@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: v0.3 source release complete through Milestone 25
-Last reviewed: 2026-08-25
+Status: v0.3 source release complete; v0.4 implemented through Milestone 26
+Last reviewed: 2026-08-26
 
-This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.2 and v0.3 source releases. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.2 and v0.3 source releases and the implemented v0.4 foundation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestone 25 completes the v0.3 source CLI with `backup` and `export-csv`, optional destination arguments, timestamped interactive suggestions, and calm artifact-specific success output. The commands invoke the existing verified transfer operations, so recoverability, format-version-two relationships, canonical-database rejection, atomic destination replacement, and last-successful-backup semantics remain shared with Settings. Independent-connection coverage completes the shared-data contract across simultaneous reads, sequential writes, stale context, bounded locks, restart, migration, and stable/development isolation. M21 through M24 behavior and every v0.2 desktop workflow remain intact without a schema change or production dependency.
+Milestone 26 adds the v0.4 terminal-history foundation without exposing an incomplete correction interface. Schema version 13 preserves the immutable Binary Resolution, Numeric Resolution, and Invalidation rows while adding separate append-only before/after correction chains plus one Postmortem-completion fact. Purpose-specific application operations validate normalized proposals, require explanations for score-affecting outcome changes, carry the reviewed correction identifier, and recheck the chain inside an immediate transaction. Pure replay derives effective terminal values without moving the original terminal time or scoring revision, and ordinary analytics consume the latest effective outcome exactly once. M25's complete v0.3 CLI and every earlier desktop workflow remain intact.
 
 | Area | Current state |
 |---|---|
@@ -20,10 +20,10 @@ Milestone 25 completes the v0.3 source CLI with `backup` and `export-csv`, optio
 | UI | All six primary screens are functional; selected navigation and action icons are local, palette-aware Lucide SVGs rendered through QtSvg while visible text and accessible names remain authoritative |
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, and explicit immediate transactions |
-| Schema | Version 12 adds immutable type-aware Forecast Reviews while preserving every Binary and Numeric historical record |
-| Domain and application operations | Complete Binary and Numeric creation, revision, Journal, Review, terminal lifecycle, type-aware Dashboard/archive/analytics queries, guarded deletion, backup, and relational CSV export; CLI reads, mutations, and transfers reuse these operations without direct SQL |
-| Analytics | Exactly-once type-aware scoring selection, Binary Brier/reliability/trend, Numeric containment calibration, and exact-unit raw Numeric summaries are pure calculations behind one consistent read-only source |
-| Automated tests | Complete v0.1/v0.2 coverage plus the full M21-M25 CLI, transfer safety, recoverability, format-version-two contents, identity, shared-connection, concurrency, lock, migration, restart, and GUI visibility coverage |
+| Schema | Version 13 adds append-only Binary/Numeric Resolution corrections, Invalidation-reason corrections, and Postmortem completion while preserving every version-12 row |
+| Domain and application operations | Complete v0.3 workflows plus UI-independent M26 terminal-history reads and atomic correction/completion operations; no M27/M30 mutation control is exposed yet |
+| Analytics | Exactly-once type-aware scoring selection uses the latest effective corrected outcome with the original Resolution time and captured scoring revision; Binary and Numeric calculations remain pure and unit-safe |
+| Automated tests | Complete v0.1-v0.3 coverage plus M26 migration rollback, snapshot-chain integrity, no-op and explanation rules, exact Numeric values, independent-connection concurrency, restart, Postmortem completion, failure rollback, and corrected analytics coverage |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and smoke-validated; original icon artwork, installer, signing, shortcuts, uninstall, updates, and public distribution remain deferred |
 
 The sections below preserve the implemented boundaries and historical evolution of the completed v0.1, v0.2, and v0.3 source releases.
@@ -99,6 +99,8 @@ Representative operations include:
 - reading a unified causal timeline;
 - editing permitted prediction metadata;
 - resolving or invalidating a prediction;
+- appending and reading terminal correction history without changing lifecycle;
+- recording a deliberate blank-Postmortem completion fact;
 - listing and filtering predictions;
 - producing analytics inputs;
 - creating a consistent backup; and
@@ -124,7 +126,7 @@ Domain code must not import PySide6 or open database connections.
 
 The data layer owns connections, schema creation, migrations, SQL, row mapping, foreign-key behavior, and transactions. It provides purpose-specific reads and writes needed by application operations.
 
-No normal data-access operation may update or delete a saved forecast revision, Journal entry, or Journal correction. Migration code is the exceptional maintenance path and must preserve legitimate history. A deliberate future deletion of a parent Prediction may cascade to its complete child history transactionally.
+No normal data-access operation may update or delete a saved forecast revision, Journal entry, Journal correction, terminal record, terminal correction, or Postmortem completion. Migration code is the exceptional maintenance path and must preserve legitimate history. A deliberate future deletion of a parent Prediction may cascade to its complete child history transactionally.
 
 ### Analytics
 
@@ -210,6 +212,8 @@ src/reckonsolve/
     numeric_predictions.py
                        Numeric Prediction, interval/Journal history, terminal records, and guarded deletion
     predictions.py     purpose-specific prediction, history, terminal, tag, and deletion persistence
+    terminal_history.py
+                       type-aware append-only terminal corrections, completion, and effective replay
     settings.py        singleton attention and backup-status setting access
     transfer.py        verified SQLite backup and relational CSV ZIP creation
   ui/
@@ -326,14 +330,20 @@ Milestone 18 also needs no schema migration. Binary `resolutions` and Numeric `n
 
 Milestone 19 migrates to version 12 with one `forecast_reviews` table. Exactly one nullable Binary or Numeric composite revision reference must be present, and insert guards require it to be the current revision of an Open Prediction of the matching type. Saved rows reject update, direct delete, and identity replacement while permitting deliberate parent cascade. Application operations also recheck the reviewed revision, metadata version, and derived deadline status inside `BEGIN IMMEDIATE`, preventing a Review from being attached to stale forecast or proposition context. The optional note and canonical UTC timestamp are immutable. [ADR 0010](decisions/0010-type-aware-forecast-reviews.md) records this boundary.
 
+Milestone 26 migrates to version 13 without modifying any released terminal row. `resolution_corrections` and `numeric_resolution_corrections` retain complete before/after snapshots of every correctable type-specific Resolution field, explicit changed-field flags, a contiguous per-Resolution sequence, canonical UTC correction time, and a required explanation for an outcome or actual-value change. `invalidation_reason_corrections` applies the same snapshot and sequence discipline to the optional reason. Composite foreign keys preserve ownership; triggers require each insert to continue the current effective snapshot and reject update, replacement, sequence gaps, and direct child deletion while the parent exists.
+
+`postmortem_completions` stores one immutable timestamped **Skip Postmortem** fact per Resolved Prediction. Its insert guard requires the currently effective Postmortem to be blank. A later Postmortem correction may still append without deleting that completion fact. `terminal_history.py` reads original facts and correction rows separately, then pure domain replay derives the effective value while preserving the original terminal timestamp and captured scoring revision. Application correction operations carry the latest correction identifier as their optimistic token and recheck it inside `BEGIN IMMEDIATE`. [ADR 0012](decisions/0012-append-only-terminal-correction-chains.md) records this design. M26 deliberately exposes no desktop or CLI mutation control; those workflows belong to later v0.4 milestones.
+
 Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
 
 ### Canonical and derived data
 
-Canonical facts include the prediction, every saved binary or numeric forecast revision, every immutable Forecast Review, every definition-change snapshot, every Journal entry and correction version, immutable Resolutions and Invalidations, and tag relationships. Derived values normally include:
+Canonical facts include the prediction, every saved binary or numeric forecast revision, every immutable Forecast Review, every definition-change snapshot, every Journal entry and correction version, original immutable Resolutions and Invalidations, every terminal correction snapshot, Postmortem completion, and tag relationships. Derived values normally include:
 
 - current forecast;
 - current displayed Journal body and unified timeline ordering;
+- effective Resolution outcome, notes, and Postmortem;
+- effective Invalidation reason;
 - time-dependent Locked status;
 - Needs Attention;
 - Ready to Resolve;
@@ -372,6 +382,8 @@ Transactions protect operations that must not leave partial history:
 - Correcting a Journal entry rechecks its reviewed latest-correction token inside one immediate transaction and appends one changed body version. An effective no-op returns the existing entry without acquiring a new timestamp or writing.
 - Resolution rechecks the reviewed type-appropriate revision and metadata version, records the Binary outcome or exact Numeric actual value plus the exact scoring revision, and persists terminal status atomically.
 - Invalidation rechecks the same type-appropriate reviewed context and records terminal state, timestamp, and optional reason atomically.
+- A terminal correction rechecks the reviewed latest-correction identifier, derives the transaction-current effective snapshot, rejects no-op or unexplained score-affecting changes, and appends exactly one complete before/after record without updating the original terminal row.
+- Postmortem completion rechecks the latest correction identifier, Resolved state, blank effective Postmortem, and absence of an earlier completion before appending one immutable timestamped fact.
 - Deletion requires explicit confirmation, rechecks untouched Open eligibility for the Prediction's forecast type, and cascades the eligible parent and its initial child state atomically.
 - Updating the stale threshold validates the value and replaces the singleton setting in one transaction; it does not mutate any Prediction or history row.
 - Backup uses SQLite's online backup API to capture a consistent snapshot, verifies a temporary database, atomically installs it, and only then records the successful time in the source settings.
@@ -406,7 +418,7 @@ resolved Prediction and captured type-appropriate scoring revision
 
 Selection logic and calculation logic require tests independent of chart widgets. Tag filtering should constrain the observation set before aggregation. Probability-history charts use all revisions for one prediction, while scoring uses exactly one eligible revision; these are separate data products and must not share misleading selection behavior.
 
-One read transaction returns each Binary and Numeric Resolution's captured scoring revision and associated tags in canonical resolution-time and identifier order. Pure analytics validate unique Prediction and Resolution contributions. Binary calculations map Yes to 1 and No to 0, calculate Brier on the 0-through-1 scale, use fixed `0-9%` through `90-100%` probability bands, and retain the cumulative resolution-time trend. Numeric calculations treat both interval endpoints as inclusive, reuse the same ten bands for whole-number confidence, and report actual mean confidence, observed containment, and count. Median absolute error and interval width use exact base-ten values; proper interval score applies the confidence-dependent penalty on only the missed side.
+One read transaction returns each Binary and Numeric Resolution's captured scoring revision, latest effective outcome after its correction chain, and associated tags in original canonical resolution-time and identifier order. Pure analytics validate unique Prediction and Resolution contributions. Binary calculations map Yes to 1 and No to 0, calculate Brier on the 0-through-1 scale, use fixed `0-9%` through `90-100%` probability bands, and retain the cumulative resolution-time trend. Numeric calculations treat both interval endpoints as inclusive, reuse the same ten bands for whole-number confidence, and report actual mean confidence, observed containment, and count. Median absolute error and interval width use exact base-ten values; proper interval score applies the confidence-dependent penalty on only the missed side. A corrected outcome changes the values calculated for that one observation; it never changes its captured ForecastRevision, original Resolution time, or observation count.
 
 The type and tag filters apply before every type-specific output. Numeric **All units** may combine unitless containment observations but produces no raw-error summary. Selecting one exact unit filters the Numeric headline, table, chart, and mean raw metrics together. The **All types** view renders Binary and Numeric sections separately, and the unit selector is available only after choosing Numeric. Native UI charts consume calculated bins and cannot select observations or calculate scores.
 
@@ -456,7 +468,7 @@ Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled r
 
 An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
 
-Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. Version 9 preserves Binary data while adding the Numeric foundation; version 10 preserves Binary Journal history while adding type-aware anchors; version 11 preserves both types and existing Binary terminal records while adding Numeric Resolution and type-aware terminal-status guards; version 12 preserves both forecast types while adding immutable type-aware Reviews. Every migration has a forced-failure rollback test pinned to its preceding schema. Earlier version-specific tests remain pinned to their historical targets. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. Version 9 preserves Binary data while adding the Numeric foundation; version 10 preserves Binary Journal history while adding type-aware anchors; version 11 preserves both types and existing Binary terminal records while adding Numeric Resolution and type-aware terminal-status guards; version 12 preserves both forecast types while adding immutable type-aware Reviews; version 13 preserves every original terminal row while adding audited correction and Postmortem-completion history. Every migration has a forced-failure rollback test pinned to its preceding schema. Earlier version-specific tests remain pinned to their historical targets. Already released migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
 
 ## 14. Backup and export
 
@@ -465,9 +477,9 @@ Backup and CSV export have separate implemented contracts:
 - Backup produces a consistent artifact sufficient to recover the full application state.
 - CSV export produces documented, portable analytical data and may use several related files to preserve historical structure honestly.
 
-Backup uses the standard-library binding to SQLite's online backup API. It writes to a unique temporary database beside the chosen destination; runs SQLite quick, foreign-key, and schema-version checks; closes the temporary connection; then uses same-directory atomic replacement. The canonical database path, including an equivalent hard link, is rejected as a destination. Failure cleanup targets only the owned temporary file, and an existing destination remains untouched until installation succeeds.
+Backup uses the standard-library binding to SQLite's online backup API. It writes to a unique temporary database beside the chosen destination; runs SQLite quick, foreign-key, and schema-version checks; closes the temporary connection; then uses same-directory atomic replacement. The canonical database path, including an equivalent hard link, is rejected as a destination. Failure cleanup targets only the owned temporary file, and an existing destination remains untouched until installation succeeds. Because backup copies the complete canonical database, schema-version-13 correction and completion tables require no special transfer path.
 
-CSV export reads canonical rows in one transaction and then uses the standard-library `csv` and `zipfile` modules. Its format-version-two bundle contains twelve relational files: Predictions, Binary and Numeric ForecastRevisions, definition changes, Journal entries and corrections, Forecast Reviews, Binary and Numeric Resolutions, Invalidations, tags, and Prediction-tag links. Stable IDs and mutually exclusive type-specific revision columns preserve the type-aware relationships rather than flattening history. Numeric values remain signed scaled integers, paired with the parent Prediction's fixed precision; export never serializes canonical values through binary floating point. CSV uses UTF-8 with a byte-order mark, CRLF rows, and quoted fields; `README.txt` documents columns, joins, blank nulls, UTC instants, ISO dates, scaling, derivation rules, and spreadsheet handling of formula-like free text. The ZIP follows the same temporary-write, validation, and atomic-install discipline as backup. SQLite backup remains the complete recovery artifact for every supported type. Neither workflow adds a production dependency.
+CSV export still reads its completed v0.3 rows in one transaction and produces the format-version-two twelve-file bundle. M26 does not prematurely alter that public analytical format because no correction mutation UI exists yet. Format version 3 must add terminal correction and Postmortem-completion relationships in Milestone 31 before v0.4 closes. SQLite backup is already the complete recovery artifact for schema version 13.
 
 ## 15. Private Windows build
 
@@ -479,7 +491,7 @@ This artifact is a development validation output, not a supported release. There
 
 ## 16. Testing strategy
 
-The suite covers package entry points, GUI and CLI runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 12, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M18 retain their historical, lifecycle, Dashboard, archive, analytics, transfer, packaging, fixed-precision Numeric, creation, revision, Journal, chart, terminal-workflow, type-aware navigation, and Numeric scoring coverage. M19 adds Review tests for both types, Open-only lifecycle enforcement, independent-connection concurrency, cancellation, immutable context, timeline rendering, restart, deletion eligibility, Needs Attention reset, and chart/revision non-effects. M20 adds format-version-two CSV relationship coverage, type-aware backup recovery, a direct real-v8-to-v12 upgrade/recovery path, and Binary/Numeric/Review private-smoke verification. M21 adds temporary-database tests for paired CLI identities, side-effect-free help/version and reads, combined archive filters, attention labels, complete Binary/Numeric text history, exact decimal and local-time output, safe terminal text, not-found behavior, and rejection of an unrecognized database without replacement. M22 adds minimal and complete Binary creation, exact Numeric creation with invalid-input retry, endpoint messaging, defaults, optional fields, EOF/Ctrl+C cancellation, atomic domain failure, restart, and actual Qt-browser visibility coverage. M23 adds both-type CLI revision, Journal, and Review coverage for immutable and exact histories, input retry, single-line prose, EOF cancellation, Open/Locked boundaries, Needs Attention behavior, cross-interface textual visibility, and revision/metadata concurrency rejection without false observations. M24 adds confirmed Binary/Numeric resolution, exact Numeric actual-value retry and canonical formatting, final scoring-revision capture, Invalid scoring exclusion, declined-confirmation cancellation, untouched-Open deletion and meaningful-history rejection, Locked terminal actions, one-way terminal rejection, stale-context failure, transaction-current deletion rechecks, bounded write-lock failure, and restart persistence. M25 adds CLI recovery backup, format-version-two export, destination prompting, canonical-source rejection, existing-artifact preservation, restart recovery, and independent-connection simultaneous-read/sequential-write coverage while retaining the existing migration, identity-isolation, stale-context, and bounded-lock tests.
+The suite covers package entry points, GUI and CLI runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 13, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M25 retain their completed historical, desktop, CLI, analytics, transfer, packaging, migration, identity, concurrency, and failure-safety coverage. M26 adds pure snapshot-replay tests plus temporary-database coverage for version-12 migration, forced rollback, database immutability and sequence guards, Binary and exact Numeric corrections, score-affecting explanation requirements, text-only changes, Invalidation reasons, Postmortem completion, corrected-outcome analytics, independent-connection stale tokens, restart, and transaction rollback.
 
 Most behavior should be verified below the GUI:
 
@@ -520,3 +532,9 @@ The architecture will continue through implemented vertical slices rather than p
 The completed v0.3 plan adds a human-directed CLI companion through Milestones 21 through 25. M21 implements the shared-data foundation and read model: paired source entry points, identity-selected database composition, `--help`, `--version`, filtered `list`, and complete type-aware `show`. M22 adds interactive `create binary` and `create numeric` flows that preserve existing defaults, exactness, optional details, atomicity, and cancellation behavior. M23 adds type-aware `revise`, `journal`, and `review`, retaining existing immutable-history, forecast-anchor, freshness, lifecycle, deadline, and optimistic-concurrency semantics. M24 adds confirmed type-aware `resolve`, `invalidate`, and guarded `delete`, retaining final scoring-revision capture, exact Numeric outcomes, Invalid exclusion, one-way terminal state, and transaction-current deletion eligibility. M25 adds CLI backup and format-version-two CSV export through the existing verified transfer operations, hardens independent-connection and artifact-failure behavior, and closes the source release. Every milestone uses the existing version-12 schema and application operations, so both matching interfaces preserve one canonical history without a synchronization subsystem.
 
 The CLI remains source-distributed through `uv`; a separately frozen executable, installer integration, noninteractive scripting API, terminal analytics, live inter-process refresh, and logo work remain outside v0.3.
+
+## 21. Evolution into v0.4
+
+The approved v0.4 plan spans Milestones 26 through 31. M26 implements only the domain and persistence foundation: original terminal rows remain immutable; complete Binary, Numeric, and Invalidation correction snapshots append in deterministic chains; one Postmortem completion fact can be recorded; and effective replay supplies corrected outcomes to ordinary analytics without changing scoring-revision capture, resolution-time ordering, or observation count. Schema version 13 migrates the completed v0.3 database forward and remains fully recoverable through SQLite backup.
+
+M27 will expose audited desktop correction and later-Postmortem workflows. M28 and M29 will add individual scorecards and paired initial-versus-final analytics. M30 will expose the Needs Postmortem queue and Skip action. M31 will add CLI read parity, relational export format version 3, full portability coverage, and v0.4 release closure. Until those milestones land, the M26 operations remain deliberately presentation-free and the completed v0.3 user workflows stay unchanged.

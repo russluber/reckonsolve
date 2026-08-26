@@ -200,6 +200,51 @@ class ConcurrentLifecycleUpdateError(ApplicationError):
         self.prediction_id = prediction_id
 
 
+class ConcurrentTerminalCorrectionError(ApplicationError):
+    """Terminal history changed after the correction was reviewed."""
+
+    def __init__(self, prediction_id: int) -> None:
+        super().__init__(
+            "This terminal record changed before the correction could be saved. "
+            "Review the latest Resolution or Invalidation history and try again."
+        )
+        self.prediction_id = prediction_id
+
+
+class TerminalCorrectionNotAllowedError(ApplicationError):
+    """The requested Prediction has no matching correctable terminal record."""
+
+    def __init__(self, prediction_id: int, record_name: str) -> None:
+        super().__init__(
+            f"Prediction {prediction_id} has no {record_name} that can be corrected."
+        )
+        self.prediction_id = prediction_id
+        self.record_name = record_name
+
+
+class TerminalCorrectionUnchangedError(ApplicationError):
+    """A terminal correction must change at least one effective value."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "The outcome and terminal text are unchanged. "
+            "Change at least one value to record a correction."
+        )
+
+
+class PostmortemCompletionNotAllowedError(ApplicationError):
+    """The current Prediction cannot record a Skip Postmortem completion."""
+
+    def __init__(self, reason: str) -> None:
+        messages = {
+            "not_resolved": "Only a Resolved prediction can skip its Postmortem.",
+            "already_completed": "This Postmortem has already been marked complete.",
+            "has_postmortem": "This Resolution already has a Postmortem.",
+        }
+        super().__init__(messages.get(reason, "This Postmortem cannot be skipped."))
+        self.reason = reason
+
+
 class LifecycleTransitionNotAllowedError(ApplicationError):
     """An already-terminal prediction cannot receive another terminal decision."""
 

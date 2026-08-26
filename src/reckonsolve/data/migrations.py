@@ -1673,6 +1673,672 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=13,
+        name="add append-only terminal corrections",
+        statements=(
+            """
+            CREATE UNIQUE INDEX resolutions_prediction_identity
+            ON resolutions (prediction_id, id)
+            """,
+            """
+            CREATE UNIQUE INDEX numeric_resolutions_prediction_identity
+            ON numeric_resolutions (prediction_id, id)
+            """,
+            """
+            CREATE UNIQUE INDEX prediction_invalidations_prediction_identity
+            ON prediction_invalidations (prediction_id, id)
+            """,
+            """
+            CREATE TABLE resolution_corrections (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL,
+                resolution_id INTEGER NOT NULL,
+                sequence INTEGER NOT NULL
+                    CHECK (typeof(sequence) = 'integer' AND sequence >= 1),
+                old_outcome TEXT NOT NULL CHECK (old_outcome IN ('yes', 'no')),
+                new_outcome TEXT NOT NULL CHECK (new_outcome IN ('yes', 'no')),
+                old_resolution_notes TEXT
+                    CHECK (old_resolution_notes IS NULL OR (
+                        length(old_resolution_notes) > 0
+                        AND old_resolution_notes = trim(
+                            old_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_resolution_notes, char(0)) = 0
+                    )),
+                new_resolution_notes TEXT
+                    CHECK (new_resolution_notes IS NULL OR (
+                        length(new_resolution_notes) > 0
+                        AND new_resolution_notes = trim(
+                            new_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_resolution_notes, char(0)) = 0
+                    )),
+                old_postmortem TEXT
+                    CHECK (old_postmortem IS NULL OR (
+                        length(old_postmortem) > 0
+                        AND old_postmortem = trim(
+                            old_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_postmortem, char(0)) = 0
+                    )),
+                new_postmortem TEXT
+                    CHECK (new_postmortem IS NULL OR (
+                        length(new_postmortem) > 0
+                        AND new_postmortem = trim(
+                            new_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_postmortem, char(0)) = 0
+                    )),
+                outcome_changed INTEGER NOT NULL CHECK (outcome_changed IN (0, 1)),
+                resolution_notes_changed INTEGER NOT NULL
+                    CHECK (resolution_notes_changed IN (0, 1)),
+                postmortem_changed INTEGER NOT NULL
+                    CHECK (postmortem_changed IN (0, 1)),
+                correction_reason TEXT
+                    CHECK (correction_reason IS NULL OR (
+                        length(correction_reason) > 0
+                        AND correction_reason = trim(
+                            correction_reason,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(correction_reason, char(0)) = 0
+                    )),
+                corrected_at TEXT NOT NULL
+                    CHECK (
+                        length(corrected_at) = 27
+                        AND corrected_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(corrected_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(corrected_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(corrected_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(corrected_at, 1, 10),
+                            0
+                        )
+                    ),
+                FOREIGN KEY (prediction_id, resolution_id)
+                    REFERENCES resolutions(prediction_id, id)
+                    ON DELETE CASCADE,
+                UNIQUE (resolution_id, sequence),
+                CHECK (outcome_changed = (old_outcome IS NOT new_outcome)),
+                CHECK (
+                    resolution_notes_changed =
+                        (old_resolution_notes IS NOT new_resolution_notes)
+                ),
+                CHECK (
+                    postmortem_changed = (old_postmortem IS NOT new_postmortem)
+                ),
+                CHECK (
+                    outcome_changed + resolution_notes_changed
+                        + postmortem_changed >= 1
+                ),
+                CHECK (outcome_changed = 0 OR correction_reason IS NOT NULL)
+            ) STRICT
+            """,
+            """
+            CREATE INDEX resolution_corrections_by_resolution
+            ON resolution_corrections (resolution_id, sequence)
+            """,
+            """
+            CREATE TRIGGER resolution_corrections_require_current_snapshot
+            BEFORE INSERT ON resolution_corrections
+            WHEN NEW.old_outcome IS NOT (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                ) THEN (
+                    SELECT new_outcome FROM resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT outcome FROM resolutions WHERE id = NEW.resolution_id
+                ) END
+            )
+            OR NEW.old_resolution_notes IS NOT (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                ) THEN (
+                    SELECT new_resolution_notes FROM resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT resolution_notes FROM resolutions
+                    WHERE id = NEW.resolution_id
+                ) END
+            )
+            OR NEW.old_postmortem IS NOT (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                ) THEN (
+                    SELECT new_postmortem FROM resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT postmortem FROM resolutions
+                    WHERE id = NEW.resolution_id
+                ) END
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'resolution correction must continue the current snapshot'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER resolution_corrections_require_next_sequence
+            BEFORE INSERT ON resolution_corrections
+            WHEN NEW.sequence != COALESCE(
+                (
+                    SELECT MAX(sequence) FROM resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                ),
+                0
+            ) + 1
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'resolution correction sequence must be contiguous'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER resolution_corrections_are_immutable
+            BEFORE UPDATE ON resolution_corrections
+            BEGIN
+                SELECT RAISE(ABORT, 'saved resolution corrections are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER resolution_corrections_reject_history_replacement
+            BEFORE INSERT ON resolution_corrections
+            WHEN EXISTS (SELECT 1 FROM resolution_corrections WHERE id = NEW.id)
+            BEGIN
+                SELECT RAISE(ABORT, 'saved resolution corrections are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER resolution_corrections_reject_direct_delete
+            BEFORE DELETE ON resolution_corrections
+            WHEN EXISTS (SELECT 1 FROM predictions WHERE id = OLD.prediction_id)
+            BEGIN
+                SELECT RAISE(ABORT, 'saved resolution corrections are immutable');
+            END
+            """,
+            """
+            CREATE TABLE numeric_resolution_corrections (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL,
+                numeric_resolution_id INTEGER NOT NULL,
+                sequence INTEGER NOT NULL
+                    CHECK (typeof(sequence) = 'integer' AND sequence >= 1),
+                old_actual_scaled INTEGER NOT NULL
+                    CHECK (
+                        typeof(old_actual_scaled) = 'integer'
+                        AND abs(old_actual_scaled) <= 999999999999999999
+                    ),
+                new_actual_scaled INTEGER NOT NULL
+                    CHECK (
+                        typeof(new_actual_scaled) = 'integer'
+                        AND abs(new_actual_scaled) <= 999999999999999999
+                    ),
+                old_resolution_notes TEXT
+                    CHECK (old_resolution_notes IS NULL OR (
+                        length(old_resolution_notes) > 0
+                        AND old_resolution_notes = trim(
+                            old_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_resolution_notes, char(0)) = 0
+                    )),
+                new_resolution_notes TEXT
+                    CHECK (new_resolution_notes IS NULL OR (
+                        length(new_resolution_notes) > 0
+                        AND new_resolution_notes = trim(
+                            new_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_resolution_notes, char(0)) = 0
+                    )),
+                old_postmortem TEXT
+                    CHECK (old_postmortem IS NULL OR (
+                        length(old_postmortem) > 0
+                        AND old_postmortem = trim(
+                            old_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_postmortem, char(0)) = 0
+                    )),
+                new_postmortem TEXT
+                    CHECK (new_postmortem IS NULL OR (
+                        length(new_postmortem) > 0
+                        AND new_postmortem = trim(
+                            new_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_postmortem, char(0)) = 0
+                    )),
+                actual_value_changed INTEGER NOT NULL
+                    CHECK (actual_value_changed IN (0, 1)),
+                resolution_notes_changed INTEGER NOT NULL
+                    CHECK (resolution_notes_changed IN (0, 1)),
+                postmortem_changed INTEGER NOT NULL
+                    CHECK (postmortem_changed IN (0, 1)),
+                correction_reason TEXT
+                    CHECK (correction_reason IS NULL OR (
+                        length(correction_reason) > 0
+                        AND correction_reason = trim(
+                            correction_reason,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(correction_reason, char(0)) = 0
+                    )),
+                corrected_at TEXT NOT NULL
+                    CHECK (
+                        length(corrected_at) = 27
+                        AND corrected_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(corrected_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(corrected_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(corrected_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(corrected_at, 1, 10),
+                            0
+                        )
+                    ),
+                FOREIGN KEY (prediction_id, numeric_resolution_id)
+                    REFERENCES numeric_resolutions(prediction_id, id)
+                    ON DELETE CASCADE,
+                UNIQUE (numeric_resolution_id, sequence),
+                CHECK (
+                    actual_value_changed =
+                        (old_actual_scaled IS NOT new_actual_scaled)
+                ),
+                CHECK (
+                    resolution_notes_changed =
+                        (old_resolution_notes IS NOT new_resolution_notes)
+                ),
+                CHECK (
+                    postmortem_changed = (old_postmortem IS NOT new_postmortem)
+                ),
+                CHECK (
+                    actual_value_changed + resolution_notes_changed
+                        + postmortem_changed >= 1
+                ),
+                CHECK (actual_value_changed = 0 OR correction_reason IS NOT NULL)
+            ) STRICT
+            """,
+            """
+            CREATE INDEX numeric_resolution_corrections_by_resolution
+            ON numeric_resolution_corrections (numeric_resolution_id, sequence)
+            """,
+            """
+            CREATE TRIGGER numeric_resolution_corrections_require_current_snapshot
+            BEFORE INSERT ON numeric_resolution_corrections
+            WHEN NEW.old_actual_scaled IS NOT (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM numeric_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                ) THEN (
+                    SELECT new_actual_scaled FROM numeric_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT actual_scaled FROM numeric_resolutions
+                    WHERE id = NEW.numeric_resolution_id
+                ) END
+            )
+            OR NEW.old_resolution_notes IS NOT (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM numeric_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                ) THEN (
+                    SELECT new_resolution_notes
+                    FROM numeric_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT resolution_notes FROM numeric_resolutions
+                    WHERE id = NEW.numeric_resolution_id
+                ) END
+            )
+            OR NEW.old_postmortem IS NOT (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM numeric_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                ) THEN (
+                    SELECT new_postmortem FROM numeric_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT postmortem FROM numeric_resolutions
+                    WHERE id = NEW.numeric_resolution_id
+                ) END
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'numeric resolution correction must continue the current snapshot'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolution_corrections_require_next_sequence
+            BEFORE INSERT ON numeric_resolution_corrections
+            WHEN NEW.sequence != COALESCE(
+                (
+                    SELECT MAX(sequence) FROM numeric_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                ),
+                0
+            ) + 1
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'numeric resolution correction sequence must be contiguous'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolution_corrections_are_immutable
+            BEFORE UPDATE ON numeric_resolution_corrections
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved numeric resolution corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolution_corrections_reject_history_replacement
+            BEFORE INSERT ON numeric_resolution_corrections
+            WHEN EXISTS (
+                SELECT 1 FROM numeric_resolution_corrections WHERE id = NEW.id
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved numeric resolution corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolution_corrections_reject_direct_delete
+            BEFORE DELETE ON numeric_resolution_corrections
+            WHEN EXISTS (SELECT 1 FROM predictions WHERE id = OLD.prediction_id)
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved numeric resolution corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TABLE invalidation_reason_corrections (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL,
+                invalidation_id INTEGER NOT NULL,
+                sequence INTEGER NOT NULL
+                    CHECK (typeof(sequence) = 'integer' AND sequence >= 1),
+                old_reason TEXT
+                    CHECK (old_reason IS NULL OR (
+                        length(old_reason) > 0
+                        AND old_reason = trim(
+                            old_reason,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_reason, char(0)) = 0
+                    )),
+                new_reason TEXT
+                    CHECK (new_reason IS NULL OR (
+                        length(new_reason) > 0
+                        AND new_reason = trim(
+                            new_reason,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_reason, char(0)) = 0
+                    )),
+                corrected_at TEXT NOT NULL
+                    CHECK (
+                        length(corrected_at) = 27
+                        AND corrected_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(corrected_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(corrected_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(corrected_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(corrected_at, 1, 10),
+                            0
+                        )
+                    ),
+                FOREIGN KEY (prediction_id, invalidation_id)
+                    REFERENCES prediction_invalidations(prediction_id, id)
+                    ON DELETE CASCADE,
+                UNIQUE (invalidation_id, sequence),
+                CHECK (old_reason IS NOT new_reason)
+            ) STRICT
+            """,
+            """
+            CREATE INDEX invalidation_reason_corrections_by_invalidation
+            ON invalidation_reason_corrections (invalidation_id, sequence)
+            """,
+            """
+            CREATE TRIGGER invalidation_reason_corrections_require_current_snapshot
+            BEFORE INSERT ON invalidation_reason_corrections
+            WHEN NEW.old_reason IS NOT (
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM invalidation_reason_corrections
+                    WHERE invalidation_id = NEW.invalidation_id
+                ) THEN (
+                    SELECT new_reason FROM invalidation_reason_corrections
+                    WHERE invalidation_id = NEW.invalidation_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT reason FROM prediction_invalidations
+                    WHERE id = NEW.invalidation_id
+                ) END
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'invalidation correction must continue the current snapshot'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER invalidation_reason_corrections_require_next_sequence
+            BEFORE INSERT ON invalidation_reason_corrections
+            WHEN NEW.sequence != COALESCE(
+                (
+                    SELECT MAX(sequence) FROM invalidation_reason_corrections
+                    WHERE invalidation_id = NEW.invalidation_id
+                ),
+                0
+            ) + 1
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'invalidation correction sequence must be contiguous'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER invalidation_reason_corrections_are_immutable
+            BEFORE UPDATE ON invalidation_reason_corrections
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved invalidation reason corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER invalidation_reason_corrections_reject_history_replacement
+            BEFORE INSERT ON invalidation_reason_corrections
+            WHEN EXISTS (
+                SELECT 1 FROM invalidation_reason_corrections WHERE id = NEW.id
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved invalidation reason corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER invalidation_reason_corrections_reject_direct_delete
+            BEFORE DELETE ON invalidation_reason_corrections
+            WHEN EXISTS (SELECT 1 FROM predictions WHERE id = OLD.prediction_id)
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved invalidation reason corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TABLE postmortem_completions (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL UNIQUE
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                completed_at TEXT NOT NULL
+                    CHECK (
+                        length(completed_at) = 27
+                        AND completed_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(completed_at, 1, 4) BETWEEN '0001' AND '9999'
+                        AND substr(completed_at, 12, 2) BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(completed_at, 1, 10) || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(completed_at, 1, 10),
+                            0
+                        )
+                    )
+            ) STRICT
+            """,
+            """
+            CREATE TRIGGER postmortem_completions_require_blank_resolved_postmortem
+            BEFORE INSERT ON postmortem_completions
+            WHEN (
+                SELECT status FROM predictions WHERE id = NEW.prediction_id
+            ) IS NOT 'resolved'
+            OR (
+                (
+                    SELECT prediction_type FROM predictions
+                    WHERE id = NEW.prediction_id
+                ) = 'binary'
+                AND (
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM resolution_corrections AS correction
+                        JOIN resolutions AS resolution
+                            ON resolution.id = correction.resolution_id
+                        WHERE resolution.prediction_id = NEW.prediction_id
+                    ) THEN (
+                        SELECT correction.new_postmortem
+                        FROM resolution_corrections AS correction
+                        JOIN resolutions AS resolution
+                            ON resolution.id = correction.resolution_id
+                        WHERE resolution.prediction_id = NEW.prediction_id
+                        ORDER BY correction.sequence DESC LIMIT 1
+                    ) ELSE (
+                        SELECT postmortem FROM resolutions
+                        WHERE prediction_id = NEW.prediction_id
+                    ) END
+                ) IS NOT NULL
+            )
+            OR (
+                (
+                    SELECT prediction_type FROM predictions
+                    WHERE id = NEW.prediction_id
+                ) = 'numeric'
+                AND (
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM numeric_resolution_corrections AS correction
+                        JOIN numeric_resolutions AS resolution
+                            ON resolution.id = correction.numeric_resolution_id
+                        WHERE resolution.prediction_id = NEW.prediction_id
+                    ) THEN (
+                        SELECT correction.new_postmortem
+                        FROM numeric_resolution_corrections AS correction
+                        JOIN numeric_resolutions AS resolution
+                            ON resolution.id = correction.numeric_resolution_id
+                        WHERE resolution.prediction_id = NEW.prediction_id
+                        ORDER BY correction.sequence DESC LIMIT 1
+                    ) ELSE (
+                        SELECT postmortem FROM numeric_resolutions
+                        WHERE prediction_id = NEW.prediction_id
+                    ) END
+                ) IS NOT NULL
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'postmortem completion requires a blank resolved postmortem'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER postmortem_completions_are_immutable
+            BEFORE UPDATE ON postmortem_completions
+            BEGIN
+                SELECT RAISE(ABORT, 'saved postmortem completions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER postmortem_completions_reject_history_replacement
+            BEFORE INSERT ON postmortem_completions
+            WHEN EXISTS (SELECT 1 FROM postmortem_completions WHERE id = NEW.id)
+            BEGIN
+                SELECT RAISE(ABORT, 'saved postmortem completions are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER postmortem_completions_reject_direct_delete
+            BEFORE DELETE ON postmortem_completions
+            WHEN EXISTS (SELECT 1 FROM predictions WHERE id = OLD.prediction_id)
+            BEGIN
+                SELECT RAISE(ABORT, 'saved postmortem completions are immutable');
+            END
+            """,
+        ),
+    ),
 )
 
 

@@ -37,6 +37,15 @@ from reckonsolve.data.predictions import (
     PredictionRepository,
 )
 from reckonsolve.data.settings import SettingsRepository
+from reckonsolve.data.terminal_history import (
+    OutcomeCorrectionReasonRequiredError,
+    PostmortemCompletionDisallowedError,
+    TerminalCorrectionContextChangedError,
+    TerminalHistoryRepository,
+)
+from reckonsolve.data.terminal_history import (
+    TerminalCorrectionUnchangedError as RepositoryTerminalCorrectionUnchangedError,
+)
 from reckonsolve.data.transfer import DataTransferRepository
 from reckonsolve.domain.attention import (
     AttentionValidationError,
@@ -49,26 +58,33 @@ from reckonsolve.domain.attention import (
 from reckonsolve.domain.browser import PredictionBrowserSnapshot
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
+    BinaryResolutionHistory,
     DefinitionChange,
     FixedPrecisionValue,
     ForecastReviewTimelineEvent,
     ForecastRevision,
+    InvalidationHistory,
     JournalTimelineEvent,
     NewForecastReview,
     NewForecastRevision,
     NewInvalidation,
+    NewInvalidationReasonCorrection,
     NewJournalCorrection,
     NewJournalEntry,
     NewNumericForecastRevision,
     NewNumericPrediction,
     NewNumericResolution,
+    NewNumericResolutionCorrection,
     NewPrediction,
     NewResolution,
+    NewResolutionCorrection,
     NumericForecastReviewTimelineEvent,
     NumericForecastRevision,
     NumericJournalTimelineEvent,
     NumericPrediction,
+    NumericResolutionHistory,
     NumericTimelineEvent,
+    PostmortemCompletion,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
@@ -76,6 +92,8 @@ from reckonsolve.domain.predictions import (
     PredictionValidationError,
     TimelineEvent,
     changed_definition_fields,
+    changed_numeric_resolution_fields,
+    changed_resolution_fields,
     display_status,
     metadata_would_change,
 )
@@ -93,6 +111,7 @@ from .errors import (
     ConcurrentJournalUpdateError,
     ConcurrentLifecycleUpdateError,
     ConcurrentPredictionUpdateError,
+    ConcurrentTerminalCorrectionError,
     CsvExportError,
     ForecastReviewNotAllowedError,
     ForecastRevisionNotAllowedError,
@@ -102,9 +121,12 @@ from .errors import (
     LifecycleTransitionNotAllowedError,
     MeaningChangeConfirmationRequired,
     NumericForecastUnchangedError,
+    PostmortemCompletionNotAllowedError,
     PredictionDeletionConfirmationRequired,
     PredictionDeletionNotAllowedError,
     PredictionNotFoundError,
+    TerminalCorrectionNotAllowedError,
+    TerminalCorrectionUnchangedError,
     ValidationError,
 )
 
@@ -122,6 +144,7 @@ class PredictionOperations:
         self._numeric_repository = NumericPredictionRepository(database)
         self._analytics_repository = AnalyticsRepository(database)
         self._settings_repository = SettingsRepository(database)
+        self._terminal_history_repository = TerminalHistoryRepository(database)
         self._transfer_repository = DataTransferRepository(database)
         self._clock = SystemClock() if clock is None else clock
         self._local_timezone = local_timezone
@@ -973,6 +996,237 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         return self._with_derived_status(updated, invalidated_at)
 
+    def get_binary_resolution_history(
+        self,
+        prediction_id: int,
+    ) -> BinaryResolutionHistory:
+        """Return the original Binary Resolution and every correction."""
+
+        history = self._terminal_history_repository.get_binary_resolution_history(
+            prediction_id
+        )
+        if history is None:
+            self._raise_missing_terminal_record(prediction_id, "Binary Resolution")
+        assert history is not None
+        return history
+
+    def get_numeric_resolution_history(
+        self,
+        prediction_id: int,
+    ) -> NumericResolutionHistory:
+        """Return the original Numeric Resolution and every correction."""
+
+        history = self._terminal_history_repository.get_numeric_resolution_history(
+            prediction_id
+        )
+        if history is None:
+            self._raise_missing_terminal_record(prediction_id, "Numeric Resolution")
+        assert history is not None
+        return history
+
+    def get_invalidation_history(self, prediction_id: int) -> InvalidationHistory:
+        """Return the original Invalidation and every reason correction."""
+
+        history = self._terminal_history_repository.get_invalidation_history(
+            prediction_id
+        )
+        if history is None:
+            self._raise_missing_terminal_record(prediction_id, "Invalidation")
+        assert history is not None
+        return history
+
+    def correct_binary_resolution(
+        self,
+        prediction_id: int,
+        outcome: BinaryOutcome,
+        *,
+        resolution_notes: str | None,
+        postmortem: str | None,
+        correction_reason: str | None = None,
+        expected_correction_id: int | None,
+    ) -> BinaryResolutionHistory:
+        """Append one complete Binary Resolution correction snapshot."""
+
+        try:
+            proposed = NewResolutionCorrection(
+                outcome=outcome,
+                resolution_notes=resolution_notes,
+                postmortem=postmortem,
+                correction_reason=correction_reason,
+            )
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_optional_positive_token(
+            expected_correction_id,
+            "expected_correction_id",
+        )
+        history = self.get_binary_resolution_history(prediction_id)
+        self._validate_terminal_correction_proposal(
+            prediction_id,
+            history.current_correction_id,
+            expected_correction_id,
+            changed_resolution_fields(history.effective, proposed),
+            proposed.correction_reason,
+            outcome_field="outcome",
+        )
+        corrected_at = as_utc(self._clock.now())
+        try:
+            updated = (
+                self._terminal_history_repository.append_binary_resolution_correction(
+                    prediction_id,
+                    proposed,
+                    expected_correction_id=expected_correction_id,
+                    corrected_at=corrected_at,
+                )
+            )
+        except TerminalCorrectionContextChangedError as error:
+            raise ConcurrentTerminalCorrectionError(prediction_id) from error
+        except RepositoryTerminalCorrectionUnchangedError as error:
+            raise TerminalCorrectionUnchangedError from error
+        except OutcomeCorrectionReasonRequiredError as error:
+            raise ValidationError(
+                "Explain why the recorded outcome is being corrected.",
+                field="correction_reason",
+            ) from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return updated
+
+    def correct_numeric_resolution(
+        self,
+        prediction_id: int,
+        actual_value: Decimal | int | str,
+        *,
+        resolution_notes: str | None,
+        postmortem: str | None,
+        correction_reason: str | None = None,
+        expected_correction_id: int | None,
+    ) -> NumericResolutionHistory:
+        """Append one complete exact Numeric Resolution correction snapshot."""
+
+        history = self.get_numeric_resolution_history(prediction_id)
+        try:
+            proposed = NewNumericResolutionCorrection(
+                actual_value=FixedPrecisionValue.from_value(
+                    actual_value,
+                    history.original.actual_value.decimal_places,
+                    field="actual_value",
+                ),
+                resolution_notes=resolution_notes,
+                postmortem=postmortem,
+                correction_reason=correction_reason,
+            )
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_optional_positive_token(
+            expected_correction_id,
+            "expected_correction_id",
+        )
+        self._validate_terminal_correction_proposal(
+            prediction_id,
+            history.current_correction_id,
+            expected_correction_id,
+            changed_numeric_resolution_fields(history.effective, proposed),
+            proposed.correction_reason,
+            outcome_field="actual_value",
+        )
+        corrected_at = as_utc(self._clock.now())
+        try:
+            updated = (
+                self._terminal_history_repository.append_numeric_resolution_correction(
+                    prediction_id,
+                    proposed,
+                    expected_correction_id=expected_correction_id,
+                    corrected_at=corrected_at,
+                )
+            )
+        except TerminalCorrectionContextChangedError as error:
+            raise ConcurrentTerminalCorrectionError(prediction_id) from error
+        except RepositoryTerminalCorrectionUnchangedError as error:
+            raise TerminalCorrectionUnchangedError from error
+        except OutcomeCorrectionReasonRequiredError as error:
+            raise ValidationError(
+                "Explain why the recorded actual value is being corrected.",
+                field="correction_reason",
+            ) from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return updated
+
+    def correct_invalidation_reason(
+        self,
+        prediction_id: int,
+        reason: str | None,
+        *,
+        expected_correction_id: int | None,
+    ) -> InvalidationHistory:
+        """Append one complete Invalidation reason correction snapshot."""
+
+        try:
+            proposed = NewInvalidationReasonCorrection(reason)
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        self._validate_optional_positive_token(
+            expected_correction_id,
+            "expected_correction_id",
+        )
+        history = self.get_invalidation_history(prediction_id)
+        if history.current_correction_id != expected_correction_id:
+            raise ConcurrentTerminalCorrectionError(prediction_id)
+        if history.effective.reason == proposed.reason:
+            raise TerminalCorrectionUnchangedError
+        corrected_at = as_utc(self._clock.now())
+        try:
+            updated = (
+                self._terminal_history_repository.append_invalidation_reason_correction(
+                    prediction_id,
+                    proposed,
+                    expected_correction_id=expected_correction_id,
+                    corrected_at=corrected_at,
+                )
+            )
+        except TerminalCorrectionContextChangedError as error:
+            raise ConcurrentTerminalCorrectionError(prediction_id) from error
+        except RepositoryTerminalCorrectionUnchangedError as error:
+            raise TerminalCorrectionUnchangedError from error
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return updated
+
+    def record_postmortem_skip(
+        self,
+        prediction_id: int,
+        *,
+        expected_correction_id: int | None,
+    ) -> PostmortemCompletion:
+        """Record that a blank Resolved Postmortem was deliberately skipped."""
+
+        self._validate_optional_positive_token(
+            expected_correction_id,
+            "expected_correction_id",
+        )
+        history = self._get_resolution_history(prediction_id)
+        if history.current_correction_id != expected_correction_id:
+            raise ConcurrentTerminalCorrectionError(prediction_id)
+        if history.postmortem_completion is not None:
+            raise PostmortemCompletionNotAllowedError("already_completed")
+        if history.effective.postmortem is not None:
+            raise PostmortemCompletionNotAllowedError("has_postmortem")
+        completed_at = as_utc(self._clock.now())
+        try:
+            completion = self._terminal_history_repository.record_postmortem_completion(
+                prediction_id,
+                expected_correction_id=expected_correction_id,
+                completed_at=completed_at,
+            )
+        except TerminalCorrectionContextChangedError as error:
+            raise ConcurrentTerminalCorrectionError(prediction_id) from error
+        except PostmortemCompletionDisallowedError as error:
+            raise PostmortemCompletionNotAllowedError(error.reason) from error
+        if completion is None:
+            raise PredictionNotFoundError(prediction_id)
+        return completion
+
     def delete_prediction(
         self,
         prediction_id: int,
@@ -1508,10 +1762,73 @@ class PredictionOperations:
             ),
         )
 
+    def _raise_missing_terminal_record(
+        self,
+        prediction_id: int,
+        record_name: str,
+    ) -> None:
+        binary = self._repository.get_prediction(prediction_id)
+        numeric = (
+            None
+            if binary is not None
+            else self._numeric_repository.get_prediction(prediction_id)
+        )
+        if binary is None and numeric is None:
+            raise PredictionNotFoundError(prediction_id)
+        raise TerminalCorrectionNotAllowedError(prediction_id, record_name)
+
+    def _get_resolution_history(
+        self,
+        prediction_id: int,
+    ) -> BinaryResolutionHistory | NumericResolutionHistory:
+        binary = self._terminal_history_repository.get_binary_resolution_history(
+            prediction_id
+        )
+        if binary is not None:
+            return binary
+        numeric = self._terminal_history_repository.get_numeric_resolution_history(
+            prediction_id
+        )
+        if numeric is not None:
+            return numeric
+        self._raise_missing_terminal_record(prediction_id, "Resolution")
+        raise AssertionError("missing terminal record helper must raise")
+
+    @staticmethod
+    def _validate_terminal_correction_proposal(
+        prediction_id: int,
+        current_correction_id: int | None,
+        expected_correction_id: int | None,
+        changed_fields: tuple[str, ...],
+        correction_reason: str | None,
+        *,
+        outcome_field: str,
+    ) -> None:
+        if current_correction_id != expected_correction_id:
+            raise ConcurrentTerminalCorrectionError(prediction_id)
+        if not changed_fields:
+            raise TerminalCorrectionUnchangedError
+        if outcome_field in changed_fields and correction_reason is None:
+            label = "outcome" if outcome_field == "outcome" else "actual value"
+            raise ValidationError(
+                f"Explain why the recorded {label} is being corrected.",
+                field="correction_reason",
+            )
+
     @staticmethod
     def _validate_positive_token(value: object, field: str) -> None:
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise ValidationError(
                 "The forecast revision context is invalid.",
+                field=field,
+            )
+
+    @staticmethod
+    def _validate_optional_positive_token(value: object, field: str) -> None:
+        if value is None:
+            return
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValidationError(
+                "The terminal correction context is invalid.",
                 field=field,
             )

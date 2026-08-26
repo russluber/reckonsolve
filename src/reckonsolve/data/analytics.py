@@ -46,7 +46,16 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
             prediction.id AS prediction_id,
             prediction.question,
             resolution.id AS resolution_id,
-            resolution.outcome,
+            COALESCE(
+                (
+                    SELECT correction.new_outcome
+                    FROM resolution_corrections AS correction
+                    WHERE correction.resolution_id = resolution.id
+                    ORDER BY correction.sequence DESC
+                    LIMIT 1
+                ),
+                resolution.outcome
+            ) AS outcome,
             resolution.resolved_at,
             resolution.scoring_revision_id,
             scoring_revision.probability_percent
@@ -107,7 +116,16 @@ def _load_numeric_source(connection: sqlite3.Connection) -> NumericAnalyticsSour
             prediction.numeric_unit,
             prediction.numeric_precision,
             resolution.id AS resolution_id,
-            resolution.actual_scaled,
+            COALESCE(
+                (
+                    SELECT correction.new_actual_scaled
+                    FROM numeric_resolution_corrections AS correction
+                    WHERE correction.numeric_resolution_id = resolution.id
+                    ORDER BY correction.sequence DESC
+                    LIMIT 1
+                ),
+                resolution.actual_scaled
+            ) AS actual_scaled,
             resolution.resolved_at,
             resolution.scoring_revision_id,
             scoring_revision.lower_scaled,
