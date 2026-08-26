@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.3. The next development target has not yet been selected.
+The completed source release is v0.3. The approved next development target is v0.4, whose contract and Milestones 26 through 31 are defined in Section 32 of `docs/product-spec.md`. No v0.4 implementation milestone has been completed yet.
 
 The v0.1 baseline includes:
 
@@ -66,6 +66,8 @@ v0.3 adds:
 - cross-interface hardening for simultaneous reads, sequential writes, lock/stale-context failures, restart, migration, and stable/development isolation.
 
 Milestones 21 through 25 in `docs/product-spec.md` are complete. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem. Treat any post-v0.3 feature work as a new explicitly authorized milestone or coherent vertical slice.
+
+v0.4 is planned to add historically honest terminal-record corrections, later and versioned Postmortems, a Needs Postmortem queue, resolved-prediction scorecards, paired initial-versus-final update analytics, and the associated CLI-read, export, migration, backup, and recovery hardening. Implement it only through the explicitly authorized Milestones 26 through 31. Preserve original terminal records, timestamps, scoring-revision capture, and one-observation-per-Prediction scoring throughout.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 

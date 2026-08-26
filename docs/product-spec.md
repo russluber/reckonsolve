@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline and v0.2/v0.3 Product Specifications
+## v0.1 Baseline and v0.2/v0.3/v0.4 Product Specifications
 
-Status: v0.3 source release implemented; Later scope requires explicit planning and authorization
+Status: v0.3 source release implemented; v0.4 product contract approved and awaiting implementation
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -23,7 +23,7 @@ Build a local-first personal forecasting journal that lets one person:
 
 The product is not merely a database of current probabilities. Its defining value is an honest historical record of what the user believed, why they believed it, and how those beliefs changed.
 
-The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface.
+The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback.
 
 ---
 
@@ -1120,6 +1120,8 @@ The v0.2 numeric product contract is resolved in Section 30. Numeric precision a
 
 The v0.3 CLI product contract, command identities, shared-data behavior, interaction model, and staged implementation plan are resolved in Section 31. Logo artwork, normal binary distribution, and automation-oriented CLI features remain deferred.
 
+The v0.4 resolution-integrity and learning contract is resolved in Section 32. Resolved outcomes may be corrected only through append-only history, Invalid Predictions remain Invalid, Postmortems may be completed later, and initial-versus-final analytics use one paired observation per eligible Prediction rather than treating revisions independently.
+
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
 ---
@@ -1591,7 +1593,263 @@ v0.3 is not complete unless all of the following are true:
 
 ---
 
-## 32. Instruction to coding agents
+## 32. v0.4 resolution integrity and learning product contract and milestone plan
+
+v0.4 strengthens what happens after an outcome becomes known. It is an additive release over the completed v0.3 desktop and CLI application: every existing Binary, Numeric, Journal, Review, lifecycle, shared-data, backup, and export invariant remains in force unless this section explicitly extends it.
+
+The v0.4 user outcome is:
+
+> Resolve quickly when the outcome is known, correct an honest mistake without erasing the original record, return to reflection later, and compare the first forecast with the final scoring forecast without pretending that every revision was a separate prediction.
+
+v0.4 does not make terminal states reversible. It adds audited corrections to facts attached to a terminal decision while preserving the decision, its original time, and its scoring context.
+
+### 32.1 Included scope and governing invariants
+
+v0.4 includes:
+
+- append-only correction of a Resolved Prediction's type-appropriate outcome, factual Resolution notes, and Postmortem;
+- append-only correction of an Invalid Prediction's reason, without changing its terminal state;
+- the ability to add or revise one displayed Postmortem after resolution while retaining every earlier version;
+- a lightweight **Needs Postmortem** Dashboard queue with an explicit **Skip Postmortem** completion action;
+- type-aware scorecards on resolved Prediction Detail;
+- initial-versus-final update analytics that treat each eligible Prediction as one paired observation;
+- read-only CLI visibility for the new terminal history;
+- CSV export format version 3, migration, backup, recovery, and private-build hardening for the new records.
+
+The following invariants govern the entire release:
+
+- A Resolved Prediction remains Resolved and an Invalid Prediction remains Invalid.
+- Neither terminal workflow reopens forecasting, permits a new ForecastRevision, or permits a new Journal entry or Forecast Review.
+- The original resolution or invalidation record and its original timestamp remain immutable.
+- A Resolution's captured scoring ForecastRevision remains immutable, even when the recorded outcome is corrected.
+- Every accepted correction appends a timestamped record. No correction overwrites or deletes an earlier terminal fact or correction.
+- The latest correction determines the effective displayed and analytical value, but the original and all superseded values remain inspectable.
+- Each resolved Prediction still contributes exactly one observation to ordinary scoring and calibration.
+- Correction, Postmortem, and Postmortem-completion records are not ForecastRevisions, Reviews, chart observations, or additional scoring observations.
+- All new writes are atomic, enforce lifecycle ownership and optimistic concurrency inside the transaction, and leave no partial history after cancellation or failure.
+
+### 32.2 Resolution and invalidation correction contract
+
+A **Resolution correction** may change one or more of these fields in one atomic save:
+
+- Binary outcome or exact Numeric actual value;
+- factual Resolution notes; and
+- Postmortem.
+
+The correction record contains:
+
+- a stable identifier and Resolution reference;
+- a snapshot of the before and after values for all three type-appropriate fields;
+- an explicit indication of which fields changed;
+- its own canonical UTC timestamp; and
+- a correction reason when required below.
+
+Multiple corrections are permitted and form deterministic append-only history. A no-op submission creates no record. Clearing optional Resolution notes or Postmortem is a recorded change rather than deletion of their history. Numeric actual values retain the Prediction's exact fixed precision and never pass through binary floating point.
+
+Changing a Binary outcome or Numeric actual value requires a short nonempty correction reason because that change alters scoring and calibration. A correction that changes only Resolution notes or Postmortem requires no separate reason. If one atomic correction changes the outcome and text, the outcome-change reason applies to the whole correction record.
+
+The correction interface must show the currently effective terminal information, explain that the original remains in history, identify a score-affecting outcome change, and require deliberate confirmation before saving. Prediction Detail shows the latest effective values and makes the complete original-to-current correction history available without letting the audit material overwhelm the primary resolution summary.
+
+An **Invalidation reason correction** may change or clear only the reason attached to an Invalid Prediction. It appends before and after reason text with its own timestamp, requires no separate correction reason, and preserves the original invalidation reason and every superseded version. It cannot change Invalid to Resolved, substitute an outcome, alter the invalidation timestamp, or reopen the Prediction.
+
+### 32.3 Later and correctable Postmortems
+
+A Prediction has one displayed Postmortem, not a sequence of separate post-resolution Journal entries. Its effective text is the latest value from the original Resolution plus any append-only Resolution corrections.
+
+The Postmortem remains optional at resolution. After resolution, the desktop interface permits the user to:
+
+- add the first Postmortem when the original Resolution left it blank;
+- correct an existing Postmortem; or
+- clear it while retaining its complete earlier text history.
+
+These actions use the Resolution-correction contract in Section 32.2. They do not change the original resolution timestamp, scoring ForecastRevision, outcome unless explicitly included in the same confirmed correction, lifecycle state, or historical timeline position of the Resolution.
+
+Resolution notes remain factual provenance and Postmortem remains reflective analysis. The interface should preserve that distinction without forcing either kind of text.
+
+### 32.4 Needs Postmortem completion workflow
+
+**Needs Postmortem** is a Dashboard attention queue, not a canonical lifecycle state and not a scoring classification. A Prediction appears in it when all of the following are true:
+
+- it is Resolved;
+- its effective Postmortem is blank; and
+- no explicit Postmortem-skip record exists.
+
+The queue has no waiting period and does not reuse the configurable Needs Attention threshold. It may overlap no nonterminal action bucket because only Resolved Predictions qualify. Each row identifies forecast type, Question, outcome, and original resolution time and opens the matching Prediction Detail view.
+
+**Skip Postmortem** records one immutable timestamped completion fact. It means that the user deliberately considers reflection complete without writing prose; it does not alter the Resolution, score, lifecycle, or original terminal timestamp. A later Postmortem may still be added, and the preserved skip fact remains part of history. A Prediction leaves the queue when it has either a nonempty effective Postmortem or a skip record.
+
+The queue and Skip action must remain calm and optional. v0.4 adds no notification, reminder, penalty, required explanation, or mandatory Postmortem.
+
+### 32.5 Resolved Prediction scorecards
+
+Prediction Detail gives every Resolved, scored Prediction a concise type-aware scorecard based on its immutable scoring ForecastRevision and latest effective outcome.
+
+For Binary Predictions, the scorecard shows:
+
+- the scored Yes probability;
+- the effective Yes or No outcome;
+- the individual Brier score; and
+- a plain-language reminder that lower is better.
+
+For Numeric Predictions, the scorecard shows:
+
+- the scored interval, confidence, median, and exact unit;
+- the effective actual value;
+- inclusive containment;
+- median absolute error;
+- interval width; and
+- proper interval score, with lower-is-better guidance where applicable.
+
+If an outcome has been corrected, the scorecard recomputes from the latest effective outcome exactly once and visibly indicates that correction history exists. The captured scoring ForecastRevision never changes. Invalid and unresolved Predictions receive no scorecard, and Postmortem completion has no scoring effect.
+
+### 32.6 Initial-versus-final update analytics
+
+v0.4 adds retrospective feedback about how the final scoring forecast compared with the initial forecast. It is descriptive hindsight, not proof that an update caused improvement or that the same strategy will work on future questions.
+
+For this feature:
+
+- **initial** means the first type-appropriate ForecastRevision for the Prediction;
+- **final** means the exact ForecastRevision captured by its Resolution for scoring;
+- the primary update-analysis population contains only Resolved Predictions for which initial and final are different revisions;
+- Resolved Predictions with only one revision are reported separately as unrevised rather than included as zero-change pairs;
+- Invalid and unresolved Predictions are excluded;
+- each eligible Prediction contributes exactly one initial/final pair; and
+- intermediate revisions are not scored or aggregated in v0.4.
+
+For a lower-is-better score, **score improvement** is:
+
+```text
+initial score - final score
+```
+
+A positive value means the final forecast scored better against the realized outcome, zero means no score difference, and a negative value means it scored worse.
+
+Binary update analytics compare initial and final Brier scores and summarize the paired score improvement with sample count and sparse-data guidance.
+
+Numeric update analytics may combine units only for unitless containment feedback. They show initial and final confidence and containment honestly rather than implying that containment alone is calibration. Median absolute error, interval width, and interval-score comparisons are available only within one exact unit label. A reduction in width is described as narrowing, not automatically as improvement; proper interval score supplies the width-and-miss performance comparison.
+
+Analytics use the latest effective outcome after any correction while retaining the original Resolution timestamp as the Prediction's position in resolution-time views. The later correction timestamp remains visible in history but does not make the Prediction appear newly resolved.
+
+Tag, forecast-type, and exact-unit filtering retain their existing logical meanings. Every headline, table, and chart in an update view must describe the same filtered paired population, show its count, and avoid claims of causal update skill from sparse or heterogeneous observations.
+
+### 32.7 Desktop, CLI, portability, and compatibility boundaries
+
+Resolution correction, Invalidation-reason correction, later Postmortem editing, and Skip Postmortem are desktop mutation workflows in v0.4. The existing CLI may still supply an original optional Postmortem while performing its established `resolve` command, but v0.4 adds no CLI command that mutates a terminal record or Postmortem completion.
+
+`reckonsolve-cli show PREDICTION_ID` becomes a read-only textual equivalent for the new history. It displays original terminal facts, current effective values, every correction with reason and timestamp, Postmortem version history, and any Skip Postmortem completion fact without flattening them into an apparent overwrite. The shared stable/development data identities, sequential-write guidance, bounded lock handling, and normal GUI/CLI refresh behavior remain unchanged.
+
+The complete SQLite backup contract remains unchanged: a verified backup must contain every new canonical record and reopen with the same effective values and history.
+
+CSV export advances to **format version 3**. It retains every format-version-two file and adds relational records for:
+
+- Resolution corrections;
+- Invalidation-reason corrections; and
+- Postmortem completion.
+
+The version-three README documents how to derive effective terminal values from original and correction records, how score-affecting outcome corrections are identified, and how exact Numeric before/after values are represented. Export must preserve stable relationships, original and correction timestamps, before/after text, changed-field information, and required outcome-correction reasons. It remains an analytical export rather than a restoration format and retains the existing consistent-read and destination-safety guarantees.
+
+Existing schema-version-12 v0.3 databases must migrate forward without reinterpreting or replacing any Prediction, ForecastRevision, Review, Journal, Resolution, Invalidation, tag, setting, or export meaning. Automated tests must exercise a real version-12-shaped database through every v0.4 migration and recovery path.
+
+### 32.8 Implementation milestones
+
+#### Milestone 26: Terminal-correction domain and persistence foundation
+
+- Add safe append-only persistence for type-aware Resolution corrections, Invalidation-reason corrections, and Postmortem completion.
+- Introduce independently testable effective-terminal-value derivation without mutating original terminal rows.
+- Enforce exact Numeric representation, outcome-reason requirements, no-op rejection, deterministic correction ordering, and immutable scoring-revision ownership.
+- Preserve one-way terminal lifecycle behavior and prove atomic rollback, optimistic concurrency, restart, and migration from the completed v0.3 schema.
+- Keep this foundation out of the UI until the historically complete operations and read models are ready.
+
+#### Milestone 27: Audited terminal correction and later Postmortem workflows
+
+- Add desktop correction workflows for Binary and Numeric Resolutions and Invalid reasons.
+- Require an explanation for outcome or actual-value corrections while keeping text-only corrections lightweight.
+- Permit Postmortems to be added, corrected, or cleared after resolution through the same append-only contract.
+- Show current effective terminal information and complete correction history on type-aware Prediction Detail.
+- Confirm score-affecting changes and reject cancellation, no-op, stale, conflicting, or wrong-lifecycle attempts without partial history.
+
+Acceptance demonstration:
+
+> Resolve a Prediction with an incorrect outcome and no Postmortem -> correct the outcome with an explanation -> add a Postmortem later -> restart -> the original Resolution, both later changes, unchanged scoring ForecastRevision, and corrected effective score all remain visible.
+
+#### Milestone 28: Resolved Prediction scorecards
+
+- Add concise Binary and Numeric scorecards to Resolved Prediction Detail.
+- Use exactly the captured scoring ForecastRevision and latest effective outcome.
+- Preserve inclusive Numeric containment, exact-unit raw metrics, and clear lower-is-better explanations.
+- Recompute after an outcome correction without adding a scoring observation or changing the Resolution's historical position.
+- Cover endpoints, exact boundaries, misses on both sides, corrected outcomes, restart, and Invalid/unresolved exclusion independently of visual rendering.
+
+#### Milestone 29: Initial-versus-final update analytics
+
+- Add paired initial-versus-final Binary Brier feedback for revised-and-resolved Predictions.
+- Add unitless Numeric containment feedback plus exact-unit median-error, width, and interval-score comparisons.
+- Report unrevised Resolved Predictions separately and exclude them from the primary score-difference population.
+- Use one pair per eligible Prediction, omit intermediate-revision hindsight aggregation, and retain existing filters and corrected-outcome behavior.
+- Label the view as retrospective feedback, show counts and sparse-data cautions, and make no causal claim that updating itself produced the result.
+
+#### Milestone 30: Needs Postmortem workflow
+
+- Add the Resolved-only **Needs Postmortem** Dashboard section and count.
+- Remove a Prediction from the queue when its effective Postmortem is nonempty or an explicit Skip record exists.
+- Add a deliberate **Skip Postmortem** action that records completion without changing lifecycle or scoring.
+- Preserve navigation, restart, outcome corrections, later Postmortem creation, and empty-state behavior for both forecast types.
+- Keep the workflow optional and separate from Needs Attention thresholds, notifications, and analytics.
+
+#### Milestone 31: v0.4 portability, CLI read support, and hardening
+
+- Extend CLI `show` with complete original, effective, correction, Postmortem, and completion history while adding no terminal-mutation command.
+- Advance relational CSV export to format version 3 and verify all new relationships, exact Numeric values, derivation instructions, and artifact-safety behavior.
+- Prove complete SQLite backup and recovery, version-12 migration, restart, stable/development isolation, simultaneous reads, sequential cross-interface writes, bounded lock failure, and stale-context rejection.
+- Run the complete automated suite and private GUI frozen-build smoke workflow across corrected Binary and Numeric outcomes, later Postmortems, scorecards, update analytics, and Needs Postmortem.
+- Align README, architecture, decision records, command help, changelog, and release documentation with the implemented v0.4 behavior.
+- Close v0.4 as a source release without expanding the milestone into logo work, a Windows installer, signing, automatic updates, or public binary distribution.
+
+### 32.9 v0.4 acceptance criteria
+
+v0.4 is not complete unless all of the following are true:
+
+1. Every completed v0.3 desktop and CLI workflow retains its prior behavior unless this contract explicitly extends it.
+2. Correcting a Binary outcome or exact Numeric actual value appends history and requires a nonempty explanation.
+3. Correcting only Resolution notes, Postmortem, or an Invalidation reason appends history without requiring a separate explanation.
+4. Original terminal values, terminal timestamps, and every superseded correction remain inspectable after restart.
+5. Resolution corrections never change the captured scoring ForecastRevision, reopen a Prediction, or permit new forecasting activity.
+6. An Invalid Prediction can correct only its reason and can never become Resolved through a v0.4 workflow.
+7. The latest effective outcome is used exactly once in individual and aggregate scoring while the original outcome remains in correction history.
+8. A Postmortem may be omitted at resolution, added later, corrected repeatedly, or cleared without creating a Journal entry or rewriting prior text.
+9. Needs Postmortem contains exactly the Resolved Predictions with neither an effective Postmortem nor a Skip record.
+10. Skip Postmortem records an immutable completion fact and changes neither score nor lifecycle.
+11. Every Resolved Prediction scorecard uses its captured scoring ForecastRevision and latest effective outcome; Invalid and unresolved Predictions receive none.
+12. Update analytics use exactly one initial/final pair per revised-and-resolved Prediction and never treat intermediate revisions as independent observations.
+13. Unrevised Resolved Predictions are reported separately rather than diluting paired score differences with artificial zero-change observations.
+14. Binary score improvement uses initial Brier minus final Brier and explains that positive is better.
+15. Numeric containment feedback may combine units, while raw error, width, and interval-score comparisons never combine unlike units.
+16. Corrected outcomes retain the original resolution-time position in time-based analytics and expose the later correction time only as history.
+17. CLI `show` represents original and effective terminal facts, all correction history, and Postmortem completion without mutating them.
+18. Backup, export format version 3, migration, restart, and the private frozen build preserve every new record and relationship.
+19. Cancellation, no-op, stale-context, lifecycle, lock, migration, and artifact failures are historically safe and leave no partial correction.
+20. The complete v0.4 workflow remains offline, local-first, and single-user.
+
+### 32.10 Explicitly outside v0.4
+
+- Reopening a Resolved or Invalid Prediction or returning it to Open or Locked.
+- Changing a Resolution's captured scoring ForecastRevision or original resolution timestamp.
+- Changing an Invalid Prediction into a Resolved Prediction or attaching a scored outcome to it.
+- Deleting original terminal records, corrections, Postmortem history, or completion facts through the normal application.
+- Aggregate hindsight scoring of every intermediate ForecastRevision or treating revisions as independent observations.
+- A causal claim or generalized forecast-updating skill grade derived from initial-versus-final differences.
+- Mandatory Postmortems, automatic reminders, notifications, penalties, or a Postmortem deadline.
+- CLI mutation of Resolution corrections, Invalidation-reason corrections, later Postmortems, or Skip Postmortem.
+- A comprehensive audit trail for all mutable metadata.
+- New forecast types, new scoring rules, multiple intervals, full probability distributions, or automatic unit conversion.
+- Full-text search, Collections, structured Sources/Evidence, attachments, prediction graphs, or advanced Forecast Review sessions.
+- JSON or Markdown export, machine-readable CLI output, a scripting API, bulk import, or noninteractive mutation flags.
+- Logo or application-icon creation, a normal Windows installer, code signing, automatic updates, or public binary distribution.
+- Accounts, cloud sync, sharing, collaboration, or required network access.
+
+---
+
+## 33. Instruction to coding agents
 
 Before implementing a milestone:
 
