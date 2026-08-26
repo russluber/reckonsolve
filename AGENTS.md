@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.2. The active development target is the staged v0.3 CLI companion defined in Section 31 of `docs/product-spec.md`; Milestone 21 is complete and Milestone 22 is next.
+The completed source release is v0.2. The active development target is the staged v0.3 CLI companion defined in Section 31 of `docs/product-spec.md`; Milestones 21 and 22 are complete and Milestone 23 is next.
 
 The v0.1 baseline includes:
 
@@ -50,14 +50,17 @@ v0.2 adds:
 
 Milestones 13 through 20 in `docs/product-spec.md` are complete. Preserve the completed Binary and Numeric behavior rather than redesigning it incidentally.
 
-v0.3 Milestone 21 adds:
+v0.3 Milestones 21 and 22 add:
 
 - paired `reckonsolve-cli` and `reckonsolve-cli-dev` source commands sharing their matching GUI database identities;
 - standard-library command parsing with no new production dependency;
 - type-aware, side-effect-free `list` with combined Question/status/type/tag filters and attention indicators; and
-- type-aware `show` with exact current detail, terminal facts, timeline, Journal correction history, Reviews, and Definition history.
+- type-aware `show` with exact current detail, terminal facts, timeline, Journal correction history, Reviews, and Definition history;
+- interactive `create binary` and `create numeric` workflows using the existing atomic application operations;
+- GUI-matching defaults of 50% Binary probability, zero Numeric decimal places, and 80% Numeric confidence; and
+- optional initial rationale, metadata, dates, and tags with cancellation and validation guaranteed not to create partial history.
 
-Implement the remaining v0.3 behavior only through its authorized Milestones 22 through 25. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem.
+Implement the remaining v0.3 behavior only through its authorized Milestones 23 through 25. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 

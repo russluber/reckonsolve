@@ -5,9 +5,11 @@ from io import StringIO
 
 import pytest
 from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QListWidget
 
 import reckonsolve.cli
 from reckonsolve import main_cli, main_cli_dev
+from reckonsolve.app import create_runtime as create_gui_runtime
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli import create_runtime, run
 from reckonsolve.data.database import Database
@@ -91,6 +93,15 @@ def test_cli_version_and_help_do_not_open_a_database(tmp_path, capsys) -> None:
     assert "--status" in help_output.out
     assert "--type" in help_output.out
     assert "--tag TAG" in help_output.out
+    assert not database_path.exists()
+
+    with pytest.raises(SystemExit) as create_help_exit:
+        run(["create", "--help"], database_path=database_path)
+    create_help_output = capsys.readouterr()
+
+    assert create_help_exit.value.code == 0
+    assert "binary" in create_help_output.out
+    assert "numeric" in create_help_output.out
     assert not database_path.exists()
 
 
@@ -490,3 +501,240 @@ def test_cli_rejects_unrecognized_database_without_replacing_it(tmp_path) -> Non
     assert output.getvalue() == ""
     assert errors.getvalue().startswith("Error: ")
     assert database_path.read_bytes() == original_bytes
+
+
+def test_cli_creates_minimal_binary_with_gui_default_and_stable_id(tmp_path) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    output = StringIO()
+    errors = StringIO()
+
+    result = run(
+        ["create", "binary"],
+        database_path=database_path,
+        stdin=StringIO("Will the CLI default this Binary forecast correctly?\n\n\n"),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == 0
+    assert errors.getvalue() == ""
+    assert "Probability [50]:" in output.getvalue()
+    assert "Created Binary Prediction #1." in output.getvalue()
+    assert "Current forecast: 50% Yes" in output.getvalue()
+
+    database = Database.open(database_path)
+    created = PredictionOperations(database).get_prediction(1)
+    assert created.question == "Will the CLI default this Binary forecast correctly?"
+    assert created.probability_percent == 50
+    assert created.current_revision_sequence == 1
+    assert created.current_rationale is None
+    assert created.background is None
+    assert created.tags == ()
+    database.close()
+
+
+def test_cli_creates_binary_with_all_optional_details_and_endpoint_note(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    output = StringIO()
+
+    result = run(
+        ["create", "binary"],
+        database_path=database_path,
+        stdin=StringIO(
+            "Will the complete Binary creation persist?\n"
+            "0\n"
+            "yes\n"
+            "Initial reasons\n"
+            "Background context\n"
+            "Use the official result\n"
+            "2099-12-30\n"
+            "2099-12-31\n"
+            "Work, Personal, work\n"
+        ),
+        stdout=output,
+    )
+
+    assert result == 0
+    assert "Note: 0% expresses absolute certainty." in output.getvalue()
+    assert "Created Binary Prediction #1." in output.getvalue()
+    assert "Current forecast: 0% Yes" in output.getvalue()
+
+    database = Database.open(database_path)
+    created = PredictionOperations(database).get_prediction(1)
+    timeline = PredictionOperations(database).list_timeline(1)
+    assert created.probability_percent == 0
+    assert created.current_rationale == "Initial reasons"
+    assert created.background == "Background context"
+    assert created.resolution_criteria == "Use the official result"
+    assert created.forecast_deadline == date(2099, 12, 30)
+    assert created.expected_resolution == date(2099, 12, 31)
+    assert set(created.tags) == {"Work", "Personal"}
+    assert len(timeline) == 1
+    database.close()
+
+
+def test_cli_numeric_creation_retries_invalid_fields_and_round_trips_exactly(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    output = StringIO()
+    errors = StringIO()
+
+    result = run(
+        ["create", "numeric"],
+        database_path=database_path,
+        stdin=StringIO(
+            "What exact temperature will be recorded?\n"
+            "\u00b0C\n"
+            "7\n"
+            "3\n"
+            "3.00\n"
+            "2.00\n"
+            "1.00\n"
+            "80\n"
+            "-1.25\n"
+            "2.00\n"
+            "9.50\n"
+            "100\n"
+            "85\n"
+            "y\n"
+            "Exact initial interval\n"
+            "Instrument background\n"
+            "Use the calibrated display\n"
+            "2099-01-01\n"
+            "2099-01-02\n"
+            "Numeric, Weather\n"
+        ),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == 0
+    assert "Decimal places must be a whole number from 0 to 6." in errors.getvalue()
+    assert (
+        "Invalid numeric forecast: Numeric forecasts require lower bound <= median "
+        "<= upper bound." in errors.getvalue()
+    )
+    assert "Confidence must be a whole number from 1 to 99." in errors.getvalue()
+    assert "Created Numeric Prediction #1." in output.getvalue()
+    assert (
+        "Current forecast: 85% interval -1.250 to 9.500 \u00b0C; median 2.000 \u00b0C"
+        in output.getvalue()
+    )
+
+    database = Database.open(database_path)
+    created = PredictionOperations(database).get_numeric_prediction(1)
+    assert created.decimal_places == 3
+    assert created.unit == "\u00b0C"
+    assert str(created.current_revision.lower_bound) == "-1.250"
+    assert str(created.current_revision.median_estimate) == "2.000"
+    assert str(created.current_revision.upper_bound) == "9.500"
+    assert created.current_revision.confidence_percent == 85
+    assert created.current_revision.rationale == "Exact initial interval"
+    assert created.background == "Instrument background"
+    assert created.resolution_criteria == "Use the calibrated display"
+    assert created.forecast_deadline == date(2099, 1, 1)
+    assert created.expected_resolution == date(2099, 1, 2)
+    assert set(created.tags) == {"Numeric", "Weather"}
+    assert len(PredictionOperations(database).list_numeric_timeline(1)) == 1
+    database.close()
+
+
+@pytest.mark.parametrize(
+    "input_stream",
+    (
+        StringIO("Will EOF cancel before a probability?\n"),
+        pytest.param(None, id="keyboard-interrupt"),
+    ),
+)
+def test_cli_creation_cancellation_is_clear_and_creates_no_prediction(
+    tmp_path,
+    input_stream,
+) -> None:
+    class InterruptingInput(StringIO):
+        def readline(self, *args, **kwargs) -> str:
+            raise KeyboardInterrupt
+
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    errors = StringIO()
+    supplied_input = InterruptingInput() if input_stream is None else input_stream
+
+    result = run(
+        ["create", "binary"],
+        database_path=database_path,
+        stdin=supplied_input,
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 130
+    assert errors.getvalue().endswith("Cancelled. No changes were made.\n")
+    database = Database.open(database_path)
+    assert PredictionOperations(database).browse_predictions().predictions == ()
+    database.close()
+
+
+def test_cli_creation_domain_failure_is_atomic(tmp_path) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    errors = StringIO()
+
+    result = run(
+        ["create", "binary"],
+        database_path=database_path,
+        stdin=StringIO(
+            "Will a past deadline prevent this creation?\n60\ny\n\n\n\n2000-01-01\n\n\n"
+        ),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "Forecast Deadline cannot be earlier than today" in errors.getvalue()
+    database = Database.open(database_path)
+    assert PredictionOperations(database).browse_predictions().predictions == ()
+    database.close()
+
+
+def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
+    qtbot,
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    assert (
+        run(
+            ["create", "binary"],
+            database_path=database_path,
+            stdin=StringIO("Will the GUI display this CLI Binary?\n70\n\n"),
+            stdout=StringIO(),
+        )
+        == 0
+    )
+    assert (
+        run(
+            ["create", "numeric"],
+            database_path=database_path,
+            stdin=StringIO(
+                "How many CLI items will the GUI display?\nitems\n\n2\n5\n9\n\n\n"
+            ),
+            stdout=StringIO(),
+        )
+        == 0
+    )
+
+    runtime = create_gui_runtime(database_path=database_path)
+    qtbot.addWidget(runtime.window)
+    runtime.window.show()
+    runtime.window.navigate_to("Predictions")
+    results = runtime.window.findChild(QListWidget, "predictionBrowserResults")
+
+    assert results is not None
+    assert results.count() == 2
+    rendered_rows = "\n".join(results.item(index).text() for index in range(2))
+    assert "Will the GUI display this CLI Binary?" in rendered_rows
+    assert "70%" in rendered_rows
+    assert "How many CLI items will the GUI display?" in rendered_rows
+    assert "80% interval: 2–9 items" in rendered_rows
+    assert "median: 5 items" in rendered_rows
+    runtime.close()

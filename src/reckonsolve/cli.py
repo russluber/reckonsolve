@@ -14,6 +14,11 @@ from PySide6.QtCore import QCoreApplication
 
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.application.predictions import PredictionOperations
+from reckonsolve.cli_creation import (
+    CliInputCancelled,
+    PromptSession,
+    create_interactively,
+)
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.attention import DashboardSnapshot
@@ -112,11 +117,13 @@ def run(
     *,
     database_path: Path | None = None,
     identity: ApplicationIdentity = STABLE_APPLICATION,
+    stdin: TextIO | None = None,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
 ) -> int:
     """Parse and execute one CLI command, returning its process status."""
 
+    input_stream = sys.stdin if stdin is None else stdin
     output = sys.stdout if stdout is None else stdout
     errors = sys.stderr if stderr is None else stderr
     parser = _build_parser(identity)
@@ -129,7 +136,18 @@ def run(
             return _run_list(runtime.operations, arguments, output)
         if arguments.command == "show":
             return _run_show(runtime.operations, arguments.prediction_id, output)
+        if arguments.command == "create":
+            return _run_create(
+                runtime.operations,
+                PredictionType(arguments.prediction_type),
+                input_stream,
+                output,
+                errors,
+            )
         parser.error("A command is required.")
+    except (CliInputCancelled, KeyboardInterrupt):
+        print("Cancelled. No changes were made.", file=errors)
+        return 130
     except (
         ApplicationDataPathError,
         ApplicationError,
@@ -154,7 +172,7 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=program_name,
         description=(
-            "Read the same local forecasting journal used by the matching "
+            "Use the same local forecasting journal as the matching "
             "Reckonsolve desktop application."
         ),
     )
@@ -204,6 +222,34 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
         "prediction_id",
         type=_positive_prediction_id,
         metavar="PREDICTION_ID",
+    )
+
+    create_parser = commands.add_parser(
+        "create",
+        help="Interactively create a Binary or Numeric Prediction.",
+        description="Create one Prediction and its first forecast atomically.",
+    )
+    create_types = create_parser.add_subparsers(
+        dest="prediction_type",
+        required=True,
+        metavar="TYPE",
+    )
+    create_types.add_parser(
+        "binary",
+        help="Create a Binary Yes/No Prediction.",
+        description=(
+            "Prompt for a Question and 0-100% Yes probability, then optionally "
+            "collect initial details before one atomic save."
+        ),
+    )
+    create_types.add_parser(
+        "numeric",
+        help="Create a Numeric interval Prediction.",
+        description=(
+            "Prompt for a Question, unit, fixed precision, central interval, median, "
+            "and confidence, then optionally collect initial details before one "
+            "atomic save."
+        ),
     )
     return parser
 
@@ -282,6 +328,36 @@ def _run_show(
             indicators,
         )
     print(rendered, file=output)
+    return 0
+
+
+def _run_create(
+    operations: PredictionOperations,
+    prediction_type: PredictionType,
+    input_stream: TextIO,
+    output: TextIO,
+    errors: TextIO,
+) -> int:
+    created = create_interactively(
+        operations,
+        prediction_type,
+        PromptSession(input_stream, output, errors),
+    )
+    print(file=output)
+    if isinstance(created, NumericPrediction):
+        summary = _numeric_forecast_summary(
+            created.current_revision.lower_bound,
+            created.current_revision.median_estimate,
+            created.current_revision.upper_bound,
+            created.current_revision.confidence_percent,
+            created.unit,
+        )
+        type_label = "Numeric"
+    else:
+        summary = f"{created.probability_percent}% Yes"
+        type_label = "Binary"
+    print(f"Created {type_label} Prediction #{created.prediction_id}.", file=output)
+    print(f"Current forecast: {summary}", file=output)
     return 0
 
 
