@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from importlib.metadata import version
 from io import StringIO
+from zipfile import ZipFile
 
 import pytest
 from PySide6.QtCore import QCoreApplication
@@ -13,6 +14,8 @@ from reckonsolve.app import create_runtime as create_gui_runtime
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli import create_runtime, run
 from reckonsolve.data.database import Database
+from reckonsolve.data.settings import SettingsRepository
+from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
 from reckonsolve.domain.predictions import BinaryOutcome
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 
@@ -118,6 +121,15 @@ def test_cli_version_and_help_do_not_open_a_database(tmp_path, capsys) -> None:
 
         assert mutation_help_exit.value.code == 0
         assert "PREDICTION_ID" in mutation_help_output.out
+        assert not database_path.exists()
+
+    for command in ("backup", "export-csv"):
+        with pytest.raises(SystemExit) as transfer_help_exit:
+            run([command, "--help"], database_path=database_path)
+        transfer_help_output = capsys.readouterr()
+
+        assert transfer_help_exit.value.code == 0
+        assert "DESTINATION" in transfer_help_output.out
         assert not database_path.exists()
 
 
@@ -1756,3 +1768,293 @@ def test_cli_terminal_write_lock_failure_is_clear_and_preserves_state(
     assert current.status.value == "open"
     assert current.invalidation is None
     database.close()
+
+
+def test_cli_backup_is_recoverable_and_records_success_across_restart(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    backup_path = tmp_path / "cli-backup.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_numeric_prediction(
+        "How many records will the CLI backup recover?",
+        "records",
+        2,
+        "-1.25",
+        "3.00",
+        "9.50",
+        80,
+        rationale="Preserve this exact interval.",
+        tags=("CLI", "Recovery"),
+    )
+    database.close()
+    monkeypatch.setattr(
+        reckonsolve.cli,
+        "PredictionOperations",
+        lambda database: PredictionOperations(
+            database,
+            FixedClock(NOW),
+            local_timezone=UTC,
+        ),
+    )
+    output = StringIO()
+
+    result = run(
+        ["backup", str(backup_path)],
+        database_path=database_path,
+        stdout=output,
+    )
+
+    assert result == 0
+    assert f"Backup created: {backup_path.resolve()}" in output.getvalue()
+    assert "complete verified Reckonsolve SQLite database" in output.getvalue()
+    assert "Last successful backup time recorded." in output.getvalue()
+
+    reopened_source = Database.open(database_path)
+    assert SettingsRepository(reopened_source).get_last_successful_backup_at() == NOW
+    reopened_source.close()
+    recovered = Database.open(backup_path)
+    recovered_prediction = PredictionOperations(recovered).get_numeric_prediction(
+        created.prediction_id
+    )
+    assert recovered_prediction.question == created.question
+    assert str(recovered_prediction.current_revision.lower_bound) == "-1.25"
+    assert str(recovered_prediction.current_revision.upper_bound) == "9.50"
+    assert recovered_prediction.tags == ("CLI", "Recovery")
+    recovered.close()
+
+
+def test_cli_export_prompt_creates_complete_format_two_bundle(tmp_path) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    export_path = tmp_path / "cli-export.zip"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will the CLI export retain this Binary history?",
+        65,
+        rationale="Retain this rationale.",
+        tags=("Export",),
+    )
+    database.close()
+    output = StringIO()
+
+    result = run(
+        ["export-csv"],
+        database_path=database_path,
+        stdin=StringIO(f"{export_path}\n"),
+        stdout=output,
+    )
+
+    assert result == 0
+    assert "Destination [reckonsolve-export-" in output.getvalue()
+    assert f"CSV export created: {export_path.resolve()}" in output.getvalue()
+    assert "Exported 12 CSV files in format version 2." in output.getvalue()
+    assert "not a recovery backup" in output.getvalue()
+    with ZipFile(export_path) as archive:
+        assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
+        assert archive.testzip() is None
+        assert str(created.prediction_id).encode() in archive.read("predictions.csv")
+        assert b"Format version: 2" in archive.read("README.txt")
+
+    reopened = Database.open(database_path)
+    assert SettingsRepository(reopened).get_last_successful_backup_at() is None
+    reopened.close()
+
+
+def test_cli_blank_transfer_prompt_accepts_timestamped_suggestion(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "data" / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    PredictionOperations(database).create_prediction(
+        "Will the suggested export destination work?",
+        50,
+    )
+    database.close()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        reckonsolve.cli,
+        "PredictionOperations",
+        lambda database: PredictionOperations(
+            database,
+            FixedClock(NOW),
+            local_timezone=UTC,
+        ),
+    )
+    expected = tmp_path / "reckonsolve-export-20260825-174512.zip"
+
+    result = run(
+        ["export-csv"],
+        database_path=database_path,
+        stdin=StringIO("\n"),
+        stdout=StringIO(),
+    )
+
+    assert result == 0
+    assert expected.is_file()
+    with ZipFile(expected) as archive:
+        assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
+
+
+def test_cli_transfer_prompt_eof_cancels_without_artifact_or_setting_change(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    PredictionOperations(database).create_prediction(
+        "Will transfer cancellation leave canonical data alone?",
+        50,
+    )
+    database.close()
+    errors = StringIO()
+
+    result = run(
+        ["backup"],
+        database_path=database_path,
+        stdin=StringIO(""),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 130
+    assert errors.getvalue() == "Cancelled. No changes were made.\n"
+    assert tuple(tmp_path.glob("reckonsolve-backup-*.sqlite3")) == ()
+    reopened = Database.open(database_path)
+    operations = PredictionOperations(reopened)
+    assert len(operations.browse_predictions().predictions) == 1
+    assert SettingsRepository(reopened).get_last_successful_backup_at() is None
+    reopened.close()
+
+
+@pytest.mark.parametrize("command", ("backup", "export-csv"))
+def test_cli_transfer_rejects_canonical_database_destination_without_mutation(
+    tmp_path,
+    command,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will a rejected transfer preserve this forecast?",
+        45,
+    )
+    database.close()
+    errors = StringIO()
+
+    result = run(
+        [command, str(database_path)],
+        database_path=database_path,
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "live Reckonsolve database" in errors.getvalue()
+    reopened = Database.open(database_path)
+    operations = PredictionOperations(reopened)
+    assert operations.get_prediction(created.prediction_id).probability_percent == 45
+    assert SettingsRepository(reopened).get_last_successful_backup_at() is None
+    reopened.close()
+
+
+@pytest.mark.parametrize(
+    ("command", "patch_target", "destination_name"),
+    (
+        ("backup", "reckonsolve.data.database.os.replace", "existing.sqlite3"),
+        ("export-csv", "reckonsolve.data.transfer.os.replace", "existing.zip"),
+    ),
+)
+def test_cli_transfer_failure_preserves_existing_destination(
+    tmp_path,
+    monkeypatch,
+    command,
+    patch_target,
+    destination_name,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    destination = tmp_path / destination_name
+    original = b"existing safe artifact"
+    destination.write_bytes(original)
+    database = Database.open(database_path)
+    PredictionOperations(database).create_prediction(
+        "Will an existing artifact survive CLI failure?",
+        55,
+    )
+    database.close()
+
+    def fail_replace(_source, _destination) -> None:
+        raise OSError("simulated CLI destination failure")
+
+    monkeypatch.setattr(patch_target, fail_replace)
+    errors = StringIO()
+
+    result = run(
+        [command, str(destination)],
+        database_path=database_path,
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "simulated CLI destination failure" in errors.getvalue()
+    assert destination.read_bytes() == original
+    assert tuple(tmp_path.glob(f".{destination.name}.*.tmp")) == ()
+    reopened = Database.open(database_path)
+    assert SettingsRepository(reopened).get_last_successful_backup_at() is None
+    reopened.close()
+
+
+def test_cli_and_desktop_connections_share_reads_and_sequential_writes(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    desktop_database = Database.open(database_path)
+    desktop_operations = PredictionOperations(desktop_database)
+    created = desktop_operations.create_prediction(
+        "Will independent connections preserve one canonical history?",
+        30,
+    )
+
+    simultaneous_read = StringIO()
+    assert (
+        run(
+            ["show", str(created.prediction_id)],
+            database_path=database_path,
+            stdout=simultaneous_read,
+        )
+        == 0
+    )
+    assert "Current forecast: 30% Yes" in simultaneous_read.getvalue()
+
+    assert (
+        run(
+            ["revise", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("70\nCLI evidence changed the forecast\n"),
+            stdout=StringIO(),
+        )
+        == 0
+    )
+    refreshed = desktop_operations.get_prediction(created.prediction_id)
+    assert refreshed.probability_percent == 70
+    desktop_operations.add_journal_entry(
+        created.prediction_id,
+        "Desktop reasoning after the CLI revision",
+        expected_revision_id=refreshed.current_revision_id,
+        expected_metadata_version=refreshed.metadata_version,
+    )
+    desktop_database.close()
+
+    after_restart = StringIO()
+    assert (
+        run(
+            ["show", str(created.prediction_id)],
+            database_path=database_path,
+            stdout=after_restart,
+        )
+        == 0
+    )
+    rendered = after_restart.getvalue()
+    assert "Current forecast: 70% Yes" in rendered
+    assert "Rationale: CLI evidence changed the forecast" in rendered
+    assert "Body: Desktop reasoning after the CLI revision" in rendered

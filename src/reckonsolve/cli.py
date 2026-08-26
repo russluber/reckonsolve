@@ -28,6 +28,7 @@ from reckonsolve.cli_mutations import (
     revise_interactively,
 )
 from reckonsolve.cli_text import terminal_text
+from reckonsolve.cli_transfer import backup_interactively, export_csv_interactively
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.attention import DashboardSnapshot
@@ -193,6 +194,20 @@ def run(
                 runtime.operations,
                 arguments.prediction_id,
                 PromptSession(input_stream, output, errors),
+            )
+            return 0
+        if arguments.command == "backup":
+            backup_interactively(
+                runtime.operations,
+                PromptSession(input_stream, output, errors),
+                arguments.destination,
+            )
+            return 0
+        if arguments.command == "export-csv":
+            export_csv_interactively(
+                runtime.operations,
+                PromptSession(input_stream, output, errors),
+                arguments.destination,
             )
             return 0
         parser.error("A command is required.")
@@ -385,6 +400,44 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
         "prediction_id",
         type=_positive_prediction_id,
         metavar="PREDICTION_ID",
+    )
+
+    backup_parser = commands.add_parser(
+        "backup",
+        help="Create a verified SQLite recovery backup.",
+        description=(
+            "Create one complete verified SQLite recovery artifact through the "
+            "same safe backup operation as the desktop application."
+        ),
+    )
+    backup_parser.add_argument(
+        "destination",
+        nargs="?",
+        type=Path,
+        metavar="DESTINATION",
+        help=(
+            "Backup .sqlite3 destination. When omitted, prompt with a "
+            "timestamped filename suggestion."
+        ),
+    )
+
+    export_parser = commands.add_parser(
+        "export-csv",
+        help="Create a documented format-version-two CSV ZIP.",
+        description=(
+            "Create the same twelve-file relational analytical CSV ZIP as the "
+            "desktop application. This is not a recovery format."
+        ),
+    )
+    export_parser.add_argument(
+        "destination",
+        nargs="?",
+        type=Path,
+        metavar="DESTINATION",
+        help=(
+            "Export .zip destination. When omitted, prompt with a timestamped "
+            "filename suggestion."
+        ),
     )
     return parser
 

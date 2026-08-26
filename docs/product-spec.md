@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline, v0.2 Specification, and v0.3 Product Contract
+## v0.1 Baseline and v0.2/v0.3 Product Specifications
 
-Status: v0.2 source release implemented; v0.3 Milestones 21 through 23 implemented
+Status: v0.3 source release implemented; Later scope requires explicit planning and authorization
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -1552,6 +1552,10 @@ Acceptance demonstration:
 - Run the complete automated suite and the existing private GUI frozen-build smoke workflow so the additive CLI cannot regress v0.2.
 - Align README, architecture, decision records when warranted, command help, and release documentation with the implemented source CLI.
 - Close v0.3 as a source release; do not turn this milestone into a separately packaged CLI binary, installer, signing, or public binary-distribution project.
+
+Implementation result:
+
+> `backup` and `export-csv` accept an optional destination or prompt with the existing timestamped suggestion, then invoke the same verified SQLite and relational CSV operations used by Settings. Source/destination failures remain nonzero and artifact-safe; backup success alone advances the saved backup time. Independent-connection tests retain simultaneous reads, sequential cross-interface writes, bounded lock failure, stale-context rejection, restart, migration, and identity isolation. The complete v0.3 workflow remains a version-12, offline, single-user source release.
 
 ### 31.11 v0.3 acceptance criteria
 

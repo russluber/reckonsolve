@@ -17,6 +17,8 @@ CSV export reads all source tables inside one explicit transaction, then closes 
 
 The ZIP is written, reopened, checked for exact membership and corrupt entries, and atomically installed through a same-directory temporary file. CSV export does not persist export state, include application settings, or claim restoration capability. Both implementations use only `sqlite3`, `csv`, `zipfile`, and other Python standard-library facilities.
 
+M25 exposes both operations through the source CLI without changing this boundary. `backup [DESTINATION]` and `export-csv [DESTINATION]` either accept an explicit path or prompt with the same timestamped suggestion used by the desktop data-management model. CLI code selects the destination and renders results; it does not copy files directly, issue transfer SQL, weaken verification, or create a second artifact format.
+
 ## Consequences
 
 - Backup remains correct if the database is open and avoids dependence on SQLite journal mode or sidecar-file copying.
@@ -26,6 +28,7 @@ The ZIP is written, reopened, checked for exact membership and corrupt entries, 
 - Consumers must join CSV files by documented identifiers and derive current type-appropriate Forecast or Journal text according to the README.
 - The last backup time requires a small schema migration, while CSV export requires no persisted state.
 - Exporting all rows into memory is proportionate to a personal local journal; a demonstrated scale problem would justify streaming from a dedicated consistent read connection later.
+- Desktop and CLI callers share one artifact contract and one failure-safety implementation; interface-specific prompting does not fork persistence behavior.
 
 ## Alternatives considered
 

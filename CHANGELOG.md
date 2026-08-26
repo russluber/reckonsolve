@@ -4,6 +4,27 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
+## 0.3.0 - 2026-08-25
+
+### Added
+
+- Paired `reckonsolve-cli` and `reckonsolve-cli-dev` source commands that use the same stable or development SQLite database as their matching desktop command.
+- Human-readable `list` and `show` commands with type-aware forecasts, combined filters, attention indicators, terminal facts, and complete exact textual history.
+- Interactive Binary and Numeric creation, revision, Journal, Forecast Review, Resolution, Invalidation, and guarded deletion workflows routed through the existing application operations.
+- CLI creation of complete verified SQLite backups and documented format-version-two relational CSV ZIP exports.
+
+### Changed
+
+- Reckonsolve can now complete the forecasting loop through either matching interface without a synchronization subsystem, server, or second canonical store.
+- CLI prose entry is intentionally line-oriented for rapid capture; the desktop interface and canonical stored text retain multiline support.
+- Cross-interface coverage now exercises simultaneous reads, sequential writes, stale-context rejection, bounded write-lock failure, restart, migration, and stable/development isolation.
+
+### Release notes
+
+- Reckonsolve v0.3 remains a local-first, offline-capable, single-user source release.
+- The CLI is run through the `uv`-managed source environment. This release does not add a separately frozen CLI executable, installer integration, signing, public binaries, live inter-process refresh, or a scripting-stability contract.
+- Existing v0.2 schema-version-12 databases require no schema change and are shared directly by the matching GUI and CLI identity. Creating a verified backup before upgrading remains recommended.
+
 ## 0.2.0 - 2026-08-20
 
 ### Added

@@ -6,7 +6,7 @@ Reckonsolve is a local-first personal forecasting journal for Windows. It record
 
 The completed binary v0.1 baseline remains intact. The staged v0.2 plan is complete: Binary and Numeric Prediction Detail record immutable Forecast Reviews while Open, using **Still at N%** or **Keep this interval**. Each Review preserves the exact retained revision, appears in the timeline, and refreshes Needs Attention without fabricating a revision, chart point, or scoring observation. Type-aware recovery, CSV export, migration, and private-build smoke coverage preserve both forecast models and Reviews.
 
-v0.3 development now includes a command-line companion for reading, creating, actively maintaining, and terminating forecasts. `reckonsolve-cli-dev` shares the isolated development database used by `reckonsolve-dev`; the stable `reckonsolve-cli` command likewise shares the stable GUI database. M21 provides filtered Prediction listings and complete type-aware textual detail/history, M22 adds interactive Binary and Numeric creation, M23 adds type-aware revision, Journal, and Forecast Review commands, and M24 adds confirmed resolution, invalidation, and guarded deletion. Backup and export arrive with final v0.3 hardening in M25.
+The completed v0.3 source release includes a command-line companion for reading, creating, actively maintaining, terminating, backing up, and exporting forecasts. `reckonsolve-cli-dev` shares the isolated development database used by `reckonsolve-dev`; the stable `reckonsolve-cli` command likewise shares the stable GUI database. Both interfaces route through the same application operations and canonical SQLite history without a synchronization subsystem.
 
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
@@ -30,7 +30,7 @@ The M12 visual pass uses a deliberately small, offline subset of Lucide icons wh
 
 ## Documentation
 
-- [Product specification](docs/product-spec.md) — implemented v0.1/v0.2 behavior and the approved v0.3 CLI contract, milestones, and acceptance criteria
+- [Product specification](docs/product-spec.md) — implemented v0.1, v0.2, and v0.3 behavior, milestones, and acceptance criteria
 - [Architecture](docs/architecture.md) — current implementation state and intended technical boundaries
 - [Architecture decision records](docs/decisions/README.md) — durable reasoning for consequential technical choices
 
@@ -63,6 +63,8 @@ uv run reckonsolve-cli-dev review 12
 uv run reckonsolve-cli-dev resolve 12
 uv run reckonsolve-cli-dev invalidate 12
 uv run reckonsolve-cli-dev delete 12
+uv run reckonsolve-cli-dev backup C:\path\to\reckonsolve-backup.sqlite3
+uv run reckonsolve-cli-dev export-csv C:\path\to\reckonsolve-export.zip
 ```
 
 `list` defaults to every Prediction and supports case-insensitive Question search plus combined status, forecast-type, and tag filters. Rows identify stable IDs, current type-appropriate forecasts, tags, and attention indicators. `show` accepts one stable Prediction ID and prints current metadata, lifecycle or terminal facts, exact Binary or Numeric history, Journal correction history, Forecast Reviews, and Definition history.
@@ -73,7 +75,9 @@ uv run reckonsolve-cli-dev delete 12
 
 `resolve`, `invalidate`, and `delete` likewise display the reviewed forecast and explain their consequence before an explicit confirmation. Resolution captures the current revision for scoring and accepts a Yes/No or exact Numeric outcome plus separate optional factual notes and Postmortem. Invalid preserves complete history outside scoring. Delete permanently removes only a transaction-current untouched Open Prediction; meaningful or Locked history is directed toward Invalid. Blank or negative confirmation cancels without writing, and terminal decisions cannot be reopened or replaced.
 
-`list` and `show` remain read-only. Use the GUI for backup and CSV export until M25. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
+`backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` creates the same documented twelve-file format-version-two analytical ZIP and does not change application state. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
+
+`list` and `show` remain read-only. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
 
 ## Private Windows build
 
