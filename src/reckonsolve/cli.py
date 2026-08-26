@@ -19,6 +19,12 @@ from reckonsolve.cli_creation import (
     PromptSession,
     create_interactively,
 )
+from reckonsolve.cli_mutations import (
+    journal_interactively,
+    review_interactively,
+    revise_interactively,
+)
+from reckonsolve.cli_text import terminal_text
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.attention import DashboardSnapshot
@@ -144,6 +150,27 @@ def run(
                 output,
                 errors,
             )
+        if arguments.command == "revise":
+            revise_interactively(
+                runtime.operations,
+                arguments.prediction_id,
+                PromptSession(input_stream, output, errors),
+            )
+            return 0
+        if arguments.command == "journal":
+            journal_interactively(
+                runtime.operations,
+                arguments.prediction_id,
+                PromptSession(input_stream, output, errors),
+            )
+            return 0
+        if arguments.command == "review":
+            review_interactively(
+                runtime.operations,
+                arguments.prediction_id,
+                PromptSession(input_stream, output, errors),
+            )
+            return 0
         parser.error("A command is required.")
     except (CliInputCancelled, KeyboardInterrupt):
         print("Cancelled. No changes were made.", file=errors)
@@ -250,6 +277,48 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
             "and confidence, then optionally collect initial details before one "
             "atomic save."
         ),
+    )
+
+    revise_parser = commands.add_parser(
+        "revise",
+        help="Interactively append a changed Binary or Numeric forecast.",
+        description=(
+            "Show the current type-aware forecast and append one changed immutable "
+            "revision while the Prediction is Open."
+        ),
+    )
+    revise_parser.add_argument(
+        "prediction_id",
+        type=_positive_prediction_id,
+        metavar="PREDICTION_ID",
+    )
+
+    journal_parser = commands.add_parser(
+        "journal",
+        help="Add a one-line Journal entry without changing the forecast.",
+        description=(
+            "Show the current forecast and append one required one-line Journal "
+            "entry while the Prediction is Open or Locked."
+        ),
+    )
+    journal_parser.add_argument(
+        "prediction_id",
+        type=_positive_prediction_id,
+        metavar="PREDICTION_ID",
+    )
+
+    review_parser = commands.add_parser(
+        "review",
+        help="Record deliberate retention of the current forecast.",
+        description=(
+            "Show the current forecast and record one Open-only Forecast Review "
+            "with an optional one-line note."
+        ),
+    )
+    review_parser.add_argument(
+        "prediction_id",
+        type=_positive_prediction_id,
+        metavar="PREDICTION_ID",
     )
     return parser
 
@@ -534,7 +603,7 @@ def _append_numeric_terminal(
         _append_field(
             lines,
             "Actual value",
-            f"{resolution.actual_value} {_terminal_text(prediction.unit)}",
+            f"{resolution.actual_value} {terminal_text(prediction.unit)}",
         )
         _append_field(
             lines, "Resolved", _format_local_timestamp(resolution.resolved_at)
@@ -808,7 +877,7 @@ def _numeric_forecast_summary(
         or unit is None
     ):
         raise ValueError("Numeric forecast data is incomplete.")
-    safe_unit = _terminal_text(unit)
+    safe_unit = terminal_text(unit)
     return (
         f"{confidence_percent}% interval {lower_bound} to {upper_bound} {safe_unit}; "
         f"median {median_estimate} {safe_unit}"
@@ -822,7 +891,7 @@ def _append_field(
     *,
     indent: str = "",
 ) -> None:
-    safe_value = _terminal_text(value)
+    safe_value = terminal_text(value)
     parts = safe_value.split("\n")
     lines.append(f"{indent}{label}: {parts[0]}")
     lines.extend(f"{indent}  {part}" for part in parts[1:])
@@ -844,23 +913,3 @@ def _format_local_timestamp(value: datetime | None) -> str:
 
 def _format_date(value: date) -> str:
     return value.isoformat()
-
-
-def _terminal_text(value: str) -> str:
-    """Escape terminal control characters while preserving ordinary text."""
-
-    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
-    characters: list[str] = []
-    for character in normalized:
-        codepoint = ord(character)
-        if character == "\n":
-            characters.append(character)
-        elif character == "\t":
-            characters.append("    ")
-        elif codepoint < 32 or 127 <= codepoint < 160:
-            characters.append(
-                f"\\x{codepoint:02x}" if codepoint <= 0xFF else f"\\u{codepoint:04x}"
-            )
-        else:
-            characters.append(character)
-    return "".join(characters)

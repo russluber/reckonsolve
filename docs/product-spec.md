@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline, v0.2 Specification, and v0.3 Product Contract
 
-Status: v0.2 source release implemented; v0.3 CLI companion approved for staged implementation
+Status: v0.2 source release implemented; v0.3 Milestones 21 through 23 implemented
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -1457,6 +1457,7 @@ Requirements:
 
 - Intermediate prompts never write partial state. One completed application operation performs the mutation atomically after input is validated.
 - Optional rationale, notes, metadata, dates, and tags remain skippable wherever the desktop contract makes them optional.
+- v0.3 CLI prose prompts accept one terminal line per field. This includes revision rationales, Journal bodies, and Forecast Review notes. The limit keeps the companion optimized for rapid capture and does not impose a one-line domain or storage invariant: the desktop interface continues to create, preserve, and display multiline text.
 - Cancelling, pressing Ctrl+C, reaching end-of-input before submission, or declining a required confirmation creates no record and reports cancellation without a traceback.
 - Ordinary validation errors are explained in plain language and permit a safe retry when practical. Expected not-found, lifecycle, stale-context, lock-contention, path, migration, and storage failures produce a nonzero exit status without an unhandled traceback.
 - Consequential terminal actions show the reviewed current forecast and explain their one-way v0.2 semantics before confirmation. Permanent deletion requires its own explicit confirmation.

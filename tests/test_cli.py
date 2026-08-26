@@ -104,6 +104,15 @@ def test_cli_version_and_help_do_not_open_a_database(tmp_path, capsys) -> None:
     assert "numeric" in create_help_output.out
     assert not database_path.exists()
 
+    for command in ("revise", "journal", "review"):
+        with pytest.raises(SystemExit) as mutation_help_exit:
+            run([command, "--help"], database_path=database_path)
+        mutation_help_output = capsys.readouterr()
+
+        assert mutation_help_exit.value.code == 0
+        assert "PREDICTION_ID" in mutation_help_output.out
+        assert not database_path.exists()
+
 
 def test_cli_list_distinguishes_empty_database_from_no_matching_filters(
     tmp_path,
@@ -738,3 +747,462 @@ def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
     assert "80% interval: 2–9 items" in rendered_rows
     assert "median: 5 items" in rendered_rows
     runtime.close()
+
+
+def test_cli_revises_binary_with_validation_retry_and_immutable_history(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will the Binary CLI revision be retained?\x1b[31m",
+        40,
+    )
+    database.close()
+    output = StringIO()
+    errors = StringIO()
+
+    result = run(
+        ["revise", str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO("not-a-number\n40\n100\nNew decisive evidence\n"),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == 0
+    assert "Question: Will the Binary CLI revision be retained?\\x1b[31m" in (
+        output.getvalue()
+    )
+    assert "\x1b[31m" not in output.getvalue()
+    assert "Current forecast: 40% Yes" in output.getvalue()
+    assert "Note: 100% expresses absolute certainty." in output.getvalue()
+    assert f"Revised Prediction #{created.prediction_id}." in output.getvalue()
+    assert "Current forecast: 100% Yes" in output.getvalue()
+    assert "Probability must be a whole number from 0 to 100." in errors.getvalue()
+    assert "The probability is unchanged." in errors.getvalue()
+
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    revisions = operations.list_forecast_revisions(created.prediction_id)
+    assert [
+        (revision.sequence, revision.probability_percent) for revision in revisions
+    ] == [
+        (1, 40),
+        (2, 100),
+    ]
+    assert revisions[1].rationale == "New decisive evidence"
+    database.close()
+
+
+def test_cli_revises_numeric_with_exact_defaults_and_validation_retry(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_numeric_prediction(
+        "What exact value will the Numeric CLI revise?",
+        "units",
+        3,
+        "-1.250",
+        "2.000",
+        "9.500",
+        80,
+    )
+    database.close()
+    output = StringIO()
+    errors = StringIO()
+
+    result = run(
+        ["revise", str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO(
+            "3.000\n2.000\n1.000\n80\n"
+            "\n\n\n\n"
+            "\n2.125\n\n90\nInstrument reading changed\n"
+        ),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == 0
+    assert "Lower bound [-1.250]:" in output.getvalue()
+    assert "Median estimate [2.000]:" in output.getvalue()
+    assert "Upper bound [9.500]:" in output.getvalue()
+    assert "Confidence [80]:" in output.getvalue()
+    assert (
+        "Current forecast: 90% interval -1.250 to 9.500 units; "
+        "median 2.125 units" in output.getvalue()
+    )
+    assert "Invalid numeric forecast:" in errors.getvalue()
+    assert "The numeric forecast is unchanged." in errors.getvalue()
+
+    database = Database.open(database_path)
+    revisions = PredictionOperations(database).list_numeric_forecast_revisions(
+        created.prediction_id
+    )
+    assert len(revisions) == 2
+    assert str(revisions[0].median_estimate) == "2.000"
+    assert str(revisions[1].lower_bound) == "-1.250"
+    assert str(revisions[1].median_estimate) == "2.125"
+    assert str(revisions[1].upper_bound) == "9.500"
+    assert revisions[1].confidence_percent == 90
+    assert revisions[1].rationale == "Instrument reading changed"
+    database.close()
+
+
+@pytest.mark.parametrize("prediction_type", ("binary", "numeric"))
+def test_cli_journal_and_review_preserve_forecast_history_and_cross_interface_timeline(
+    tmp_path,
+    prediction_type,
+) -> None:
+    database_path = tmp_path / f"{prediction_type}.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    if prediction_type == "binary":
+        created = operations.create_prediction("Will active records stay distinct?", 65)
+    else:
+        created = operations.create_numeric_prediction(
+            "How many active records will stay distinct?",
+            "records",
+            0,
+            "2",
+            "5",
+            "9",
+            75,
+        )
+    database.close()
+    journal_output = StringIO()
+    journal_errors = StringIO()
+
+    assert (
+        run(
+            ["journal", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("\nA concise CLI Journal entry\n"),
+            stdout=journal_output,
+            stderr=journal_errors,
+        )
+        == 0
+    )
+    assert "Journal entry text is required." in journal_errors.getvalue()
+    assert "The current forecast is unchanged." in journal_output.getvalue()
+
+    review_output = StringIO()
+    assert (
+        run(
+            ["review", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("Rechecked the available evidence\n"),
+            stdout=review_output,
+        )
+        == 0
+    )
+    assert "kept it unchanged" in review_output.getvalue()
+    assert "The current forecast is unchanged." in review_output.getvalue()
+
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    if prediction_type == "binary":
+        assert len(operations.list_forecast_revisions(created.prediction_id)) == 1
+        timeline = operations.list_timeline(created.prediction_id)
+    else:
+        assert (
+            len(operations.list_numeric_forecast_revisions(created.prediction_id)) == 1
+        )
+        timeline = operations.list_numeric_timeline(created.prediction_id)
+    assert len(timeline) == 3
+    database.close()
+
+    show_output = StringIO()
+    assert (
+        run(
+            ["show", str(created.prediction_id)],
+            database_path=database_path,
+            stdout=show_output,
+        )
+        == 0
+    )
+    rendered = show_output.getvalue()
+    assert "JOURNAL | Entry" in rendered
+    assert "Body: A concise CLI Journal entry" in rendered
+    assert "REVIEW | Review" in rendered
+    assert "Note: Rechecked the available evidence" in rendered
+
+
+def test_cli_journal_does_not_refresh_attention_but_review_does(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    old = NOW - timedelta(days=30)
+    database = Database.open(database_path)
+    created = PredictionOperations(
+        database,
+        FixedClock(old),
+        local_timezone=UTC,
+    ).create_prediction("Will Review refresh this stale forecast?", 55)
+    database.close()
+    monkeypatch.setattr(
+        reckonsolve.cli,
+        "PredictionOperations",
+        lambda database: PredictionOperations(
+            database,
+            FixedClock(NOW),
+            local_timezone=UTC,
+        ),
+    )
+
+    assert (
+        run(
+            ["journal", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("New evidence without reconsideration\n"),
+            stdout=StringIO(),
+        )
+        == 0
+    )
+    database = Database.open(database_path)
+    snapshot = PredictionOperations(
+        database,
+        FixedClock(NOW),
+        local_timezone=UTC,
+    ).get_dashboard()
+    assert [item.prediction_id for item in snapshot.needs_attention_predictions] == [
+        created.prediction_id
+    ]
+    database.close()
+
+    assert (
+        run(
+            ["review", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("\n"),
+            stdout=StringIO(),
+        )
+        == 0
+    )
+    database = Database.open(database_path)
+    operations = PredictionOperations(
+        database,
+        FixedClock(NOW),
+        local_timezone=UTC,
+    )
+    assert operations.get_dashboard().needs_attention_predictions == ()
+    assert len(operations.list_forecast_revisions(created.prediction_id)) == 1
+    database.close()
+
+
+@pytest.mark.parametrize("command", ("revise", "journal", "review"))
+def test_cli_active_mutation_eof_cancels_without_history(
+    tmp_path,
+    command,
+) -> None:
+    database_path = tmp_path / f"{command}.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will cancelled active commands leave history alone?",
+        45,
+    )
+    before = PredictionOperations(database).list_timeline(created.prediction_id)
+    database.close()
+    errors = StringIO()
+
+    result = run(
+        [command, str(created.prediction_id)],
+        database_path=database_path,
+        stdin=StringIO(""),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 130
+    assert errors.getvalue() == "Cancelled. No changes were made.\n"
+    database = Database.open(database_path)
+    assert PredictionOperations(database).list_timeline(created.prediction_id) == before
+    database.close()
+
+
+def test_cli_rejects_stale_revision_context_without_overwriting_other_change(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will concurrent CLI revision context be rejected?",
+        30,
+    )
+    database.close()
+
+    class ConcurrentRevisionInput(StringIO):
+        changed = False
+
+        def readline(self, *args, **kwargs) -> str:
+            if not self.changed:
+                self.changed = True
+                concurrent_database = Database.open(database_path)
+                concurrent_operations = PredictionOperations(concurrent_database)
+                current = concurrent_operations.get_prediction(created.prediction_id)
+                concurrent_operations.revise_forecast(
+                    created.prediction_id,
+                    50,
+                    expected_revision_id=current.current_revision_id,
+                    expected_metadata_version=current.metadata_version,
+                )
+                concurrent_database.close()
+            return super().readline(*args, **kwargs)
+
+    errors = StringIO()
+    result = run(
+        ["revise", str(created.prediction_id)],
+        database_path=database_path,
+        stdin=ConcurrentRevisionInput("70\nLate local reasoning\n"),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert "changed before the forecast could be revised" in errors.getvalue()
+    database = Database.open(database_path)
+    revisions = PredictionOperations(database).list_forecast_revisions(
+        created.prediction_id
+    )
+    assert [revision.probability_percent for revision in revisions] == [30, 50]
+    database.close()
+
+
+@pytest.mark.parametrize(
+    ("command", "command_input", "expected_error"),
+    (
+        (
+            "journal",
+            "Locally reviewed Journal text\n",
+            "changed before the Journal entry could be saved",
+        ),
+        (
+            "review",
+            "Locally reviewed Forecast Review note\n",
+            "changed before the Forecast Review could be saved",
+        ),
+    ),
+)
+def test_cli_journal_and_review_reject_stale_metadata_context(
+    tmp_path,
+    command,
+    command_input,
+    expected_error,
+) -> None:
+    database_path = tmp_path / f"{command}.sqlite3"
+    database = Database.open(database_path)
+    created = PredictionOperations(database).create_prediction(
+        "Will stale prose context be rejected?",
+        35,
+    )
+    database.close()
+
+    class ConcurrentMetadataInput(StringIO):
+        changed = False
+
+        def readline(self, *args, **kwargs) -> str:
+            if not self.changed:
+                self.changed = True
+                concurrent_database = Database.open(database_path)
+                concurrent_operations = PredictionOperations(concurrent_database)
+                current = concurrent_operations.get_prediction(created.prediction_id)
+                concurrent_operations.update_metadata(
+                    created.prediction_id,
+                    question=current.question,
+                    background="Background added by another interface.",
+                    resolution_criteria=current.resolution_criteria,
+                    forecast_deadline=current.forecast_deadline,
+                    expected_resolution=current.expected_resolution,
+                    tags=current.tags,
+                    expected_metadata_version=current.metadata_version,
+                )
+                concurrent_database.close()
+            return super().readline(*args, **kwargs)
+
+    errors = StringIO()
+    result = run(
+        [command, str(created.prediction_id)],
+        database_path=database_path,
+        stdin=ConcurrentMetadataInput(command_input),
+        stdout=StringIO(),
+        stderr=errors,
+    )
+
+    assert result == 1
+    assert expected_error in errors.getvalue()
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    assert len(operations.list_timeline(created.prediction_id)) == 1
+    assert (
+        operations.get_prediction(created.prediction_id).background
+        == "Background added by another interface."
+    )
+    database.close()
+
+
+def test_cli_active_commands_respect_derived_lock_boundaries(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    created_at = NOW - timedelta(days=3)
+    database = Database.open(database_path)
+    created = PredictionOperations(
+        database,
+        FixedClock(created_at),
+        local_timezone=UTC,
+    ).create_prediction(
+        "Will this forecast be Locked at the command boundary?",
+        60,
+        forecast_deadline=(created_at + timedelta(days=1)).date(),
+    )
+    database.close()
+    monkeypatch.setattr(
+        reckonsolve.cli,
+        "PredictionOperations",
+        lambda database: PredictionOperations(
+            database,
+            FixedClock(NOW),
+            local_timezone=UTC,
+        ),
+    )
+
+    for command, expected_error in (
+        ("revise", "Forecast Deadline has passed"),
+        ("review", "prediction is Locked"),
+    ):
+        errors = StringIO()
+        assert (
+            run(
+                [command, str(created.prediction_id)],
+                database_path=database_path,
+                stdin=StringIO("70\n"),
+                stdout=StringIO(),
+                stderr=errors,
+            )
+            == 1
+        )
+        assert expected_error in errors.getvalue()
+
+    assert (
+        run(
+            ["journal", str(created.prediction_id)],
+            database_path=database_path,
+            stdin=StringIO("Evidence after the deadline\n"),
+            stdout=StringIO(),
+        )
+        == 0
+    )
+    database = Database.open(database_path)
+    operations = PredictionOperations(
+        database,
+        FixedClock(NOW),
+        local_timezone=UTC,
+    )
+    assert operations.get_prediction(created.prediction_id).status.value == "locked"
+    assert len(operations.list_forecast_revisions(created.prediction_id)) == 1
+    assert len(operations.list_timeline(created.prediction_id)) == 2
+    database.close()

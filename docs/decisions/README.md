@@ -69,3 +69,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0008: Use selected local icons and a private onedir build](0008-private-onedir-and-local-icons.md) — Accepted 2026-08-20
 - [0009: Store fixed-precision numeric values as scaled integers](0009-scaled-integer-numeric-values.md) — Accepted 2026-08-20
 - [0010: Preserve type-aware Forecast Reviews as immutable revision anchors](0010-type-aware-forecast-reviews.md) — Accepted 2026-08-20
+- [0011: Keep CLI mutations line-oriented and route them through application operations](0011-line-oriented-cli-mutations.md) — Accepted 2026-08-25
