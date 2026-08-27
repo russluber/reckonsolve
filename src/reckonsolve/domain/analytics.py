@@ -18,6 +18,7 @@ class ScoringObservation:
     probability_percent: int
     outcome: BinaryOutcome
     tags: tuple[str, ...] = ()
+    outcome_corrected: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,7 @@ class NumericScoringObservation:
     confidence_percent: int
     actual_value: FixedPrecisionValue
     tags: tuple[str, ...] = ()
+    actual_value_corrected: bool = False
 
 
 @dataclass(frozen=True, slots=True)

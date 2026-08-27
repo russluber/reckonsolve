@@ -1339,6 +1339,9 @@ class FakePredictionOperations:
             raise self.analytics_error
         return summarize_analytics(self.analytics_source, tag=tag)
 
+    def get_prediction_scorecard(self, prediction_id: int) -> object | None:
+        return None
+
     def get_forecast_analytics(
         self,
         *,

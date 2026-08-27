@@ -11,6 +11,9 @@ from zipfile import BadZipFile
 from reckonsolve.analytics import (
     AnalyticsSnapshot,
     ForecastAnalyticsSnapshot,
+    PredictionScorecard,
+    binary_scorecard,
+    numeric_scorecard,
     summarize_analytics,
     summarize_forecast_analytics,
 )
@@ -1463,6 +1466,43 @@ class PredictionOperations:
         return summarize_analytics(
             self._analytics_repository.get_source(),
             tag=tag,
+        )
+
+    def get_prediction_scorecard(
+        self,
+        prediction_id: int,
+    ) -> PredictionScorecard | None:
+        """Return one resolved Prediction's type-aware derived scorecard.
+
+        The card is derived only from the immutable scoring ForecastRevision and
+        the effective current terminal value supplied by analytics data access.
+        Unresolved and Invalid Predictions intentionally have no scorecard.
+        """
+
+        self._validate_positive_token(prediction_id, "prediction_id")
+        binary_source, numeric_source = self._analytics_repository.get_sources()
+        binary_observation = next(
+            (
+                observation
+                for observation in binary_source.observations
+                if observation.prediction_id == prediction_id
+            ),
+            None,
+        )
+        if binary_observation is not None:
+            return binary_scorecard(binary_observation)
+        numeric_observation = next(
+            (
+                observation
+                for observation in numeric_source.observations
+                if observation.prediction_id == prediction_id
+            ),
+            None,
+        )
+        return (
+            None
+            if numeric_observation is None
+            else numeric_scorecard(numeric_observation)
         )
 
     def get_forecast_analytics(

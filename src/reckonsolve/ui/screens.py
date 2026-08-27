@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Protocol
 
 from PySide6.QtCore import QDate, QEvent, QObject, Qt, Signal
@@ -30,7 +31,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from reckonsolve.analytics import AnalyticsSnapshot
+from reckonsolve.analytics import (
+    AnalyticsSnapshot,
+    BinaryScorecard,
+    NumericScorecard,
+    PredictionScorecard,
+)
 from reckonsolve.application.errors import (
     ApplicationError,
     MeaningChangeConfirmationRequired,
@@ -585,6 +591,12 @@ class PredictionOperations(Protocol):
 
     def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
         """Return exactly-once scoring analytics for all or one tag."""
+
+    def get_prediction_scorecard(
+        self,
+        prediction_id: int,
+    ) -> PredictionScorecard | None:
+        """Return a derived scorecard only for one resolved Prediction."""
 
     def get_stale_threshold_days(self) -> int:
         """Return the persisted Needs Attention threshold."""
@@ -1219,6 +1231,47 @@ class NumericPredictionDetailScreen(QWidget):
         self.resolution_scoring.setObjectName("numericResolutionScoringForecast")
         self.resolution_scoring.setTextFormat(Qt.TextFormat.PlainText)
         self.resolution_scoring.setWordWrap(True)
+        self.scorecard_section = QGroupBox("SCORECARD", self.resolution_section)
+        self.scorecard_section.setObjectName("numericPredictionScorecard")
+        scorecard_layout = QVBoxLayout(self.scorecard_section)
+        self.scorecard_interval = QLabel("", self.scorecard_section)
+        self.scorecard_interval.setObjectName("numericScorecardScoringInterval")
+        self.scorecard_interval.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_actual = QLabel("", self.scorecard_section)
+        self.scorecard_actual.setObjectName("numericScorecardActualValue")
+        self.scorecard_actual.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_containment = QLabel("", self.scorecard_section)
+        self.scorecard_containment.setObjectName("numericScorecardContainment")
+        self.scorecard_containment.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_median_error = QLabel("", self.scorecard_section)
+        self.scorecard_median_error.setObjectName("numericScorecardMedianAbsoluteError")
+        self.scorecard_median_error.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_width = QLabel("", self.scorecard_section)
+        self.scorecard_width.setObjectName("numericScorecardIntervalWidth")
+        self.scorecard_width.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_interval_score = QLabel("", self.scorecard_section)
+        self.scorecard_interval_score.setObjectName("numericScorecardIntervalScore")
+        self.scorecard_interval_score.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_guidance = QLabel(
+            "Lower median error and interval score are better.",
+            self.scorecard_section,
+        )
+        self.scorecard_guidance.setObjectName("numericScorecardGuidance")
+        self.scorecard_guidance.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_correction_notice = QLabel("", self.scorecard_section)
+        self.scorecard_correction_notice.setObjectName(
+            "numericScorecardCorrectionNotice"
+        )
+        self.scorecard_correction_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_correction_notice.setWordWrap(True)
+        scorecard_layout.addWidget(self.scorecard_interval)
+        scorecard_layout.addWidget(self.scorecard_actual)
+        scorecard_layout.addWidget(self.scorecard_containment)
+        scorecard_layout.addWidget(self.scorecard_median_error)
+        scorecard_layout.addWidget(self.scorecard_width)
+        scorecard_layout.addWidget(self.scorecard_interval_score)
+        scorecard_layout.addWidget(self.scorecard_guidance)
+        scorecard_layout.addWidget(self.scorecard_correction_notice)
         self.resolution_notes = QLabel("", self.resolution_section)
         self.resolution_notes.setObjectName("numericResolutionNotes")
         self.resolution_notes.setTextFormat(Qt.TextFormat.PlainText)
@@ -1248,6 +1301,7 @@ class NumericPredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_actual)
         resolution_layout.addWidget(self.resolution_time)
         resolution_layout.addWidget(self.resolution_scoring)
+        resolution_layout.addWidget(self.scorecard_section)
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem)
         resolution_layout.addWidget(
@@ -1257,6 +1311,7 @@ class NumericPredictionDetailScreen(QWidget):
         )
         resolution_layout.addWidget(self.resolution_history)
         self.resolution_section.setHidden(True)
+        self.scorecard_section.setHidden(True)
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
         self.invalidation_section.setObjectName("numericInvalidationSection")
@@ -1418,6 +1473,7 @@ class NumericPredictionDetailScreen(QWidget):
             self._resolution_history = None
             self._invalidation_history = None
             self.resolution_section.setHidden(True)
+            self.scorecard_section.setHidden(True)
             self.invalidation_section.setHidden(True)
             self.detail_content.setHidden(True)
             self.empty_state.setHidden(False)
@@ -1510,6 +1566,7 @@ class NumericPredictionDetailScreen(QWidget):
             self.correct_resolution_button.setEnabled(False)
             self.resolution_history.setHidden(True)
             self.resolution_section.setHidden(True)
+            self.scorecard_section.setHidden(True)
         else:
             try:
                 history = self._operations.get_numeric_resolution_history(
@@ -1553,6 +1610,7 @@ class NumericPredictionDetailScreen(QWidget):
             )
             self.postmortem.setHidden(not effective.postmortem)
             self.resolution_section.setHidden(False)
+            self._show_scorecard(prediction.prediction_id)
         invalidation = prediction.invalidation
         if invalidation is None:
             self._invalidation_history = None
@@ -1588,6 +1646,49 @@ class NumericPredictionDetailScreen(QWidget):
             )
             self.invalidation_reason.setHidden(not effective_invalidation.reason)
             self.invalidation_section.setHidden(False)
+
+    def _show_scorecard(self, prediction_id: int) -> None:
+        try:
+            scorecard = self._operations.get_prediction_scorecard(prediction_id)
+        except ApplicationError as error:
+            self.scorecard_section.setHidden(True)
+            self._show_error(f"Scorecard is unavailable. {error}")
+            return
+        if not isinstance(scorecard, NumericScorecard):
+            self.scorecard_section.setHidden(True)
+            return
+        self.scorecard_interval.setText(
+            f"Scored interval: {scorecard.confidence_percent}% "
+            f"{scorecard.lower_bound} to {scorecard.upper_bound} {scorecard.unit} "
+            f"(median {scorecard.median_estimate} {scorecard.unit})"
+        )
+        self.scorecard_actual.setText(
+            f"Effective actual: {scorecard.actual_value} {scorecard.unit}"
+        )
+        self.scorecard_containment.setText(
+            "Containment: Yes (inclusive)" if scorecard.contained else "Containment: No"
+        )
+        self.scorecard_median_error.setText(
+            "Median absolute error: "
+            f"{_format_score_decimal(scorecard.median_absolute_error)} "
+            f"{scorecard.unit}"
+        )
+        self.scorecard_width.setText(
+            f"Interval width: {_format_score_decimal(scorecard.interval_width)} "
+            f"{scorecard.unit}"
+        )
+        self.scorecard_interval_score.setText(
+            "Proper interval score: "
+            f"{_format_score_decimal(scorecard.interval_score)} {scorecard.unit}"
+        )
+        self.scorecard_correction_notice.setText(
+            "The effective actual value was corrected; original Resolution and "
+            "correction history remain below."
+            if scorecard.actual_value_corrected
+            else ""
+        )
+        self.scorecard_correction_notice.setHidden(not scorecard.actual_value_corrected)
+        self.scorecard_section.setHidden(False)
 
     def _show_error(self, message: str) -> None:
         self.detail_error.setText(message)
@@ -4095,6 +4196,35 @@ class PredictionDetailScreen(QWidget):
             "predictionResolutionScoringForecast"
         )
         self.resolution_scoring_forecast.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_section = QGroupBox("SCORECARD", self.resolution_section)
+        self.scorecard_section.setObjectName("predictionScorecard")
+        scorecard_layout = QVBoxLayout(self.scorecard_section)
+        self.scorecard_forecast = QLabel("", self.scorecard_section)
+        self.scorecard_forecast.setObjectName("predictionScorecardForecast")
+        self.scorecard_forecast.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_outcome = QLabel("", self.scorecard_section)
+        self.scorecard_outcome.setObjectName("predictionScorecardOutcome")
+        self.scorecard_outcome.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_brier = QLabel("", self.scorecard_section)
+        self.scorecard_brier.setObjectName("predictionScorecardBrier")
+        self.scorecard_brier.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_guidance = QLabel(
+            "Brier score: lower is better.",
+            self.scorecard_section,
+        )
+        self.scorecard_guidance.setObjectName("predictionScorecardGuidance")
+        self.scorecard_guidance.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_correction_notice = QLabel("", self.scorecard_section)
+        self.scorecard_correction_notice.setObjectName(
+            "predictionScorecardCorrectionNotice"
+        )
+        self.scorecard_correction_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.scorecard_correction_notice.setWordWrap(True)
+        scorecard_layout.addWidget(self.scorecard_forecast)
+        scorecard_layout.addWidget(self.scorecard_outcome)
+        scorecard_layout.addWidget(self.scorecard_brier)
+        scorecard_layout.addWidget(self.scorecard_guidance)
+        scorecard_layout.addWidget(self.scorecard_correction_notice)
         self.resolution_notes_heading = QLabel(
             "RESOLUTION NOTES",
             self.resolution_section,
@@ -4131,6 +4261,7 @@ class PredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_outcome)
         resolution_layout.addWidget(self.resolution_resolved_at)
         resolution_layout.addWidget(self.resolution_scoring_forecast)
+        resolution_layout.addWidget(self.scorecard_section)
         resolution_layout.addWidget(self.resolution_notes_heading)
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem_heading)
@@ -4142,6 +4273,7 @@ class PredictionDetailScreen(QWidget):
         )
         resolution_layout.addWidget(self.resolution_history)
         self.resolution_section.setHidden(True)
+        self.scorecard_section.setHidden(True)
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
         self.invalidation_section.setObjectName("predictionInvalidationSection")
@@ -4305,6 +4437,7 @@ class PredictionDetailScreen(QWidget):
             self._resolution_history = None
             self._invalidation_history = None
             self.resolution_section.setHidden(True)
+            self.scorecard_section.setHidden(True)
             self.invalidation_section.setHidden(True)
             return
 
@@ -4735,10 +4868,12 @@ class PredictionDetailScreen(QWidget):
             has_postmortem = effective.postmortem is not None
             self.postmortem_heading.setHidden(not has_postmortem)
             self.postmortem.setHidden(not has_postmortem)
+            self._show_scorecard(prediction.prediction_id)
         else:
             self._resolution_history = None
             self.correct_resolution_button.setEnabled(False)
             self.resolution_history.setHidden(True)
+            self.scorecard_section.setHidden(True)
 
         invalidation = prediction.invalidation
         self.invalidation_section.setHidden(invalidation is None)
@@ -4773,6 +4908,34 @@ class PredictionDetailScreen(QWidget):
             self._invalidation_history = None
             self.correct_invalidation_button.setEnabled(False)
             self.invalidation_history.setHidden(True)
+
+    def _show_scorecard(self, prediction_id: int) -> None:
+        try:
+            scorecard = self._operations.get_prediction_scorecard(prediction_id)
+        except ApplicationError as error:
+            self.scorecard_section.setHidden(True)
+            self._show_error(f"Scorecard is unavailable. {error}")
+            return
+        if not isinstance(scorecard, BinaryScorecard):
+            self.scorecard_section.setHidden(True)
+            return
+        self.scorecard_forecast.setText(
+            f"Scored Yes probability: {scorecard.probability_percent}%"
+        )
+        self.scorecard_outcome.setText(
+            f"Effective outcome: {scorecard.outcome.value.capitalize()}"
+        )
+        self.scorecard_brier.setText(
+            f"Brier score: {_format_brier_score(scorecard.brier_score)}"
+        )
+        self.scorecard_correction_notice.setText(
+            "The effective outcome was corrected; original Resolution and correction "
+            "history remain below."
+            if scorecard.outcome_corrected
+            else ""
+        )
+        self.scorecard_correction_notice.setHidden(not scorecard.outcome_corrected)
+        self.scorecard_section.setHidden(False)
 
     def _load_definition_history(self, prediction_id: int) -> None:
         try:
@@ -5563,6 +5726,20 @@ def _format_local_timestamp(value: datetime) -> str:
 
 def _format_date(value: date | None) -> str:
     return "" if value is None else value.strftime("%b %d, %Y")
+
+
+def _format_brier_score(value: float) -> str:
+    """Present the finite per-Prediction Binary score without padding."""
+
+    return f"{value:.4f}".rstrip("0").rstrip(".")
+
+
+def _format_score_decimal(value: Decimal) -> str:
+    """Present a derived Decimal metric without inventing fine precision."""
+
+    if value == value.to_integral():
+        return format(value.quantize(Decimal(1)), "f")
+    return format(value.quantize(Decimal("0.001")), "f").rstrip("0").rstrip(".")
 
 
 def _numeric_forecast_text(

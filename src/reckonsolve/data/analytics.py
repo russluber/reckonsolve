@@ -56,6 +56,12 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
                 ),
                 resolution.outcome
             ) AS outcome,
+            EXISTS(
+                SELECT 1
+                FROM resolution_corrections AS correction
+                WHERE correction.resolution_id = resolution.id
+                    AND correction.outcome_changed = 1
+            ) AS outcome_corrected,
             resolution.resolved_at,
             resolution.scoring_revision_id,
             scoring_revision.probability_percent
@@ -100,6 +106,7 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
                 probability_percent=int(row["probability_percent"]),
                 outcome=BinaryOutcome(row["outcome"]),
                 tags=tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
+                outcome_corrected=bool(row["outcome_corrected"]),
             )
             for row in rows
         ),
@@ -126,6 +133,12 @@ def _load_numeric_source(connection: sqlite3.Connection) -> NumericAnalyticsSour
                 ),
                 resolution.actual_scaled
             ) AS actual_scaled,
+            EXISTS(
+                SELECT 1
+                FROM numeric_resolution_corrections AS correction
+                WHERE correction.numeric_resolution_id = resolution.id
+                    AND correction.actual_value_changed = 1
+            ) AS actual_value_corrected,
             resolution.resolved_at,
             resolution.scoring_revision_id,
             scoring_revision.lower_scaled,
@@ -219,4 +232,5 @@ def _map_numeric_scoring_observation(
         confidence_percent=int(row["confidence_percent"]),
         actual_value=FixedPrecisionValue(int(row["actual_scaled"]), decimal_places),
         tags=tags,
+        actual_value_corrected=bool(row["actual_value_corrected"]),
     )

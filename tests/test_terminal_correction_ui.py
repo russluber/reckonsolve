@@ -137,6 +137,21 @@ def test_binary_correction_and_later_postmortem_survive_restart(
         "I read a preliminary status as final."
     )
     assert operations.get_analytics().mean_brier == pytest.approx(0.64)
+    assert _child(window, QLabel, "predictionScorecardForecast").text() == (
+        "Scored Yes probability: 80%"
+    )
+    assert _child(window, QLabel, "predictionScorecardOutcome").text() == (
+        "Effective outcome: No"
+    )
+    assert _child(window, QLabel, "predictionScorecardBrier").text() == (
+        "Brier score: 0.64"
+    )
+    assert not _child(window, QGroupBox, "predictionScorecard").isHidden()
+    assert not _child(
+        window,
+        QLabel,
+        "predictionScorecardCorrectionNotice",
+    ).isHidden()
 
     reflection_operations = PredictionOperations(database, FixedClock(REFLECTED), UTC)
     reflection_window = MainWindow(reflection_operations)
@@ -276,6 +291,30 @@ def test_numeric_actual_correction_is_exact_and_score_affecting(
     assert str(history.effective.actual_value) == "4.25"
     assert history.corrections[0].changed_fields == ("actual_value",)
     assert operations.get_forecast_analytics().numeric.scored_prediction_count == 1
+    assert _child(window, QLabel, "numericScorecardScoringInterval").text() == (
+        "Scored interval: 80% 1.00 to 3.00 hours (median 2.00 hours)"
+    )
+    assert _child(window, QLabel, "numericScorecardActualValue").text() == (
+        "Effective actual: 4.25 hours"
+    )
+    assert _child(window, QLabel, "numericScorecardContainment").text() == (
+        "Containment: No"
+    )
+    assert _child(window, QLabel, "numericScorecardMedianAbsoluteError").text() == (
+        "Median absolute error: 2.25 hours"
+    )
+    assert _child(window, QLabel, "numericScorecardIntervalWidth").text() == (
+        "Interval width: 2 hours"
+    )
+    assert _child(window, QLabel, "numericScorecardIntervalScore").text() == (
+        "Proper interval score: 14.5 hours"
+    )
+    assert not _child(window, QGroupBox, "numericPredictionScorecard").isHidden()
+    assert not _child(
+        window,
+        QLabel,
+        "numericScorecardCorrectionNotice",
+    ).isHidden()
 
 
 def test_numeric_invalid_reason_can_be_corrected_and_cleared(

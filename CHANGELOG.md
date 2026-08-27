@@ -11,10 +11,12 @@ All notable changes to Reckonsolve are documented here.
 - Effective terminal-history derivation with optimistic correction tokens, exact Numeric snapshots, immutable original terminal facts, and corrected-outcome selection for ordinary analytics.
 - Milestone 27 desktop workflows for correcting Binary and exact Numeric Resolution facts, adding or revising a Postmortem after resolution, and correcting or clearing an Invalid reason without reopening the Prediction.
 - Effective terminal summaries plus collapsed, complete original-to-current correction history on Binary and Numeric Prediction Detail.
+- Milestone 28 type-aware resolved-prediction scorecards that show the captured scoring forecast, effective outcome or actual value, and individual Binary or Numeric metrics without creating another scoring observation.
 
 ### Changed
 
 - Every terminal correction now receives a deliberate confirmation; score-affecting outcome or actual-value changes are identified explicitly and require a nonempty explanation.
+- A corrected Binary outcome or Numeric actual value now recomputes its individual scorecard from the effective terminal fact while retaining the original scoring revision and resolution position.
 
 ## 0.3.0 - 2026-08-25
 

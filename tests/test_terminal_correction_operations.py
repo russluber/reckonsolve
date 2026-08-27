@@ -124,6 +124,14 @@ def test_binary_corrections_append_snapshots_and_drive_effective_analytics(
     assert len(source.observations) == 1
     assert source.observations[0].outcome is BinaryOutcome.YES
     assert source.observations[0].scoring_revision_id == original_scoring_revision_id
+    assert source.observations[0].outcome_corrected is True
+    scorecard = operations.get_prediction_scorecard(resolved.prediction_id)
+    assert scorecard is not None
+    assert scorecard.scoring_revision_id == original_scoring_revision_id
+    assert scorecard.outcome is BinaryOutcome.YES
+    assert scorecard.brier_score == pytest.approx(0.09)
+    assert scorecard.outcome_corrected is True
+    assert operations.get_analytics().scored_prediction_count == 1
     with database.transaction() as connection:
         original = connection.execute(
             "SELECT outcome, resolution_notes, postmortem FROM resolutions"
@@ -247,6 +255,14 @@ def test_numeric_correction_round_trips_exactly_and_updates_one_observation(
     assert len(source.observations) == 1
     assert str(source.observations[0].actual_value) == "-2.50"
     assert source.observations[0].scoring_revision_id == scoring_revision_id
+    assert source.observations[0].actual_value_corrected is True
+    scorecard = operations.get_prediction_scorecard(resolved.prediction_id)
+    assert scorecard is not None
+    assert scorecard.scoring_revision_id == scoring_revision_id
+    assert str(scorecard.actual_value) == "-2.50"
+    assert scorecard.contained is True
+    assert scorecard.actual_value_corrected is True
+    assert operations.get_forecast_analytics().numeric.scored_prediction_count == 1
 
     with pytest.raises(ValidationError) as precision_error:
         operations.correct_numeric_resolution(
@@ -306,6 +322,23 @@ def test_invalidation_reason_correction_is_append_only_for_both_types(tmp_path) 
     assert numeric_history.effective.reason == "The quantity became undefined."
     assert binary_history.effective.invalidated_at == RESOLVED
     assert numeric_history.effective.invalidated_at == RESOLVED
+    database.close()
+
+
+def test_unresolved_and_invalid_predictions_have_no_scorecard(tmp_path) -> None:
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    operations = PredictionOperations(database, FixedClock(CREATED), UTC)
+    open_prediction = operations.create_prediction("Will this remain open?", 50)
+    invalid_candidate = operations.create_prediction("Will this be invalid?", 50)
+    invalid = operations.invalidate_prediction(
+        invalid_candidate.prediction_id,
+        reason="The premise was withdrawn.",
+        expected_revision_id=invalid_candidate.current_revision_id,
+        expected_metadata_version=invalid_candidate.metadata_version,
+    )
+
+    assert operations.get_prediction_scorecard(open_prediction.prediction_id) is None
+    assert operations.get_prediction_scorecard(invalid.prediction_id) is None
     database.close()
 
 
