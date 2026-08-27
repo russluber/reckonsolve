@@ -171,7 +171,7 @@ def test_csv_bundle_preserves_relational_history_and_raw_text(tmp_path) -> None:
 
     assert result.destination == export_path.resolve()
     assert result.exported_at == NOW
-    assert result.csv_file_count == 12
+    assert result.csv_file_count == 16
     assert SettingsRepository(database).get_last_successful_backup_at() is None
     with ZipFile(export_path) as archive:
         assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
@@ -270,7 +270,7 @@ def test_csv_bundle_preserves_relational_history_and_raw_text(tmp_path) -> None:
     assert "not a complete restoration format" in readme
     assert "highest sequence is the current Binary forecast" in readme
     assert "scoring_revision_id" in readme
-    assert "Format version: 2" in readme
+    assert "Format version: 3" in readme
     assert "numeric_forecast_revisions.csv" in readme
     assert "forecast_reviews.csv" in readme
     database.close()
@@ -306,7 +306,7 @@ def test_csv_export_includes_numeric_interval_data(tmp_path) -> None:
 
     result = operations.export_csv_bundle(destination)
 
-    assert result.csv_file_count == 12
+    assert result.csv_file_count == 16
     with ZipFile(destination) as archive:
         rows = _read_csv(archive, "numeric_forecast_revisions.csv")
     assert rows == [
@@ -360,6 +360,122 @@ def test_csv_export_rejects_the_live_database_without_mutation(tmp_path) -> None
         operations.export_csv_bundle(path)
 
     assert operations.get_prediction(created.prediction_id).question == created.question
+    database.close()
+
+
+def test_format_three_export_preserves_terminal_corrections_and_completion(
+    tmp_path,
+) -> None:
+    database = Database.open(tmp_path / "source.sqlite3")
+    operations = PredictionOperations(database, FixedClock())
+
+    binary = operations.create_prediction("Will Binary correction export?", 65)
+    operations.resolve_prediction(
+        binary.prediction_id,
+        BinaryOutcome.YES,
+        resolution_notes="Original Binary notes",
+        expected_revision_id=binary.current_revision_id,
+        expected_metadata_version=binary.metadata_version,
+    )
+    operations.record_postmortem_skip(
+        binary.prediction_id,
+        expected_correction_id=None,
+    )
+    operations.correct_binary_resolution(
+        binary.prediction_id,
+        BinaryOutcome.NO,
+        resolution_notes="Corrected Binary notes",
+        postmortem="Later Binary Postmortem",
+        correction_reason="Certified result was No.",
+        expected_correction_id=None,
+    )
+
+    numeric = operations.create_numeric_prediction(
+        "What exact Numeric correction exports?",
+        "units",
+        2,
+        "-5.00",
+        "0.00",
+        "8.00",
+        80,
+    )
+    operations.resolve_numeric_prediction(
+        numeric.prediction_id,
+        "7.25",
+        postmortem="Original Numeric Postmortem",
+        expected_revision_id=numeric.current_revision.revision_id,
+        expected_metadata_version=numeric.metadata_version,
+    )
+    operations.correct_numeric_resolution(
+        numeric.prediction_id,
+        "-1.25",
+        resolution_notes="Corrected Numeric notes",
+        postmortem=None,
+        correction_reason="The source reported a signed quantity.",
+        expected_correction_id=None,
+    )
+
+    invalid = operations.create_prediction("Will Invalid correction export?", 15)
+    operations.invalidate_prediction(
+        invalid.prediction_id,
+        reason="Original Invalid reason",
+        expected_revision_id=invalid.current_revision_id,
+        expected_metadata_version=invalid.metadata_version,
+    )
+    operations.correct_invalidation_reason(
+        invalid.prediction_id,
+        "Corrected Invalid reason",
+        expected_correction_id=None,
+    )
+
+    destination = tmp_path / "v04-export.zip"
+    result = operations.export_csv_bundle(destination)
+
+    assert result.csv_file_count == 16
+    with ZipFile(destination) as archive:
+        binary_rows = _read_csv(archive, "resolution_corrections.csv")
+        numeric_rows = _read_csv(archive, "numeric_resolution_corrections.csv")
+        invalid_rows = _read_csv(archive, "invalidation_reason_corrections.csv")
+        completion_rows = _read_csv(archive, "postmortem_completions.csv")
+        readme = archive.read("README.txt").decode("utf-8")
+
+    assert binary_rows == [
+        {
+            "correction_id": binary_rows[0]["correction_id"],
+            "prediction_id": str(binary.prediction_id),
+            "resolution_id": binary_rows[0]["resolution_id"],
+            "sequence": "1",
+            "old_outcome": "yes",
+            "new_outcome": "no",
+            "old_resolution_notes": "Original Binary notes",
+            "new_resolution_notes": "Corrected Binary notes",
+            "old_postmortem": "",
+            "new_postmortem": "Later Binary Postmortem",
+            "outcome_changed": "1",
+            "resolution_notes_changed": "1",
+            "postmortem_changed": "1",
+            "correction_reason": "Certified result was No.",
+            "corrected_at_utc": "2026-08-20T18:30:45.123456Z",
+        }
+    ]
+    assert numeric_rows[0]["old_actual_scaled"] == "725"
+    assert numeric_rows[0]["new_actual_scaled"] == "-125"
+    assert numeric_rows[0]["actual_value_changed"] == "1"
+    assert numeric_rows[0]["old_postmortem"] == "Original Numeric Postmortem"
+    assert numeric_rows[0]["new_postmortem"] == ""
+    assert (
+        numeric_rows[0]["correction_reason"] == "The source reported a signed quantity."
+    )
+    assert invalid_rows[0]["prediction_id"] == str(invalid.prediction_id)
+    assert invalid_rows[0]["old_reason"] == "Original Invalid reason"
+    assert invalid_rows[0]["new_reason"] == "Corrected Invalid reason"
+    assert completion_rows[0]["prediction_id"] == str(binary.prediction_id)
+    assert completion_rows[0]["completed_at_utc"] == ("2026-08-20T18:30:45.123456Z")
+    assert "Format version: 3" in readme
+    assert "outcome_changed = 1 identifies a score-affecting correction" in readme
+    assert "old_actual_scaled" in readme
+    assert "apply each correction in sequence" in readme
+    assert "later Postmortem correction may coexist" in readme
     database.close()
 
 

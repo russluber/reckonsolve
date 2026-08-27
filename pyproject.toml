@@ -1,6 +1,6 @@
 [project]
 name = "reckonsolve"
-version = "0.3.0"
+version = "0.4.0"
 description = "A local-first personal forecasting journal."
 readme = "README.md"
 license = "MIT"

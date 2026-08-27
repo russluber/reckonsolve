@@ -30,7 +30,7 @@ Milestone 26 exposes these rules through domain, application, and persistence op
 - Stale dialogs or competing processes cannot branch or silently overwrite a correction chain.
 - Numeric outcomes remain signed scaled integers at the immutable Prediction precision.
 - The migration adds four small tables, three ownership indexes, and integrity triggers; this is more schema than in-place editing but makes historical correctness enforceable below the UI.
-- Complete SQLite backup automatically includes the new records. The existing format-version-two CSV export intentionally remains unchanged until the version-three work in Milestone 31.
+- Complete SQLite backup automatically includes the new records. Format-version-three CSV export now preserves all three correction chains and Postmortem completion as separate relational files.
 
 ## Alternatives considered
 

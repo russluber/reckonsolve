@@ -4,6 +4,8 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
+## 0.4.0 - 2026-08-26
+
 ### Added
 
 - Cross-shell `rsc` and `rscd` executable shortcuts for the stable and development CLI companions while retaining the descriptive command names.
@@ -15,12 +17,22 @@ All notable changes to Reckonsolve are documented here.
 - Milestone 29 retrospective initial-versus-final feedback for revised-and-resolved Binary and Numeric Predictions, with unrevised resolutions counted separately and existing type, tag, and exact-unit filters retained.
 - Milestone 30 Needs Postmortem Dashboard queue for Resolved Predictions with a blank effective Postmortem and no earlier Skip fact.
 - Confirmed Skip Postmortem completion that preserves resolution, score, lifecycle, and later Postmortem eligibility while remaining visible on Prediction Detail.
+- Historically complete read-only CLI `show` output for original and effective terminal facts, every correction and Postmortem version, correction reasons and timestamps, and Skip completion.
+- Relational CSV export format version 3 with Binary and Numeric Resolution corrections, Invalidation-reason corrections, and Postmortem-completion records.
+- v0.4 portability and private-build coverage spanning schema-version-12 migration, corrected outcomes, later Postmortems, scorecards, update analytics, Needs Postmortem, backup, and restart.
 
 ### Changed
 
 - Every terminal correction now receives a deliberate confirmation; score-affecting outcome or actual-value changes are identified explicitly and require a nonempty explanation.
 - A corrected Binary outcome or Numeric actual value now recomputes its individual scorecard from the effective terminal fact while retaining the original scoring revision and resolution position.
 - Binary paired feedback reports initial and final Brier plus initial-minus-final score improvement; Numeric feedback combines only unitless confidence and containment while reserving raw error, width, and interval-score comparisons for one exact unit.
+- CSV export now produces a documented sixteen-file format-version-three analytical bundle while preserving every format-version-two file and relationship.
+
+### Release notes
+
+- Reckonsolve v0.4 remains a local-first, offline-capable, single-user source release.
+- Existing v0.3 schema-version-12 databases migrate automatically to schema version 13 without replacing original terminal records. Creating a verified backup before upgrading remains recommended.
+- This release does not add terminal-mutation CLI commands, a Windows installer, signing, automatic updates, public binaries, or application-logo artwork.
 
 ## 0.3.0 - 2026-08-25
 

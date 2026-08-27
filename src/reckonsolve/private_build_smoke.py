@@ -24,10 +24,10 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             raise FileExistsError(f"Private build smoke path already exists: {path}")
     backup_path.parent.mkdir(parents=True, exist_ok=True)
 
-    previous_database = Database.open(database_path, migrations=MIGRATIONS[:8])
+    previous_database = Database.open(database_path, migrations=MIGRATIONS[:12])
     try:
         previous_prediction = PredictionOperations(previous_database).create_prediction(
-            "M20 v0.1 prediction survives the frozen migration?",
+            "M31 v0.3 prediction survives the frozen migration?",
             55,
         )
         previous_prediction_id = previous_prediction.prediction_id
@@ -50,7 +50,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         if operations.get_prediction(previous_prediction_id).probability_percent != 55:
             raise RuntimeError("The frozen migration did not preserve prior data.")
         binary_prediction = operations.create_prediction(
-            "M20 private frozen-build Binary prediction?",
+            "M31 private frozen-build Binary prediction?",
             60,
             rationale="Initial Binary smoke forecast.",
             tags=("private-smoke",),
@@ -81,8 +81,20 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             expected_revision_id=binary_prediction.current_revision_id,
             expected_metadata_version=binary_prediction.metadata_version,
         )
+        operations.record_postmortem_skip(
+            binary_prediction.prediction_id,
+            expected_correction_id=None,
+        )
+        binary_history = operations.correct_binary_resolution(
+            binary_prediction.prediction_id,
+            BinaryOutcome.NO,
+            resolution_notes="Frozen corrected Binary facts survive.",
+            postmortem="Frozen later Binary Postmortem survives.",
+            correction_reason="Frozen smoke corrects the certified outcome.",
+            expected_correction_id=None,
+        )
         numeric_prediction = operations.create_numeric_prediction(
-            "M20 private frozen-build Numeric prediction?",
+            "M31 private frozen-build Numeric prediction?",
             "days",
             1,
             "-1.5",
@@ -115,9 +127,52 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             expected_revision_id=numeric_prediction.current_revision.revision_id,
             expected_metadata_version=numeric_prediction.metadata_version,
         )
+        numeric_history = operations.correct_numeric_resolution(
+            numeric_prediction.prediction_id,
+            "8.5",
+            resolution_notes="Frozen corrected Numeric facts survive.",
+            postmortem="Frozen later Numeric Postmortem survives.",
+            correction_reason="Frozen smoke corrects the exact observed value.",
+            expected_correction_id=None,
+        )
+        needs_postmortem = operations.create_prediction(
+            "M31 frozen Needs Postmortem prediction?",
+            50,
+            tags=("private-smoke",),
+        )
+        needs_postmortem = operations.resolve_prediction(
+            needs_postmortem.prediction_id,
+            BinaryOutcome.YES,
+            expected_revision_id=needs_postmortem.current_revision_id,
+            expected_metadata_version=needs_postmortem.metadata_version,
+        )
+        if binary_history.effective.outcome is not BinaryOutcome.NO:
+            raise RuntimeError("The frozen Binary correction was not effective.")
+        if numeric_history.effective.actual_value.decimal_value != Decimal("8.5"):
+            raise RuntimeError("The frozen Numeric correction was not effective.")
+        if operations.get_prediction_scorecard(binary_prediction.prediction_id) is None:
+            raise RuntimeError("The frozen Binary scorecard was not available.")
+        if (
+            operations.get_prediction_scorecard(numeric_prediction.prediction_id)
+            is None
+        ):
+            raise RuntimeError("The frozen Numeric scorecard was not available.")
+        analytics = operations.get_forecast_analytics()
+        if (
+            analytics.binary_updates.paired_count != 1
+            or analytics.numeric_updates.paired_count != 1
+        ):
+            raise RuntimeError("The frozen update analytics were incomplete.")
+        queued_ids = {
+            item.prediction_id
+            for item in operations.get_dashboard().needs_postmortem_predictions
+        }
+        if queued_ids != {needs_postmortem.prediction_id}:
+            raise RuntimeError("The frozen Needs Postmortem queue was incorrect.")
         operations.create_backup(backup_path)
         binary_prediction_id = binary_prediction.prediction_id
         numeric_prediction_id = numeric_prediction.prediction_id
+        needs_postmortem_id = needs_postmortem.prediction_id
     finally:
         runtime.close()
 
@@ -126,12 +181,14 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         binary_prediction_id,
         numeric_prediction_id,
         previous_prediction_id,
+        needs_postmortem_id,
     )
     _verify_smoke_database(
         backup_path,
         binary_prediction_id,
         numeric_prediction_id,
         previous_prediction_id,
+        needs_postmortem_id,
     )
 
 
@@ -140,6 +197,7 @@ def _verify_smoke_database(
     binary_prediction_id: int,
     numeric_prediction_id: int,
     previous_prediction_id: int,
+    needs_postmortem_id: int,
 ) -> None:
     database = Database.open(database_path)
     try:
@@ -159,6 +217,16 @@ def _verify_smoke_database(
             raise RuntimeError("The pre-upgrade forecast did not survive restart.")
         if binary_prediction.resolution is None:
             raise RuntimeError("The frozen Binary resolution did not survive restart.")
+        binary_history = operations.get_binary_resolution_history(binary_prediction_id)
+        if (
+            binary_history.original.outcome is not BinaryOutcome.YES
+            or binary_history.effective.outcome is not BinaryOutcome.NO
+            or len(binary_history.corrections) != 1
+            or binary_history.postmortem_completion is None
+            or binary_history.effective.postmortem
+            != "Frozen later Binary Postmortem survives."
+        ):
+            raise RuntimeError("The frozen Binary terminal history did not survive.")
         if len(binary_revisions) != 2 or len(binary_timeline) != 4:
             raise RuntimeError("The frozen Binary history did not survive restart.")
         if (
@@ -167,12 +235,37 @@ def _verify_smoke_database(
             or numeric_prediction.current_revision.upper_bound.decimal_value
             != Decimal("9.0")
             or numeric_prediction.resolution is None
-            or numeric_prediction.resolution.actual_value.decimal_value
-            != Decimal("9.5")
         ):
             raise RuntimeError("The frozen Numeric forecast did not survive restart.")
+        numeric_history = operations.get_numeric_resolution_history(
+            numeric_prediction_id
+        )
+        if (
+            numeric_history.original.actual_value.decimal_value != Decimal("9.5")
+            or numeric_history.effective.actual_value.decimal_value != Decimal("8.5")
+            or len(numeric_history.corrections) != 1
+            or numeric_history.effective.postmortem
+            != "Frozen later Numeric Postmortem survives."
+        ):
+            raise RuntimeError("The frozen Numeric terminal history did not survive.")
         if len(numeric_revisions) != 2 or len(numeric_timeline) != 3:
             raise RuntimeError("The frozen Numeric history did not survive restart.")
+        if operations.get_prediction_scorecard(binary_prediction_id) is None:
+            raise RuntimeError("The frozen Binary scorecard did not survive restart.")
+        if operations.get_prediction_scorecard(numeric_prediction_id) is None:
+            raise RuntimeError("The frozen Numeric scorecard did not survive restart.")
+        analytics = operations.get_forecast_analytics()
+        if (
+            analytics.binary_updates.paired_count != 1
+            or analytics.numeric_updates.paired_count != 1
+        ):
+            raise RuntimeError("The frozen update analytics did not survive restart.")
+        queued_ids = {
+            item.prediction_id
+            for item in operations.get_dashboard().needs_postmortem_predictions
+        }
+        if queued_ids != {needs_postmortem_id}:
+            raise RuntimeError("The frozen Needs Postmortem queue did not survive.")
     finally:
         database.close()
 

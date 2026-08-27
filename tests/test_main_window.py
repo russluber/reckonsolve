@@ -1398,7 +1398,7 @@ class FakePredictionOperations:
         return CsvExportResult(
             destination=destination,
             exported_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
-            csv_file_count=12,
+            csv_file_count=16,
         )
 
 
@@ -2377,7 +2377,7 @@ def test_settings_creates_backup_and_csv_bundle_from_selected_destinations(
     expected_export = tmp_path / "chosen-export.zip"
     assert operations.export_calls == [expected_export]
     assert _required_child(window, QLabel, "dataManagementStatus").text() == (
-        f"Exported 12 CSV files: {expected_export}"
+        f"Exported 16 CSV files: {expected_export}"
     )
     assert suggested_paths[0].endswith("reckonsolve-backup-20260820-123000.sqlite3")
     assert suggested_paths[1].endswith("reckonsolve-export-20260820-123000.zip")

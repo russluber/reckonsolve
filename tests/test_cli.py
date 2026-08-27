@@ -1825,7 +1825,7 @@ def test_cli_backup_is_recoverable_and_records_success_across_restart(
     recovered.close()
 
 
-def test_cli_export_prompt_creates_complete_format_two_bundle(tmp_path) -> None:
+def test_cli_export_prompt_creates_complete_format_three_bundle(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     export_path = tmp_path / "cli-export.zip"
     database = Database.open(database_path)
@@ -1848,13 +1848,193 @@ def test_cli_export_prompt_creates_complete_format_two_bundle(tmp_path) -> None:
     assert result == 0
     assert "Destination [reckonsolve-export-" in output.getvalue()
     assert f"CSV export created: {export_path.resolve()}" in output.getvalue()
-    assert "Exported 12 CSV files in format version 2." in output.getvalue()
+    assert "Exported 16 CSV files in format version 3." in output.getvalue()
     assert "not a recovery backup" in output.getvalue()
     with ZipFile(export_path) as archive:
         assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
         assert archive.testzip() is None
         assert str(created.prediction_id).encode() in archive.read("predictions.csv")
-        assert b"Format version: 2" in archive.read("README.txt")
+        assert b"Format version: 3" in archive.read("README.txt")
+
+
+def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+
+    binary_operations = PredictionOperations(
+        database,
+        FixedClock(NOW),
+        local_timezone=UTC,
+    )
+    binary = binary_operations.create_prediction(
+        "Will CLI show every Binary terminal fact?",
+        70,
+    )
+    binary_operations.resolve_prediction(
+        binary.prediction_id,
+        BinaryOutcome.YES,
+        resolution_notes="Original Binary notes",
+        expected_revision_id=binary.current_revision_id,
+        expected_metadata_version=binary.metadata_version,
+    )
+    PredictionOperations(
+        database,
+        FixedClock(NOW + timedelta(minutes=1)),
+        local_timezone=UTC,
+    ).record_postmortem_skip(
+        binary.prediction_id,
+        expected_correction_id=None,
+    )
+    PredictionOperations(
+        database,
+        FixedClock(NOW + timedelta(minutes=2)),
+        local_timezone=UTC,
+    ).correct_binary_resolution(
+        binary.prediction_id,
+        BinaryOutcome.NO,
+        resolution_notes="Corrected Binary notes",
+        postmortem="Later Binary reflection",
+        correction_reason="The certified outcome was No.",
+        expected_correction_id=None,
+    )
+
+    numeric_operations = PredictionOperations(
+        database,
+        FixedClock(NOW + timedelta(minutes=3)),
+        local_timezone=UTC,
+    )
+    numeric = numeric_operations.create_numeric_prediction(
+        "What exact value will CLI show?",
+        "points",
+        2,
+        "-2.00",
+        "1.50",
+        "8.00",
+        80,
+    )
+    numeric_operations.resolve_numeric_prediction(
+        numeric.prediction_id,
+        "7.25",
+        postmortem="Original Numeric reflection",
+        expected_revision_id=numeric.current_revision.revision_id,
+        expected_metadata_version=numeric.metadata_version,
+    )
+    PredictionOperations(
+        database,
+        FixedClock(NOW + timedelta(minutes=4)),
+        local_timezone=UTC,
+    ).correct_numeric_resolution(
+        numeric.prediction_id,
+        "-1.25",
+        resolution_notes="Corrected Numeric notes",
+        postmortem=None,
+        correction_reason="The source used a signed value.",
+        expected_correction_id=None,
+    )
+
+    invalid_operations = PredictionOperations(
+        database,
+        FixedClock(NOW + timedelta(minutes=5)),
+        local_timezone=UTC,
+    )
+    invalid = invalid_operations.create_prediction(
+        "Will CLI show Invalid reason history?",
+        20,
+    )
+    invalid_operations.invalidate_prediction(
+        invalid.prediction_id,
+        reason="Original invalid reason",
+        expected_revision_id=invalid.current_revision_id,
+        expected_metadata_version=invalid.metadata_version,
+    )
+    PredictionOperations(
+        database,
+        FixedClock(NOW + timedelta(minutes=6)),
+        local_timezone=UTC,
+    ).correct_invalidation_reason(
+        invalid.prediction_id,
+        "Corrected invalid reason",
+        expected_correction_id=None,
+    )
+    with database.transaction() as connection:
+        counts_before = tuple(
+            connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in (
+                "resolution_corrections",
+                "numeric_resolution_corrections",
+                "invalidation_reason_corrections",
+                "postmortem_completions",
+            )
+        )
+    database.close()
+
+    binary_output = StringIO()
+    numeric_output = StringIO()
+    invalid_output = StringIO()
+    assert (
+        run(
+            ["show", str(binary.prediction_id)],
+            database_path=database_path,
+            stdout=binary_output,
+        )
+        == 0
+    )
+    assert (
+        run(
+            ["show", str(numeric.prediction_id)],
+            database_path=database_path,
+            stdout=numeric_output,
+        )
+        == 0
+    )
+    assert (
+        run(
+            ["show", str(invalid.prediction_id)],
+            database_path=database_path,
+            stdout=invalid_output,
+        )
+        == 0
+    )
+
+    binary_text = binary_output.getvalue()
+    assert "Effective outcome: No" in binary_text
+    assert "Original Resolution |" in binary_text
+    assert "Outcome: Yes" in binary_text
+    assert "Correction 1 |" in binary_text
+    assert "Changed fields: Outcome, Resolution notes, Postmortem" in binary_text
+    assert "Correction reason: The certified outcome was No." in binary_text
+    assert "Postmortem before: Not set" in binary_text
+    assert "Postmortem after: Later Binary reflection" in binary_text
+    assert "Postmortem completion" in binary_text
+    assert "Skipped:" in binary_text
+
+    numeric_text = numeric_output.getvalue()
+    assert "Effective actual value: -1.25 points" in numeric_text
+    assert "Actual value before: 7.25 points" in numeric_text
+    assert "Actual value after: -1.25 points" in numeric_text
+    assert "Postmortem before: Original Numeric reflection" in numeric_text
+    assert "Postmortem after: Not set" in numeric_text
+    assert "Correction reason: The source used a signed value." in numeric_text
+
+    invalid_text = invalid_output.getvalue()
+    assert "Effective reason: Corrected invalid reason" in invalid_text
+    assert "Original Invalidation |" in invalid_text
+    assert "Reason before: Original invalid reason" in invalid_text
+    assert "Reason after: Corrected invalid reason" in invalid_text
+
+    reopened = Database.open(database_path)
+    with reopened.transaction() as connection:
+        counts_after = tuple(
+            connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in (
+                "resolution_corrections",
+                "numeric_resolution_corrections",
+                "invalidation_reason_corrections",
+                "postmortem_completions",
+            )
+        )
+    reopened.close()
+    assert counts_after == counts_before
 
     reopened = Database.open(database_path)
     assert SettingsRepository(reopened).get_last_successful_backup_at() is None
@@ -2043,6 +2223,35 @@ def test_cli_and_desktop_connections_share_reads_and_sequential_writes(
         expected_revision_id=refreshed.current_revision_id,
         expected_metadata_version=refreshed.metadata_version,
     )
+    resolved = desktop_operations.resolve_prediction(
+        created.prediction_id,
+        BinaryOutcome.YES,
+        expected_revision_id=refreshed.current_revision_id,
+        expected_metadata_version=refreshed.metadata_version,
+    )
+    assert resolved.resolution is not None
+    desktop_operations.correct_binary_resolution(
+        created.prediction_id,
+        BinaryOutcome.NO,
+        resolution_notes="Desktop corrected the terminal fact",
+        postmortem="Desktop added a later Postmortem",
+        correction_reason="The verified outcome was No.",
+        expected_correction_id=None,
+    )
+    corrected_read = StringIO()
+    assert (
+        run(
+            ["show", str(created.prediction_id)],
+            database_path=database_path,
+            stdout=corrected_read,
+        )
+        == 0
+    )
+    assert "Effective outcome: No" in corrected_read.getvalue()
+    assert "Outcome before: Yes" in corrected_read.getvalue()
+    assert "Postmortem after: Desktop added a later Postmortem" in (
+        corrected_read.getvalue()
+    )
     desktop_database.close()
 
     after_restart = StringIO()
@@ -2058,3 +2267,4 @@ def test_cli_and_desktop_connections_share_reads_and_sequential_writes(
     assert "Current forecast: 70% Yes" in rendered
     assert "Rationale: CLI evidence changed the forecast" in rendered
     assert "Body: Desktop reasoning after the CLI revision" in rendered
+    assert "Correction reason: The verified outcome was No." in rendered

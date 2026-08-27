@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4 Product Specifications
 
-Status: v0.3 source release implemented; v0.4 product contract approved and awaiting implementation
+Status: v0.4 source release implemented
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -1751,6 +1751,8 @@ The version-three README documents how to derive effective terminal values from 
 Existing schema-version-12 v0.3 databases must migrate forward without reinterpreting or replacing any Prediction, ForecastRevision, Review, Journal, Resolution, Invalidation, tag, setting, or export meaning. Automated tests must exercise a real version-12-shaped database through every v0.4 migration and recovery path.
 
 ### 32.8 Implementation milestones
+
+Milestones 26 through 31 are implemented in v0.4.0.
 
 #### Milestone 26: Terminal-correction domain and persistence foundation
 

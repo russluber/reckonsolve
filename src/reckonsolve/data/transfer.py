@@ -294,6 +294,126 @@ _CSV_TABLES = (
         ORDER BY prediction_id, tag_id
         """,
     ),
+    _CsvTable(
+        "resolution_corrections.csv",
+        (
+            "correction_id",
+            "prediction_id",
+            "resolution_id",
+            "sequence",
+            "old_outcome",
+            "new_outcome",
+            "old_resolution_notes",
+            "new_resolution_notes",
+            "old_postmortem",
+            "new_postmortem",
+            "outcome_changed",
+            "resolution_notes_changed",
+            "postmortem_changed",
+            "correction_reason",
+            "corrected_at_utc",
+        ),
+        """
+        SELECT
+            id AS correction_id,
+            prediction_id,
+            resolution_id,
+            sequence,
+            old_outcome,
+            new_outcome,
+            old_resolution_notes,
+            new_resolution_notes,
+            old_postmortem,
+            new_postmortem,
+            outcome_changed,
+            resolution_notes_changed,
+            postmortem_changed,
+            correction_reason,
+            corrected_at AS corrected_at_utc
+        FROM resolution_corrections
+        ORDER BY resolution_id, sequence, id
+        """,
+    ),
+    _CsvTable(
+        "numeric_resolution_corrections.csv",
+        (
+            "numeric_correction_id",
+            "prediction_id",
+            "numeric_resolution_id",
+            "sequence",
+            "old_actual_scaled",
+            "new_actual_scaled",
+            "old_resolution_notes",
+            "new_resolution_notes",
+            "old_postmortem",
+            "new_postmortem",
+            "actual_value_changed",
+            "resolution_notes_changed",
+            "postmortem_changed",
+            "correction_reason",
+            "corrected_at_utc",
+        ),
+        """
+        SELECT
+            id AS numeric_correction_id,
+            prediction_id,
+            numeric_resolution_id,
+            sequence,
+            old_actual_scaled,
+            new_actual_scaled,
+            old_resolution_notes,
+            new_resolution_notes,
+            old_postmortem,
+            new_postmortem,
+            actual_value_changed,
+            resolution_notes_changed,
+            postmortem_changed,
+            correction_reason,
+            corrected_at AS corrected_at_utc
+        FROM numeric_resolution_corrections
+        ORDER BY numeric_resolution_id, sequence, id
+        """,
+    ),
+    _CsvTable(
+        "invalidation_reason_corrections.csv",
+        (
+            "invalidation_correction_id",
+            "prediction_id",
+            "invalidation_id",
+            "sequence",
+            "old_reason",
+            "new_reason",
+            "corrected_at_utc",
+        ),
+        """
+        SELECT
+            id AS invalidation_correction_id,
+            prediction_id,
+            invalidation_id,
+            sequence,
+            old_reason,
+            new_reason,
+            corrected_at AS corrected_at_utc
+        FROM invalidation_reason_corrections
+        ORDER BY invalidation_id, sequence, id
+        """,
+    ),
+    _CsvTable(
+        "postmortem_completions.csv",
+        (
+            "completion_id",
+            "prediction_id",
+            "completed_at_utc",
+        ),
+        """
+        SELECT
+            id AS completion_id,
+            prediction_id,
+            completed_at AS completed_at_utc
+        FROM postmortem_completions
+        ORDER BY id
+        """,
+    ),
 )
 
 CSV_FILE_NAMES = tuple(table.filename for table in _CSV_TABLES)
@@ -435,7 +555,7 @@ def _export_readme(exported_at: datetime) -> str:
     return f"""Reckonsolve CSV Export Bundle
 ==============================
 
-Format version: 2
+Format version: 3
 Exported at (UTC): {format_utc(exported_at)}
 
 Purpose
@@ -492,15 +612,15 @@ journal_corrections.csv
   there is no correction, original_body remains current.
 
 resolutions.csv
-  One immutable Yes/No outcome for each resolved Binary Prediction. prediction_id joins
-  predictions.csv and scoring_revision_id identifies the exact ForecastRevision
-  used for Brier and calibration scoring.
+  One original immutable Yes/No outcome for each resolved Binary Prediction.
+  prediction_id joins predictions.csv and scoring_revision_id identifies the exact
+  ForecastRevision used for Brier and calibration scoring.
 
 numeric_resolutions.csv
-  One immutable outcome for each resolved Numeric Prediction. prediction_id joins
-  predictions.csv and scoring_numeric_revision_id identifies the exact Numeric
-  ForecastRevision used for Numeric scoring. actual_scaled uses the parent
-  Prediction's numeric_precision.
+  One original immutable outcome for each resolved Numeric Prediction.
+  prediction_id joins predictions.csv and scoring_numeric_revision_id identifies
+  the exact Numeric ForecastRevision used for Numeric scoring. actual_scaled uses
+  the parent Prediction's numeric_precision.
 
 forecast_reviews.csv
   Every immutable deliberate reconsideration that retained the current forecast.
@@ -509,7 +629,7 @@ forecast_reviews.csv
   Reviews are not ForecastRevisions and do not add scoring observations.
 
 invalidations.csv
-  One immutable invalidation record for each Invalid Prediction. Invalid
+  One original immutable invalidation record for each Invalid Prediction. Invalid
   Predictions remain historical but are excluded from scoring.
 
 tags.csv
@@ -518,4 +638,32 @@ tags.csv
 
 prediction_tags.csv
   Many-to-many links joining prediction_id to tag_id.
+
+resolution_corrections.csv
+  Every immutable Binary Resolution correction. resolution_id joins resolutions.csv;
+  sequence is contiguous from 1. Each row contains complete old/new outcome,
+  Resolution-notes, and Postmortem snapshots plus explicit changed-field flags.
+  outcome_changed = 1 identifies a score-affecting correction and requires a
+  nonblank correction_reason. To derive the effective Resolution, start with the
+  original resolutions.csv row and apply each correction in sequence; the last
+  new_* snapshot is current. resolved_at_utc and scoring_revision_id never change.
+
+numeric_resolution_corrections.csv
+  Every immutable Numeric Resolution correction. numeric_resolution_id joins
+  numeric_resolutions.csv and sequence is contiguous from 1. old_actual_scaled
+  and new_actual_scaled use the parent Prediction's numeric_precision exactly.
+  actual_value_changed = 1 identifies a score-affecting correction and requires a
+  nonblank correction_reason. Derive the effective Resolution by applying complete
+  old/new snapshots in sequence. resolved_at_utc and scoring_numeric_revision_id
+  remain the original immutable scoring context.
+
+invalidation_reason_corrections.csv
+  Every immutable Invalid-reason correction. invalidation_id joins invalidations.csv.
+  Apply rows in sequence to derive the effective reason; the original Invalid state
+  and invalidated_at_utc never change, and the Prediction remains outside scoring.
+
+postmortem_completions.csv
+  One immutable Skip Postmortem fact for a Resolved Prediction. prediction_id joins
+  predictions.csv. It records deliberate completion without prose and changes no
+  lifecycle or score. A later Postmortem correction may coexist with this fact.
 """

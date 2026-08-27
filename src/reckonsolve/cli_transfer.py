@@ -53,7 +53,7 @@ def export_csv_interactively(
     result = operations.export_csv_bundle(selected_destination)
     print(f"CSV export created: {result.destination}", file=session.output)
     print(
-        f"Exported {result.csv_file_count} CSV files in format version 2.",
+        f"Exported {result.csv_file_count} CSV files in format version 3.",
         file=session.output,
     )
     print(

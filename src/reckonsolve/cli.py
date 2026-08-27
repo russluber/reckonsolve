@@ -34,16 +34,20 @@ from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.attention import DashboardSnapshot
 from reckonsolve.domain.browser import PredictionBrowserItem
 from reckonsolve.domain.predictions import (
+    BinaryResolutionHistory,
     DefinitionChange,
     FixedPrecisionValue,
     ForecastReviewTimelineEvent,
     ForecastTimelineEvent,
+    InvalidationHistory,
     JournalCorrection,
     JournalTimelineEvent,
     NumericForecastReviewTimelineEvent,
     NumericForecastTimelineEvent,
     NumericJournalTimelineEvent,
     NumericPrediction,
+    NumericResolutionHistory,
+    PostmortemCompletion,
     PredictionDetail,
     PredictionStatus,
     PredictionType,
@@ -423,9 +427,9 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
 
     export_parser = commands.add_parser(
         "export-csv",
-        help="Create a documented format-version-two CSV ZIP.",
+        help="Create a documented format-version-three CSV ZIP.",
         description=(
-            "Create the same twelve-file relational analytical CSV ZIP as the "
+            "Create the same sixteen-file relational analytical CSV ZIP as the "
             "desktop application. This is not a recovery format."
         ),
     )
@@ -501,19 +505,43 @@ def _run_show(
     definition_changes = operations.list_definition_changes(prediction_id)
     if isinstance(prediction, NumericPrediction):
         timeline = operations.list_numeric_timeline(prediction_id)
+        resolution_history = (
+            operations.get_numeric_resolution_history(prediction_id)
+            if prediction.resolution is not None
+            else None
+        )
+        invalidation_history = (
+            operations.get_invalidation_history(prediction_id)
+            if prediction.invalidation is not None
+            else None
+        )
         rendered = _format_numeric_detail(
             prediction,
             timeline,
             definition_changes,
             indicators,
+            resolution_history,
+            invalidation_history,
         )
     else:
         timeline = operations.list_timeline(prediction_id)
+        resolution_history = (
+            operations.get_binary_resolution_history(prediction_id)
+            if prediction.resolution is not None
+            else None
+        )
+        invalidation_history = (
+            operations.get_invalidation_history(prediction_id)
+            if prediction.invalidation is not None
+            else None
+        )
         rendered = _format_binary_detail(
             prediction,
             timeline,
             definition_changes,
             indicators,
+            resolution_history,
+            invalidation_history,
         )
     print(rendered, file=output)
     return 0
@@ -588,13 +616,20 @@ def _format_binary_detail(
     timeline: tuple[TimelineEvent, ...],
     definition_changes: tuple[DefinitionChange, ...],
     indicators: AttentionIndicators,
+    resolution_history: BinaryResolutionHistory | None,
+    invalidation_history: InvalidationHistory | None,
 ) -> str:
     lines = [f"Prediction #{prediction.prediction_id}", "Type: Binary"]
     _append_common_detail(lines, prediction, indicators)
     _append_field(lines, "Current forecast", f"{prediction.probability_percent}% Yes")
     if prediction.current_rationale is not None:
         _append_field(lines, "Current rationale", prediction.current_rationale)
-    _append_binary_terminal(lines, prediction)
+    _append_binary_terminal(
+        lines,
+        prediction,
+        resolution_history,
+        invalidation_history,
+    )
     _append_definition_history(lines, definition_changes)
     lines.extend(("", "Timeline"))
     for event in timeline:
@@ -613,6 +648,8 @@ def _format_numeric_detail(
     ],
     definition_changes: tuple[DefinitionChange, ...],
     indicators: AttentionIndicators,
+    resolution_history: NumericResolutionHistory | None,
+    invalidation_history: InvalidationHistory | None,
 ) -> str:
     lines = [f"Prediction #{prediction.prediction_id}", "Type: Numeric"]
     _append_common_detail(lines, prediction, indicators)
@@ -631,7 +668,13 @@ def _format_numeric_detail(
     _append_field(lines, "Decimal precision", str(prediction.decimal_places))
     if prediction.current_revision.rationale is not None:
         _append_field(lines, "Current rationale", prediction.current_revision.rationale)
-    _append_numeric_terminal(lines, prediction, timeline)
+    _append_numeric_terminal(
+        lines,
+        prediction,
+        timeline,
+        resolution_history,
+        invalidation_history,
+    )
     _append_definition_history(lines, definition_changes)
     lines.extend(("", "Timeline"))
     for event in timeline:
@@ -675,11 +718,19 @@ def _append_common_detail(
 def _append_binary_terminal(
     lines: list[str],
     prediction: PredictionDetail,
+    resolution_history: BinaryResolutionHistory | None,
+    invalidation_history: InvalidationHistory | None,
 ) -> None:
     if prediction.resolution is not None:
-        resolution = prediction.resolution
+        if resolution_history is None:
+            raise ValueError("Resolved Binary terminal history is missing.")
+        resolution = resolution_history.effective
         lines.extend(("", "Resolution"))
-        _append_field(lines, "Outcome", resolution.outcome.value.capitalize())
+        _append_field(
+            lines,
+            "Effective outcome" if resolution_history.corrections else "Outcome",
+            resolution.outcome.value.capitalize(),
+        )
         _append_field(
             lines, "Resolved", _format_local_timestamp(resolution.resolved_at)
         )
@@ -691,11 +742,30 @@ def _append_binary_terminal(
             f"ID {resolution.scoring_revision_id})",
         )
         if resolution.resolution_notes is not None:
-            _append_field(lines, "Resolution notes", resolution.resolution_notes)
+            _append_field(
+                lines,
+                (
+                    "Effective resolution notes"
+                    if resolution_history.corrections
+                    else "Resolution notes"
+                ),
+                resolution.resolution_notes,
+            )
         if resolution.postmortem is not None:
-            _append_field(lines, "Postmortem", resolution.postmortem)
+            _append_field(
+                lines,
+                (
+                    "Effective Postmortem"
+                    if resolution_history.corrections
+                    else "Postmortem"
+                ),
+                resolution.postmortem,
+            )
+        _append_binary_resolution_history(lines, resolution_history)
     elif prediction.invalidation is not None:
-        invalidation = prediction.invalidation
+        if invalidation_history is None:
+            raise ValueError("Invalid terminal history is missing.")
+        invalidation = invalidation_history.effective
         lines.extend(("", "Invalidation"))
         _append_field(
             lines,
@@ -703,7 +773,12 @@ def _append_binary_terminal(
             _format_local_timestamp(invalidation.invalidated_at),
         )
         if invalidation.reason is not None:
-            _append_field(lines, "Reason", invalidation.reason)
+            _append_field(
+                lines,
+                "Effective reason" if invalidation_history.corrections else "Reason",
+                invalidation.reason,
+            )
+        _append_invalidation_history(lines, invalidation_history)
 
 
 def _append_numeric_terminal(
@@ -715,13 +790,21 @@ def _append_numeric_terminal(
         | NumericForecastReviewTimelineEvent,
         ...,
     ],
+    resolution_history: NumericResolutionHistory | None,
+    invalidation_history: InvalidationHistory | None,
 ) -> None:
     if prediction.resolution is not None:
-        resolution = prediction.resolution
+        if resolution_history is None:
+            raise ValueError("Resolved Numeric terminal history is missing.")
+        resolution = resolution_history.effective
         lines.extend(("", "Resolution"))
         _append_field(
             lines,
-            "Actual value",
+            (
+                "Effective actual value"
+                if resolution_history.corrections
+                else "Actual value"
+            ),
             f"{resolution.actual_value} {terminal_text(prediction.unit)}",
         )
         _append_field(
@@ -758,11 +841,34 @@ def _append_numeric_terminal(
                 f"ID {resolution.scoring_revision_id}",
             )
         if resolution.resolution_notes is not None:
-            _append_field(lines, "Resolution notes", resolution.resolution_notes)
+            _append_field(
+                lines,
+                (
+                    "Effective resolution notes"
+                    if resolution_history.corrections
+                    else "Resolution notes"
+                ),
+                resolution.resolution_notes,
+            )
         if resolution.postmortem is not None:
-            _append_field(lines, "Postmortem", resolution.postmortem)
+            _append_field(
+                lines,
+                (
+                    "Effective Postmortem"
+                    if resolution_history.corrections
+                    else "Postmortem"
+                ),
+                resolution.postmortem,
+            )
+        _append_numeric_resolution_history(
+            lines,
+            resolution_history,
+            prediction.unit,
+        )
     elif prediction.invalidation is not None:
-        invalidation = prediction.invalidation
+        if invalidation_history is None:
+            raise ValueError("Invalid terminal history is missing.")
+        invalidation = invalidation_history.effective
         lines.extend(("", "Invalidation"))
         _append_field(
             lines,
@@ -770,7 +876,197 @@ def _append_numeric_terminal(
             _format_local_timestamp(invalidation.invalidated_at),
         )
         if invalidation.reason is not None:
-            _append_field(lines, "Reason", invalidation.reason)
+            _append_field(
+                lines,
+                "Effective reason" if invalidation_history.corrections else "Reason",
+                invalidation.reason,
+            )
+        _append_invalidation_history(lines, invalidation_history)
+
+
+def _append_binary_resolution_history(
+    lines: list[str],
+    history: BinaryResolutionHistory,
+) -> None:
+    original = history.original
+    lines.extend(("", "Terminal history", ""))
+    lines.append(
+        f"Original Resolution | {_format_local_timestamp(original.resolved_at)}"
+    )
+    _append_field(lines, "Outcome", original.outcome.value.capitalize(), indent="  ")
+    _append_field(
+        lines,
+        "Resolution notes",
+        _display_optional_value(original.resolution_notes),
+        indent="  ",
+    )
+    _append_field(
+        lines,
+        "Postmortem",
+        _display_optional_value(original.postmortem),
+        indent="  ",
+    )
+    for correction in history.corrections:
+        lines.append("")
+        lines.append(
+            f"Correction {correction.sequence} | "
+            f"{_format_local_timestamp(correction.corrected_at)}"
+        )
+        _append_field(
+            lines,
+            "Changed fields",
+            ", ".join(
+                _terminal_field_label(field) for field in correction.changed_fields
+            ),
+            indent="  ",
+        )
+        _append_change(
+            lines,
+            "Outcome",
+            correction.old_outcome.value.capitalize(),
+            correction.new_outcome.value.capitalize(),
+        )
+        _append_change(
+            lines,
+            "Resolution notes",
+            correction.old_resolution_notes,
+            correction.new_resolution_notes,
+        )
+        _append_change(
+            lines,
+            "Postmortem",
+            correction.old_postmortem,
+            correction.new_postmortem,
+        )
+        _append_field(
+            lines,
+            "Correction reason",
+            _display_optional_value(correction.correction_reason),
+            indent="  ",
+        )
+    _append_postmortem_completion(lines, history.postmortem_completion)
+
+
+def _append_numeric_resolution_history(
+    lines: list[str],
+    history: NumericResolutionHistory,
+    unit: str,
+) -> None:
+    original = history.original
+    safe_unit = terminal_text(unit)
+    lines.extend(("", "Terminal history", ""))
+    lines.append(
+        f"Original Resolution | {_format_local_timestamp(original.resolved_at)}"
+    )
+    _append_field(
+        lines,
+        "Actual value",
+        f"{original.actual_value} {safe_unit}",
+        indent="  ",
+    )
+    _append_field(
+        lines,
+        "Resolution notes",
+        _display_optional_value(original.resolution_notes),
+        indent="  ",
+    )
+    _append_field(
+        lines,
+        "Postmortem",
+        _display_optional_value(original.postmortem),
+        indent="  ",
+    )
+    for correction in history.corrections:
+        lines.append("")
+        lines.append(
+            f"Correction {correction.sequence} | "
+            f"{_format_local_timestamp(correction.corrected_at)}"
+        )
+        _append_field(
+            lines,
+            "Changed fields",
+            ", ".join(
+                _terminal_field_label(field) for field in correction.changed_fields
+            ),
+            indent="  ",
+        )
+        _append_change(
+            lines,
+            "Actual value",
+            f"{correction.old_actual_value} {safe_unit}",
+            f"{correction.new_actual_value} {safe_unit}",
+        )
+        _append_change(
+            lines,
+            "Resolution notes",
+            correction.old_resolution_notes,
+            correction.new_resolution_notes,
+        )
+        _append_change(
+            lines,
+            "Postmortem",
+            correction.old_postmortem,
+            correction.new_postmortem,
+        )
+        _append_field(
+            lines,
+            "Correction reason",
+            _display_optional_value(correction.correction_reason),
+            indent="  ",
+        )
+    _append_postmortem_completion(lines, history.postmortem_completion)
+
+
+def _append_invalidation_history(
+    lines: list[str],
+    history: InvalidationHistory,
+) -> None:
+    original = history.original
+    lines.extend(("", "Terminal history", ""))
+    lines.append(
+        f"Original Invalidation | {_format_local_timestamp(original.invalidated_at)}"
+    )
+    _append_field(
+        lines,
+        "Reason",
+        _display_optional_value(original.reason),
+        indent="  ",
+    )
+    for correction in history.corrections:
+        lines.append("")
+        lines.append(
+            f"Correction {correction.sequence} | "
+            f"{_format_local_timestamp(correction.corrected_at)}"
+        )
+        _append_change(lines, "Reason", correction.old_reason, correction.new_reason)
+
+
+def _append_postmortem_completion(
+    lines: list[str],
+    completion: PostmortemCompletion | None,
+) -> None:
+    if completion is None:
+        return
+    lines.extend(("", "Postmortem completion"))
+    _append_field(
+        lines,
+        "Skipped",
+        _format_local_timestamp(completion.completed_at),
+    )
+    _append_field(
+        lines,
+        "Meaning",
+        "Reflection was deliberately completed without prose; a later Postmortem remains allowed.",
+    )
+
+
+def _terminal_field_label(field: str) -> str:
+    return {
+        "outcome": "Outcome",
+        "actual_value": "Actual value",
+        "resolution_notes": "Resolution notes",
+        "postmortem": "Postmortem",
+    }[field]
 
 
 def _append_definition_history(

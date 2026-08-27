@@ -126,7 +126,7 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
     assert backup_path.is_file()
     assert export_path.is_file()
     assert (
-        "Exported 12 CSV files"
+        "Exported 16 CSV files"
         in runtime.window.findChild(
             QLabel,
             "dataManagementStatus",
