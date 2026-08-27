@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -27,8 +28,9 @@ from reckonsolve.domain.attention import (
     MIN_STALE_THRESHOLD_DAYS,
     DashboardPrediction,
     DashboardSnapshot,
+    NeedsPostmortemPrediction,
 )
-from reckonsolve.domain.predictions import PredictionType
+from reckonsolve.domain.predictions import PostmortemCompletion, PredictionType
 from reckonsolve.domain.transfer import (
     BackupResult,
     CsvExportResult,
@@ -54,6 +56,14 @@ class DashboardOperations(Protocol):
         prediction_id: int,
     ) -> DashboardPredictionSnapshot:
         """Return one current prediction for Detail navigation."""
+
+    def record_postmortem_skip(
+        self,
+        prediction_id: int,
+        *,
+        expected_correction_id: int | None,
+    ) -> PostmortemCompletion:
+        """Record one deliberate completion for a blank Resolved Postmortem."""
 
 
 class AttentionSettingsOperations(Protocol):
@@ -112,6 +122,12 @@ class DashboardScreen(QWidget):
         self.error_label.setTextFormat(Qt.TextFormat.PlainText)
         self.error_label.setHidden(True)
 
+        self.status_label = QLabel(self)
+        self.status_label.setObjectName("dashboardStatus")
+        self.status_label.setWordWrap(True)
+        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.status_label.setHidden(True)
+
         self.threshold_label = QLabel(self)
         self.threshold_label.setObjectName("dashboardThreshold")
         self.threshold_label.setTextFormat(Qt.TextFormat.PlainText)
@@ -133,6 +149,11 @@ class DashboardScreen(QWidget):
                 "Nothing is ready to resolve.",
             ),
             ("locked", "Locked", "No locked predictions."),
+            (
+                "needsPostmortem",
+                "Needs Postmortem",
+                "No Resolved Predictions need a Postmortem decision.",
+            ),
         ):
             group = QGroupBox(content)
             group.setObjectName(f"dashboard{key[0].upper()}{key[1:]}Section")
@@ -151,6 +172,7 @@ class DashboardScreen(QWidget):
         layout.addWidget(title)
         layout.addWidget(introduction)
         layout.addWidget(self.error_label)
+        layout.addWidget(self.status_label)
         layout.addWidget(self.threshold_label)
         layout.addWidget(self.scroll_area, 1)
 
@@ -172,6 +194,7 @@ class DashboardScreen(QWidget):
     def refresh(self) -> None:
         """Re-query buckets, retaining prior rows only with an explicit warning."""
 
+        self.status_label.setHidden(True)
         try:
             snapshot = self._operations.get_dashboard()
         except ApplicationError as error:
@@ -203,6 +226,7 @@ class DashboardScreen(QWidget):
             snapshot.ready_to_resolve_predictions,
         )
         self._render_section("locked", snapshot.locked_predictions)
+        self._render_needs_postmortem_section(snapshot.needs_postmortem_predictions)
 
     def _render_empty_sections(self) -> None:
         for key in self._sections:
@@ -241,6 +265,67 @@ class DashboardScreen(QWidget):
             )
             layout.addWidget(button)
 
+    def _render_needs_postmortem_section(
+        self,
+        predictions: tuple[NeedsPostmortemPrediction, ...],
+    ) -> None:
+        """Render optional Resolved reflection work without lifecycle badges."""
+
+        key = "needsPostmortem"
+        group, layout, empty_text = self._sections[key]
+        self._clear_layout(layout)
+        group.setTitle(f"{group.property('baseTitle')} ({len(predictions)})")
+        if not predictions:
+            empty = QLabel(empty_text, group)
+            empty.setObjectName("dashboardNeedsPostmortemEmpty")
+            empty.setTextFormat(Qt.TextFormat.PlainText)
+            layout.addWidget(empty)
+            return
+        explanation = QLabel(
+            "Optional reflection after resolution. Skip records that you consider "
+            "the Postmortem complete without prose; it does not change the outcome, "
+            "score, or lifecycle.",
+            group,
+        )
+        explanation.setObjectName("dashboardNeedsPostmortemExplanation")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        for prediction in predictions:
+            row = QWidget(group)
+            row.setObjectName(f"dashboardNeedsPostmortemRow{prediction.prediction_id}")
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            open_button = QPushButton(
+                self._postmortem_row_text(prediction).replace("&", "&&"),
+                row,
+            )
+            open_button.setObjectName(
+                f"dashboardNeedsPostmortemPrediction{prediction.prediction_id}"
+            )
+            open_button.setToolTip("Open Prediction Detail")
+            open_button.setAccessibleName(prediction.question)
+            open_button.setAccessibleDescription(
+                self._postmortem_row_description(prediction)
+            )
+            apply_lucide_icon(open_button, LucideIcon.ARROW_RIGHT, size=16)
+            open_button.clicked.connect(
+                partial(self._open_prediction, prediction.prediction_id)
+            )
+            skip_button = QPushButton("Skip Postmortem", row)
+            skip_button.setObjectName(
+                f"skipPostmortemPrediction{prediction.prediction_id}"
+            )
+            skip_button.setToolTip(
+                "Record that reflection is complete without writing a Postmortem."
+            )
+            skip_button.setAccessibleName(f"Skip Postmortem for {prediction.question}")
+            apply_lucide_icon(skip_button, LucideIcon.CIRCLE_CHECK)
+            skip_button.clicked.connect(partial(self._skip_postmortem, prediction))
+            row_layout.addWidget(open_button, 1)
+            row_layout.addWidget(skip_button)
+            layout.addWidget(row)
+
     def _open_prediction(self, prediction_id: int) -> None:
         try:
             prediction = self._operations.get_prediction_for_navigation(prediction_id)
@@ -250,6 +335,35 @@ class DashboardScreen(QWidget):
             return
         self.error_label.setHidden(True)
         self.prediction_selected.emit(prediction)
+
+    def _skip_postmortem(self, prediction: NeedsPostmortemPrediction) -> None:
+        answer = QMessageBox.warning(
+            self,
+            "Skip Postmortem?",
+            "This records that you deliberately consider reflection complete "
+            "without writing a Postmortem. It does not change the Resolution, "
+            "score, or lifecycle. You may still add a Postmortem later; this "
+            "completion remains in history.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._operations.record_postmortem_skip(
+                prediction.prediction_id,
+                expected_correction_id=prediction.current_correction_id,
+            )
+        except ApplicationError as error:
+            self.error_label.setText(str(error))
+            self.error_label.setHidden(False)
+            return
+        self.refresh()
+        self.status_label.setText(
+            "Postmortem skipped. You can still add one later; the completion "
+            "remains in history."
+        )
+        self.status_label.setHidden(False)
 
     @staticmethod
     def _row_text(prediction: DashboardPrediction) -> str:
@@ -276,6 +390,22 @@ class DashboardScreen(QWidget):
             f"{_forecast_summary(prediction)}. "
             f"{', '.join(classifications)}. Forecast last considered "
             f"{_format_local_timestamp(prediction.attention_reference_at)}."
+        )
+
+    @staticmethod
+    def _postmortem_row_text(prediction: NeedsPostmortemPrediction) -> str:
+        return (
+            f"{prediction.question}\n"
+            f"{_postmortem_outcome_summary(prediction)}  |  "
+            f"RESOLVED\nResolved {_format_local_timestamp(prediction.resolved_at)}"
+        )
+
+    @staticmethod
+    def _postmortem_row_description(prediction: NeedsPostmortemPrediction) -> str:
+        return (
+            f"{_postmortem_outcome_summary(prediction)}. Resolved "
+            f"{_format_local_timestamp(prediction.resolved_at)}. Needs an optional "
+            "Postmortem decision."
         )
 
     @staticmethod
@@ -531,6 +661,20 @@ class AttentionSettingsScreen(QWidget):
 
 def _format_local_timestamp(value: datetime) -> str:
     return value.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+
+
+def _postmortem_outcome_summary(prediction: NeedsPostmortemPrediction) -> str:
+    """Return the type-aware effective terminal fact for one queue row."""
+
+    if prediction.prediction_type is PredictionType.BINARY:
+        if prediction.binary_outcome is None:
+            raise ValueError("A Binary Postmortem row requires an outcome.")
+        return f"BINARY | Outcome: {prediction.binary_outcome.value.capitalize()}"
+    if prediction.numeric_actual_value is None or prediction.numeric_unit is None:
+        raise ValueError("A Numeric Postmortem row requires an exact actual value.")
+    return (
+        f"NUMERIC | Actual: {prediction.numeric_actual_value} {prediction.numeric_unit}"
+    )
 
 
 def _forecast_summary(prediction: DashboardPrediction) -> str:

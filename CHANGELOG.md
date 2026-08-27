@@ -13,6 +13,8 @@ All notable changes to Reckonsolve are documented here.
 - Effective terminal summaries plus collapsed, complete original-to-current correction history on Binary and Numeric Prediction Detail.
 - Milestone 28 type-aware resolved-prediction scorecards that show the captured scoring forecast, effective outcome or actual value, and individual Binary or Numeric metrics without creating another scoring observation.
 - Milestone 29 retrospective initial-versus-final feedback for revised-and-resolved Binary and Numeric Predictions, with unrevised resolutions counted separately and existing type, tag, and exact-unit filters retained.
+- Milestone 30 Needs Postmortem Dashboard queue for Resolved Predictions with a blank effective Postmortem and no earlier Skip fact.
+- Confirmed Skip Postmortem completion that preserves resolution, score, lifecycle, and later Postmortem eligibility while remaining visible on Prediction Detail.
 
 ### Changed
 

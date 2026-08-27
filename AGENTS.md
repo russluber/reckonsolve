@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.3. The approved next development target is v0.4, whose contract and Milestones 26 through 31 are defined in Section 32 of `docs/product-spec.md`. Milestones 26 through 29 are complete; Milestones 30 and 31 remain.
+The completed source release is v0.3. The approved next development target is v0.4, whose contract and Milestones 26 through 31 are defined in Section 32 of `docs/product-spec.md`. Milestones 26 through 30 are complete; Milestone 31 remains.
 
 The v0.1 baseline includes:
 
@@ -67,7 +67,7 @@ v0.3 adds:
 
 Milestones 21 through 25 in `docs/product-spec.md` are complete. Preserve the shared application-operation and canonical SQLite boundaries rather than adding direct CLI SQL or a synchronization subsystem. Treat any post-v0.3 feature work as a new explicitly authorized milestone or coherent vertical slice.
 
-v0.4 Milestone 26 adds the schema-version-13 domain and persistence foundation for historically honest terminal-record corrections, later and versioned Postmortems, and Postmortem completion. Milestone 27 exposes confirmed desktop correction workflows for Binary and Numeric Resolutions and Invalid reasons, including later Postmortems, effective terminal display, and complete collapsed audit history. Milestone 28 adds type-aware resolved-prediction scorecards that derive their metrics from the captured scoring revision and latest effective terminal fact without creating another observation. Milestone 29 adds filtered retrospective initial-versus-final feedback using one pair per revised-and-resolved Prediction, with unrevised resolutions reported separately and raw Numeric comparisons restricted to one exact unit. The Needs Postmortem workflow and associated CLI-read and export hardening remain in Milestones 30 and 31. Implement them only through their explicitly authorized milestones. Preserve original terminal records, timestamps, scoring-revision capture, and one-observation-per-Prediction scoring throughout.
+v0.4 Milestone 26 adds the schema-version-13 domain and persistence foundation for historically honest terminal-record corrections, later and versioned Postmortems, and Postmortem completion. Milestone 27 exposes confirmed desktop correction workflows for Binary and Numeric Resolutions and Invalid reasons, including later Postmortems, effective terminal display, and complete collapsed audit history. Milestone 28 adds type-aware resolved-prediction scorecards that derive their metrics from the captured scoring revision and latest effective terminal fact without creating another observation. Milestone 29 adds filtered retrospective initial-versus-final feedback using one pair per revised-and-resolved Prediction, with unrevised resolutions reported separately and raw Numeric comparisons restricted to one exact unit. Milestone 30 exposes the Resolved-only Needs Postmortem Dashboard queue, confirmed Skip Postmortem completion, and preserved completion display on Prediction Detail. The remaining CLI-read and export hardening is Milestone 31. Implement it only through its explicitly authorized milestone. Preserve original terminal records, timestamps, scoring-revision capture, and one-observation-per-Prediction scoring throughout.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 

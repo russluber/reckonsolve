@@ -1280,6 +1280,10 @@ class NumericPredictionDetailScreen(QWidget):
         self.postmortem.setObjectName("numericResolutionPostmortem")
         self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem.setWordWrap(True)
+        self.postmortem_completion = QLabel("", self.resolution_section)
+        self.postmortem_completion.setObjectName("numericPostmortemCompletion")
+        self.postmortem_completion.setTextFormat(Qt.TextFormat.PlainText)
+        self.postmortem_completion.setWordWrap(True)
         self.correct_resolution_button = QPushButton(
             "Correct Resolution",
             self.resolution_section,
@@ -1304,6 +1308,7 @@ class NumericPredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.scorecard_section)
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem)
+        resolution_layout.addWidget(self.postmortem_completion)
         resolution_layout.addWidget(
             self.correct_resolution_button,
             0,
@@ -1312,6 +1317,7 @@ class NumericPredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_history)
         self.resolution_section.setHidden(True)
         self.scorecard_section.setHidden(True)
+        self.postmortem_completion.setHidden(True)
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
         self.invalidation_section.setObjectName("numericInvalidationSection")
@@ -1574,12 +1580,14 @@ class NumericPredictionDetailScreen(QWidget):
                 )
             except ApplicationError as error:
                 effective = resolution
+                completion = None
                 self._resolution_history = None
                 self.correct_resolution_button.setEnabled(False)
                 self.resolution_history.setHidden(True)
                 self._show_error(f"Resolution history is unavailable. {error}")
             else:
                 effective = history.effective
+                completion = history.postmortem_completion
                 self._resolution_history = history
                 self.correct_resolution_button.setEnabled(True)
                 _show_numeric_resolution_correction_history(
@@ -1609,6 +1617,14 @@ class NumericPredictionDetailScreen(QWidget):
                 else f"Postmortem: {effective.postmortem}"
             )
             self.postmortem.setHidden(not effective.postmortem)
+            self.postmortem_completion.setText(
+                ""
+                if completion is None
+                else "Postmortem completion: Skipped "
+                f"{_format_local_timestamp(completion.completed_at)}. You may still "
+                "add a Postmortem later; this completion remains in history."
+            )
+            self.postmortem_completion.setHidden(completion is None)
             self.resolution_section.setHidden(False)
             self._show_scorecard(prediction.prediction_id)
         invalidation = prediction.invalidation
@@ -4240,6 +4256,10 @@ class PredictionDetailScreen(QWidget):
         self.postmortem.setObjectName("predictionPostmortem")
         self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem.setWordWrap(True)
+        self.postmortem_completion = QLabel("", self.resolution_section)
+        self.postmortem_completion.setObjectName("predictionPostmortemCompletion")
+        self.postmortem_completion.setTextFormat(Qt.TextFormat.PlainText)
+        self.postmortem_completion.setWordWrap(True)
         self.correct_resolution_button = QPushButton(
             "Correct Resolution",
             self.resolution_section,
@@ -4266,6 +4286,7 @@ class PredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem_heading)
         resolution_layout.addWidget(self.postmortem)
+        resolution_layout.addWidget(self.postmortem_completion)
         resolution_layout.addWidget(
             self.correct_resolution_button,
             0,
@@ -4274,6 +4295,7 @@ class PredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_history)
         self.resolution_section.setHidden(True)
         self.scorecard_section.setHidden(True)
+        self.postmortem_completion.setHidden(True)
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
         self.invalidation_section.setObjectName("predictionInvalidationSection")
@@ -4839,11 +4861,13 @@ class PredictionDetailScreen(QWidget):
             except ApplicationError as error:
                 self._resolution_history = None
                 effective = resolution
+                completion = None
                 self.correct_resolution_button.setEnabled(False)
                 self.resolution_history.setHidden(True)
                 self._show_error(f"Resolution history is unavailable. {error}")
             else:
                 effective = history.effective
+                completion = history.postmortem_completion
                 self._resolution_history = history
                 self.correct_resolution_button.setEnabled(True)
                 _show_binary_resolution_correction_history(
@@ -4868,6 +4892,14 @@ class PredictionDetailScreen(QWidget):
             has_postmortem = effective.postmortem is not None
             self.postmortem_heading.setHidden(not has_postmortem)
             self.postmortem.setHidden(not has_postmortem)
+            self.postmortem_completion.setText(
+                ""
+                if completion is None
+                else "Postmortem completion: Skipped "
+                f"{_format_local_timestamp(completion.completed_at)}. You may still "
+                "add a Postmortem later; this completion remains in history."
+            )
+            self.postmortem_completion.setHidden(completion is None)
             self._show_scorecard(prediction.prediction_id)
         else:
             self._resolution_history = None

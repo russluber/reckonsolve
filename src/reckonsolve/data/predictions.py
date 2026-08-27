@@ -4,7 +4,10 @@ import sqlite3
 from datetime import date, datetime
 
 from reckonsolve.clock import format_utc, parse_utc
-from reckonsolve.domain.attention import DashboardPrediction
+from reckonsolve.domain.attention import (
+    DashboardPrediction,
+    NeedsPostmortemPrediction,
+)
 from reckonsolve.domain.browser import (
     PredictionBrowserItem,
     PredictionBrowserSnapshot,
@@ -834,6 +837,134 @@ class PredictionRepository:
 
         return tuple(_map_dashboard_prediction(row) for row in rows)
 
+    def list_needs_postmortem_predictions(
+        self,
+    ) -> tuple[NeedsPostmortemPrediction, ...]:
+        """Load Resolved Predictions lacking both prose and a Skip fact."""
+
+        with self._database.transaction() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    prediction.id AS prediction_id,
+                    prediction.question,
+                    prediction.prediction_type,
+                    resolution.resolved_at,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM resolution_corrections AS correction
+                            WHERE correction.resolution_id = resolution.id
+                        )
+                        THEN (
+                            SELECT correction.new_outcome
+                            FROM resolution_corrections AS correction
+                            WHERE correction.resolution_id = resolution.id
+                            ORDER BY correction.sequence DESC
+                            LIMIT 1
+                        )
+                        ELSE resolution.outcome
+                    END AS binary_outcome,
+                    NULL AS numeric_actual_scaled,
+                    NULL AS numeric_unit,
+                    NULL AS numeric_precision,
+                    (
+                        SELECT correction.id
+                        FROM resolution_corrections AS correction
+                        WHERE correction.resolution_id = resolution.id
+                        ORDER BY correction.sequence DESC
+                        LIMIT 1
+                    ) AS current_correction_id
+                FROM predictions AS prediction
+                JOIN resolutions AS resolution
+                    ON resolution.prediction_id = prediction.id
+                WHERE prediction.status = 'resolved'
+                    AND prediction.prediction_type = 'binary'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM postmortem_completions AS completion
+                        WHERE completion.prediction_id = prediction.id
+                    )
+                    AND (
+                        CASE
+                            WHEN EXISTS (
+                                SELECT 1
+                                FROM resolution_corrections AS correction
+                                WHERE correction.resolution_id = resolution.id
+                            )
+                            THEN (
+                                SELECT correction.new_postmortem
+                                FROM resolution_corrections AS correction
+                                WHERE correction.resolution_id = resolution.id
+                                ORDER BY correction.sequence DESC
+                                LIMIT 1
+                            )
+                            ELSE resolution.postmortem
+                        END
+                    ) IS NULL
+                UNION ALL
+                SELECT
+                    prediction.id AS prediction_id,
+                    prediction.question,
+                    prediction.prediction_type,
+                    resolution.resolved_at,
+                    NULL AS binary_outcome,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM numeric_resolution_corrections AS correction
+                            WHERE correction.numeric_resolution_id = resolution.id
+                        )
+                        THEN (
+                            SELECT correction.new_actual_scaled
+                            FROM numeric_resolution_corrections AS correction
+                            WHERE correction.numeric_resolution_id = resolution.id
+                            ORDER BY correction.sequence DESC
+                            LIMIT 1
+                        )
+                        ELSE resolution.actual_scaled
+                    END AS numeric_actual_scaled,
+                    prediction.numeric_unit,
+                    prediction.numeric_precision,
+                    (
+                        SELECT correction.id
+                        FROM numeric_resolution_corrections AS correction
+                        WHERE correction.numeric_resolution_id = resolution.id
+                        ORDER BY correction.sequence DESC
+                        LIMIT 1
+                    ) AS current_correction_id
+                FROM predictions AS prediction
+                JOIN numeric_resolutions AS resolution
+                    ON resolution.prediction_id = prediction.id
+                WHERE prediction.status = 'resolved'
+                    AND prediction.prediction_type = 'numeric'
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM postmortem_completions AS completion
+                        WHERE completion.prediction_id = prediction.id
+                    )
+                    AND (
+                        CASE
+                            WHEN EXISTS (
+                                SELECT 1
+                                FROM numeric_resolution_corrections AS correction
+                                WHERE correction.numeric_resolution_id = resolution.id
+                            )
+                            THEN (
+                                SELECT correction.new_postmortem
+                                FROM numeric_resolution_corrections AS correction
+                                WHERE correction.numeric_resolution_id = resolution.id
+                                ORDER BY correction.sequence DESC
+                                LIMIT 1
+                            )
+                            ELSE resolution.postmortem
+                        END
+                    ) IS NULL
+                ORDER BY resolved_at, prediction_id
+                """
+            ).fetchall()
+        return tuple(_map_needs_postmortem_prediction(row) for row in rows)
+
     def list_browser_predictions(self) -> PredictionBrowserSnapshot:
         """Load every prediction summary and every associated tag."""
 
@@ -1245,6 +1376,44 @@ def _map_dashboard_prediction(row: sqlite3.Row) -> DashboardPrediction:
         expected_resolution=_parse_date(row["expected_resolution"]),
         prediction_type=prediction_type,
         **numeric_values,
+    )
+
+
+def _map_needs_postmortem_prediction(
+    row: sqlite3.Row,
+) -> NeedsPostmortemPrediction:
+    """Map one Resolved optional-reflection queue row."""
+
+    prediction_type = PredictionType(row["prediction_type"])
+    if prediction_type is PredictionType.BINARY:
+        return NeedsPostmortemPrediction(
+            prediction_id=int(row["prediction_id"]),
+            question=str(row["question"]),
+            prediction_type=prediction_type,
+            resolved_at=parse_utc(str(row["resolved_at"])),
+            current_correction_id=(
+                None
+                if row["current_correction_id"] is None
+                else int(row["current_correction_id"])
+            ),
+            binary_outcome=BinaryOutcome(row["binary_outcome"]),
+        )
+    decimal_places = int(row["numeric_precision"])
+    return NeedsPostmortemPrediction(
+        prediction_id=int(row["prediction_id"]),
+        question=str(row["question"]),
+        prediction_type=prediction_type,
+        resolved_at=parse_utc(str(row["resolved_at"])),
+        current_correction_id=(
+            None
+            if row["current_correction_id"] is None
+            else int(row["current_correction_id"])
+        ),
+        numeric_actual_value=FixedPrecisionValue(
+            int(row["numeric_actual_scaled"]),
+            decimal_places,
+        ),
+        numeric_unit=str(row["numeric_unit"]),
     )
 
 

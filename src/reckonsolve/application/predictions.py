@@ -1385,6 +1385,9 @@ class PredictionOperations:
             needs_attention_predictions=needs_attention_predictions,
             ready_to_resolve_predictions=ready_to_resolve_predictions,
             locked_predictions=locked_predictions,
+            needs_postmortem_predictions=(
+                self._repository.list_needs_postmortem_predictions()
+            ),
         )
 
     def browse_predictions(

@@ -3,7 +3,12 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from .predictions import FixedPrecisionValue, PredictionStatus, PredictionType
+from .predictions import (
+    BinaryOutcome,
+    FixedPrecisionValue,
+    PredictionStatus,
+    PredictionType,
+)
 
 DEFAULT_STALE_THRESHOLD_DAYS = 14
 MIN_STALE_THRESHOLD_DAYS = 1
@@ -45,14 +50,29 @@ class DashboardPrediction:
 
 
 @dataclass(frozen=True, slots=True)
+class NeedsPostmortemPrediction:
+    """One Resolved Prediction awaiting an optional reflection decision."""
+
+    prediction_id: int
+    question: str
+    prediction_type: PredictionType
+    resolved_at: datetime
+    current_correction_id: int | None
+    binary_outcome: BinaryOutcome | None = None
+    numeric_actual_value: FixedPrecisionValue | None = None
+    numeric_unit: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DashboardSnapshot:
-    """Deterministic, overlapping action buckets for the Dashboard."""
+    """Deterministic Dashboard action views, including postmortem work."""
 
     stale_threshold_days: int
     open_predictions: tuple[DashboardPrediction, ...]
     needs_attention_predictions: tuple[DashboardPrediction, ...]
     ready_to_resolve_predictions: tuple[DashboardPrediction, ...]
     locked_predictions: tuple[DashboardPrediction, ...]
+    needs_postmortem_predictions: tuple[NeedsPostmortemPrediction, ...] = ()
 
 
 def validate_stale_threshold_days(value: object) -> int:
