@@ -19,6 +19,8 @@ class ScoringObservation:
     outcome: BinaryOutcome
     tags: tuple[str, ...] = ()
     outcome_corrected: bool = False
+    initial_revision_id: int | None = None
+    initial_probability_percent: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +48,11 @@ class NumericScoringObservation:
     actual_value: FixedPrecisionValue
     tags: tuple[str, ...] = ()
     actual_value_corrected: bool = False
+    initial_revision_id: int | None = None
+    initial_lower_bound: FixedPrecisionValue | None = None
+    initial_median_estimate: FixedPrecisionValue | None = None
+    initial_upper_bound: FixedPrecisionValue | None = None
+    initial_confidence_percent: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

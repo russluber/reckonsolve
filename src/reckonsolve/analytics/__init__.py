@@ -31,11 +31,22 @@ from .scoring import (
     brier_score,
     summarize_analytics,
 )
+from .updates import (
+    BinaryUpdateAnalyticsSnapshot,
+    BinaryUpdatePair,
+    NumericUnitUpdateSummary,
+    NumericUpdateAnalyticsSnapshot,
+    NumericUpdatePair,
+    summarize_binary_updates,
+    summarize_numeric_updates,
+)
 
 __all__ = [
     "AnalyticsSnapshot",
     "AnalyticsSource",
     "BinaryScorecard",
+    "BinaryUpdateAnalyticsSnapshot",
+    "BinaryUpdatePair",
     "BrierTrendPoint",
     "CalibrationBin",
     "ContainmentCalibrationBin",
@@ -46,6 +57,9 @@ __all__ = [
     "NumericScoredPrediction",
     "NumericScoringObservation",
     "NumericUnitSummary",
+    "NumericUnitUpdateSummary",
+    "NumericUpdateAnalyticsSnapshot",
+    "NumericUpdatePair",
     "PredictionScorecard",
     "ScoredPrediction",
     "ScoringObservation",
@@ -54,6 +68,8 @@ __all__ = [
     "numeric_scorecard",
     "score_numeric_observation",
     "summarize_analytics",
+    "summarize_binary_updates",
     "summarize_forecast_analytics",
     "summarize_numeric_analytics",
+    "summarize_numeric_updates",
 ]

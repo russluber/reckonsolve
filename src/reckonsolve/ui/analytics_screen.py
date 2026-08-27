@@ -23,9 +23,12 @@ from PySide6.QtWidgets import (
 
 from reckonsolve.analytics import (
     AnalyticsSnapshot,
+    BinaryUpdateAnalyticsSnapshot,
     ForecastAnalyticsSnapshot,
     NumericAnalyticsSnapshot,
     NumericUnitSummary,
+    NumericUnitUpdateSummary,
+    NumericUpdateAnalyticsSnapshot,
 )
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.predictions import PredictionType
@@ -137,8 +140,12 @@ class AnalyticsScreen(QWidget):
         content_layout = QVBoxLayout(content)
         self.binary_content = self._create_binary_content(content)
         self.numeric_content = self._create_numeric_content(content)
+        self.binary_update_content = self._create_binary_update_content(content)
+        self.numeric_update_content = self._create_numeric_update_content(content)
         content_layout.addWidget(self.binary_content)
         content_layout.addWidget(self.numeric_content)
+        content_layout.addWidget(self.binary_update_content)
+        content_layout.addWidget(self.numeric_update_content)
         content_layout.addStretch()
 
         self.scroll_area = QScrollArea(self)
@@ -306,6 +313,106 @@ class AnalyticsScreen(QWidget):
         section_layout.addWidget(self.containment_table)
         return section
 
+    def _create_binary_update_content(self, parent: QWidget) -> QGroupBox:
+        section = QGroupBox("Binary retrospective update feedback", parent)
+        section.setObjectName("binaryUpdateAnalyticsSection")
+        section_layout = QVBoxLayout(section)
+        explanation = QLabel(
+            "This compares revision 1 with the exact final scoring revision for "
+            "each revised-and-resolved Binary Prediction. It is descriptive "
+            "hindsight, not proof that updating caused improvement.",
+            section,
+        )
+        explanation.setObjectName("binaryUpdateAnalyticsExplanation")
+        explanation.setWordWrap(True)
+        self.binary_update_paired_count = QLabel(section)
+        self.binary_update_paired_count.setObjectName("binaryUpdatePairedCount")
+        self.binary_update_unrevised_count = QLabel(section)
+        self.binary_update_unrevised_count.setObjectName("binaryUpdateUnrevisedCount")
+        self.binary_update_initial_brier = QLabel(section)
+        self.binary_update_initial_brier.setObjectName("binaryUpdateInitialBrier")
+        self.binary_update_final_brier = QLabel(section)
+        self.binary_update_final_brier.setObjectName("binaryUpdateFinalBrier")
+        self.binary_update_improvement = QLabel(section)
+        self.binary_update_improvement.setObjectName("binaryUpdateImprovement")
+        self.binary_update_guidance = QLabel(section)
+        self.binary_update_guidance.setObjectName("binaryUpdateGuidance")
+        self.binary_update_guidance.setWordWrap(True)
+        for label in (
+            explanation,
+            self.binary_update_paired_count,
+            self.binary_update_unrevised_count,
+            self.binary_update_initial_brier,
+            self.binary_update_final_brier,
+            self.binary_update_improvement,
+            self.binary_update_guidance,
+        ):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            section_layout.addWidget(label)
+        return section
+
+    def _create_numeric_update_content(self, parent: QWidget) -> QGroupBox:
+        section = QGroupBox("Numeric retrospective update feedback", parent)
+        section.setObjectName("numericUpdateAnalyticsSection")
+        section_layout = QVBoxLayout(section)
+        explanation = QLabel(
+            "This compares revision 1 with the exact final scoring revision for "
+            "each revised-and-resolved Numeric Prediction. Confidence and "
+            "containment may combine units; raw comparisons require one exact unit.",
+            section,
+        )
+        explanation.setObjectName("numericUpdateAnalyticsExplanation")
+        explanation.setWordWrap(True)
+        self.numeric_update_paired_count = QLabel(section)
+        self.numeric_update_paired_count.setObjectName("numericUpdatePairedCount")
+        self.numeric_update_unrevised_count = QLabel(section)
+        self.numeric_update_unrevised_count.setObjectName("numericUpdateUnrevisedCount")
+        self.numeric_update_initial_confidence = QLabel(section)
+        self.numeric_update_initial_confidence.setObjectName(
+            "numericUpdateInitialConfidence"
+        )
+        self.numeric_update_final_confidence = QLabel(section)
+        self.numeric_update_final_confidence.setObjectName(
+            "numericUpdateFinalConfidence"
+        )
+        self.numeric_update_initial_containment = QLabel(section)
+        self.numeric_update_initial_containment.setObjectName(
+            "numericUpdateInitialContainment"
+        )
+        self.numeric_update_final_containment = QLabel(section)
+        self.numeric_update_final_containment.setObjectName(
+            "numericUpdateFinalContainment"
+        )
+        self.numeric_update_raw_scope = QLabel(section)
+        self.numeric_update_raw_scope.setObjectName("numericUpdateRawScope")
+        self.numeric_update_raw_scope.setWordWrap(True)
+        self.numeric_update_median_error = QLabel(section)
+        self.numeric_update_median_error.setObjectName("numericUpdateMedianError")
+        self.numeric_update_width = QLabel(section)
+        self.numeric_update_width.setObjectName("numericUpdateWidth")
+        self.numeric_update_interval_score = QLabel(section)
+        self.numeric_update_interval_score.setObjectName("numericUpdateIntervalScore")
+        self.numeric_update_guidance = QLabel(section)
+        self.numeric_update_guidance.setObjectName("numericUpdateGuidance")
+        self.numeric_update_guidance.setWordWrap(True)
+        for label in (
+            explanation,
+            self.numeric_update_paired_count,
+            self.numeric_update_unrevised_count,
+            self.numeric_update_initial_confidence,
+            self.numeric_update_final_confidence,
+            self.numeric_update_initial_containment,
+            self.numeric_update_final_containment,
+            self.numeric_update_raw_scope,
+            self.numeric_update_median_error,
+            self.numeric_update_width,
+            self.numeric_update_interval_score,
+            self.numeric_update_guidance,
+        ):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            section_layout.addWidget(label)
+        return section
+
     def refresh(self) -> None:
         """Reload one coherent analytical subset and preserve honest error state."""
 
@@ -375,10 +482,14 @@ class AnalyticsScreen(QWidget):
         self.numeric_summary.setHidden(not show_numeric)
         self.binary_content.setHidden(not show_binary)
         self.numeric_content.setHidden(not show_numeric)
+        self.binary_update_content.setHidden(not show_binary)
+        self.numeric_update_content.setHidden(not show_numeric)
         if show_binary:
             self._render_binary(snapshot.binary)
+            self._render_binary_updates(snapshot.binary_updates)
         if show_numeric:
             self._render_numeric(snapshot.numeric)
+            self._render_numeric_updates(snapshot.numeric_updates)
 
         count = (snapshot.binary.scored_prediction_count if show_binary else 0) + (
             snapshot.numeric.scored_prediction_count if show_numeric else 0
@@ -480,6 +591,114 @@ class AnalyticsScreen(QWidget):
             f"{_format_decimal(summary.mean_interval_score)} {unit}"
         )
 
+    def _render_binary_updates(
+        self,
+        snapshot: BinaryUpdateAnalyticsSnapshot,
+    ) -> None:
+        count = snapshot.paired_count
+        self.binary_update_paired_count.setText(f"Revised-and-resolved pairs: {count}")
+        self.binary_update_unrevised_count.setText(
+            f"Unrevised Resolved Predictions (reported separately): "
+            f"{snapshot.unrevised_count}"
+        )
+        self.binary_update_initial_brier.setText(
+            f"Mean initial Brier: {_optional_brier(snapshot.mean_initial_brier)}"
+        )
+        self.binary_update_final_brier.setText(
+            f"Mean final Brier: {_optional_brier(snapshot.mean_final_brier)}"
+        )
+        self.binary_update_improvement.setText(
+            "Mean score improvement (initial minus final): "
+            f"{_optional_signed_float(snapshot.mean_score_improvement)}"
+        )
+        self.binary_update_guidance.setText(_update_guidance(count, "Brier"))
+
+    def _render_numeric_updates(
+        self,
+        snapshot: NumericUpdateAnalyticsSnapshot,
+    ) -> None:
+        count = snapshot.paired_count
+        self.numeric_update_paired_count.setText(f"Revised-and-resolved pairs: {count}")
+        self.numeric_update_unrevised_count.setText(
+            f"Unrevised Resolved Predictions (reported separately): "
+            f"{snapshot.unrevised_count}"
+        )
+        self.numeric_update_initial_confidence.setText(
+            "Mean initial confidence: "
+            f"{_optional_percent(snapshot.mean_initial_confidence_percent)}"
+        )
+        self.numeric_update_final_confidence.setText(
+            "Mean final confidence: "
+            f"{_optional_percent(snapshot.mean_final_confidence_percent)}"
+        )
+        self.numeric_update_initial_containment.setText(
+            "Initial intervals contained the outcome: "
+            f"{_containment_count(snapshot.initial_contained_count, count)}"
+        )
+        self.numeric_update_final_containment.setText(
+            "Final intervals contained the outcome: "
+            f"{_containment_count(snapshot.final_contained_count, count)}"
+        )
+        unit_summary = snapshot.unit_summary
+        if self._selected_unit() is None:
+            self.numeric_update_raw_scope.setText(
+                "Choose one exact Numeric unit to compare median error, interval "
+                "width, and proper interval score. Unlike units are never averaged."
+            )
+            self._set_numeric_update_raw_metrics(None)
+        elif unit_summary is None:
+            self.numeric_update_raw_scope.setText(
+                f"No revised-and-resolved pairs match unit: {self._selected_unit()}."
+            )
+            self._set_numeric_update_raw_metrics(None)
+        else:
+            self.numeric_update_raw_scope.setText(
+                f"Raw comparisons use {unit_summary.count} pair(s) with the exact "
+                f"unit: {unit_summary.unit}."
+            )
+            self._set_numeric_update_raw_metrics(unit_summary)
+        self.numeric_update_guidance.setText(_update_guidance(count, "Numeric"))
+
+    def _set_numeric_update_raw_metrics(
+        self,
+        summary: NumericUnitUpdateSummary | None,
+    ) -> None:
+        if summary is None:
+            self.numeric_update_median_error.setText(
+                "Mean median error, initial to final: Not available"
+            )
+            self.numeric_update_width.setText(
+                "Mean interval width, initial to final: Not available"
+            )
+            self.numeric_update_interval_score.setText(
+                "Mean interval score, initial to final: Not available"
+            )
+            return
+        unit = summary.unit
+        self.numeric_update_median_error.setText(
+            "Mean median error, initial to final: "
+            f"{_format_decimal(summary.mean_initial_median_absolute_error)} to "
+            f"{_format_decimal(summary.mean_final_median_absolute_error)} {unit}; "
+            "reduction (initial minus final): "
+            f"{_format_signed_decimal(summary.mean_median_error_reduction)} {unit}"
+        )
+        self.numeric_update_width.setText(
+            "Mean interval width, initial to final: "
+            f"{_format_decimal(summary.mean_initial_interval_width)} to "
+            f"{_format_decimal(summary.mean_final_interval_width)} {unit}; "
+            "narrowing (initial minus final): "
+            f"{_format_signed_decimal(summary.mean_narrowing)} {unit}. "
+            "Narrower is not automatically better."
+        )
+        self.numeric_update_interval_score.setText(
+            "Mean interval score, initial to final: "
+            f"{_format_decimal(summary.mean_initial_interval_score)} to "
+            f"{_format_decimal(summary.mean_final_interval_score)} {unit}; "
+            "improvement (initial minus final): "
+            f"{_format_signed_decimal(summary.mean_interval_score_improvement)} "
+            f"{unit}. Positive is better."
+        )
+
     def _empty_message(self, prediction_type: PredictionType | None) -> str:
         if self._selected_tag() is not None:
             return "No scored predictions match these filters."
@@ -571,3 +790,49 @@ def _format_decimal(value: Decimal) -> str:
     if value == value.to_integral():
         return format(value.quantize(Decimal(1)), "f")
     return format(value.quantize(Decimal("0.001")), "f").rstrip("0").rstrip(".")
+
+
+def _optional_brier(value: float | None) -> str:
+    return "Not available" if value is None else f"{value:.3f}"
+
+
+def _optional_signed_float(value: float | None) -> str:
+    return "Not available" if value is None else f"{value:+.3f}"
+
+
+def _format_signed_decimal(value: Decimal) -> str:
+    formatted = _format_decimal(abs(value))
+    if value > 0:
+        return f"+{formatted}"
+    if value < 0:
+        return f"-{formatted}"
+    return "0"
+
+
+def _containment_count(contained_count: int, pair_count: int) -> str:
+    if pair_count == 0:
+        return "Not available"
+    return (
+        f"{contained_count} of {pair_count} "
+        f"({_format_percent(100 * contained_count / pair_count)})"
+    )
+
+
+def _update_guidance(pair_count: int, score_name: str) -> str:
+    if pair_count == 0:
+        return (
+            "No revised-and-resolved pairs match these filters. Unrevised "
+            "Predictions remain visible in the separate count above."
+        )
+    direction = (
+        "Positive score improvement means the final forecast had a lower score. "
+        if score_name == "Brier"
+        else "Containment alone is not calibration or proof of better forecasting. "
+    )
+    return (
+        direction
+        + "Sparse paired samples can be noisy; treat the comparison as tentative "
+        "personal feedback. "
+        + "It does not show that updating caused the difference or predict future "
+        "performance."
+    )

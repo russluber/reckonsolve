@@ -12,11 +12,13 @@ All notable changes to Reckonsolve are documented here.
 - Milestone 27 desktop workflows for correcting Binary and exact Numeric Resolution facts, adding or revising a Postmortem after resolution, and correcting or clearing an Invalid reason without reopening the Prediction.
 - Effective terminal summaries plus collapsed, complete original-to-current correction history on Binary and Numeric Prediction Detail.
 - Milestone 28 type-aware resolved-prediction scorecards that show the captured scoring forecast, effective outcome or actual value, and individual Binary or Numeric metrics without creating another scoring observation.
+- Milestone 29 retrospective initial-versus-final feedback for revised-and-resolved Binary and Numeric Predictions, with unrevised resolutions counted separately and existing type, tag, and exact-unit filters retained.
 
 ### Changed
 
 - Every terminal correction now receives a deliberate confirmation; score-affecting outcome or actual-value changes are identified explicitly and require a nonempty explanation.
 - A corrected Binary outcome or Numeric actual value now recomputes its individual scorecard from the effective terminal fact while retaining the original scoring revision and resolution position.
+- Binary paired feedback reports initial and final Brier plus initial-minus-final score improvement; Numeric feedback combines only unitless confidence and containment while reserving raw error, width, and interval-score comparisons for one exact unit.
 
 ## 0.3.0 - 2026-08-25
 

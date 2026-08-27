@@ -64,7 +64,9 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
             ) AS outcome_corrected,
             resolution.resolved_at,
             resolution.scoring_revision_id,
-            scoring_revision.probability_percent
+            scoring_revision.probability_percent,
+            initial_revision.id AS initial_revision_id,
+            initial_revision.probability_percent AS initial_probability_percent
         FROM resolutions AS resolution
         JOIN predictions AS prediction
             ON prediction.id = resolution.prediction_id
@@ -73,6 +75,9 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
         JOIN forecast_revisions AS scoring_revision
             ON scoring_revision.prediction_id = prediction.id
             AND scoring_revision.id = resolution.scoring_revision_id
+        JOIN forecast_revisions AS initial_revision
+            ON initial_revision.prediction_id = prediction.id
+            AND initial_revision.sequence = 1
         ORDER BY resolution.resolved_at, resolution.id
         """
     ).fetchall()
@@ -107,6 +112,8 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
                 outcome=BinaryOutcome(row["outcome"]),
                 tags=tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
                 outcome_corrected=bool(row["outcome_corrected"]),
+                initial_revision_id=int(row["initial_revision_id"]),
+                initial_probability_percent=int(row["initial_probability_percent"]),
             )
             for row in rows
         ),
@@ -144,7 +151,12 @@ def _load_numeric_source(connection: sqlite3.Connection) -> NumericAnalyticsSour
             scoring_revision.lower_scaled,
             scoring_revision.median_scaled,
             scoring_revision.upper_scaled,
-            scoring_revision.confidence_percent
+            scoring_revision.confidence_percent,
+            initial_revision.id AS initial_revision_id,
+            initial_revision.lower_scaled AS initial_lower_scaled,
+            initial_revision.median_scaled AS initial_median_scaled,
+            initial_revision.upper_scaled AS initial_upper_scaled,
+            initial_revision.confidence_percent AS initial_confidence_percent
         FROM numeric_resolutions AS resolution
         JOIN predictions AS prediction
             ON prediction.id = resolution.prediction_id
@@ -153,6 +165,9 @@ def _load_numeric_source(connection: sqlite3.Connection) -> NumericAnalyticsSour
         JOIN numeric_forecast_revisions AS scoring_revision
             ON scoring_revision.prediction_id = prediction.id
             AND scoring_revision.id = resolution.scoring_revision_id
+        JOIN numeric_forecast_revisions AS initial_revision
+            ON initial_revision.prediction_id = prediction.id
+            AND initial_revision.sequence = 1
         ORDER BY resolution.resolved_at, resolution.id
         """
     ).fetchall()
@@ -233,4 +248,18 @@ def _map_numeric_scoring_observation(
         actual_value=FixedPrecisionValue(int(row["actual_scaled"]), decimal_places),
         tags=tags,
         actual_value_corrected=bool(row["actual_value_corrected"]),
+        initial_revision_id=int(row["initial_revision_id"]),
+        initial_lower_bound=FixedPrecisionValue(
+            int(row["initial_lower_scaled"]),
+            decimal_places,
+        ),
+        initial_median_estimate=FixedPrecisionValue(
+            int(row["initial_median_scaled"]),
+            decimal_places,
+        ),
+        initial_upper_bound=FixedPrecisionValue(
+            int(row["initial_upper_scaled"]),
+            decimal_places,
+        ),
+        initial_confidence_percent=int(row["initial_confidence_percent"]),
     )

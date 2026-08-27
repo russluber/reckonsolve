@@ -7,6 +7,12 @@ from reckonsolve.domain.predictions import PredictionType
 
 from .numeric import NumericAnalyticsSnapshot, summarize_numeric_analytics
 from .scoring import AnalyticsSnapshot, summarize_analytics
+from .updates import (
+    BinaryUpdateAnalyticsSnapshot,
+    NumericUpdateAnalyticsSnapshot,
+    summarize_binary_updates,
+    summarize_numeric_updates,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +21,8 @@ class ForecastAnalyticsSnapshot:
 
     binary: AnalyticsSnapshot
     numeric: NumericAnalyticsSnapshot
+    binary_updates: BinaryUpdateAnalyticsSnapshot
+    numeric_updates: NumericUpdateAnalyticsSnapshot
     available_tags: tuple[str, ...]
     available_units: tuple[str, ...]
     selected_type: PredictionType | None = None
@@ -56,12 +64,31 @@ def summarize_forecast_analytics(
         tag=tag,
         unit=unit,
     )
+    binary_updates = summarize_binary_updates(
+        binary_source
+        if include_binary
+        else AnalyticsSource(observations=(), available_tags=()),
+        tag=tag,
+    )
+    numeric_updates = summarize_numeric_updates(
+        numeric_source
+        if include_numeric
+        else NumericAnalyticsSource(
+            observations=(),
+            available_tags=(),
+            available_units=numeric_source.available_units,
+        ),
+        tag=tag,
+        unit=unit,
+    )
     tag_sources = (binary_source.available_tags if include_binary else ()) + (
         numeric_source.available_tags if include_numeric else ()
     )
     return ForecastAnalyticsSnapshot(
         binary=binary,
         numeric=numeric,
+        binary_updates=binary_updates,
+        numeric_updates=numeric_updates,
         available_tags=_unique_labels(tag_sources),
         available_units=numeric_source.available_units,
         selected_type=prediction_type,
