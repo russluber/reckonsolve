@@ -66,6 +66,11 @@ The matching CLI reads and changes records in that same development data without
 uv run reckonsolve-cli-dev list
 uv run reckonsolve-cli-dev list --search "temperature" --status open --type numeric --tag Personal
 uv run reckonsolve-cli-dev show 12
+uv run reckonsolve-cli-dev search "project evidence" --tag Work --tag Research --tag-mode all
+uv run reckonsolve-cli-dev search '"old wording"' --include-superseded-history
+uv run reckonsolve-cli-dev saved-views
+uv run reckonsolve-cli-dev saved-view --name "Work follow-up"
+uv run reckonsolve-cli-dev saved-view --id 3
 uv run reckonsolve-cli-dev create binary
 uv run reckonsolve-cli-dev create numeric
 uv run reckonsolve-cli-dev revise 12
@@ -78,7 +83,7 @@ uv run reckonsolve-cli-dev backup C:\path\to\reckonsolve-backup.sqlite3
 uv run reckonsolve-cli-dev export-csv C:\path\to\reckonsolve-export.zip
 ```
 
-`list` defaults to every Prediction and supports case-insensitive Question search plus combined status, forecast-type, and tag filters. Rows identify stable IDs, current type-appropriate forecasts, tags, and attention indicators. `show` accepts one stable Prediction ID and prints current metadata, exact Binary or Numeric forecast history, Journal correction history, Forecast Reviews, and Definition history. For Resolved or Invalid records it also distinguishes the original terminal fact from the current effective value, lists every correction with before/after snapshots, reason and timestamp, preserves the complete Postmortem version chain, and shows any Skip Postmortem completion. It remains read-only; terminal corrections and Skip completion are desktop workflows in v0.4.
+`list` defaults to every Prediction and supports case-insensitive Question search plus combined status, forecast-type, and tag filters. `search QUERY` searches the full current/effective journal corpus and supports deliberate All/Any word modes, superseded-history inclusion, repeated tags with All/Any matching, status, type, attention, ISO date-range, and deterministic-sort filters. It prints one explainable row per Prediction, including the best source, a plain-text snippet, and additional-match count; a spelling suggestion or Any-word fallback is advice, never an automatic query change. `saved-views` lists each dynamic configuration, while `saved-view --name NAME` or `--id ID` reruns it against current data. These commands are read-only. `show` accepts one stable Prediction ID and prints current metadata, exact Binary or Numeric forecast history, Journal correction history, Forecast Reviews, and Definition history. For Resolved or Invalid records it also distinguishes the original terminal fact from the current effective value, lists every correction with before/after snapshots, reason and timestamp, preserves the complete Postmortem version chain, and shows any Skip Postmortem completion. Terminal corrections and Skip completion remain desktop workflows in v0.4.
 
 `create binary` and `create numeric` are interactive and write the complete Prediction plus its first revision atomically. Binary probability defaults to 50%; Numeric decimal places default to 0 and confidence defaults to 80%. Both workflows optionally collect a one-line initial rationale, Background, Resolution Criteria, ISO dates, and comma-separated tags. Ctrl+C or end-of-input before creation saves nothing. Use `uv run reckonsolve-cli-dev --help` or a subcommand's `--help` for the complete syntax.
 
@@ -88,7 +93,7 @@ uv run reckonsolve-cli-dev export-csv C:\path\to\reckonsolve-export.zip
 
 `backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` creates the same documented sixteen-file format-version-three analytical ZIP and does not change application state. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
 
-`list` and `show` remain read-only. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
+`list`, `show`, `search`, `saved-views`, and `saved-view` remain read-only. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
 
 ## Private Windows build
 

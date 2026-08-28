@@ -6,13 +6,14 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from enum import StrEnum
 from importlib.metadata import version
 from pathlib import Path
 from typing import TextIO
 
 from PySide6.QtCore import QCoreApplication
 
-from reckonsolve.application.errors import ApplicationError
+from reckonsolve.application.errors import ApplicationError, SavedViewNotFoundError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli_creation import (
     CliInputCancelled,
@@ -32,7 +33,13 @@ from reckonsolve.cli_transfer import backup_interactively, export_csv_interactiv
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.attention import DashboardSnapshot
-from reckonsolve.domain.browser import PredictionBrowserItem
+from reckonsolve.domain.browser import (
+    ArchiveAttention,
+    ArchiveDateMeaning,
+    ArchiveSort,
+    ArchiveTagMatchMode,
+    PredictionBrowserItem,
+)
 from reckonsolve.domain.predictions import (
     BinaryResolutionHistory,
     DefinitionChange,
@@ -52,6 +59,15 @@ from reckonsolve.domain.predictions import (
     PredictionStatus,
     PredictionType,
     TimelineEvent,
+)
+from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
+from reckonsolve.domain.search import (
+    PredictionSearchHit,
+    PredictionSearchResults,
+    SearchMatchMode,
+    SearchPrediction,
+    build_search_snippet,
+    search_source_label,
 )
 from reckonsolve.identity import (
     DEVELOPMENT_APPLICATION,
@@ -150,6 +166,12 @@ def run(
             return _run_list(runtime.operations, arguments, output)
         if arguments.command == "show":
             return _run_show(runtime.operations, arguments.prediction_id, output)
+        if arguments.command == "search":
+            return _run_search(runtime.operations, arguments, output)
+        if arguments.command == "saved-views":
+            return _run_saved_views(runtime.operations, output)
+        if arguments.command == "saved-view":
+            return _run_saved_view(runtime.operations, arguments, output)
         if arguments.command == "create":
             return _run_create(
                 runtime.operations,
@@ -292,6 +314,67 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
         "prediction_id",
         type=_positive_prediction_id,
         metavar="PREDICTION_ID",
+    )
+
+    search_parser = commands.add_parser(
+        "search",
+        help="Search the full forecasting journal with archive filters.",
+        description=(
+            "Search current/effective Prediction text through the same local "
+            "explainable query as the Predictions screen."
+        ),
+    )
+    search_parser.add_argument("text", metavar="QUERY", help="Ordinary search text.")
+    match_mode = search_parser.add_mutually_exclusive_group()
+    match_mode.add_argument(
+        "--all-words",
+        action="store_const",
+        const=SearchMatchMode.ALL.value,
+        dest="match_mode",
+        help="Require every query word somewhere in the same Prediction (default).",
+    )
+    match_mode.add_argument(
+        "--any-words",
+        action="store_const",
+        const=SearchMatchMode.ANY.value,
+        dest="match_mode",
+        help="Match at least one query word deliberately.",
+    )
+    search_parser.set_defaults(match_mode=SearchMatchMode.ALL.value)
+    search_parser.add_argument(
+        "--include-superseded-history",
+        action="store_true",
+        help="Also search explicitly superseded Definition, Journal, and terminal text.",
+    )
+    _add_search_archive_filters(search_parser)
+
+    commands.add_parser(
+        "saved-views",
+        help="List saved dynamic archive views without running one.",
+        description="List every Saved View and its retained dynamic configuration.",
+    )
+
+    saved_view_parser = commands.add_parser(
+        "saved-view",
+        help="Run one Saved View against current local data.",
+        description=(
+            "Run one named dynamic Saved View through the same read-only archive "
+            "query as the desktop application."
+        ),
+    )
+    saved_view_identifier = saved_view_parser.add_mutually_exclusive_group(
+        required=True
+    )
+    saved_view_identifier.add_argument(
+        "--id",
+        type=_positive_saved_view_id,
+        metavar="SAVED_VIEW_ID",
+        help="Run the Saved View with this stable identifier.",
+    )
+    saved_view_identifier.add_argument(
+        "--name",
+        metavar="NAME",
+        help="Run the Saved View with this exact case-insensitive name.",
     )
 
     create_parser = commands.add_parser(
@@ -460,6 +543,119 @@ def _positive_prediction_id(value: str) -> int:
     return prediction_id
 
 
+def _positive_saved_view_id(value: str) -> int:
+    """Parse a stable Saved View identifier without reusing Prediction wording."""
+
+    try:
+        saved_view_id = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "SAVED_VIEW_ID must be a positive whole number."
+        ) from error
+    if saved_view_id < 1:
+        raise argparse.ArgumentTypeError(
+            "SAVED_VIEW_ID must be a positive whole number."
+        )
+    return saved_view_id
+
+
+def _iso_calendar_date(value: str) -> date:
+    """Parse one local-calendar archive boundary for argparse."""
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "Dates must use ISO calendar form YYYY-MM-DD."
+        ) from error
+
+
+def _add_search_archive_filters(parser: argparse.ArgumentParser) -> None:
+    """Add the M37 textual equivalents of the desktop archive controls."""
+
+    parser.add_argument(
+        "--status",
+        choices=("all", *(status.value for status in PredictionStatus)),
+        default="all",
+        help="Filter by derived lifecycle status (default: all).",
+    )
+    parser.add_argument(
+        "--type",
+        choices=("all", *(prediction_type.value for prediction_type in PredictionType)),
+        default="all",
+        dest="prediction_type",
+        help="Filter by forecast type (default: all).",
+    )
+    parser.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        metavar="TAG",
+        help="Require one tag; repeat for multiple tags.",
+    )
+    parser.add_argument(
+        "--tag-mode",
+        choices=_cli_choices(ArchiveTagMatchMode),
+        default=_cli_name(ArchiveTagMatchMode.ALL),
+        help="Combine repeated tags as all or any (default: all).",
+    )
+    parser.add_argument(
+        "--attention",
+        choices=("all", *_cli_choices(ArchiveAttention)),
+        default="all",
+        help="Filter by one derived attention classification.",
+    )
+    parser.add_argument(
+        "--date-meaning",
+        choices=_cli_choices(ArchiveDateMeaning),
+        default=_cli_name(ArchiveDateMeaning.CREATED),
+        help="Choose the date used by --from and --to (default: created).",
+    )
+    parser.add_argument(
+        "--from",
+        dest="date_start",
+        type=_iso_calendar_date,
+        metavar="YYYY-MM-DD",
+        help="Inclusive start date for the selected date meaning.",
+    )
+    parser.add_argument(
+        "--to",
+        dest="date_end",
+        type=_iso_calendar_date,
+        metavar="YYYY-MM-DD",
+        help="Inclusive end date for the selected date meaning.",
+    )
+    parser.add_argument(
+        "--sort",
+        choices=_cli_choices(ArchiveSort),
+        default=_cli_name(ArchiveSort.RELEVANCE),
+        help="Deterministic result order (default: relevance).",
+    )
+
+
+def _cli_choices[TArchiveEnum: StrEnum](
+    enum_type: type[TArchiveEnum],
+) -> tuple[str, ...]:
+    """Expose readable hyphenated enum values without changing domain values."""
+
+    return tuple(_cli_name(member) for member in enum_type)
+
+
+def _cli_name[TArchiveEnum: StrEnum](value: TArchiveEnum) -> str:
+    """Render one domain enum as a conventional CLI option value."""
+
+    return value.value.replace("_", "-")
+
+
+def _archive_enum[TArchiveEnum: StrEnum](
+    enum_type: type[TArchiveEnum],
+    value: str,
+) -> TArchiveEnum:
+    """Map a validated hyphenated CLI choice back to its domain enum value."""
+
+    return enum_type(value.replace("-", "_"))
+
+
 def _run_list(
     operations: PredictionOperations,
     arguments: argparse.Namespace,
@@ -493,6 +689,352 @@ def _run_list(
         file=output,
     )
     return 0
+
+
+def _run_search(
+    operations: PredictionOperations,
+    arguments: argparse.Namespace,
+    output: TextIO,
+) -> int:
+    """Render one side-effect-free full-text query with every archive control."""
+
+    if not arguments.text.strip():
+        raise ApplicationError(
+            "Search text is required. Use list for ordinary browsing."
+        )
+    results = operations.search_predictions(
+        arguments.text,
+        match_mode=SearchMatchMode(arguments.match_mode),
+        include_superseded=arguments.include_superseded_history,
+        status=_optional_status(arguments.status),
+        prediction_type=_optional_prediction_type(arguments.prediction_type),
+        tags=tuple(arguments.tag),
+        tag_match_mode=_archive_enum(ArchiveTagMatchMode, arguments.tag_mode),
+        attention=_optional_attention(arguments.attention),
+        date_meaning=_archive_enum(ArchiveDateMeaning, arguments.date_meaning),
+        date_start=arguments.date_start,
+        date_end=arguments.date_end,
+        sort=_archive_enum(ArchiveSort, arguments.sort),
+    )
+    indicators = AttentionIndicators.from_snapshot(operations.get_dashboard())
+    if not results.hits:
+        print(_search_empty_message(operations, results), file=output)
+        return 0
+    print(_format_search_results(results, indicators), file=output)
+    return 0
+
+
+def _run_saved_views(operations: PredictionOperations, output: TextIO) -> int:
+    """List mutable dynamic Saved Views without evaluating their membership."""
+
+    views = operations.list_saved_views()
+    if not views:
+        print("No Saved Views yet.", file=output)
+        return 0
+    print(_format_saved_views(views), file=output)
+    return 0
+
+
+def _run_saved_view(
+    operations: PredictionOperations,
+    arguments: argparse.Namespace,
+    output: TextIO,
+) -> int:
+    """Execute one dynamic Saved View using the ordinary shared read queries."""
+
+    view = _selected_saved_view(operations.list_saved_views(), arguments)
+    configuration = view.configuration
+    query = configuration.archive_query
+    indicators = AttentionIndicators.from_snapshot(operations.get_dashboard())
+    header = f"Saved View #{view.saved_view_id}: {terminal_text(view.name)}"
+    if configuration.search_text.strip():
+        results = operations.search_predictions(
+            configuration.search_text,
+            match_mode=configuration.match_mode,
+            include_superseded=configuration.include_superseded,
+            status=query.status,
+            prediction_type=query.prediction_type,
+            tags=query.tags,
+            tag_match_mode=query.tag_match_mode,
+            attention=query.attention,
+            date_meaning=query.date_meaning,
+            date_start=query.date_start,
+            date_end=query.date_end,
+            sort=query.sort,
+        )
+        if not results.hits:
+            print(
+                f"{header}\n\n{_search_empty_message(operations, results)}", file=output
+            )
+            return 0
+        print(
+            _format_search_results(results, indicators, heading=header),
+            file=output,
+        )
+        return 0
+
+    snapshot = operations.browse_predictions(
+        status=query.status,
+        prediction_type=query.prediction_type,
+        tags=query.tags,
+        tag_match_mode=query.tag_match_mode,
+        attention=query.attention,
+        date_meaning=query.date_meaning,
+        date_start=query.date_start,
+        date_end=query.date_end,
+        sort=query.sort,
+    )
+    if not snapshot.predictions:
+        print(
+            f"{header}\n\nNo predictions currently match this Saved View.", file=output
+        )
+        return 0
+    rendered = _format_prediction_list(snapshot.predictions, indicators)
+    print(f"{header}\n\n{rendered}", file=output)
+    return 0
+
+
+def _optional_status(value: str) -> PredictionStatus | None:
+    """Convert an argparse status selection to the domain's optional filter."""
+
+    return None if value == "all" else PredictionStatus(value)
+
+
+def _optional_prediction_type(value: str) -> PredictionType | None:
+    """Convert an argparse type selection to the domain's optional filter."""
+
+    return None if value == "all" else PredictionType(value)
+
+
+def _optional_attention(value: str) -> ArchiveAttention | None:
+    """Convert an argparse attention selection to the domain's optional filter."""
+
+    return None if value == "all" else _archive_enum(ArchiveAttention, value)
+
+
+def _selected_saved_view(
+    views: tuple[SavedView, ...],
+    arguments: argparse.Namespace,
+) -> SavedView:
+    """Resolve the explicit stable ID or normalized exact display name selection."""
+
+    if arguments.id is not None:
+        view = next(
+            (
+                candidate
+                for candidate in views
+                if candidate.saved_view_id == arguments.id
+            ),
+            None,
+        )
+        if view is None:
+            raise SavedViewNotFoundError(arguments.id)
+        return view
+    name = arguments.name.strip()
+    view = next(
+        (
+            candidate
+            for candidate in views
+            if candidate.normalized_name == name.casefold()
+        ),
+        None,
+    )
+    if view is None:
+        raise ApplicationError(
+            f"Saved View named {terminal_text(name)!r} was not found."
+        )
+    return view
+
+
+def _search_empty_message(
+    operations: PredictionOperations,
+    results: PredictionSearchResults,
+) -> str:
+    """Distinguish an empty journal from a filtered text miss and offer guidance."""
+
+    if not operations.browse_predictions().predictions:
+        return "No predictions yet."
+    if results.any_word_available:
+        message = (
+            "No predictions match all words. Try --any-words to broaden the search."
+        )
+    else:
+        message = "No predictions match this search and filters."
+    if results.suggestion is not None:
+        message += f"\nSuggestion: search for {terminal_text(results.suggestion)!r}."
+    return message
+
+
+def _format_saved_views(views: tuple[SavedView, ...]) -> str:
+    """Render inspectable dynamic configurations without evaluating membership."""
+
+    lines = [f"Saved Views ({len(views)})"]
+    for view in views:
+        lines.extend(("", f"#{view.saved_view_id} | {terminal_text(view.name)}"))
+        _append_saved_view_configuration(lines, view.configuration)
+    return "\n".join(lines)
+
+
+def _append_saved_view_configuration(
+    lines: list[str],
+    configuration: SavedViewConfiguration,
+) -> None:
+    """Render every stored archive control in plain terminal text."""
+
+    query = configuration.archive_query
+    _append_field(
+        lines,
+        "  Search",
+        configuration.search_text
+        if configuration.search_text.strip()
+        else "Browse archive",
+    )
+    _append_field(
+        lines,
+        "  Word mode",
+        "All words" if configuration.match_mode is SearchMatchMode.ALL else "Any words",
+    )
+    _append_field(
+        lines,
+        "  Include superseded history",
+        "Yes" if configuration.include_superseded else "No",
+    )
+    _append_field(
+        lines,
+        "  Status",
+        "All" if query.status is None else query.status.value.capitalize(),
+    )
+    _append_field(
+        lines,
+        "  Forecast type",
+        "All"
+        if query.prediction_type is None
+        else query.prediction_type.value.capitalize(),
+    )
+    _append_field(
+        lines,
+        "  Tags",
+        (
+            "None"
+            if not query.tags
+            else f"{', '.join(query.tags)} ({query.tag_match_mode.value.capitalize()})"
+        ),
+    )
+    _append_field(
+        lines,
+        "  Attention",
+        "None"
+        if query.attention is None
+        else query.attention.value.replace("_", " ").title(),
+    )
+    _append_field(
+        lines,
+        "  Date range",
+        _archive_date_range_text(query.date_meaning, query.date_start, query.date_end),
+    )
+    _append_field(lines, "  Sort", query.sort.value.replace("_", " ").title())
+
+
+def _archive_date_range_text(
+    meaning: ArchiveDateMeaning,
+    start: date | None,
+    end: date | None,
+) -> str:
+    """Describe optional inclusive local-calendar date bounds concisely."""
+
+    label = meaning.value.replace("_", " ").title()
+    if start is None and end is None:
+        return f"{label}: any date"
+    if start is None:
+        return f"{label}: through {end.isoformat()}"
+    if end is None:
+        return f"{label}: from {start.isoformat()}"
+    return f"{label}: {start.isoformat()} through {end.isoformat()}"
+
+
+def _format_search_results(
+    results: PredictionSearchResults,
+    indicators: AttentionIndicators,
+    *,
+    heading: str = "Search results",
+) -> str:
+    """Render grouped explainable hits without exposing FTS implementation details."""
+
+    lines = [f"{heading} ({len(results.hits)})"]
+    _append_field(
+        lines,
+        "Match mode",
+        "All words" if results.query.match_mode is SearchMatchMode.ALL else "Any words",
+    )
+    if results.query.include_superseded:
+        _append_field(lines, "Include superseded history", "Yes")
+    for hit in results.hits:
+        lines.extend(("", _format_search_hit_header(hit)))
+        _append_field(lines, "Question", hit.prediction.question, indent="  ")
+        if hit.prediction.tags:
+            _append_field(lines, "Tags", ", ".join(hit.prediction.tags), indent="  ")
+        labels = indicators.labels_for(hit.prediction.prediction_id)
+        if labels:
+            _append_field(lines, "Attention", ", ".join(labels), indent="  ")
+        _append_field(
+            lines,
+            "Match",
+            search_source_label(hit.best_match.document),
+            indent="  ",
+        )
+        snippet = build_search_snippet(
+            hit.best_match.document.text,
+            results.parsed_text,
+        )
+        _append_field(lines, "Snippet", snippet.text, indent="  ")
+        if hit.additional_match_count:
+            noun = "source" if hit.additional_match_count == 1 else "sources"
+            _append_field(
+                lines,
+                "Additional matches",
+                f"{hit.additional_match_count} {noun}",
+                indent="  ",
+            )
+    return "\n".join(lines)
+
+
+def _format_search_hit_header(hit: PredictionSearchHit) -> str:
+    """Render stable identity plus current forecast or terminal context for one hit."""
+
+    prediction = hit.prediction
+    return (
+        f"#{prediction.prediction_id} | {prediction.prediction_type.value.upper()} | "
+        f"{prediction.status.value.upper()} | {_search_prediction_summary(prediction)}"
+    )
+
+
+def _search_prediction_summary(prediction: SearchPrediction) -> str:
+    """Mirror desktop search's current-forecast or effective-terminal summary."""
+
+    if (
+        prediction.status is PredictionStatus.RESOLVED
+        and prediction.prediction_type is PredictionType.BINARY
+        and prediction.binary_outcome is not None
+    ):
+        return f"Resolved {prediction.binary_outcome.value.capitalize()}"
+    if (
+        prediction.status is PredictionStatus.RESOLVED
+        and prediction.prediction_type is PredictionType.NUMERIC
+        and prediction.numeric_actual_value is not None
+        and prediction.numeric_unit is not None
+    ):
+        return f"Resolved {prediction.numeric_actual_value} {prediction.numeric_unit}"
+    if prediction.prediction_type is PredictionType.BINARY:
+        if prediction.probability_percent is None:
+            raise ValueError("A Binary search result requires a probability.")
+        return f"{prediction.probability_percent}% Yes"
+    return _numeric_forecast_summary(
+        prediction.numeric_lower_bound,
+        prediction.numeric_median_estimate,
+        prediction.numeric_upper_bound,
+        prediction.numeric_confidence_percent,
+        prediction.numeric_unit,
+    )
 
 
 def _run_show(

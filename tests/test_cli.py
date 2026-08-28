@@ -16,7 +16,10 @@ from reckonsolve.cli import create_runtime, run
 from reckonsolve.data.database import Database
 from reckonsolve.data.settings import SettingsRepository
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
-from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.domain.browser import ArchiveQuery, ArchiveSort, ArchiveTagMatchMode
+from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
+from reckonsolve.domain.saved_views import SavedViewConfiguration
+from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 
 
@@ -96,6 +99,34 @@ def test_cli_version_and_help_do_not_open_a_database(tmp_path, capsys) -> None:
     assert "--status" in help_output.out
     assert "--type" in help_output.out
     assert "--tag TAG" in help_output.out
+    assert not database_path.exists()
+
+    with pytest.raises(SystemExit) as search_help_exit:
+        run(["search", "--help"], database_path=database_path)
+    search_help_output = capsys.readouterr()
+
+    assert search_help_exit.value.code == 0
+    assert "QUERY" in search_help_output.out
+    assert "--include-superseded-history" in search_help_output.out
+    assert "--tag-mode" in search_help_output.out
+    assert "--date-meaning" in search_help_output.out
+    assert not database_path.exists()
+
+    with pytest.raises(SystemExit) as saved_views_help_exit:
+        run(["saved-views", "--help"], database_path=database_path)
+    saved_views_help_output = capsys.readouterr()
+
+    assert saved_views_help_exit.value.code == 0
+    assert "Saved View" in saved_views_help_output.out
+    assert not database_path.exists()
+
+    with pytest.raises(SystemExit) as saved_view_help_exit:
+        run(["saved-view", "--help"], database_path=database_path)
+    saved_view_help_output = capsys.readouterr()
+
+    assert saved_view_help_exit.value.code == 0
+    assert "SAVED_VIEW_ID" in saved_view_help_output.out
+    assert "--name NAME" in saved_view_help_output.out
     assert not database_path.exists()
 
     with pytest.raises(SystemExit) as create_help_exit:
@@ -221,6 +252,267 @@ def test_cli_list_combines_filters_and_formats_type_aware_attention(
     assert "Tags: Caf\u00e9, Work" in rendered
     assert "Attention: Needs Attention, Ready to Resolve" in rendered
     assert "unrelated Binary" not in rendered
+
+
+def test_cli_search_uses_shared_explainable_query_and_rich_filters(tmp_path) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
+    target = operations.create_prediction(
+        "Will the calibrated report arrive?",
+        65,
+        background="A tracked research deliverable.",
+        expected_resolution=date(2000, 1, 1),
+        tags=("Work", "Research"),
+    )
+    operations.add_journal_entry(
+        target.prediction_id,
+        "Precise journal evidence arrived from the project lead.",
+        expected_revision_id=target.current_revision_id,
+        expected_metadata_version=target.metadata_version,
+    )
+    operations.update_metadata(
+        target.prediction_id,
+        question="Will the revised report arrive?",
+        background=target.background,
+        resolution_criteria=target.resolution_criteria,
+        forecast_deadline=target.forecast_deadline,
+        expected_resolution=target.expected_resolution,
+        tags=target.tags,
+        expected_metadata_version=target.metadata_version,
+        confirm_meaning_change=True,
+    )
+    operations.create_numeric_prediction(
+        "How many unrelated deliveries will arrive?",
+        "items",
+        0,
+        1,
+        2,
+        3,
+        80,
+        tags=("Work",),
+    )
+    operations.create_prediction("Will the mission launch?", 50, tags=("Other",))
+    database.close()
+
+    output = StringIO()
+    result = run(
+        [
+            "search",
+            '"precise journal evidence"',
+            "--status",
+            "open",
+            "--type",
+            "binary",
+            "--tag",
+            "work",
+            "--tag",
+            "research",
+            "--tag-mode",
+            "all",
+            "--attention",
+            "ready-to-resolve",
+            "--date-meaning",
+            "created",
+            "--from",
+            "2026-08-25",
+            "--to",
+            "2026-08-25",
+            "--sort",
+            "question-a-to-z",
+        ],
+        database_path=database_path,
+        stdout=output,
+    )
+
+    assert result == 0
+    rendered = output.getvalue()
+    assert "Search results (1)" in rendered
+    assert f"#{target.prediction_id} | BINARY | OPEN | 65% Yes" in rendered
+    assert "Question: Will the revised report arrive?" in rendered
+    assert "Tags: Research, Work" in rendered
+    assert "Match: Journal entry match" in rendered
+    assert "Snippet: Precise journal evidence arrived" in rendered
+    assert "unrelated deliveries" not in rendered
+
+    fallback = StringIO()
+    assert (
+        run(
+            ["search", "revised impossibleword"],
+            database_path=database_path,
+            stdout=fallback,
+        )
+        == 0
+    )
+    assert "Try --any-words" in fallback.getvalue()
+
+    suggested = StringIO()
+    assert (
+        run(
+            ["search", "missoin"],
+            database_path=database_path,
+            stdout=suggested,
+        )
+        == 0
+    )
+    assert "Suggestion: search for 'mission'." in suggested.getvalue()
+
+    any_words = StringIO()
+    assert (
+        run(
+            ["search", "revised impossibleword", "--any-words"],
+            database_path=database_path,
+            stdout=any_words,
+        )
+        == 0
+    )
+    assert "Match mode: Any words" in any_words.getvalue()
+    assert f"#{target.prediction_id} | BINARY | OPEN" in any_words.getvalue()
+
+    current_only = StringIO()
+    assert (
+        run(
+            ["search", '"calibrated report"'],
+            database_path=database_path,
+            stdout=current_only,
+        )
+        == 0
+    )
+    assert "No predictions match this search and filters." in current_only.getvalue()
+
+    historical = StringIO()
+    assert (
+        run(
+            [
+                "search",
+                '"calibrated report"',
+                "--include-superseded-history",
+            ],
+            database_path=database_path,
+            stdout=historical,
+        )
+        == 0
+    )
+    assert "Include superseded history: Yes" in historical.getvalue()
+    assert "Match: Question match — superseded history" in historical.getvalue()
+
+
+def test_cli_saved_views_list_and_execute_current_dynamic_queries(tmp_path) -> None:
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
+    binary = operations.create_prediction(
+        "Will saved-view evidence arrive?",
+        55,
+        tags=("Work", "Evidence"),
+    )
+    operations.add_journal_entry(
+        binary.prediction_id,
+        "The project lead says the evidence is now available.",
+        expected_revision_id=binary.current_revision_id,
+        expected_metadata_version=binary.metadata_version,
+    )
+    numeric = operations.create_numeric_prediction(
+        "How many work items will finish?",
+        "items",
+        0,
+        1,
+        2,
+        3,
+        80,
+        tags=("Work",),
+    )
+    evidence_view = operations.create_saved_view(
+        "Evidence Search",
+        SavedViewConfiguration(
+            search_text="project lead",
+            match_mode=SearchMatchMode.ALL,
+            include_superseded=False,
+            archive_query=ArchiveQuery(
+                tags=("Work", "Evidence"),
+                tag_match_mode=ArchiveTagMatchMode.ALL,
+                sort=ArchiveSort.RELEVANCE,
+            ),
+        ),
+    )
+    numeric_view = operations.create_saved_view(
+        "Numeric Work",
+        SavedViewConfiguration(
+            search_text="",
+            match_mode=SearchMatchMode.ALL,
+            include_superseded=False,
+            archive_query=ArchiveQuery(
+                prediction_type=PredictionType.NUMERIC,
+                tags=("Work",),
+                sort=ArchiveSort.QUESTION_A_TO_Z,
+            ),
+        ),
+    )
+    before_binary = operations.get_prediction(binary.prediction_id)
+    before_numeric = operations.get_numeric_prediction(numeric.prediction_id)
+    database.close()
+
+    listed = StringIO()
+    assert run(["saved-views"], database_path=database_path, stdout=listed) == 0
+    rendered_list = listed.getvalue()
+    assert "Saved Views (2)" in rendered_list
+    assert f"#{evidence_view.saved_view_id} | Evidence Search" in rendered_list
+    assert "Search: project lead" in rendered_list
+    assert f"#{numeric_view.saved_view_id} | Numeric Work" in rendered_list
+    assert "Forecast type: Numeric" in rendered_list
+
+    by_name = StringIO()
+    assert (
+        run(
+            ["saved-view", "--name", "eViDeNcE sEaRcH"],
+            database_path=database_path,
+            stdout=by_name,
+        )
+        == 0
+    )
+    rendered_name = by_name.getvalue()
+    assert (
+        f"Saved View #{evidence_view.saved_view_id}: Evidence Search" in rendered_name
+    )
+    assert f"#{binary.prediction_id} | BINARY | OPEN | 55% Yes" in rendered_name
+    assert "Match: Journal entry match" in rendered_name
+    assert "work items" not in rendered_name
+
+    by_id = StringIO()
+    assert (
+        run(
+            ["saved-view", "--id", str(numeric_view.saved_view_id)],
+            database_path=database_path,
+            stdout=by_id,
+        )
+        == 0
+    )
+    rendered_id = by_id.getvalue()
+    assert f"Saved View #{numeric_view.saved_view_id}: Numeric Work" in rendered_id
+    assert f"#{numeric.prediction_id} | NUMERIC | OPEN" in rendered_id
+    assert "saved-view evidence" not in rendered_id
+
+    missing_errors = StringIO()
+    assert (
+        run(
+            ["saved-view", "--name", "No such view"],
+            database_path=database_path,
+            stdout=StringIO(),
+            stderr=missing_errors,
+        )
+        == 1
+    )
+    assert "Saved View named 'No such view' was not found." in missing_errors.getvalue()
+
+    reopened = Database.open(database_path)
+    reopened_operations = PredictionOperations(reopened, FixedClock(NOW), UTC)
+    assert reopened_operations.get_prediction(binary.prediction_id) == before_binary
+    assert (
+        reopened_operations.get_numeric_prediction(numeric.prediction_id)
+        == before_numeric
+    )
+    assert len(reopened_operations.list_saved_views()) == 2
+    reopened.close()
 
 
 def test_cli_show_binary_includes_terminal_detail_and_complete_history(
