@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline and v0.2/v0.3/v0.4 Product Specifications
+## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5 Product Specifications
 
-Status: v0.4 source release implemented
+Status: v0.4 source release implemented; v0.5 approved for staged implementation
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -23,7 +23,7 @@ Build a local-first personal forecasting journal that lets one person:
 
 The product is not merely a database of current probabilities. Its defining value is an honest historical record of what the user believed, why they believed it, and how those beliefs changed.
 
-The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback.
+The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback. v0.5 makes the growing journal reliably retrievable and manageable through explainable full-text search, richer archive controls, dynamic Saved Views, and deliberate tag-library maintenance.
 
 ---
 
@@ -726,7 +726,7 @@ Search, status, forecast-type, and tag filters combine using logical AND. Each
 result identifies Binary or Numeric forecast type and presents the matching
 current forecast summary without obscuring a Numeric unit or interval.
 
-Full-text search across rationales, Background, and journal entries is Later unless it is nearly free within the chosen architecture.
+The v0.1 question-only behavior remains the compatibility baseline. v0.5 explicitly promotes full-text retrieval across the wider historically honest journal corpus under the contract in Section 33.
 
 ---
 
@@ -1121,6 +1121,8 @@ The v0.2 numeric product contract is resolved in Section 30. Numeric precision a
 The v0.3 CLI product contract, command identities, shared-data behavior, interaction model, and staged implementation plan are resolved in Section 31. Logo artwork, normal binary distribution, and automation-oriented CLI features remain deferred.
 
 The v0.4 resolution-integrity and learning contract is resolved in Section 32. Resolved outcomes may be corrected only through append-only history, Invalid Predictions remain Invalid, Postmortems may be completed later, and initial-versus-final analytics use one paired observation per eligible Prediction rather than treating revisions independently.
+
+The v0.5 retrieval-and-organization contract is resolved in Section 33. Search is local, lexical, explainable, current/effective by default, and historically explicit when superseded text is requested. Saved Views remain dynamic queries rather than Collections, and global tag maintenance changes current organizational metadata without rewriting forecast, Journal, or terminal history.
 
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
@@ -1851,7 +1853,394 @@ v0.4 is not complete unless all of the following are true:
 
 ---
 
-## 33. Instruction to coding agents
+## 33. v0.5 retrieval and organization product contract and milestone plan
+
+v0.5 makes a larger Reckonsolve journal easy to find and organize without introducing a hosted search service, opaque recommendation system, or second source of truth. It promotes the previously deferred full-text-search work and strengthens the existing Predictions archive while preserving every completed Binary, Numeric, desktop, CLI, lifecycle, history, analytics, backup, and export invariant.
+
+The release promise is:
+
+> Recall the words you remember, find the right Prediction quickly, understand why it matched, and never mistake superseded text for the current record.
+
+### 33.1 Included scope and governing invariants
+
+v0.5 includes:
+
+- local full-text search across the user-authored Prediction corpus defined in Section 33.2;
+- explainable relevance ranking, source-labeled snippets, one grouped result per Prediction, and contextual navigation from a match to Prediction Detail;
+- safe all-word, any-word, phrase, prefix, literal-substring, and spelling-suggestion behavior without exposing raw search-engine syntax;
+- an explicit opt-in for superseded historical text while current and effective text remains the default;
+- richer archive filtering, multiple-tag matching, deterministic sorting, and clear reset and empty states;
+- dynamic Saved Views that retain a search-and-filter configuration without copying or freezing result membership;
+- deliberate global tag rename, merge, and delete workflows with affected-record counts and transactional safeguards;
+- read-only CLI search and Saved View execution through the same application query and canonical database as the matching GUI identity;
+- a rebuildable local search index, migration, backup, restart, stable/development, cross-interface, and private-build hardening; and
+- a repeatable relevance corpus and regression process that treats retrieval quality as release behavior rather than incidental SQL output.
+
+The following invariants govern every v0.5 feature:
+
+- SQLite remains the only canonical store. A search index is derived data and may never become the sole copy of any user text or relationship.
+- Search, filtering, sorting, opening a result, and running a Saved View are read-only. They do not create history, change lifecycle, reset Needs Attention, advance metadata versions, or alter timestamps.
+- Search results group matches by Prediction. Multiple matching fragments never make one Prediction appear to be several independent records.
+- Relevance changes presentation order only. It never changes the canonical archive, timeline order, scoring-revision selection, or analytical population.
+- Superseded text is excluded from normal search unless the user deliberately includes history, and every historical-only match is labeled as superseded.
+- Structured status, forecast type, tag, date, and attention facts remain filters. They are not inferred from prose or persisted as search-engine truth.
+- Binary and Numeric forecasts retain their completed type-specific creation, revision, lifecycle, resolution, scorecard, and analytics behavior.
+- Saved Views are ordinary mutable organizational preferences, not forecast history, Collections, or snapshots of Prediction identifiers.
+- Tag-library maintenance may change current tag metadata and associations but never edits a ForecastRevision, Journal version, Definition snapshot, Review, terminal fact, correction, score, or Postmortem completion.
+- Every canonical write that changes searchable content and every corresponding search-index update commit atomically or roll back together.
+- A missing, stale, incompatible, or damaged search index must produce an explicit repairable condition, never a false empty result set.
+- All v0.5 behavior remains offline, single-user, and shared only between the paired stable or development GUI and CLI database identities.
+
+### 33.2 Searchable corpus and historical semantics
+
+Normal search covers the current or effective user-authored text of a Prediction plus every immutable text record that remains a genuine part of its forecasting history.
+
+The default searchable corpus includes:
+
+- current Question;
+- current tag labels;
+- current Background;
+- current Resolution Criteria;
+- every nonempty Binary or Numeric ForecastRevision rationale, including the initial rationale;
+- every nonempty Forecast Review note;
+- the effective body of every Journal entry after replaying any transparent corrections;
+- effective Binary or Numeric Resolution notes;
+- the effective Postmortem;
+- the effective Invalidation reason; and
+- every required explanation attached to a score-affecting Resolution correction.
+
+Forecast rationales and Review notes are not superseded merely because a later forecast exists. Each remains an honest time-specific statement and stays in default search. A Journal entry contributes only its effective body by default, while its original timestamp, forecast anchor, and complete correction chain remain canonical. Resolution notes, Postmortem, and Invalidation reason likewise contribute only their latest effective values by default.
+
+The **Include superseded history** option additionally searches:
+
+- earlier Question and Resolution Criteria values preserved by Definition history;
+- original and superseded Journal bodies;
+- original and superseded Resolution-note and Postmortem values; and
+- original and superseded Invalidation reasons.
+
+Historical search does not invent history for fields that Reckonsolve never audited. Background, Expected Resolution, and tag associations therefore expose only their current values. Date values, probabilities, Numeric interval values, outcomes, statuses, and Postmortem-completion facts are rendered or filtered as structured information rather than indexed as undifferentiated prose.
+
+Each searchable fragment has a stable source classification and enough relational identity to locate its canonical owner. At minimum, result sources distinguish:
+
+- Current Question;
+- Tag;
+- Background;
+- Resolution Criteria;
+- Forecast rationale with type and revision sequence;
+- Forecast Review note;
+- Journal entry;
+- Resolution notes;
+- Postmortem;
+- Invalidation reason;
+- outcome-correction explanation; and
+- each corresponding superseded historical source when history is included.
+
+Repeated snapshots or correction rows must not create visually duplicate matches for unchanged text. Search projection may deduplicate identical derived fragments, but it may not delete or coalesce the underlying canonical history.
+
+### 33.3 Query and matching contract
+
+The user enters ordinary text rather than SQLite FTS syntax. Reckonsolve owns query parsing, quoting, validation, and normalization, and arbitrary punctuation must never turn a normal search into a database syntax error.
+
+Matching follows these rules:
+
+- Surrounding whitespace is ignored. A blank query applies no text constraint and retains normal archive browsing.
+- Matching is Unicode-aware and case-insensitive. Equivalent ordinary Latin characters with or without common diacritics should match.
+- Unquoted words use **All words** by default. Every word must occur somewhere within the same Prediction, but different words may occur in different source fragments.
+- A quoted phrase must occur contiguously within one source fragment.
+- The final unquoted word may match the beginning of a longer indexed word so an in-progress query such as `calibr` can find `calibration`.
+- The existing Unicode-aware current-Question substring behavior remains eligible. Moving to full-text search must not make a previously valid Question substring undiscoverable.
+- Exact contiguous text, exact Question, phrase, whole-token, and prefix evidence may all contribute to ranking; matching never rewrites stored text.
+- If an All-words query has no result, Reckonsolve does not silently broaden it. The empty state offers **Search for any word**, and the resulting mode is visibly identified.
+- **Any word** requires at least one query word and may be selected deliberately even when All-words results exist.
+- A corpus-derived spelling suggestion may appear after a zero-result or clearly weak query. It never silently replaces the typed query, must not require a network service or general dictionary download, and runs only after the user accepts or selects the suggestion.
+- Names, acronyms, units, and uncommon domain terms are not presumed to be misspellings merely because they are rare.
+- v0.5 performs no automatic synonym expansion, semantic paraphrase inference, stemming that changes a complete word's meaning, or personalization from earlier searches.
+
+Text matching combines with every active structured filter using logical AND. Match mode affects only the relationship among query words. It does not weaken status, type, date, attention, or tag requirements.
+
+### 33.4 Ranking, grouping, and result explanation
+
+Search retrieves matching fragments, then groups them by Prediction before producing the archive read model. One Prediction contributes one result row regardless of the number of matching sources.
+
+The default relevance policy gives the strongest preference to:
+
+1. an exact or literal match in the current Question;
+2. a whole-word or prefix match in the current Question;
+3. a current tag match;
+4. a match in current Background or Resolution Criteria;
+5. a match in Forecast rationale, Forecast Review, or effective Journal text;
+6. a match in effective terminal notes, Postmortem, Invalidation reason, or an outcome-correction explanation; and
+7. a superseded historical match when history is included.
+
+Within that policy, term coverage, phrase proximity, source quality, and full-text relevance determine the main order. Recency may break otherwise close ties but must not push an old exact Question below a newer vague prose match. Stable Prediction identity supplies the final deterministic tie-breaker.
+
+The exact numeric weighting is an implementation detail tuned against the approved relevance corpus. Changing weights may not violate the source priority, historical labeling, exact-Question expectation, or release acceptance cases.
+
+Each matching result shows:
+
+- current Question;
+- Binary or Numeric type;
+- current derived lifecycle status;
+- current type-appropriate forecast or effective terminal summary;
+- current tags;
+- the best matching source label;
+- a short plain-text snippet with safely emphasized matching text; and
+- an additional-match count when other fragments in the same Prediction also matched.
+
+The explanation must make relevance inspectable without exposing raw scores. Examples include **Question match**, **Journal entry match**, **Forecast revision 3 rationale**, and **Historical Postmortem version - superseded**.
+
+Opening a result loads current Prediction Detail through the normal application query. When the best source has a visible destination, Detail scrolls to and expands the corresponding current metadata section, timeline record, Definition history, terminal correction history, or Postmortem area and temporarily emphasizes the matched passage. A stale or removed derived search target triggers a current re-query or index repair rather than opening fabricated text.
+
+### 33.5 Archive filters and sorting
+
+v0.5 evolves the existing Predictions screen rather than adding a seventh primary Search screen. The archive retains its current status, forecast-type, and tag behavior and adds the following retrieval controls:
+
+- zero or more tag selections;
+- **All selected tags** or **Any selected tag**, with All as the default;
+- an optional attention filter for Needs Attention, Ready to Resolve, or Needs Postmortem;
+- an optional inclusive date range with one selected date meaning: Created, Forecast Deadline, Expected Resolution, or terminal decision date; and
+- an explicit sort selector.
+
+Status choices remain All, Open, Locked, Resolved, and Invalid. Forecast-type choices remain All types, Binary, and Numeric. One selected attention classification narrows to that derived population; it does not create a persisted status. An active date range excludes Predictions without the selected date value. Stored date-only fields retain their calendar semantics, while canonical created and original terminal-decision instants are compared by their displayed local calendar date using one time-zone view per query. A later terminal correction never moves a Prediction into a different terminal-date range.
+
+Supported sort choices are:
+
+- Relevance, available when text search is nonblank;
+- Created newest or oldest;
+- Question A-Z or Z-A;
+- Forecast last considered newest or oldest, using the later eligible ForecastRevision or Forecast Review;
+- Expected Resolution soonest or latest; and
+- terminal decision newest or oldest.
+
+Rows without the selected optional sort value follow rows that have one. All sorts have a stable Prediction-identity tie-breaker. Relevance is the default while a nonblank search is active; Created newest remains the default for ordinary browsing. Choosing another sort is deliberate and must not change match eligibility.
+
+All filter families combine using logical AND except the internal Any-selected-tags mode. A visible **Clear search and filters** action returns to the default archive. Empty results distinguish a genuinely empty database, no current matches, no All-words matches with an available Any-word fallback, and an index/query failure. A failed refresh retains previously rendered results only with an explicit warning.
+
+### 33.6 Saved Views
+
+A **Saved View** is a named dynamic archive query. It stores a retrieval configuration, not a list or copy of matching Prediction identifiers. Opening it reruns the current application query against current canonical data, so membership may legitimately change as Predictions, dates, attention conditions, tags, or effective text change.
+
+A Saved View may retain:
+
+- search text;
+- All-words or Any-word mode;
+- Include superseded history;
+- lifecycle status;
+- forecast type;
+- selected tags and their All/Any mode;
+- attention classification;
+- selected date meaning and optional inclusive endpoints; and
+- sort choice.
+
+Saved View names are required, normalized nonempty text with case-insensitive identity and retained display spelling. The Predictions screen supports **Save current view**, **Save as new**, rename, explicit update, and delete. Applying a Saved View replaces the current archive controls with its stored configuration. Subsequent control changes mark the view as modified but do not silently overwrite it; only **Update saved view** changes the stored preference.
+
+Built-in default browsing is not a mutable Saved View. Saved Views have stable identifiers, ordinary update/delete semantics, and no immutable audit history. Deleting a Saved View deletes no Prediction or tag and needs no historically consequential confirmation.
+
+Tag references use stable tag identity rather than copied display text. A tag rename therefore follows the Saved View automatically. A tag merge retargets and deduplicates references. Deleting a referenced tag explicitly warns that affected Saved Views will lose that tag condition before the single confirmed transaction proceeds.
+
+Saved Views are part of recoverable local application state and therefore belong in SQLite backup. They are omitted from the analytical CSV bundle just as other interface preferences are omitted. They are not Collections: the user cannot manually add or remove one Prediction while preserving a fixed membership list.
+
+### 33.7 Tag-library management
+
+v0.5 adds a secondary **Manage Tags** workflow reachable from Predictions and, where practical, Settings. It is not a new primary screen. The library lists every retained tag with its current Prediction-association count and Saved View reference count and supports filtering the tag list by name.
+
+The workflow permits:
+
+- renaming a tag while retaining its stable identity and all associations;
+- merging one or more source tags into one selected target tag; and
+- deleting a tag and removing its current Prediction and Saved View associations.
+
+Existing tag validation and case-insensitive identity remain authoritative. A display-only capitalization or spelling cleanup is a rename. Renaming to the case-insensitive identity of another tag does not merge silently; the interface directs the user to the explicit merge workflow.
+
+A rename displays the current and proposed labels plus the number of affected Predictions before saving. One transaction retains the tag's stable identifier, changes its display and normalized identity, rebuilds the affected search documents, and advances the optimistic metadata context of associated Predictions. Stable Saved View references require no retargeting and display the new label after refresh.
+
+A merge displays the source tags, target tag, number of affected Predictions, and number of affected Saved Views before confirmation. One transaction unions Prediction associations into the target, removes duplicate associations, retargets and deduplicates Saved View filters, removes the source tags, updates affected search documents, and advances the optimistic metadata context of affected Predictions. Forecast history, Journal history, freshness, lifecycle, and analytics remain unchanged.
+
+Deletion likewise displays affected counts and requires confirmation. One transaction removes the tag's Prediction associations, removes its Saved View references, removes the retained tag row, updates affected search documents, and advances affected Prediction metadata contexts. The confirmation explicitly warns when a Saved View will become broader because its tag condition is being removed. Cancellation or any failure leaves every association and Saved View unchanged.
+
+Because global rename, merge, or deletion changes visible Prediction metadata after creation, affected Predictions no longer qualify as untouched creation records for normal deletion. No Definition snapshot is appended because tags remain outside proposition-definition history. Stale metadata dialogs must reject saving rather than restoring pre-management tag state.
+
+v0.5 adds no tag hierarchy, aliases, colors, automatic tagging, bulk Prediction deletion, or generic bulk metadata editor.
+
+### 33.8 Search persistence, repair, and portability
+
+The search engine uses SQLite FTS5 through Python's standard-library `sqlite3` binding. v0.5 adds no hosted search process, web service, ORM, external search server, embedding model, or production search dependency. Source development and the private frozen Windows build must both prove FTS5 availability before the release can close.
+
+The first v0.5 migration advances the completed schema-version-13 database and creates a content-bearing derived full-text index with unindexed source metadata plus a projection-version marker. Each row represents one searchable fragment rather than one flattened Prediction. Canonical tables remain authoritative for every displayed value, filter, relationship, and historical record.
+
+A data-layer projector deterministically derives the complete search-document set for one Prediction. Every existing or new application mutation that changes searchable text or current tag labels/associations rebuilds the affected Prediction's documents inside the same `BEGIN IMMEDIATE` transaction as the canonical change. Multi-Prediction tag operations rebuild every affected Prediction before committing. Independent GUI and CLI connections therefore observe a consistent old or new state rather than a partially refreshed index.
+
+The query layer safely compiles user text, retrieves fragment candidates, evaluates Prediction-level term coverage, applies structured filters before final ranking, groups by Prediction, and returns presentation-neutral hits. Widgets and CLI renderers perform no SQL, ranking, or history replay.
+
+The search index may be rebuilt in full from canonical state after migration, projection-version change, integrity failure, backup recovery, or an explicit repair action. Rebuilding it creates no product history and changes no canonical application timestamp. An index failure remains visible and offers repair; Reckonsolve must not reinterpret the failure as zero matches.
+
+SQLite backup continues to copy the complete database, including Saved Views and the physical derived index. Recovery verifies canonical migration history and either verifies or deterministically rebuilds the index before reporting success. Relational CSV export remains format version 3 because v0.5 adds no new analytical forecast fact: it reflects current tag rows and associations but excludes the derived index, Saved Views, query text, ranking data, and spelling vocabulary.
+
+Stable and development identities retain separate databases and therefore separate indexes, tag libraries, and Saved Views. Tests and private smoke workflows use only explicit temporary paths.
+
+### 33.9 Desktop and CLI boundaries
+
+Desktop search lives in the Predictions screen so browsing, structured filters, Saved Views, result explanation, and contextual Detail navigation remain one coherent archive workflow. Search input is keyboard-first and may use a short debounce, but a pending query must not block ordinary navigation or display stale results as though they belong to the latest text.
+
+v0.5 adds a read-only CLI search command through both paired identities:
+
+```text
+rsc search "QUERY" [filters]
+rscd search "QUERY" [filters]
+```
+
+The long `reckonsolve-cli` and `reckonsolve-cli-dev` names expose the same command. CLI search supports the same All/Any word mode, history inclusion, status, forecast type, repeated tag filters with All/Any semantics, attention filter, date range, and deterministic sorts where they have a meaningful textual representation. It displays Prediction ID, Question, type, status, current forecast or terminal summary, best source label, snippet, and additional-match count. A suggestion is printed as a suggestion, never executed automatically.
+
+The CLI can list Saved Views and execute one by exact case-insensitive name or stable identifier through the shared application query. Saved View creation, update, rename, and deletion and all tag-library mutations remain desktop-only in v0.5. Existing `list`, `show`, creation, active forecasting, lifecycle, backup, and export commands retain their prior contracts.
+
+Search and Saved View execution are side-effect-free and do not require an interactive prompt. v0.5 adds no machine-readable output, shell query language, noninteractive mutation flag, background watcher, or live push refresh between already-open processes.
+
+### 33.10 Search-quality and evaluation contract
+
+Search is not accepted merely because FTS5 returns rows. Before UI weighting is finalized, the repository must contain a representative, synthetic, privacy-safe relevance corpus with named memory scenarios and expected inclusions, exclusions, and ranking positions.
+
+The corpus and tests cover at least:
+
+- exact current Questions;
+- reordered words;
+- words distributed across a Question and another fragment of the same Prediction;
+- quoted phrases that must remain within one fragment;
+- partial final words;
+- case and common Latin-diacritic differences;
+- punctuation, apostrophes, hyphens, percentages, and query characters meaningful to FTS syntax;
+- one-edit spelling mistakes and deliberate acceptance or rejection of a suggestion;
+- overlapping common terms that should not outrank a stronger Question match;
+- identical text in multiple fragments without duplicate Prediction rows;
+- effective Journal and terminal text after corrections;
+- superseded-only text excluded by default and labeled when history is included;
+- Binary and exact Numeric results;
+- every structured filter, null date, tag mode, and deterministic sort boundary;
+- immediate visibility after GUI and CLI writes, restart, and migration;
+- independent connections, bounded lock failure, and atomic index rollback; and
+- index corruption or incompatibility reported as repairable failure rather than empty search.
+
+Every approved memory scenario must place its intended Prediction within the top three relevant results, and an unambiguous exact current-Question search must rank that Prediction first. Tests assert stable ordering only where the contract makes order meaningful; they do not freeze incidental floating-point relevance values.
+
+The hardening milestone records search time and result completeness against a synthetic corpus substantially larger than expected ordinary personal use. The goal is perceptibly immediate first-page retrieval without introducing infrastructure for hypothetical web scale. A fixed cross-machine millisecond assertion is not a correctness criterion, but an observed regression that makes typing or opening results visibly sluggish blocks release until investigated.
+
+Reckonsolve stores no hidden query history, click profile, or behavioral ranking telemetry. When real use exposes a poor retrieval case, a privacy-safe reproduction becomes a regression scenario before weights or matching rules change.
+
+### 33.11 Implementation milestones
+
+Milestones 32 through 38 implement v0.5.0. Work remains one coherent vertical slice at a time.
+
+#### Milestone 32: Search projection and retrieval foundation
+
+- Record the consequential SQLite FTS5 and rebuildable-derived-index approach in an architecture decision record.
+- Add the safe schema-version-13 migration, projection-version state, FTS capability validation, and deterministic full rebuild.
+- Define presentation-neutral search documents, queries, fragments, grouped hits, source classifications, and repair errors.
+- Project default-effective and opt-in superseded text without flattening or mutating canonical history.
+- Add safe parsing for words, phrases, prefix completion, literal Question substrings, All/Any matching, and explicit spelling suggestions.
+- Add deterministic grouping and source-priority ranking against the synthetic relevance corpus.
+- Integrate per-Prediction index refresh into every existing searchable canonical write transaction and prove rollback, restart, correction replay, stable/development isolation, and independent-connection consistency.
+- Expose no end-user search UI until the complete read model and failure states are ready.
+
+#### Milestone 33: Explainable desktop full-text search
+
+- Replace the Predictions screen's question-only text path with the shared grouped full-text query while preserving blank-query archive behavior.
+- Show one result per Prediction with type, status, current forecast or terminal summary, tags, source label, safe snippet, and additional-match count.
+- Add All/Any mode, quoted phrases, prefix behavior, spelling suggestions, and Include superseded history with unmistakable historical labels.
+- Open current type-aware Detail at the best matching metadata, timeline, Definition-history, or terminal-history context.
+- Preserve keyboard focus, accessible result summaries, responsive query updates, explicit empty states, and visible retained-results behavior after expected query failure.
+
+Acceptance demonstration:
+
+> Create a Prediction, revise it with rationale, add and correct a Journal entry, resolve it, and add a later Postmortem -> search different remembered phrases -> each phrase finds one Prediction with the correct source -> superseded Journal wording appears only after Include superseded history -> restart -> the same current and historical matches remain.
+
+#### Milestone 34: Rich archive filters and deterministic sorting
+
+- Add multi-tag All/Any filtering, attention classification, inclusive date meaning/range, and the complete sort choices from Section 33.5.
+- Apply every structured filter before final relevance ordering and preserve logical-AND behavior across filter families.
+- Derive Locked and attention conditions against one current date/instant per query without persisting them in the index.
+- Define null-date placement, local-date projection for instants, stable tie-breakers, clear-all behavior, and no-match explanations.
+- Cover filter and sort combinations across Binary, Numeric, nonterminal, terminal, corrected outcome, missing-date, and date-boundary records.
+
+#### Milestone 35: Dynamic Saved Views
+
+- Add recoverable persistence for named mutable Saved Views and stable tag references without storing result membership.
+- Add Save current view, Save as new, apply, modified-state, explicit update, rename, and delete workflows inside Predictions.
+- Restore every query, history, filter, date, attention, tag-mode, and sort control exactly and rerun against current data.
+- Preserve case-insensitive name identity, clear duplicate-name errors, cancellation, restart, backup, and stable/development isolation.
+- Keep Saved Views out of forecast history, Analytics, CSV export, Collections, and primary navigation.
+
+#### Milestone 36: Transactional tag-library management
+
+- Add the secondary tag-library workflow with association and Saved View counts.
+- Implement explicit rename, confirmed merge, and confirmed deletion using stable tag identity and existing validation.
+- Update Prediction associations, Saved View references, optimistic metadata contexts, and affected search documents atomically.
+- Reject stale metadata saves after global tag changes and preserve untouched canonical forecast, Journal, terminal, freshness, and analytical facts.
+- Cover duplicate-case labels, display-only rename, many-to-one merge deduplication, deletion that broadens Saved Views, cancellation, rollback, restart, backup, and cross-interface reads.
+
+#### Milestone 37: CLI retrieval parity
+
+- Add type-aware `search` to stable and development CLI identities through the shared application query.
+- Support the meaningful text, history, filter, date, tag-mode, attention, and sort options without exposing raw FTS syntax.
+- Render best-source explanation, snippet, additional matches, explicit suggestions, empty states, and repairable failures without mutation.
+- Add read-only Saved View listing and execution while keeping Saved View and tag-library mutation desktop-only.
+- Preserve existing CLI commands, single canonical database identity, sequential-write guidance, bounded locks, and normal restart refresh.
+
+#### Milestone 38: v0.5 portability, relevance, and release hardening
+
+- Prove complete migration from a real schema-version-13 v0.4 database, forced-failure rollback, full-index rebuild, integrity failure reporting, and repair from canonical history.
+- Verify backup and recovery of Saved Views and search capability while retaining CSV format version 3 and documenting every intentional exclusion.
+- Exercise simultaneous reads, sequential GUI/CLI writes, stale contexts, tag-wide transactions, stable/development isolation, and no false empty results after failure.
+- Run and document the full relevance corpus and a substantially larger synthetic performance corpus.
+- Extend the private frozen-build smoke workflow to prove FTS5 availability, migration, effective/history search, Saved Views, tag maintenance, CLI-compatible canonical results, backup, repair, and restart without the source environment.
+- Run the complete automated suite and align README, architecture, decision records, command help, changelog, and release documentation with implemented v0.5 behavior.
+- Close v0.5 as a source release without expanding into semantic search, Collections, new forecast models, logo work, an installer, signing, updates, or public binary distribution.
+
+### 33.12 v0.5 acceptance criteria
+
+v0.5 is not complete unless all of the following are true:
+
+1. Every completed v0.4 desktop and CLI workflow retains its prior behavior unless this contract explicitly extends it.
+2. Normal search covers every default source in Section 33.2 and returns one grouped row per matching Prediction.
+3. Search is Unicode-aware, case-insensitive, safe for arbitrary punctuation, and never exposes a raw FTS parse error to ordinary query input.
+4. All-words matching may combine words across fragments of one Prediction but never across different Predictions.
+5. Quoted phrases remain fragment-local, prefix completion finds expected longer words, and existing current-Question substring discovery is preserved.
+6. Any-word fallback and spelling suggestions are explicit user choices and never silently change the typed query.
+7. An exact unambiguous current-Question query ranks its Prediction first, and every approved memory scenario ranks its intended Prediction within the top three.
+8. Every result explains its best source, shows a safe relevant snippet, reports additional matches, and opens current Detail at the matching context when one exists.
+9. Effective corrected Journal and terminal text is searchable by default while superseded-only text is absent unless Include superseded history is active.
+10. Every historical-only result is visibly labeled superseded and never masquerades as current Question, Journal, or terminal text.
+11. Relevance affects presentation only and never changes canonical history, lifecycle, freshness, scoring, analytics, or timeline order.
+12. Status, type, attention, date, and tag filters combine exactly as specified, including All/Any multi-tag behavior and null-date exclusion.
+13. Every sort is deterministic, Relevance is available only for nonblank search, and ordinary browsing still defaults to Created newest.
+14. A Saved View restores its complete configuration and dynamically reruns against current data without storing membership.
+15. Editing archive controls after applying a Saved View never silently overwrites the saved configuration.
+16. Saved Views persist across restart and backup, remain isolated between stable and development identities, and remain absent from analytical CSV export.
+17. Tag rename retains identity and associations; tag merge unions and deduplicates; tag deletion removes only the confirmed current associations and references.
+18. Global tag changes update affected search results and Saved Views atomically, reject stale metadata forms, and alter no forecast, Journal, terminal, freshness, or scoring fact.
+19. Every searchable canonical write and its affected index projection commit or roll back together across GUI and CLI operations.
+20. Index rebuild reproduces search behavior from canonical data without creating history or changing application timestamps.
+21. An unavailable, corrupt, incompatible, or stale index is reported and repairable rather than displayed as no matches.
+22. CLI search and Saved View execution use the same application query and produce semantically equivalent eligibility, source, and ordering behavior as the matching GUI identity.
+23. Backup, migration, recovery, restart, stable/development isolation, cross-interface access, and the private frozen build preserve all canonical v0.5 state and search capability.
+24. Search quality and weighting changes are guarded by the privacy-safe relevance corpus, and no hidden query or click history is collected.
+25. The complete v0.5 workflow remains offline, local-first, single-user, and proportionate to a personal forecasting journal.
+
+### 33.13 Explicitly outside v0.5
+
+- Semantic or vector search, embeddings, a bundled language model, automatic synonym inference, web search, hosted indexing, or an external search server.
+- Hidden query logging, click tracking, behavioral personalization, advertising, recommendation feeds, or popularity-based ranking.
+- Collections, manually curated result membership, favorites, pins, tag hierarchy, tag colors, tag aliases, or automatic tagging.
+- Structured Sources/Evidence, attachments, Prediction relationships, graphs, or backlinks.
+- Generic bulk Prediction editing, bulk deletion, bulk import, or a scripting API.
+- CLI mutation of Saved Views or the tag library, machine-readable search output, noninteractive mutation flags, or live inter-process push refresh.
+- New forecast types, multiple Numeric intervals, full distributions, conditional forecasts, new scoring rules, or advanced Forecast Review sessions.
+- Notifications, automatic reminders, background monitoring, or automatic forecast changes.
+- A new CSV format solely for derived search data or Saved Views, JSON or Markdown export, or restoration from analytical export.
+- A normal Windows installer, application-icon artwork, code signing, automatic updates, or public binary distribution.
+- Accounts, profiles, cloud sync, sharing, collaboration, or required network access.
+
+---
+
+## 34. Instruction to coding agents
 
 Before implementing a milestone:
 
