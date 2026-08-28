@@ -35,6 +35,48 @@ class DuplicateSavedViewNameError(ApplicationError):
         self.name = name
 
 
+class TagNotFoundError(ApplicationError):
+    """A selected stable tag identity no longer exists."""
+
+    def __init__(self, tag_id: int) -> None:
+        super().__init__(f"Tag {tag_id} was not found. Refresh Manage Tags and retry.")
+        self.tag_id = tag_id
+
+
+class DuplicateTagNameError(ApplicationError):
+    """A proposed tag label belongs to another retained tag."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"A tag named {name!r} already exists. Use Merge Tags to combine them."
+        )
+        self.name = name
+
+
+class TagRenameUnchangedError(ApplicationError):
+    """A tag rename must change its retained display spelling."""
+
+    def __init__(self) -> None:
+        super().__init__("The tag name is unchanged.")
+
+
+class TagMergeSelectionError(ApplicationError):
+    """A merge requires distinct source and target tag identities."""
+
+    def __init__(self) -> None:
+        super().__init__("Select at least one source tag and one different target tag.")
+
+
+class ConcurrentTagLibraryUpdateError(ApplicationError):
+    """Tag relationships changed after the user reviewed their consequences."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "The tag library changed before this action could be saved. "
+            "Review the refreshed counts and try again."
+        )
+
+
 class ValidationError(ApplicationError):
     """A user-supplied value failed authoritative validation."""
 

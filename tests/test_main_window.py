@@ -77,6 +77,13 @@ from reckonsolve.domain.search import (
     SearchSourceKind,
     parse_search_text,
 )
+from reckonsolve.domain.tags import (
+    TagDeletePreview,
+    TagLibraryItem,
+    TagManagementContext,
+    TagMergePreview,
+    TagRenamePreview,
+)
 from reckonsolve.domain.transfer import (
     BackupResult,
     CsvExportResult,
@@ -89,6 +96,7 @@ from reckonsolve.ui.analytics_charts import (
     ContainmentCalibrationChart,
 )
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
+from reckonsolve.ui.tag_manager import TagManagerDialog
 
 EXPECTED_SCREEN_NAMES = (
     "Dashboard",
@@ -439,6 +447,8 @@ class FakePredictionOperations:
         self.saved_views: list[SavedView] = []
         self.saved_view_error: ApplicationError | None = None
         self.saved_view_next_id = 1
+        self.tag_library: list[TagLibraryItem] = []
+        self.tag_library_error: ApplicationError | None = None
         self.analytics_source = AnalyticsSource(observations=(), available_tags=())
         self.numeric_analytics_source = NumericAnalyticsSource(
             observations=(),
@@ -1544,6 +1554,117 @@ class FakePredictionOperations:
             view for view in self.saved_views if view.saved_view_id != saved_view_id
         ]
 
+    def list_tags(self, name_filter: str = "") -> tuple[TagLibraryItem, ...]:
+        if self.tag_library_error is not None:
+            raise self.tag_library_error
+        key = name_filter.strip().casefold()
+        return tuple(
+            tag for tag in self.tag_library if not key or key in tag.normalized_name
+        )
+
+    def preview_tag_rename(self, tag_id: int, name: str) -> TagRenamePreview:
+        tag = next(item for item in self.tag_library if item.tag_id == tag_id)
+        return TagRenamePreview(
+            context=self._tag_context(tag),
+            proposed_display_name=name.strip(),
+            proposed_normalized_name=name.strip().casefold(),
+        )
+
+    def rename_tag(self, preview: TagRenamePreview) -> None:
+        self.tag_library = [
+            replace(
+                tag,
+                display_name=preview.proposed_display_name,
+                normalized_name=preview.proposed_normalized_name,
+            )
+            if tag.tag_id == preview.context.item.tag_id
+            else tag
+            for tag in self.tag_library
+        ]
+
+    def preview_tag_merge(
+        self,
+        source_tag_ids: tuple[int, ...],
+        target_tag_id: int,
+    ) -> TagMergePreview:
+        source_contexts = tuple(
+            self._tag_context(
+                next(tag for tag in self.tag_library if tag.tag_id == source_id)
+            )
+            for source_id in source_tag_ids
+        )
+        target = self._tag_context(
+            next(tag for tag in self.tag_library if tag.tag_id == target_tag_id)
+        )
+        return TagMergePreview(
+            source_contexts=source_contexts,
+            target_context=target,
+            affected_prediction_ids=tuple(
+                sorted(
+                    {
+                        prediction_id
+                        for context in source_contexts
+                        for prediction_id in context.prediction_ids
+                    }
+                )
+            ),
+            affected_saved_view_ids=tuple(
+                sorted(
+                    {
+                        saved_view_id
+                        for context in source_contexts
+                        for saved_view_id in context.saved_view_ids
+                    }
+                )
+            ),
+        )
+
+    def merge_tags(self, preview: TagMergePreview) -> None:
+        source_ids = {tag.tag_id for tag in preview.source_tags}
+        target_id = preview.target_tag.tag_id
+        self.tag_library = [
+            replace(
+                tag,
+                prediction_count=(
+                    len(
+                        set(preview.target_context.prediction_ids)
+                        | set(preview.affected_prediction_ids)
+                    )
+                ),
+                saved_view_count=(
+                    len(
+                        set(preview.target_context.saved_view_ids)
+                        | set(preview.affected_saved_view_ids)
+                    )
+                ),
+            )
+            if tag.tag_id == target_id
+            else tag
+            for tag in self.tag_library
+            if tag.tag_id not in source_ids
+        ]
+
+    def preview_tag_delete(self, tag_id: int) -> TagDeletePreview:
+        tag = next(item for item in self.tag_library if item.tag_id == tag_id)
+        return TagDeletePreview(self._tag_context(tag))
+
+    def delete_tag(self, preview: TagDeletePreview) -> None:
+        self.tag_library = [
+            tag for tag in self.tag_library if tag.tag_id != preview.tag.tag_id
+        ]
+
+    @staticmethod
+    def _tag_context(tag: TagLibraryItem) -> TagManagementContext:
+        return TagManagementContext(
+            item=tag,
+            prediction_ids=tuple(
+                tag.tag_id * 100 + index for index in range(tag.prediction_count)
+            ),
+            saved_view_ids=tuple(
+                tag.tag_id * 100 + index for index in range(tag.saved_view_count)
+            ),
+        )
+
     def get_prediction_scorecard(self, prediction_id: int) -> object | None:
         return None
 
@@ -2361,6 +2482,137 @@ def test_prediction_browser_saved_view_creation_rename_delete_and_cancel(
     assert _required_child(window, QLabel, "savedViewState").text() == (
         "No Saved View selected"
     )
+
+
+def test_prediction_browser_opens_secondary_tag_manager(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations()
+    opened: list[FakePredictionOperations] = []
+
+    class FakeTagDialog:
+        changed = False
+
+        def __init__(self, supplied_operations, _parent) -> None:
+            opened.append(supplied_operations)
+
+        def exec(self) -> int:
+            return 0
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.prediction_browser.TagManagerDialog",
+        FakeTagDialog,
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "manageTagsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert opened == [operations]
+
+
+def test_tag_manager_filters_and_confirms_rename_merge_and_delete(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations()
+    operations.tag_library = [
+        TagLibraryItem(1, "Work", "work", 2, 1),
+        TagLibraryItem(2, "Personal", "personal", 1, 0),
+        TagLibraryItem(3, "Old", "old", 1, 2),
+    ]
+    dialog = TagManagerDialog(operations)
+    qtbot.addWidget(dialog)
+    table = _required_child(dialog, QTableWidget, "tagManagerTable")
+    filter_input = _required_child(dialog, QLineEdit, "tagManagerFilter")
+
+    assert table.rowCount() == 3
+    filter_input.setText("pers")
+    assert table.rowCount() == 1
+    assert table.item(0, 0).text() == "Personal"
+    filter_input.clear()
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.tag_manager.QInputDialog.getText",
+        lambda *_args, **_kwargs: ("Career", True),
+    )
+    monkeypatch.setattr(
+        "reckonsolve.ui.tag_manager.QMessageBox.question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    _select_tag_rows(table, "Work")
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "renameTagButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert {tag.display_name for tag in operations.tag_library} == {
+        "Career",
+        "Personal",
+        "Old",
+    }
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.tag_manager.QInputDialog.getItem",
+        lambda *_args, **_kwargs: ("Career", True),
+    )
+    _select_tag_rows(table, "Career", "Personal")
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "mergeTagsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert {tag.display_name for tag in operations.tag_library} == {
+        "Career",
+        "Old",
+    }
+
+    confirmations: list[str] = []
+
+    def confirm_delete(*args, **_kwargs):
+        confirmations.append(str(args[2]))
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.tag_manager.QMessageBox.question",
+        confirm_delete,
+    )
+    _select_tag_rows(table, "Old")
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "deleteTagButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert [tag.display_name for tag in operations.tag_library] == ["Career"]
+    assert "may return a broader set of Predictions" in confirmations[-1]
+    assert dialog.changed
+
+
+def test_tag_manager_cancellation_leaves_library_unchanged(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations()
+    original = TagLibraryItem(1, "Work", "work", 2, 1)
+    operations.tag_library = [original]
+    dialog = TagManagerDialog(operations)
+    qtbot.addWidget(dialog)
+    table = _required_child(dialog, QTableWidget, "tagManagerTable")
+    _select_tag_rows(table, "Work")
+    monkeypatch.setattr(
+        "reckonsolve.ui.tag_manager.QInputDialog.getText",
+        lambda *_args, **_kwargs: ("Career", False),
+    )
+
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "renameTagButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.tag_library == [original]
+    assert not dialog.changed
 
 
 def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
@@ -5764,6 +6016,15 @@ def _required_child[WidgetType: QWidget](
     child = parent.findChild(widget_type, object_name)
     assert child is not None
     return child
+
+
+def _select_tag_rows(table: QTableWidget, *display_names: str) -> None:
+    table.clearSelection()
+    wanted = set(display_names)
+    for row in range(table.rowCount()):
+        item = table.item(row, 0)
+        if item is not None and item.text() in wanted:
+            item.setSelected(True)
 
 
 def _scoring_observation(

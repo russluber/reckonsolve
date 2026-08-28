@@ -49,6 +49,20 @@ from reckonsolve.data.saved_views import SavedViewRepository
 from reckonsolve.data.search import SearchRepository
 from reckonsolve.data.search_index import SearchIndexBusyError, SearchIndexError
 from reckonsolve.data.settings import SettingsRepository
+from reckonsolve.data.tags import (
+    DuplicateTagNameError as RepositoryDuplicateTagNameError,
+)
+from reckonsolve.data.tags import (
+    TagLibraryContextChangedError as RepositoryTagLibraryContextChangedError,
+)
+from reckonsolve.data.tags import (
+    TagMergeSelectionError as RepositoryTagMergeSelectionError,
+)
+from reckonsolve.data.tags import TagNotFoundError as RepositoryTagNotFoundError
+from reckonsolve.data.tags import (
+    TagRenameUnchangedError as RepositoryTagRenameUnchangedError,
+)
+from reckonsolve.data.tags import TagRepository
 from reckonsolve.data.terminal_history import (
     OutcomeCorrectionReasonRequiredError,
     PostmortemCompletionDisallowedError,
@@ -120,6 +134,7 @@ from reckonsolve.domain.predictions import (
     changed_resolution_fields,
     display_status,
     metadata_would_change,
+    normalize_tag_label,
 )
 from reckonsolve.domain.saved_views import (
     SavedView,
@@ -135,6 +150,12 @@ from reckonsolve.domain.search import (
     parse_search_text,
     rank_search_candidates,
 )
+from reckonsolve.domain.tags import (
+    TagDeletePreview,
+    TagLibraryItem,
+    TagMergePreview,
+    TagRenamePreview,
+)
 from reckonsolve.domain.transfer import (
     BackupResult,
     CsvExportResult,
@@ -149,9 +170,11 @@ from .errors import (
     ConcurrentJournalUpdateError,
     ConcurrentLifecycleUpdateError,
     ConcurrentPredictionUpdateError,
+    ConcurrentTagLibraryUpdateError,
     ConcurrentTerminalCorrectionError,
     CsvExportError,
     DuplicateSavedViewNameError,
+    DuplicateTagNameError,
     ForecastReviewNotAllowedError,
     ForecastRevisionNotAllowedError,
     ForecastUnchangedError,
@@ -166,6 +189,9 @@ from .errors import (
     PredictionNotFoundError,
     SavedViewNotFoundError,
     SearchUnavailableError,
+    TagMergeSelectionError,
+    TagNotFoundError,
+    TagRenameUnchangedError,
     TerminalCorrectionNotAllowedError,
     TerminalCorrectionUnchangedError,
     ValidationError,
@@ -189,6 +215,7 @@ class PredictionOperations:
         self._transfer_repository = DataTransferRepository(database)
         self._search_repository = SearchRepository(database)
         self._saved_view_repository = SavedViewRepository(database)
+        self._tag_repository = TagRepository(database)
         self._database = database
         self._clock = SystemClock() if clock is None else clock
         self._local_timezone = local_timezone
@@ -1750,6 +1777,108 @@ class PredictionOperations:
         except RepositorySavedViewNotFoundError as error:
             raise SavedViewNotFoundError(saved_view_id) from error
 
+    def list_tags(self, name_filter: str = "") -> tuple[TagLibraryItem, ...]:
+        """Return every retained tag, optionally narrowed by a name substring."""
+
+        if not isinstance(name_filter, str):
+            raise ValidationError("The tag filter must be text.", field="name_filter")
+        key = name_filter.strip().casefold()
+        return tuple(
+            tag
+            for tag in self._tag_repository.list_tags()
+            if not key or key in tag.normalized_name
+        )
+
+    def preview_tag_rename(self, tag_id: int, name: str) -> TagRenamePreview:
+        """Validate and load the exact consequences of a proposed global rename."""
+
+        self._validate_positive_token(tag_id, "tag_id")
+        try:
+            display_name, normalized_name = normalize_tag_label(name)
+            return self._tag_repository.preview_rename(
+                tag_id,
+                display_name,
+                normalized_name,
+            )
+        except PredictionValidationError as error:
+            raise ValidationError(str(error), field="name") from error
+        except RepositoryTagNotFoundError as error:
+            raise TagNotFoundError(tag_id) from error
+        except RepositoryDuplicateTagNameError as error:
+            raise DuplicateTagNameError(display_name) from error
+        except RepositoryTagRenameUnchangedError as error:
+            raise TagRenameUnchangedError from error
+
+    def rename_tag(self, preview: TagRenamePreview) -> None:
+        """Apply one already-reviewed global rename atomically."""
+
+        if not isinstance(preview, TagRenamePreview):
+            raise ValidationError("The tag rename context is invalid.", field="preview")
+        try:
+            self._tag_repository.rename_tag(preview, as_utc(self._clock.now()))
+        except RepositoryTagNotFoundError as error:
+            raise TagNotFoundError(preview.context.item.tag_id) from error
+        except RepositoryDuplicateTagNameError as error:
+            raise DuplicateTagNameError(preview.proposed_display_name) from error
+        except RepositoryTagRenameUnchangedError as error:
+            raise ConcurrentTagLibraryUpdateError from error
+        except RepositoryTagLibraryContextChangedError as error:
+            raise ConcurrentTagLibraryUpdateError from error
+
+    def preview_tag_merge(
+        self,
+        source_tag_ids: tuple[int, ...],
+        target_tag_id: int,
+    ) -> TagMergePreview:
+        """Load the exact union consequences of a deliberate many-to-one merge."""
+
+        self._validate_tag_identifiers(source_tag_ids, "source_tag_ids")
+        self._validate_positive_token(target_tag_id, "target_tag_id")
+        try:
+            return self._tag_repository.preview_merge(source_tag_ids, target_tag_id)
+        except RepositoryTagNotFoundError as error:
+            raise ConcurrentTagLibraryUpdateError from error
+        except RepositoryTagMergeSelectionError as error:
+            raise TagMergeSelectionError from error
+
+    def merge_tags(self, preview: TagMergePreview) -> None:
+        """Apply one already-reviewed tag union atomically."""
+
+        if not isinstance(preview, TagMergePreview):
+            raise ValidationError("The tag merge context is invalid.", field="preview")
+        try:
+            self._tag_repository.merge_tags(preview, as_utc(self._clock.now()))
+        except RepositoryTagNotFoundError as error:
+            raise ConcurrentTagLibraryUpdateError from error
+        except (
+            RepositoryTagMergeSelectionError,
+            RepositoryTagLibraryContextChangedError,
+        ) as error:
+            raise ConcurrentTagLibraryUpdateError from error
+
+    def preview_tag_delete(self, tag_id: int) -> TagDeletePreview:
+        """Load every relationship a deliberate tag deletion will remove."""
+
+        self._validate_positive_token(tag_id, "tag_id")
+        try:
+            return self._tag_repository.preview_delete(tag_id)
+        except RepositoryTagNotFoundError as error:
+            raise TagNotFoundError(tag_id) from error
+
+    def delete_tag(self, preview: TagDeletePreview) -> None:
+        """Apply one already-reviewed global tag deletion atomically."""
+
+        if not isinstance(preview, TagDeletePreview):
+            raise ValidationError(
+                "The tag deletion context is invalid.", field="preview"
+            )
+        try:
+            self._tag_repository.delete_tag(preview, as_utc(self._clock.now()))
+        except RepositoryTagNotFoundError as error:
+            raise ConcurrentTagLibraryUpdateError from error
+        except RepositoryTagLibraryContextChangedError as error:
+            raise ConcurrentTagLibraryUpdateError from error
+
     def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
         """Return exactly-once scoring analytics for all or one tag subset."""
 
@@ -2155,6 +2284,22 @@ class PredictionOperations:
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise ValidationError(
                 "The forecast revision context is invalid.",
+                field=field,
+            )
+
+    @staticmethod
+    def _validate_tag_identifiers(value: object, field: str) -> None:
+        if (
+            not isinstance(value, tuple)
+            or not value
+            or any(
+                isinstance(tag_id, bool) or not isinstance(tag_id, int) or tag_id < 1
+                for tag_id in value
+            )
+            or len(set(value)) != len(value)
+        ):
+            raise ValidationError(
+                "The selected tag identities are invalid.",
                 field=field,
             )
 

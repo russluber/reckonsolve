@@ -57,6 +57,7 @@ from .predictions import (
     PredictionValidationError,
     Resolution,
     TimelineEvent,
+    normalize_tag_label,
 )
 from .saved_views import (
     SavedView,
@@ -79,6 +80,13 @@ from .search import (
     SearchSourceKind,
     build_search_snippet,
     search_source_label,
+)
+from .tags import (
+    TagDeletePreview,
+    TagLibraryItem,
+    TagManagementContext,
+    TagMergePreview,
+    TagRenamePreview,
 )
 from .transfer import BackupResult, CsvExportResult, DataManagementStatus
 
@@ -143,6 +151,11 @@ __all__ = [
     "SearchQuery",
     "SearchSnippet",
     "SearchSourceKind",
+    "TagDeletePreview",
+    "TagLibraryItem",
+    "TagManagementContext",
+    "TagMergePreview",
+    "TagRenamePreview",
     "TimelineEvent",
     "archive_date",
     "build_search_snippet",
@@ -150,6 +163,7 @@ __all__ = [
     "matches_archive_query",
     "needs_attention",
     "normalize_saved_view_name",
+    "normalize_tag_label",
     "ready_to_resolve",
     "search_source_label",
     "sort_archive_items",

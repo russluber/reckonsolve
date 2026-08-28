@@ -1154,25 +1154,35 @@ def _normalize_tags(values: object) -> tuple[str, ...]:
     normalized_tags: list[str] = []
     seen: set[str] = set()
     for candidate in candidates:
-        if not isinstance(candidate, str):
-            raise PredictionValidationError(
-                "Every tag must be text.",
-                field="tags",
-            )
-        tag = candidate.strip()
-        if "\x00" in tag:
-            raise PredictionValidationError(
-                "Tags cannot contain the NUL control character.",
-                field="tags",
-            )
-        if any(delimiter in tag for delimiter in (",", "\r", "\n")):
-            raise PredictionValidationError(
-                "Tags cannot contain commas or line breaks.",
-                field="tags",
-            )
-        normalized_name = tag.casefold()
-        if not normalized_name or normalized_name in seen:
+        if isinstance(candidate, str) and not candidate.strip():
+            continue
+        tag, normalized_name = normalize_tag_label(candidate)
+        if normalized_name in seen:
             continue
         seen.add(normalized_name)
         normalized_tags.append(tag)
     return tuple(normalized_tags)
+
+
+def normalize_tag_label(value: object) -> tuple[str, str]:
+    """Apply the authoritative tag-label validation and identity rules."""
+
+    if not isinstance(value, str):
+        raise PredictionValidationError(
+            "Every tag must be text.",
+            field="tags",
+        )
+    tag = value.strip()
+    if not tag:
+        raise PredictionValidationError("A tag name is required.", field="tags")
+    if "\x00" in tag:
+        raise PredictionValidationError(
+            "Tags cannot contain the NUL control character.",
+            field="tags",
+        )
+    if any(delimiter in tag for delimiter in (",", "\r", "\n")):
+        raise PredictionValidationError(
+            "Tags cannot contain commas or line breaks.",
+            field="tags",
+        )
+    return tag, tag.casefold()

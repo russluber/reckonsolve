@@ -49,6 +49,7 @@ from reckonsolve.domain.search import (
     search_source_label,
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.tag_manager import TagManagementOperations, TagManagerDialog
 
 
 class PredictionBrowserDetailSnapshot(Protocol):
@@ -57,7 +58,7 @@ class PredictionBrowserDetailSnapshot(Protocol):
     prediction_id: int
 
 
-class PredictionBrowserOperations(Protocol):
+class PredictionBrowserOperations(TagManagementOperations, Protocol):
     """Application queries used by the prediction browser."""
 
     def browse_predictions(
@@ -187,6 +188,9 @@ class PredictionBrowserScreen(QWidget):
         self.delete_saved_view_button = QPushButton("Delete", self)
         self.delete_saved_view_button.setObjectName("deleteSavedViewButton")
         apply_lucide_icon(self.delete_saved_view_button, LucideIcon.TRASH)
+        self.manage_tags_button = QPushButton("Manage Tags…", self)
+        self.manage_tags_button.setObjectName("manageTagsButton")
+        apply_lucide_icon(self.manage_tags_button, LucideIcon.SETTINGS)
 
         search_label = QLabel("Search", self)
         self.search_input = QLineEdit(self)
@@ -385,6 +389,10 @@ class PredictionBrowserScreen(QWidget):
         filters_layout.addLayout(search_layout)
         filters_layout.addLayout(filter_controls)
         filters_layout.addLayout(archive_controls)
+        tag_management_layout = QHBoxLayout()
+        tag_management_layout.addWidget(self.manage_tags_button)
+        tag_management_layout.addStretch()
+        filters_layout.addLayout(tag_management_layout)
 
         self.error_label = QLabel(self)
         self.error_label.setObjectName("predictionBrowserError")
@@ -477,6 +485,7 @@ class PredictionBrowserScreen(QWidget):
         self.update_saved_view_button.clicked.connect(self._update_active_saved_view)
         self.rename_saved_view_button.clicked.connect(self._rename_active_saved_view)
         self.delete_saved_view_button.clicked.connect(self._delete_active_saved_view)
+        self.manage_tags_button.clicked.connect(self._manage_tags)
         self.results_list.currentItemChanged.connect(self._selection_changed)
         self.results_list.itemActivated.connect(self._open_item)
         self.open_button.clicked.connect(self._open_current_item)
@@ -757,6 +766,25 @@ class PredictionBrowserScreen(QWidget):
         if self._active_saved_view_id is None:
             return None
         return self._saved_views.get(self._active_saved_view_id)
+
+    def _manage_tags(self) -> None:
+        """Open the secondary global tag workflow, then refresh stable references."""
+
+        dialog = TagManagerDialog(self._operations, self)
+        dialog.exec()
+        if not dialog.changed:
+            return
+        try:
+            self._load_saved_views()
+        except ApplicationError as error:
+            self.error_label.setText(str(error))
+            self.error_label.setHidden(False)
+            return
+        active = self._active_saved_view()
+        if active is None:
+            self.refresh()
+        else:
+            self._apply_saved_view(active)
 
     def _update_saved_view_state(self) -> None:
         active = self._active_saved_view()
