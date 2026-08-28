@@ -58,6 +58,13 @@ from .predictions import (
     Resolution,
     TimelineEvent,
 )
+from .saved_views import (
+    SavedView,
+    SavedViewConfiguration,
+    SavedViewTag,
+    SavedViewValidationError,
+    normalize_saved_view_name,
+)
 from .search import (
     ParsedSearchText,
     PredictionSearchHit,
@@ -123,6 +130,10 @@ __all__ = [
     "PredictionStatus",
     "PredictionValidationError",
     "Resolution",
+    "SavedView",
+    "SavedViewConfiguration",
+    "SavedViewTag",
+    "SavedViewValidationError",
     "ScoringObservation",
     "SearchClause",
     "SearchDocument",
@@ -138,6 +149,7 @@ __all__ = [
     "classify_archive_items",
     "matches_archive_query",
     "needs_attention",
+    "normalize_saved_view_name",
     "ready_to_resolve",
     "search_source_label",
     "sort_archive_items",

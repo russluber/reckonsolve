@@ -14,10 +14,12 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -28,12 +30,14 @@ from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.browser import (
     ArchiveAttention,
     ArchiveDateMeaning,
+    ArchiveQuery,
     ArchiveSort,
     ArchiveTagMatchMode,
     PredictionBrowserItem,
     PredictionBrowserSnapshot,
 )
 from reckonsolve.domain.predictions import PredictionStatus, PredictionType
+from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import (
     ParsedSearchText,
     PredictionSearchHit,
@@ -98,6 +102,25 @@ class PredictionBrowserOperations(Protocol):
     ) -> PredictionBrowserDetailSnapshot:
         """Return one current prediction for Detail navigation."""
 
+    def list_saved_views(self) -> tuple[SavedView, ...]:
+        """Return mutable archive configurations without result membership."""
+
+    def create_saved_view(
+        self, name: str, configuration: SavedViewConfiguration
+    ) -> SavedView:
+        """Persist one named dynamic archive configuration."""
+
+    def update_saved_view(
+        self, saved_view_id: int, configuration: SavedViewConfiguration
+    ) -> SavedView:
+        """Explicitly replace one Saved View configuration."""
+
+    def rename_saved_view(self, saved_view_id: int, name: str) -> SavedView:
+        """Rename one mutable Saved View."""
+
+    def delete_saved_view(self, saved_view_id: int) -> None:
+        """Delete one mutable Saved View only."""
+
 
 class PredictionBrowserScreen(QWidget):
     """Browse every lifecycle state by question text, status, and tag."""
@@ -116,6 +139,8 @@ class PredictionBrowserScreen(QWidget):
         self._loaded_snapshot: (
             PredictionBrowserSnapshot | PredictionSearchResults | None
         ) = None
+        self._saved_views: dict[int, SavedView] = {}
+        self._active_saved_view_id: int | None = None
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setObjectName("predictionBrowserRefreshTimer")
         self._refresh_timer.setInterval(60_000)
@@ -137,6 +162,31 @@ class PredictionBrowserScreen(QWidget):
         introduction.setObjectName("predictionBrowserIntroduction")
         introduction.setWordWrap(True)
         introduction.setTextFormat(Qt.TextFormat.PlainText)
+
+        saved_view_label = QLabel("Saved View", self)
+        self.saved_view_picker = QComboBox(self)
+        self.saved_view_picker.setObjectName("savedViewPicker")
+        self.saved_view_picker.setAccessibleName("Apply a Saved View")
+        self.saved_view_picker.addItem("No Saved View", None)
+        saved_view_label.setBuddy(self.saved_view_picker)
+        self.saved_view_state = QLabel("No Saved View selected", self)
+        self.saved_view_state.setObjectName("savedViewState")
+        self.saved_view_state.setTextFormat(Qt.TextFormat.PlainText)
+        self.save_current_view_button = QPushButton("Save current view…", self)
+        self.save_current_view_button.setObjectName("saveCurrentViewButton")
+        apply_lucide_icon(self.save_current_view_button, LucideIcon.SAVE)
+        self.save_as_new_button = QPushButton("Save as new…", self)
+        self.save_as_new_button.setObjectName("saveViewAsNewButton")
+        apply_lucide_icon(self.save_as_new_button, LucideIcon.SAVE)
+        self.update_saved_view_button = QPushButton("Update Saved View", self)
+        self.update_saved_view_button.setObjectName("updateSavedViewButton")
+        apply_lucide_icon(self.update_saved_view_button, LucideIcon.SAVE)
+        self.rename_saved_view_button = QPushButton("Rename", self)
+        self.rename_saved_view_button.setObjectName("renameSavedViewButton")
+        apply_lucide_icon(self.rename_saved_view_button, LucideIcon.PENCIL)
+        self.delete_saved_view_button = QPushButton("Delete", self)
+        self.delete_saved_view_button.setObjectName("deleteSavedViewButton")
+        apply_lucide_icon(self.delete_saved_view_button, LucideIcon.TRASH)
 
         search_label = QLabel("Search", self)
         self.search_input = QLineEdit(self)
@@ -321,6 +371,17 @@ class PredictionBrowserScreen(QWidget):
         archive_controls.addStretch()
 
         filters_layout = QVBoxLayout()
+        saved_views_layout = QHBoxLayout()
+        saved_views_layout.addWidget(saved_view_label)
+        saved_views_layout.addWidget(self.saved_view_picker)
+        saved_views_layout.addWidget(self.saved_view_state)
+        saved_views_layout.addWidget(self.save_current_view_button)
+        saved_views_layout.addWidget(self.save_as_new_button)
+        saved_views_layout.addWidget(self.update_saved_view_button)
+        saved_views_layout.addWidget(self.rename_saved_view_button)
+        saved_views_layout.addWidget(self.delete_saved_view_button)
+        saved_views_layout.addStretch()
+        filters_layout.addLayout(saved_views_layout)
         filters_layout.addLayout(search_layout)
         filters_layout.addLayout(filter_controls)
         filters_layout.addLayout(archive_controls)
@@ -410,11 +471,18 @@ class PredictionBrowserScreen(QWidget):
         self.date_start.dateChanged.connect(self.refresh)
         self.date_end.dateChanged.connect(self.refresh)
         self.sort_filter.currentIndexChanged.connect(self._sort_selected)
+        self.saved_view_picker.currentIndexChanged.connect(self._saved_view_selected)
+        self.save_current_view_button.clicked.connect(self._save_current_view)
+        self.save_as_new_button.clicked.connect(self._save_as_new)
+        self.update_saved_view_button.clicked.connect(self._update_active_saved_view)
+        self.rename_saved_view_button.clicked.connect(self._rename_active_saved_view)
+        self.delete_saved_view_button.clicked.connect(self._delete_active_saved_view)
         self.results_list.currentItemChanged.connect(self._selection_changed)
         self.results_list.itemActivated.connect(self._open_item)
         self.open_button.clicked.connect(self._open_current_item)
         self.any_word_button.clicked.connect(self._search_for_any_word)
         self.suggestion_button.clicked.connect(self._accept_suggestion)
+        self._update_saved_view_state()
 
     def showEvent(self, event: QShowEvent) -> None:
         """Keep derived Locked status current while the browser remains visible."""
@@ -436,6 +504,7 @@ class PredictionBrowserScreen(QWidget):
         self._sync_default_sort(bool(self.search_input.text().strip()))
         selected_tags = self._selected_tags()
         try:
+            self._load_saved_views()
             snapshot = self._query()
             available_keys = {item.casefold() for item in snapshot.available_tags}
             retained_tags = tuple(
@@ -464,6 +533,246 @@ class PredictionBrowserScreen(QWidget):
         self._loaded_snapshot = snapshot
         self._update_tag_choices(snapshot.available_tags)
         self._render(snapshot)
+        self._update_saved_view_state()
+
+    def _load_saved_views(self) -> None:
+        """Refresh the picker without changing the active configuration."""
+
+        views = self._operations.list_saved_views()
+        self._saved_views = {view.saved_view_id: view for view in views}
+        if self._active_saved_view_id not in self._saved_views:
+            self._active_saved_view_id = None
+        with QSignalBlocker(self.saved_view_picker):
+            self.saved_view_picker.clear()
+            self.saved_view_picker.addItem("No Saved View", None)
+            selected_index = 0
+            for view in views:
+                self.saved_view_picker.addItem(view.name, view.saved_view_id)
+                if view.saved_view_id == self._active_saved_view_id:
+                    selected_index = self.saved_view_picker.count() - 1
+            self.saved_view_picker.setCurrentIndex(selected_index)
+
+    def _saved_view_selected(self, _index: int) -> None:
+        value = self.saved_view_picker.currentData()
+        if value is None:
+            self._active_saved_view_id = None
+            self._update_saved_view_state()
+            return
+        view = self._saved_views.get(int(value))
+        if view is None:
+            self._active_saved_view_id = None
+            self._update_saved_view_state()
+            return
+        self._apply_saved_view(view)
+
+    def _apply_saved_view(self, view: SavedView) -> None:
+        """Replace controls, then dynamically rerun the normal archive query."""
+
+        configuration = view.configuration
+        query = configuration.archive_query
+        with (
+            QSignalBlocker(self.search_input),
+            QSignalBlocker(self.match_mode),
+            QSignalBlocker(self.include_history),
+            QSignalBlocker(self.status_filter),
+            QSignalBlocker(self.type_filter),
+            QSignalBlocker(self.tag_filter),
+            QSignalBlocker(self.tag_match_mode),
+            QSignalBlocker(self.attention_filter),
+            QSignalBlocker(self.date_meaning),
+            QSignalBlocker(self.date_start_enabled),
+            QSignalBlocker(self.date_end_enabled),
+            QSignalBlocker(self.date_start),
+            QSignalBlocker(self.date_end),
+            QSignalBlocker(self.sort_filter),
+        ):
+            self.search_input.setText(configuration.search_text)
+            self.match_mode.setCurrentIndex(
+                self.match_mode.findData(configuration.match_mode.value)
+            )
+            self.include_history.setChecked(configuration.include_superseded)
+            self.status_filter.setCurrentIndex(
+                self.status_filter.findData(
+                    None if query.status is None else query.status.value
+                )
+            )
+            self.type_filter.setCurrentIndex(
+                self.type_filter.findData(
+                    None
+                    if query.prediction_type is None
+                    else query.prediction_type.value
+                )
+            )
+            self._set_selected_tags(query.tags)
+            self.tag_match_mode.setCurrentIndex(
+                self.tag_match_mode.findData(query.tag_match_mode.value)
+            )
+            self.attention_filter.setCurrentIndex(
+                self.attention_filter.findData(
+                    None if query.attention is None else query.attention.value
+                )
+            )
+            self.date_meaning.setCurrentIndex(
+                self.date_meaning.findData(query.date_meaning.value)
+            )
+            self.date_start_enabled.setChecked(query.date_start is not None)
+            self.date_end_enabled.setChecked(query.date_end is not None)
+            if query.date_start is not None:
+                self.date_start.setDate(
+                    QDate(
+                        query.date_start.year,
+                        query.date_start.month,
+                        query.date_start.day,
+                    )
+                )
+            if query.date_end is not None:
+                self.date_end.setDate(
+                    QDate(query.date_end.year, query.date_end.month, query.date_end.day)
+                )
+            self.sort_filter.setCurrentIndex(
+                self.sort_filter.findData(query.sort.value)
+            )
+        self._sort_is_default = False
+        self._active_saved_view_id = view.saved_view_id
+        self.refresh()
+
+    def _current_saved_view_configuration(self) -> SavedViewConfiguration:
+        return SavedViewConfiguration(
+            search_text=self.search_input.text(),
+            match_mode=self._selected_match_mode(),
+            include_superseded=self.include_history.isChecked(),
+            archive_query=ArchiveQuery(
+                status=self._selected_status(),
+                prediction_type=self._selected_prediction_type(),
+                tags=self._selected_tags(),
+                tag_match_mode=self._selected_tag_match_mode(),
+                attention=self._selected_attention(),
+                date_meaning=self._selected_date_meaning(),
+                date_start=self._selected_date(
+                    self.date_start_enabled, self.date_start
+                ),
+                date_end=self._selected_date(self.date_end_enabled, self.date_end),
+                sort=self._selected_sort(),
+            ),
+        )
+
+    def _save_current_view(self) -> None:
+        """Name and save the current dynamic archive controls as a new view."""
+
+        self._create_saved_view(suggested_name="")
+
+    def _save_as_new(self) -> None:
+        """Clone the current controls under an explicitly new Saved View name."""
+
+        active = self._active_saved_view()
+        self._create_saved_view(
+            suggested_name="" if active is None else f"{active.name} copy"
+        )
+
+    def _create_saved_view(self, *, suggested_name: str) -> None:
+        name, accepted = QInputDialog.getText(
+            self,
+            "Save current view",
+            "Saved View name:",
+            text=suggested_name,
+        )
+        if not accepted:
+            return
+        try:
+            view = self._operations.create_saved_view(
+                name,
+                self._current_saved_view_configuration(),
+            )
+        except ApplicationError as error:
+            self.error_label.setText(str(error))
+            self.error_label.setHidden(False)
+            return
+        self.error_label.setHidden(True)
+        self._active_saved_view_id = view.saved_view_id
+        self.refresh()
+
+    def _update_active_saved_view(self) -> None:
+        view = self._active_saved_view()
+        if view is None:
+            return
+        try:
+            updated = self._operations.update_saved_view(
+                view.saved_view_id,
+                self._current_saved_view_configuration(),
+            )
+        except ApplicationError as error:
+            self.error_label.setText(str(error))
+            self.error_label.setHidden(False)
+            return
+        self.error_label.setHidden(True)
+        self._active_saved_view_id = updated.saved_view_id
+        self.refresh()
+
+    def _rename_active_saved_view(self) -> None:
+        view = self._active_saved_view()
+        if view is None:
+            return
+        name, accepted = QInputDialog.getText(
+            self,
+            "Rename Saved View",
+            "Saved View name:",
+            text=view.name,
+        )
+        if not accepted:
+            return
+        try:
+            renamed = self._operations.rename_saved_view(view.saved_view_id, name)
+        except ApplicationError as error:
+            self.error_label.setText(str(error))
+            self.error_label.setHidden(False)
+            return
+        self.error_label.setHidden(True)
+        self._active_saved_view_id = renamed.saved_view_id
+        self.refresh()
+
+    def _delete_active_saved_view(self) -> None:
+        view = self._active_saved_view()
+        if view is None:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Delete Saved View",
+            f"Delete Saved View {view.name!r}? This does not delete Predictions.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._operations.delete_saved_view(view.saved_view_id)
+        except ApplicationError as error:
+            self.error_label.setText(str(error))
+            self.error_label.setHidden(False)
+            return
+        self.error_label.setHidden(True)
+        self._active_saved_view_id = None
+        self.refresh()
+
+    def _active_saved_view(self) -> SavedView | None:
+        if self._active_saved_view_id is None:
+            return None
+        return self._saved_views.get(self._active_saved_view_id)
+
+    def _update_saved_view_state(self) -> None:
+        active = self._active_saved_view()
+        if active is None:
+            self.saved_view_state.setText("No Saved View selected")
+            self.update_saved_view_button.setEnabled(False)
+            self.rename_saved_view_button.setEnabled(False)
+            self.delete_saved_view_button.setEnabled(False)
+            return
+        modified = self._current_saved_view_configuration() != active.configuration
+        self.saved_view_state.setText(
+            f"{active.name}: {'Modified' if modified else 'Saved'}"
+        )
+        self.update_saved_view_button.setEnabled(modified)
+        self.rename_saved_view_button.setEnabled(True)
+        self.delete_saved_view_button.setEnabled(True)
 
     def _query(self) -> PredictionBrowserSnapshot | PredictionSearchResults:
         text = self.search_input.text()
@@ -733,6 +1042,7 @@ class PredictionBrowserScreen(QWidget):
 
     def _search_text_edited(self, text: str) -> None:
         self._sync_default_sort(bool(text.strip()))
+        self._update_saved_view_state()
         self._search_debounce.start()
 
     def _search_for_any_word(self) -> None:

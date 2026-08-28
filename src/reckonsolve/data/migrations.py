@@ -2542,6 +2542,83 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=15,
+        name="add dynamic saved views",
+        statements=(
+            """
+            CREATE TABLE saved_views (
+                id INTEGER PRIMARY KEY,
+                display_name TEXT NOT NULL
+                    CHECK (
+                        length(display_name) > 0
+                        AND display_name = trim(
+                            display_name,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(display_name, char(0)) = 0
+                    ),
+                normalized_name TEXT NOT NULL UNIQUE
+                    CHECK (length(normalized_name) > 0),
+                search_text TEXT NOT NULL,
+                match_mode TEXT NOT NULL CHECK (match_mode IN ('all', 'any')),
+                include_superseded INTEGER NOT NULL
+                    CHECK (include_superseded IN (0, 1)),
+                status TEXT CHECK (status IN ('open', 'locked', 'resolved', 'invalid')),
+                prediction_type TEXT CHECK (prediction_type IN ('binary', 'numeric')),
+                tag_match_mode TEXT NOT NULL
+                    CHECK (tag_match_mode IN ('all', 'any')),
+                attention TEXT CHECK (
+                    attention IN (
+                        'needs_attention', 'ready_to_resolve', 'needs_postmortem'
+                    )
+                ),
+                date_meaning TEXT NOT NULL CHECK (
+                    date_meaning IN (
+                        'created', 'forecast_deadline', 'expected_resolution',
+                        'terminal_decision'
+                    )
+                ),
+                date_start TEXT CHECK (
+                    date_start IS NULL OR (
+                        length(date_start) = 10
+                        AND date(date_start, '+0 days') = date_start
+                    )
+                ),
+                date_end TEXT CHECK (
+                    date_end IS NULL OR (
+                        length(date_end) = 10
+                        AND date(date_end, '+0 days') = date_end
+                    )
+                ),
+                sort TEXT NOT NULL CHECK (
+                    sort IN (
+                        'relevance', 'created_newest', 'created_oldest',
+                        'question_a_to_z', 'question_z_to_a',
+                        'forecast_considered_newest',
+                        'forecast_considered_oldest',
+                        'expected_resolution_soonest',
+                        'expected_resolution_latest',
+                        'terminal_decision_newest', 'terminal_decision_oldest'
+                    )
+                )
+            ) STRICT
+            """,
+            """
+            CREATE TABLE saved_view_tags (
+                saved_view_id INTEGER NOT NULL
+                    REFERENCES saved_views(id) ON DELETE CASCADE,
+                tag_id INTEGER NOT NULL REFERENCES tags(id),
+                PRIMARY KEY (saved_view_id, tag_id)
+            ) STRICT
+            """,
+            """
+            CREATE INDEX saved_view_tags_by_tag
+            ON saved_view_tags (tag_id, saved_view_id)
+            """,
+        ),
+    ),
 )
 
 

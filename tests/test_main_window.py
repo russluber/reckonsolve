@@ -46,6 +46,7 @@ from reckonsolve.domain.attention import DashboardPrediction, DashboardSnapshot
 from reckonsolve.domain.browser import (
     ArchiveAttention,
     ArchiveDateMeaning,
+    ArchiveQuery,
     ArchiveSort,
     ArchiveTagMatchMode,
     PredictionBrowserItem,
@@ -64,6 +65,7 @@ from reckonsolve.domain.predictions import (
     PredictionType,
     Resolution,
 )
+from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import (
     PredictionSearchHit,
     PredictionSearchResults,
@@ -434,6 +436,9 @@ class FakePredictionOperations:
         self.search_document: SearchDocument | None = None
         self.search_any_word_available = False
         self.search_suggestion: str | None = None
+        self.saved_views: list[SavedView] = []
+        self.saved_view_error: ApplicationError | None = None
+        self.saved_view_next_id = 1
         self.analytics_source = AnalyticsSource(observations=(), available_tags=())
         self.numeric_analytics_source = NumericAnalyticsSource(
             observations=(),
@@ -1487,6 +1492,58 @@ class FakePredictionOperations:
             raise self.analytics_error
         return summarize_analytics(self.analytics_source, tag=tag)
 
+    def list_saved_views(self) -> tuple[SavedView, ...]:
+        if self.saved_view_error is not None:
+            raise self.saved_view_error
+        return tuple(self.saved_views)
+
+    def create_saved_view(
+        self,
+        name: str,
+        configuration: SavedViewConfiguration,
+    ) -> SavedView:
+        if self.saved_view_error is not None:
+            raise self.saved_view_error
+        view = SavedView(
+            saved_view_id=self.saved_view_next_id,
+            name=name.strip(),
+            normalized_name=name.strip().casefold(),
+            configuration=configuration,
+            tags=(),
+        )
+        self.saved_view_next_id += 1
+        self.saved_views.append(view)
+        return view
+
+    def update_saved_view(
+        self,
+        saved_view_id: int,
+        configuration: SavedViewConfiguration,
+    ) -> SavedView:
+        for index, view in enumerate(self.saved_views):
+            if view.saved_view_id == saved_view_id:
+                updated = replace(view, configuration=configuration)
+                self.saved_views[index] = updated
+                return updated
+        raise RuntimeError("Saved View missing from fake operations.")
+
+    def rename_saved_view(self, saved_view_id: int, name: str) -> SavedView:
+        for index, view in enumerate(self.saved_views):
+            if view.saved_view_id == saved_view_id:
+                renamed = replace(
+                    view,
+                    name=name.strip(),
+                    normalized_name=name.strip().casefold(),
+                )
+                self.saved_views[index] = renamed
+                return renamed
+        raise RuntimeError("Saved View missing from fake operations.")
+
+    def delete_saved_view(self, saved_view_id: int) -> None:
+        self.saved_views = [
+            view for view in self.saved_views if view.saved_view_id != saved_view_id
+        ]
+
     def get_prediction_scorecard(self, prediction_id: int) -> object | None:
         return None
 
@@ -2164,6 +2221,146 @@ def test_prediction_browser_sends_rich_archive_filters_and_resets_defaults(
         Qt.MouseButton.LeftButton,
     )
     assert operations.archive_calls[-1][-1] is ArchiveSort.RELEVANCE
+
+
+def test_prediction_browser_applies_and_explicitly_updates_dynamic_saved_views(
+    qtbot: QtBot,
+) -> None:
+    instant = datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
+    configuration = SavedViewConfiguration(
+        search_text="evidence",
+        match_mode=SearchMatchMode.ANY,
+        include_superseded=True,
+        archive_query=ArchiveQuery(
+            status=PredictionStatus.OPEN,
+            prediction_type=PredictionType.BINARY,
+            tags=("Work",),
+            tag_match_mode=ArchiveTagMatchMode.ALL,
+            attention=None,
+            date_meaning=ArchiveDateMeaning.EXPECTED_RESOLUTION,
+            date_start=date(2026, 8, 1),
+            date_end=date(2026, 8, 31),
+            sort=ArchiveSort.RELEVANCE,
+        ),
+    )
+    operations = FakePredictionOperations()
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=(
+            PredictionBrowserItem(
+                prediction_id=1,
+                question="Will evidence remain in a dynamic Saved View?",
+                probability_percent=50,
+                status=PredictionStatus.OPEN,
+                created_at=instant,
+                latest_revision_at=instant,
+                expected_resolution=date(2026, 8, 15),
+                tags=("Work",),
+            ),
+        ),
+        available_tags=("Work",),
+    )
+    operations.saved_views = [
+        SavedView(
+            saved_view_id=7,
+            name="Evidence",
+            normalized_name="evidence",
+            configuration=configuration,
+            tags=(),
+        )
+    ]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+
+    picker = _required_child(window, QComboBox, "savedViewPicker")
+    picker.setCurrentIndex(picker.findData(7))
+
+    assert _required_child(window, QLineEdit, "predictionSearchInput").text() == (
+        "evidence"
+    )
+    assert _required_child(
+        window, QComboBox, "predictionSearchMatchMode"
+    ).currentData() == (SearchMatchMode.ANY.value)
+    assert _required_child(
+        window, QCheckBox, "predictionSearchIncludeHistory"
+    ).isChecked()
+    assert _required_child(
+        window, QComboBox, "predictionStatusFilter"
+    ).currentData() == (PredictionStatus.OPEN.value)
+    assert _required_child(
+        window, QComboBox, "predictionDateMeaning"
+    ).currentData() == (ArchiveDateMeaning.EXPECTED_RESOLUTION.value)
+    assert _required_child(window, QLabel, "savedViewState").text() == "Evidence: Saved"
+
+    status = _required_child(window, QComboBox, "predictionStatusFilter")
+    status.setCurrentIndex(status.findData(PredictionStatus.RESOLVED.value))
+    update = _required_child(window, QPushButton, "updateSavedViewButton")
+    assert update.isEnabled()
+    assert _required_child(window, QLabel, "savedViewState").text() == (
+        "Evidence: Modified"
+    )
+
+    qtbot.mouseClick(update, Qt.MouseButton.LeftButton)
+
+    assert operations.saved_views[0].configuration.archive_query.status is (
+        PredictionStatus.RESOLVED
+    )
+    assert _required_child(window, QLabel, "savedViewState").text() == "Evidence: Saved"
+
+
+def test_prediction_browser_saved_view_creation_rename_delete_and_cancel(
+    qtbot: QtBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.prediction_browser.QInputDialog.getText",
+        lambda *_args, **_kwargs: ("Focus", True),
+    )
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "saveCurrentViewButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert [view.name for view in operations.saved_views] == ["Focus"]
+    assert _required_child(window, QLabel, "savedViewState").text() == "Focus: Saved"
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.prediction_browser.QInputDialog.getText",
+        lambda *_args, **_kwargs: ("Renamed", True),
+    )
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "renameSavedViewButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert [view.name for view in operations.saved_views] == ["Renamed"]
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.prediction_browser.QInputDialog.getText",
+        lambda *_args, **_kwargs: ("Ignored", False),
+    )
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "saveViewAsNewButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert [view.name for view in operations.saved_views] == ["Renamed"]
+
+    monkeypatch.setattr(
+        "reckonsolve.ui.prediction_browser.QMessageBox.question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "deleteSavedViewButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert operations.saved_views == []
+    assert _required_child(window, QLabel, "savedViewState").text() == (
+        "No Saved View selected"
+    )
 
 
 def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(

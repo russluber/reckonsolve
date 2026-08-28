@@ -63,14 +63,14 @@ def test_cli_runtime_selects_paired_stable_and_development_paths(
 
     stable = create_runtime(identity=STABLE_APPLICATION)
     assert stable.database.path == tmp_path / "Reckonsolve" / "reckonsolve.sqlite3"
-    assert stable.database.schema_version == 14
+    assert stable.database.schema_version == 15
     stable.close()
 
     development = create_runtime(identity=DEVELOPMENT_APPLICATION)
     assert development.database.path == (
         tmp_path / "Reckonsolve Dev" / "reckonsolve.sqlite3"
     )
-    assert development.database.schema_version == 14
+    assert development.database.schema_version == 15
     development.close()
 
     assert stable.database.path != development.database.path

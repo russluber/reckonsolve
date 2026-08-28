@@ -32,7 +32,7 @@ def test_v14_upgrade_preserves_v13_data_and_builds_search_projection(tmp_path) -
     )
     old.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:14])
     operations = PredictionOperations(upgraded, FixedClock(), UTC)
 
     assert upgraded.schema_version == 14
@@ -78,7 +78,9 @@ def test_failing_v14_rolls_back_every_search_schema_change(tmp_path) -> None:
 
 
 def test_v14_creates_versioned_projection_and_update_triggers(tmp_path) -> None:
-    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    database = Database.open(
+        tmp_path / "reckonsolve.sqlite3", migrations=MIGRATIONS[:14]
+    )
 
     with database.transaction() as connection:
         state = connection.execute(
@@ -123,4 +125,4 @@ def test_v14_startup_reports_an_explicit_missing_fts5_capability(
     monkeypatch.setattr("reckonsolve.data.database.require_fts5", unavailable)
 
     with pytest.raises(SearchIndexUnavailableError, match="FTS5 is unavailable"):
-        Database.open(tmp_path / "reckonsolve.sqlite3")
+        Database.open(tmp_path / "reckonsolve.sqlite3", migrations=MIGRATIONS[:14])

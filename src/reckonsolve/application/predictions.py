@@ -39,6 +39,13 @@ from reckonsolve.data.predictions import (
     PredictionDeletionDisallowedError,
     PredictionRepository,
 )
+from reckonsolve.data.saved_views import (
+    DuplicateSavedViewNameError as RepositoryDuplicateSavedViewNameError,
+)
+from reckonsolve.data.saved_views import (
+    SavedViewNotFoundError as RepositorySavedViewNotFoundError,
+)
+from reckonsolve.data.saved_views import SavedViewRepository
 from reckonsolve.data.search import SearchRepository
 from reckonsolve.data.search_index import SearchIndexBusyError, SearchIndexError
 from reckonsolve.data.settings import SettingsRepository
@@ -114,6 +121,12 @@ from reckonsolve.domain.predictions import (
     display_status,
     metadata_would_change,
 )
+from reckonsolve.domain.saved_views import (
+    SavedView,
+    SavedViewConfiguration,
+    SavedViewValidationError,
+    normalize_saved_view_name,
+)
 from reckonsolve.domain.search import (
     PredictionSearchResults,
     SearchMatchMode,
@@ -138,6 +151,7 @@ from .errors import (
     ConcurrentPredictionUpdateError,
     ConcurrentTerminalCorrectionError,
     CsvExportError,
+    DuplicateSavedViewNameError,
     ForecastReviewNotAllowedError,
     ForecastRevisionNotAllowedError,
     ForecastUnchangedError,
@@ -150,6 +164,7 @@ from .errors import (
     PredictionDeletionConfirmationRequired,
     PredictionDeletionNotAllowedError,
     PredictionNotFoundError,
+    SavedViewNotFoundError,
     SearchUnavailableError,
     TerminalCorrectionNotAllowedError,
     TerminalCorrectionUnchangedError,
@@ -173,6 +188,7 @@ class PredictionOperations:
         self._terminal_history_repository = TerminalHistoryRepository(database)
         self._transfer_repository = DataTransferRepository(database)
         self._search_repository = SearchRepository(database)
+        self._saved_view_repository = SavedViewRepository(database)
         self._database = database
         self._clock = SystemClock() if clock is None else clock
         self._local_timezone = local_timezone
@@ -1664,6 +1680,75 @@ class PredictionOperations:
             raise SearchUnavailableError(
                 "The local search index could not be rebuilt from Prediction history."
             ) from error
+
+    def list_saved_views(self) -> tuple[SavedView, ...]:
+        """Return every mutable Saved View without querying Prediction membership."""
+
+        return self._saved_view_repository.list_saved_views()
+
+    def create_saved_view(
+        self,
+        name: str,
+        configuration: SavedViewConfiguration,
+    ) -> SavedView:
+        """Persist one named dynamic archive configuration."""
+
+        try:
+            display_name, normalized_name = normalize_saved_view_name(name)
+            return self._saved_view_repository.create_saved_view(
+                display_name,
+                normalized_name,
+                configuration,
+            )
+        except SavedViewValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        except RepositoryDuplicateSavedViewNameError as error:
+            raise DuplicateSavedViewNameError(display_name) from error
+
+    def update_saved_view(
+        self,
+        saved_view_id: int,
+        configuration: SavedViewConfiguration,
+    ) -> SavedView:
+        """Explicitly replace a Saved View's dynamic configuration."""
+
+        self._validate_positive_token(saved_view_id, "saved_view_id")
+        try:
+            return self._saved_view_repository.update_saved_view(
+                saved_view_id,
+                configuration,
+            )
+        except SavedViewValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        except RepositorySavedViewNotFoundError as error:
+            raise SavedViewNotFoundError(saved_view_id) from error
+
+    def rename_saved_view(self, saved_view_id: int, name: str) -> SavedView:
+        """Explicitly rename one mutable Saved View."""
+
+        self._validate_positive_token(saved_view_id, "saved_view_id")
+        try:
+            display_name, normalized_name = normalize_saved_view_name(name)
+            return self._saved_view_repository.rename_saved_view(
+                saved_view_id,
+                display_name,
+                normalized_name,
+            )
+        except SavedViewValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+        except RepositoryDuplicateSavedViewNameError as error:
+            raise DuplicateSavedViewNameError(display_name) from error
+        except RepositorySavedViewNotFoundError as error:
+            raise SavedViewNotFoundError(saved_view_id) from error
+
+    def delete_saved_view(self, saved_view_id: int) -> None:
+        """Delete only a selected mutable Saved View and its tag references."""
+
+        self._validate_positive_token(saved_view_id, "saved_view_id")
+        try:
+            self._saved_view_repository.delete_saved_view(saved_view_id)
+        except RepositorySavedViewNotFoundError as error:
+            raise SavedViewNotFoundError(saved_view_id) from error
 
     def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
         """Return exactly-once scoring analytics for all or one tag subset."""

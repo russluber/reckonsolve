@@ -19,6 +19,22 @@ class SearchUnavailableError(ApplicationError):
     """A local search cannot complete safely until its stated cause is resolved."""
 
 
+class SavedViewNotFoundError(ApplicationError):
+    """The requested mutable Saved View no longer exists."""
+
+    def __init__(self, saved_view_id: int) -> None:
+        super().__init__(f"Saved View {saved_view_id} was not found.")
+        self.saved_view_id = saved_view_id
+
+
+class DuplicateSavedViewNameError(ApplicationError):
+    """A Saved View name is already in use after normalization."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"A Saved View named {name!r} already exists.")
+        self.name = name
+
+
 class ValidationError(ApplicationError):
     """A user-supplied value failed authoritative validation."""
 
