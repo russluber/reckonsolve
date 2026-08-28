@@ -2339,6 +2339,209 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=14,
+        name="add rebuildable full text search projection",
+        statements=(
+            """
+            CREATE TABLE search_index_state (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                projection_version INTEGER NOT NULL
+                    CHECK (
+                        typeof(projection_version) = 'integer'
+                        AND projection_version >= 0
+                    ),
+                document_count INTEGER NOT NULL
+                    CHECK (
+                        typeof(document_count) = 'integer'
+                        AND document_count >= 0
+                    )
+            ) STRICT
+            """,
+            """
+            INSERT INTO search_index_state (
+                singleton_id, projection_version, document_count
+            ) VALUES (1, 0, 0)
+            """,
+            """
+            CREATE TABLE search_dirty_predictions (
+                prediction_id INTEGER PRIMARY KEY
+                    CHECK (
+                        typeof(prediction_id) = 'integer'
+                        AND prediction_id >= 1
+                    )
+            ) STRICT
+            """,
+            """
+            CREATE VIRTUAL TABLE prediction_search USING fts5(
+                prediction_id UNINDEXED,
+                source_kind UNINDEXED,
+                source_record_id UNINDEXED,
+                source_version_id UNINDEXED,
+                source_sequence UNINDEXED,
+                occurred_at UNINDEXED,
+                is_superseded UNINDEXED,
+                body,
+                tokenize = 'unicode61 remove_diacritics 2',
+                prefix = '2 3 4'
+            )
+            """,
+            """
+            CREATE VIRTUAL TABLE prediction_search_vocabulary
+            USING fts5vocab(prediction_search, 'row')
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_prediction_insert
+            AFTER INSERT ON predictions
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_prediction_update
+            AFTER UPDATE ON predictions
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_prediction_delete
+            AFTER DELETE ON predictions
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (OLD.id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_prediction_tag_insert
+            AFTER INSERT ON prediction_tags
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_prediction_tag_delete
+            AFTER DELETE ON prediction_tags
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (OLD.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_tag_update
+            AFTER UPDATE OF display_name, normalized_name ON tags
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                SELECT prediction_id
+                FROM prediction_tags
+                WHERE tag_id = NEW.id;
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_binary_revision_insert
+            AFTER INSERT ON forecast_revisions
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_numeric_revision_insert
+            AFTER INSERT ON numeric_forecast_revisions
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_definition_change_insert
+            AFTER INSERT ON prediction_definition_changes
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_journal_insert
+            AFTER INSERT ON journal_entries
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_journal_correction_insert
+            AFTER INSERT ON journal_entry_corrections
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_forecast_review_insert
+            AFTER INSERT ON forecast_reviews
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_binary_resolution_insert
+            AFTER INSERT ON resolutions
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_numeric_resolution_insert
+            AFTER INSERT ON numeric_resolutions
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_invalidation_insert
+            AFTER INSERT ON prediction_invalidations
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_binary_resolution_correction_insert
+            AFTER INSERT ON resolution_corrections
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_numeric_resolution_correction_insert
+            AFTER INSERT ON numeric_resolution_corrections
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            CREATE TRIGGER search_dirty_after_invalidation_correction_insert
+            AFTER INSERT ON invalidation_reason_corrections
+            BEGIN
+                INSERT OR IGNORE INTO search_dirty_predictions (prediction_id)
+                VALUES (NEW.prediction_id);
+            END
+            """,
+            """
+            INSERT INTO search_dirty_predictions (prediction_id)
+            SELECT id FROM predictions ORDER BY id
+            """,
+        ),
+    ),
 )
 
 

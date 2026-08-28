@@ -20,6 +20,7 @@ from .errors import (
     PredictionDeletionConfirmationRequired,
     PredictionDeletionNotAllowedError,
     PredictionNotFoundError,
+    SearchUnavailableError,
     ValidationError,
 )
 from .predictions import PredictionOperations
@@ -45,5 +46,6 @@ __all__ = [
     "PredictionDeletionNotAllowedError",
     "PredictionNotFoundError",
     "PredictionOperations",
+    "SearchUnavailableError",
     "ValidationError",
 ]

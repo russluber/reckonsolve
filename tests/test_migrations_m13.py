@@ -59,7 +59,7 @@ def test_v13_upgrade_preserves_v12_terminal_data_and_adds_empty_histories(
     )
     old.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:13])
     recovered = PredictionOperations(upgraded, FixedClock(), UTC)
 
     assert upgraded.schema_version == 13

@@ -13,6 +13,15 @@ from .migrations import (
     apply_migrations,
     current_schema_version,
 )
+from .search_index import (
+    SearchIndexError,
+    SearchIndexRepairRequiredError,
+    check_search_index,
+    initialize_search_index,
+    rebuild_search_index,
+    refresh_pending_search_documents,
+    require_fts5,
+)
 
 
 class DatabaseClosedError(RuntimeError):
@@ -30,9 +39,12 @@ class Database:
         self,
         path: Path,
         connection: sqlite3.Connection,
+        *,
+        search_enabled: bool,
     ) -> None:
         self._path = path
         self._connection: sqlite3.Connection | None = connection
+        self._search_enabled = search_enabled
 
     @classmethod
     def open(
@@ -59,13 +71,20 @@ class Database:
                     "SQLite foreign-key enforcement could not be enabled."
                 )
             connection.execute("PRAGMA busy_timeout = 5000")
+            if any(migration.version >= 14 for migration in migrations):
+                require_fts5(connection)
             apply_migrations(connection, migrations)
+            search_enabled = initialize_search_index(connection)
         except BaseException:
             if connection is not None:
                 connection.close()
             raise
 
-        return cls(database_path, connection)
+        return cls(
+            database_path,
+            connection,
+            search_enabled=search_enabled,
+        )
 
     @property
     def path(self) -> Path:
@@ -95,6 +114,16 @@ class Database:
         connection.execute("BEGIN IMMEDIATE")
         try:
             yield connection
+            if self._search_enabled:
+                try:
+                    refresh_pending_search_documents(connection)
+                except SearchIndexError:
+                    raise
+                except sqlite3.Error as error:
+                    raise SearchIndexRepairRequiredError(
+                        "Search documents could not be refreshed with the canonical "
+                        "change."
+                    ) from error
             connection.execute("COMMIT")
         except BaseException:
             if connection.in_transaction:
@@ -109,6 +138,39 @@ class Database:
             return
         self._connection = None
         connection.close()
+
+    def rebuild_search_index(self) -> None:
+        """Deterministically replace the derived full-text projection."""
+
+        if not self._search_enabled:
+            return
+        try:
+            with self.transaction() as connection:
+                rebuild_search_index(connection)
+        except SearchIndexError:
+            raise
+        except sqlite3.Error as error:
+            raise SearchIndexRepairRequiredError(
+                "The local search index could not be rebuilt from canonical data."
+            ) from error
+
+    def check_search_index(self, *, verify_projection: bool = True) -> None:
+        """Verify the local FTS structures and their canonical projection."""
+
+        if not self._search_enabled:
+            return
+        try:
+            with self.transaction() as connection:
+                check_search_index(
+                    connection,
+                    verify_projection=verify_projection,
+                )
+        except SearchIndexError:
+            raise
+        except sqlite3.Error as error:
+            raise SearchIndexRepairRequiredError(
+                "The local search index could not be verified."
+            ) from error
 
     def backup_to(self, destination: Path) -> Path:
         """Create and verify an atomically installed SQLite recovery snapshot."""

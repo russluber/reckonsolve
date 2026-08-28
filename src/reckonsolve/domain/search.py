@@ -1,0 +1,380 @@
+"""Presentation-neutral full-text search values and pure relevance rules."""
+
+from __future__ import annotations
+
+import unicodedata
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import date, datetime
+from enum import StrEnum
+
+from .predictions import PredictionStatus, PredictionType
+
+
+class SearchValidationError(ValueError):
+    """A search request has an invalid user-supplied value."""
+
+    def __init__(self, message: str, *, field: str) -> None:
+        super().__init__(message)
+        self.field = field
+
+
+class SearchMatchMode(StrEnum):
+    """How independently parsed query clauses combine within one Prediction."""
+
+    ALL = "all"
+    ANY = "any"
+
+
+class SearchSourceKind(StrEnum):
+    """Stable classifications for searchable user-authored text."""
+
+    QUESTION = "question"
+    TAG = "tag"
+    BACKGROUND = "background"
+    RESOLUTION_CRITERIA = "resolution_criteria"
+    FORECAST_RATIONALE = "forecast_rationale"
+    FORECAST_REVIEW = "forecast_review"
+    JOURNAL = "journal"
+    RESOLUTION_NOTES = "resolution_notes"
+    POSTMORTEM = "postmortem"
+    INVALIDATION_REASON = "invalidation_reason"
+    OUTCOME_CORRECTION_REASON = "outcome_correction_reason"
+
+
+@dataclass(frozen=True, slots=True)
+class SearchClause:
+    """One safely parsed word or fragment-local phrase."""
+
+    tokens: tuple[str, ...]
+    is_phrase: bool = False
+    is_prefix: bool = False
+
+    @property
+    def text(self) -> str:
+        return " ".join(self.tokens)
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedSearchText:
+    """Normalized ordinary user text without exposed FTS query syntax."""
+
+    raw_text: str
+    literal_text: str
+    clauses: tuple[SearchClause, ...]
+
+    @property
+    def is_blank(self) -> bool:
+        return not self.literal_text
+
+    @property
+    def coverage_size(self) -> int:
+        if self.is_blank:
+            return 0
+        return max(1, len(self.clauses))
+
+
+@dataclass(frozen=True, slots=True)
+class SearchQuery:
+    """The M32 text-and-history search request."""
+
+    text: str
+    match_mode: SearchMatchMode = SearchMatchMode.ALL
+    include_superseded: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.text, str):
+            raise SearchValidationError("Search text must be text.", field="text")
+        if not isinstance(self.match_mode, SearchMatchMode):
+            raise SearchValidationError(
+                "The search word-matching mode is invalid.",
+                field="match_mode",
+            )
+        if not isinstance(self.include_superseded, bool):
+            raise SearchValidationError(
+                "The historical search choice is invalid.",
+                field="include_superseded",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class SearchDocument:
+    """One rebuildable searchable fragment derived from canonical history."""
+
+    prediction_id: int
+    source_kind: SearchSourceKind
+    source_record_id: int
+    source_version_id: int | None
+    source_sequence: int | None
+    occurred_at: datetime | None
+    is_superseded: bool
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class SearchPrediction:
+    """Current canonical identity carried beside matching fragments."""
+
+    prediction_id: int
+    question: str
+    prediction_type: PredictionType
+    status: PredictionStatus
+    created_at: datetime
+    forecast_deadline: date | None
+    tags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SearchFragmentCandidate:
+    """One indexed fragment plus the clauses that retrieved it."""
+
+    row_id: int
+    document: SearchDocument
+    matched_clause_indexes: frozenset[int]
+    relevance: float
+    literal_match: bool = False
+    exact_text_match: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SearchFragmentHit:
+    """One explainable canonical source retained after ranking."""
+
+    document: SearchDocument
+    matched_clause_indexes: frozenset[int]
+    literal_match: bool
+    exact_text_match: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PredictionSearchHit:
+    """One grouped Prediction result with its best matching fragment."""
+
+    prediction: SearchPrediction
+    best_match: SearchFragmentHit
+    additional_match_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class PredictionSearchResults:
+    """Read-only grouped results and transparent fallback guidance."""
+
+    query: SearchQuery
+    parsed_text: ParsedSearchText
+    hits: tuple[PredictionSearchHit, ...]
+    any_word_available: bool = False
+    suggestion: str | None = None
+
+
+def parse_search_text(text: str) -> ParsedSearchText:
+    """Parse ordinary text into safe words and fragment-local quoted phrases."""
+
+    stripped = text.strip()
+    if not stripped:
+        return ParsedSearchText(raw_text=text, literal_text="", clauses=())
+
+    segments: list[tuple[bool, str]] = []
+    buffer: list[str] = []
+    quoted = False
+    for character in stripped:
+        if character == '"':
+            if buffer:
+                segments.append((quoted, "".join(buffer)))
+                buffer.clear()
+            quoted = not quoted
+        else:
+            buffer.append(character)
+    if buffer:
+        # An unmatched final quote is treated as ordinary text rather than as a
+        # surprising phrase operator.
+        segments.append((False, "".join(buffer)))
+
+    clauses: list[SearchClause] = []
+    clause_segment_indexes: list[int] = []
+    for segment_index, (is_quoted, segment) in enumerate(segments):
+        tokens = search_tokens(segment)
+        if is_quoted:
+            if tokens:
+                clauses.append(SearchClause(tokens=tokens, is_phrase=True))
+                clause_segment_indexes.append(segment_index)
+        else:
+            for token in tokens:
+                clauses.append(SearchClause(tokens=(token,)))
+                clause_segment_indexes.append(segment_index)
+
+    ends_in_unquoted_token = (
+        bool(stripped)
+        and stripped[-1] != '"'
+        and _is_token_character(stripped[-1])
+        and not quoted
+    )
+    if ends_in_unquoted_token:
+        for index in range(len(clauses) - 1, -1, -1):
+            clause = clauses[index]
+            segment_is_quoted = segments[clause_segment_indexes[index]][0]
+            if not segment_is_quoted and len(clause.tokens[0]) >= 2:
+                clauses[index] = replace(clause, is_prefix=True)
+                break
+
+    literal_source = stripped
+    if (
+        len(segments) == 1
+        and segments[0][0]
+        and stripped.startswith('"')
+        and stripped.endswith('"')
+    ):
+        literal_source = segments[0][1]
+
+    return ParsedSearchText(
+        raw_text=text,
+        literal_text=normalize_search_literal(literal_source),
+        clauses=tuple(clauses),
+    )
+
+
+def search_tokens(text: str) -> tuple[str, ...]:
+    """Approximate unicode61 words for safe FTS queries and suggestions."""
+
+    normalized = unicodedata.normalize("NFKD", text).casefold()
+    tokens: list[str] = []
+    current: list[str] = []
+    for character in normalized:
+        category = unicodedata.category(character)
+        if category.startswith("M"):
+            continue
+        if _is_token_character(character):
+            current.append(character)
+        elif current:
+            tokens.append("".join(current))
+            current.clear()
+    if current:
+        tokens.append("".join(current))
+    return tuple(tokens)
+
+
+def normalize_search_literal(text: str) -> str:
+    """Normalize case, common Latin diacritics, and whitespace for literals."""
+
+    normalized = unicodedata.normalize("NFKD", text).casefold()
+    without_marks = "".join(
+        character
+        for character in normalized
+        if not unicodedata.category(character).startswith("M")
+    )
+    return " ".join(without_marks.split())
+
+
+def rank_search_candidates(
+    parsed_text: ParsedSearchText,
+    match_mode: SearchMatchMode,
+    predictions: Mapping[int, SearchPrediction],
+    candidates: Sequence[SearchFragmentCandidate],
+) -> tuple[PredictionSearchHit, ...]:
+    """Group fragment candidates and rank Predictions deterministically."""
+
+    if parsed_text.is_blank:
+        return ()
+
+    by_prediction: dict[int, list[SearchFragmentCandidate]] = {}
+    for candidate in candidates:
+        if candidate.document.prediction_id in predictions:
+            by_prediction.setdefault(candidate.document.prediction_id, []).append(
+                candidate
+            )
+
+    required = frozenset(range(len(parsed_text.clauses)))
+    ranked: list[tuple[tuple[object, ...], PredictionSearchHit]] = []
+    for prediction_id, fragments in by_prediction.items():
+        coverage = frozenset().union(
+            *(fragment.matched_clause_indexes for fragment in fragments)
+        )
+        literal_only_match = any(fragment.literal_match for fragment in fragments)
+        eligible = (
+            literal_only_match
+            if not parsed_text.clauses
+            else (
+                bool(coverage)
+                if match_mode is SearchMatchMode.ANY
+                else required.issubset(coverage)
+            )
+        )
+        if not eligible:
+            continue
+
+        ordered_fragments = sorted(fragments, key=_fragment_rank_key)
+        best = ordered_fragments[0]
+        prediction = predictions[prediction_id]
+        hit = PredictionSearchHit(
+            prediction=prediction,
+            best_match=SearchFragmentHit(
+                document=best.document,
+                matched_clause_indexes=best.matched_clause_indexes,
+                literal_match=best.literal_match,
+                exact_text_match=best.exact_text_match,
+            ),
+            additional_match_count=len(ordered_fragments) - 1,
+        )
+        current_question_fragments = tuple(
+            fragment
+            for fragment in fragments
+            if fragment.document.source_kind is SearchSourceKind.QUESTION
+            and not fragment.document.is_superseded
+        )
+        exact_question = any(
+            fragment.exact_text_match for fragment in current_question_fragments
+        )
+        literal_question = any(
+            fragment.literal_match for fragment in current_question_fragments
+        )
+        ranked.append(
+            (
+                (
+                    0 if exact_question else 1,
+                    0 if literal_question else 1,
+                    _source_priority(best.document),
+                    -len(coverage),
+                    _fragment_rank_key(best),
+                    prediction.prediction_id,
+                ),
+                hit,
+            )
+        )
+
+    return tuple(hit for _, hit in sorted(ranked, key=lambda item: item[0]))
+
+
+def _fragment_rank_key(candidate: SearchFragmentCandidate) -> tuple[object, ...]:
+    document = candidate.document
+    return (
+        _source_priority(document),
+        0 if candidate.exact_text_match else 1,
+        0 if candidate.literal_match else 1,
+        -len(candidate.matched_clause_indexes),
+        candidate.relevance,
+        document.source_sequence if document.source_sequence is not None else 0,
+        document.source_record_id,
+        document.source_version_id if document.source_version_id is not None else 0,
+        candidate.row_id,
+    )
+
+
+def _source_priority(document: SearchDocument) -> int:
+    priorities = {
+        SearchSourceKind.QUESTION: 0,
+        SearchSourceKind.TAG: 1,
+        SearchSourceKind.BACKGROUND: 2,
+        SearchSourceKind.RESOLUTION_CRITERIA: 2,
+        SearchSourceKind.FORECAST_RATIONALE: 3,
+        SearchSourceKind.FORECAST_REVIEW: 3,
+        SearchSourceKind.JOURNAL: 3,
+        SearchSourceKind.RESOLUTION_NOTES: 4,
+        SearchSourceKind.POSTMORTEM: 4,
+        SearchSourceKind.INVALIDATION_REASON: 4,
+        SearchSourceKind.OUTCOME_CORRECTION_REASON: 4,
+    }
+    return priorities[document.source_kind] + (10 if document.is_superseded else 0)
+
+
+def _is_token_character(character: str) -> bool:
+    category = unicodedata.category(character)
+    return category[0] in {"L", "N"} or category == "Co"

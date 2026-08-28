@@ -39,6 +39,8 @@ from reckonsolve.data.predictions import (
     PredictionDeletionDisallowedError,
     PredictionRepository,
 )
+from reckonsolve.data.search import SearchRepository
+from reckonsolve.data.search_index import SearchIndexBusyError, SearchIndexError
 from reckonsolve.data.settings import SettingsRepository
 from reckonsolve.data.terminal_history import (
     OutcomeCorrectionReasonRequiredError,
@@ -100,6 +102,14 @@ from reckonsolve.domain.predictions import (
     display_status,
     metadata_would_change,
 )
+from reckonsolve.domain.search import (
+    PredictionSearchResults,
+    SearchMatchMode,
+    SearchQuery,
+    SearchValidationError,
+    parse_search_text,
+    rank_search_candidates,
+)
 from reckonsolve.domain.transfer import (
     BackupResult,
     CsvExportResult,
@@ -128,6 +138,7 @@ from .errors import (
     PredictionDeletionConfirmationRequired,
     PredictionDeletionNotAllowedError,
     PredictionNotFoundError,
+    SearchUnavailableError,
     TerminalCorrectionNotAllowedError,
     TerminalCorrectionUnchangedError,
     ValidationError,
@@ -149,6 +160,8 @@ class PredictionOperations:
         self._settings_repository = SettingsRepository(database)
         self._terminal_history_repository = TerminalHistoryRepository(database)
         self._transfer_repository = DataTransferRepository(database)
+        self._search_repository = SearchRepository(database)
+        self._database = database
         self._clock = SystemClock() if clock is None else clock
         self._local_timezone = local_timezone
 
@@ -1457,6 +1470,102 @@ class PredictionOperations:
                 )
             ),
         )
+
+    def search_predictions(
+        self,
+        text: str,
+        *,
+        match_mode: SearchMatchMode = SearchMatchMode.ALL,
+        include_superseded: bool = False,
+    ) -> PredictionSearchResults:
+        """Search canonical Prediction text through the rebuildable projection."""
+
+        try:
+            query = SearchQuery(
+                text=text,
+                match_mode=match_mode,
+                include_superseded=include_superseded,
+            )
+            parsed_text = parse_search_text(query.text)
+        except SearchValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
+
+        if parsed_text.is_blank:
+            return PredictionSearchResults(
+                query=query, parsed_text=parsed_text, hits=()
+            )
+
+        try:
+            predictions, candidates = self._search_repository.find_candidates(
+                parsed_text,
+                include_superseded=query.include_superseded,
+            )
+            current_date = (
+                as_utc(self._clock.now()).astimezone(self._local_timezone).date()
+            )
+            effective_predictions = {
+                prediction_id: replace(
+                    prediction,
+                    status=display_status(
+                        prediction.status,
+                        prediction.forecast_deadline,
+                        current_date,
+                    ),
+                )
+                for prediction_id, prediction in predictions.items()
+            }
+            hits = rank_search_candidates(
+                parsed_text,
+                query.match_mode,
+                effective_predictions,
+                candidates,
+            )
+            any_word_available = (
+                query.match_mode is SearchMatchMode.ALL
+                and not hits
+                and bool(
+                    rank_search_candidates(
+                        parsed_text,
+                        SearchMatchMode.ANY,
+                        effective_predictions,
+                        candidates,
+                    )
+                )
+            )
+            suggestion = None
+            if not hits:
+                suggestion = self._search_repository.suggest_spelling(
+                    parsed_text,
+                    include_superseded=query.include_superseded,
+                )
+        except SearchIndexBusyError as error:
+            raise SearchUnavailableError(
+                "The local database is busy with another Reckonsolve action. "
+                "Wait a moment and search again."
+            ) from error
+        except SearchIndexError as error:
+            raise SearchUnavailableError(
+                "The local search index is unavailable. Run the search-index repair "
+                "before searching again."
+            ) from error
+
+        return PredictionSearchResults(
+            query=query,
+            parsed_text=parsed_text,
+            hits=hits,
+            any_word_available=any_word_available,
+            suggestion=suggestion,
+        )
+
+    def repair_search_index(self) -> None:
+        """Rebuild the derived local search projection from canonical history."""
+
+        try:
+            self._database.rebuild_search_index()
+        except SearchIndexError as error:
+            raise SearchUnavailableError(
+                "The local search index could not be rebuilt from Prediction history."
+            ) from error
 
     def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
         """Return exactly-once scoring analytics for all or one tag subset."""

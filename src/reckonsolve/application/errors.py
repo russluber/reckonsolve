@@ -15,6 +15,10 @@ class CsvExportError(ApplicationError):
     """A portable CSV bundle could not be created safely."""
 
 
+class SearchUnavailableError(ApplicationError):
+    """A local search cannot complete safely until its stated cause is resolved."""
+
+
 class ValidationError(ApplicationError):
     """A user-supplied value failed authoritative validation."""
 
