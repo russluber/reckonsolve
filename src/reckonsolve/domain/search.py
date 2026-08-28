@@ -128,6 +128,10 @@ class SearchPrediction:
     forecast_deadline: date | None
     tags: tuple[str, ...]
     latest_revision_at: datetime | None = None
+    expected_resolution: date | None = None
+    latest_review_at: datetime | None = None
+    terminal_decision_at: datetime | None = None
+    needs_postmortem: bool = False
     probability_percent: int | None = None
     numeric_lower_bound: FixedPrecisionValue | None = None
     numeric_median_estimate: FixedPrecisionValue | None = None

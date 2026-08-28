@@ -60,7 +60,19 @@ from reckonsolve.domain.attention import (
     ready_to_resolve,
     validate_stale_threshold_days,
 )
-from reckonsolve.domain.browser import PredictionBrowserSnapshot
+from reckonsolve.domain.browser import (
+    ArchiveAttention,
+    ArchiveDateMeaning,
+    ArchiveQuery,
+    ArchiveQueryValidationError,
+    ArchiveSort,
+    ArchiveTagMatchMode,
+    PredictionBrowserSnapshot,
+    classify_archive_items,
+    matches_archive_query,
+    sort_archive_items,
+    validate_archive_query,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     BinaryResolutionHistory,
@@ -1410,6 +1422,13 @@ class PredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        tags: tuple[str, ...] = (),
+        tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
+        attention: ArchiveAttention | None = None,
+        date_meaning: ArchiveDateMeaning = ArchiveDateMeaning.CREATED,
+        date_start: date | None = None,
+        date_end: date | None = None,
+        sort: ArchiveSort = ArchiveSort.CREATED_NEWEST,
     ) -> PredictionBrowserSnapshot:
         """Search and filter current prediction summaries for the archive."""
 
@@ -1418,56 +1437,45 @@ class PredictionOperations:
                 "Question search text must be text.",
                 field="question_text",
             )
-        if status is not None and not isinstance(status, PredictionStatus):
-            raise ValidationError(
-                "The prediction status filter is invalid.",
-                field="status",
-            )
-        if tag is not None and not isinstance(tag, str):
-            raise ValidationError(
-                "The prediction tag filter is invalid.",
-                field="tag",
-            )
-        if prediction_type is not None and not isinstance(
-            prediction_type,
-            PredictionType,
-        ):
-            raise ValidationError(
-                "The forecast type filter is invalid.",
-                field="prediction_type",
-            )
-
         search_key = question_text.strip().casefold()
-        tag_key = None if tag is None else tag.strip().casefold() or None
+        archive_query = self._archive_query(
+            status=status,
+            tag=tag,
+            prediction_type=prediction_type,
+            tags=tags,
+            tag_match_mode=tag_match_mode,
+            attention=attention,
+            date_meaning=date_meaning,
+            date_start=date_start,
+            date_end=date_end,
+            sort=sort,
+            text_active=bool(search_key),
+        )
         now = as_utc(self._clock.now())
         current_date = now.astimezone(self._local_timezone).date()
+        stale_threshold_days = self.get_stale_threshold_days()
         snapshot = self._repository.list_browser_predictions()
-        predictions = tuple(
-            replace(
-                prediction,
-                status=display_status(
-                    prediction.status,
-                    prediction.forecast_deadline,
-                    current_date,
-                ),
-            )
-            for prediction in snapshot.predictions
+        predictions = classify_archive_items(
+            snapshot.predictions,
+            current_date=current_date,
         )
         return replace(
             snapshot,
-            predictions=tuple(
-                prediction
-                for prediction in predictions
-                if (not search_key or search_key in prediction.question.casefold())
-                and (status is None or prediction.status is status)
-                and (
-                    prediction_type is None
-                    or prediction.prediction_type is prediction_type
-                )
-                and (
-                    tag_key is None
-                    or tag_key in {item.casefold() for item in prediction.tags}
-                )
+            predictions=sort_archive_items(
+                (
+                    prediction
+                    for prediction in predictions
+                    if (not search_key or search_key in prediction.question.casefold())
+                    and matches_archive_query(
+                        prediction,
+                        archive_query,
+                        now=now,
+                        current_date=current_date,
+                        stale_threshold_days=stale_threshold_days,
+                        local_timezone=self._local_timezone,
+                    )
+                ),
+                archive_query.sort,
             ),
         )
 
@@ -1480,6 +1488,13 @@ class PredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        tags: tuple[str, ...] = (),
+        tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
+        attention: ArchiveAttention | None = None,
+        date_meaning: ArchiveDateMeaning = ArchiveDateMeaning.CREATED,
+        date_start: date | None = None,
+        date_end: date | None = None,
+        sort: ArchiveSort = ArchiveSort.RELEVANCE,
     ) -> PredictionSearchResults:
         """Search canonical Prediction text through the rebuildable projection."""
 
@@ -1492,23 +1507,23 @@ class PredictionOperations:
             parsed_text = parse_search_text(query.text)
         except SearchValidationError as error:
             raise ValidationError(str(error), field=error.field) from error
-        if status is not None and not isinstance(status, PredictionStatus):
-            raise ValidationError(
-                "The prediction status filter is invalid.", field="status"
-            )
-        if tag is not None and not isinstance(tag, str):
-            raise ValidationError("The prediction tag filter is invalid.", field="tag")
-        if prediction_type is not None and not isinstance(
-            prediction_type, PredictionType
-        ):
-            raise ValidationError(
-                "The forecast type filter is invalid.", field="prediction_type"
-            )
-
         if parsed_text.is_blank:
             return PredictionSearchResults(
                 query=query, parsed_text=parsed_text, hits=()
             )
+        archive_query = self._archive_query(
+            status=status,
+            tag=tag,
+            prediction_type=prediction_type,
+            tags=tags,
+            tag_match_mode=tag_match_mode,
+            attention=attention,
+            date_meaning=date_meaning,
+            date_start=date_start,
+            date_end=date_end,
+            sort=sort,
+            text_active=True,
+        )
 
         try:
             predictions, candidates, available_tags = (
@@ -1517,32 +1532,23 @@ class PredictionOperations:
                     include_superseded=query.include_superseded,
                 )
             )
-            current_date = (
-                as_utc(self._clock.now()).astimezone(self._local_timezone).date()
+            now = as_utc(self._clock.now())
+            current_date = now.astimezone(self._local_timezone).date()
+            stale_threshold_days = self.get_stale_threshold_days()
+            classified_predictions = classify_archive_items(
+                predictions.values(),
+                current_date=current_date,
             )
             effective_predictions = {
-                prediction_id: replace(
+                prediction.prediction_id: prediction
+                for prediction in classified_predictions
+                if matches_archive_query(
                     prediction,
-                    status=display_status(
-                        prediction.status,
-                        prediction.forecast_deadline,
-                        current_date,
-                    ),
-                )
-                for prediction_id, prediction in predictions.items()
-            }
-            tag_key = None if tag is None else tag.strip().casefold() or None
-            effective_predictions = {
-                prediction_id: prediction
-                for prediction_id, prediction in effective_predictions.items()
-                if (status is None or prediction.status is status)
-                and (
-                    prediction_type is None
-                    or prediction.prediction_type is prediction_type
-                )
-                and (
-                    tag_key is None
-                    or tag_key in {item.casefold() for item in prediction.tags}
+                    archive_query,
+                    now=now,
+                    current_date=current_date,
+                    stale_threshold_days=stale_threshold_days,
+                    local_timezone=self._local_timezone,
                 )
             }
             hits = rank_search_candidates(
@@ -1551,6 +1557,17 @@ class PredictionOperations:
                 effective_predictions,
                 candidates,
             )
+            if archive_query.sort is not ArchiveSort.RELEVANCE:
+                hits_by_prediction_id = {
+                    hit.prediction.prediction_id: hit for hit in hits
+                }
+                hits = tuple(
+                    hits_by_prediction_id[prediction.prediction_id]
+                    for prediction in sort_archive_items(
+                        (hit.prediction for hit in hits),
+                        archive_query.sort,
+                    )
+                )
             any_word_available = (
                 query.match_mode is SearchMatchMode.ALL
                 and not hits
@@ -1588,6 +1605,55 @@ class PredictionOperations:
             suggestion=suggestion,
             available_tags=available_tags,
         )
+
+    @staticmethod
+    def _archive_query(
+        *,
+        status: PredictionStatus | None,
+        tag: str | None,
+        prediction_type: PredictionType | None,
+        tags: tuple[str, ...],
+        tag_match_mode: ArchiveTagMatchMode,
+        attention: ArchiveAttention | None,
+        date_meaning: ArchiveDateMeaning,
+        date_start: date | None,
+        date_end: date | None,
+        sort: ArchiveSort,
+        text_active: bool,
+    ) -> ArchiveQuery:
+        """Normalize legacy single-tag input into one rich archive request."""
+
+        if status is not None and not isinstance(status, PredictionStatus):
+            raise ValidationError(
+                "The prediction status filter is invalid.", field="status"
+            )
+        if tag is not None and not isinstance(tag, str):
+            raise ValidationError("The prediction tag filter is invalid.", field="tag")
+        if prediction_type is not None and not isinstance(
+            prediction_type, PredictionType
+        ):
+            raise ValidationError(
+                "The forecast type filter is invalid.", field="prediction_type"
+            )
+        if not isinstance(tags, tuple):
+            raise ValidationError("Selected tags must be text labels.", field="tags")
+        selected_tags = tags if tag is None else (*tags, tag)
+        request = ArchiveQuery(
+            status=status,
+            prediction_type=prediction_type,
+            tags=selected_tags,
+            tag_match_mode=tag_match_mode,
+            attention=attention,
+            date_meaning=date_meaning,
+            date_start=date_start,
+            date_end=date_end,
+            sort=sort,
+        )
+        try:
+            validate_archive_query(request, text_active=text_active)
+        except ArchiveQueryValidationError as error:
+            raise ValidationError(str(error), field="archive_query") from error
+        return request
 
     def repair_search_index(self) -> None:
         """Rebuild the derived local search projection from canonical history."""

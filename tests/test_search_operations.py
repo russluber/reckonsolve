@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -7,6 +7,7 @@ from reckonsolve.application.errors import SearchUnavailableError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.search_index import SearchIndexRepairRequiredError
+from reckonsolve.domain.browser import ArchiveDateMeaning, ArchiveTagMatchMode
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     PredictionStatus,
@@ -374,6 +375,48 @@ def test_search_applies_existing_archive_filters_before_grouped_ranking(
     assert _matching_ids(filtered) == [numeric.prediction_id]
     assert no_status_match.hits == ()
     assert filtered.available_tags == ("Excluded", "Included")
+    database.close()
+
+
+def test_search_applies_rich_archive_tags_and_dates_before_ranking(tmp_path) -> None:
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    operations = _operations(database)
+    binary = operations.create_prediction(
+        "Will archivehail Binary evidence remain useful?",
+        45,
+        expected_resolution=date(2026, 8, 25),
+        tags=("Blue", "Red"),
+    )
+    numeric = operations.create_numeric_prediction(
+        "How many archivehail observations will arrive?",
+        "observations",
+        0,
+        1,
+        2,
+        3,
+        80,
+        expected_resolution=date(2026, 8, 26),
+        tags=("Green", "Red"),
+    )
+
+    all_tags = operations.search_predictions(
+        "archivehail",
+        tags=("red", "blue"),
+        tag_match_mode=ArchiveTagMatchMode.ALL,
+        date_meaning=ArchiveDateMeaning.EXPECTED_RESOLUTION,
+        date_start=date(2026, 8, 25),
+        date_end=date(2026, 8, 25),
+    )
+    any_tags = operations.search_predictions(
+        "archivehail",
+        tags=("red", "blue"),
+        tag_match_mode=ArchiveTagMatchMode.ANY,
+        date_meaning=ArchiveDateMeaning.EXPECTED_RESOLUTION,
+        date_start=date(2026, 8, 26),
+    )
+
+    assert _matching_ids(all_tags) == [binary.prediction_id]
+    assert _matching_ids(any_tags) == [numeric.prediction_id]
     database.close()
 
 

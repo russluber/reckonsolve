@@ -44,6 +44,10 @@ from reckonsolve.application.errors import (
 )
 from reckonsolve.domain.attention import DashboardPrediction, DashboardSnapshot
 from reckonsolve.domain.browser import (
+    ArchiveAttention,
+    ArchiveDateMeaning,
+    ArchiveSort,
+    ArchiveTagMatchMode,
     PredictionBrowserItem,
     PredictionBrowserSnapshot,
 )
@@ -406,6 +410,17 @@ class FakePredictionOperations:
         self.browser_error: ApplicationError | None = None
         self.browser_calls: list[tuple[str, PredictionStatus | None, str | None]] = []
         self.browser_type_calls: list[PredictionType | None] = []
+        self.archive_calls: list[
+            tuple[
+                tuple[str, ...],
+                ArchiveTagMatchMode,
+                ArchiveAttention | None,
+                ArchiveDateMeaning,
+                date | None,
+                date | None,
+                ArchiveSort,
+            ]
+        ] = []
         self.search_calls: list[
             tuple[
                 str,
@@ -1310,9 +1325,19 @@ class FakePredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        tags: tuple[str, ...] = (),
+        tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
+        attention: ArchiveAttention | None = None,
+        date_meaning: ArchiveDateMeaning = ArchiveDateMeaning.CREATED,
+        date_start: date | None = None,
+        date_end: date | None = None,
+        sort: ArchiveSort = ArchiveSort.CREATED_NEWEST,
     ) -> PredictionBrowserSnapshot:
         self.browser_calls.append((question_text, status, tag))
         self.browser_type_calls.append(prediction_type)
+        self.archive_calls.append(
+            (tags, tag_match_mode, attention, date_meaning, date_start, date_end, sort)
+        )
         if self.browser_error is not None:
             raise self.browser_error
         if self.browser_snapshot is not None:
@@ -1339,6 +1364,7 @@ class FakePredictionOperations:
             )
         search_key = question_text.strip().casefold()
         tag_key = None if tag is None else tag.casefold()
+        tag_keys = {item.casefold() for item in tags}
         return replace(
             source,
             predictions=tuple(
@@ -1354,6 +1380,16 @@ class FakePredictionOperations:
                     tag_key is None
                     or tag_key in {item.casefold() for item in prediction.tags}
                 )
+                and (
+                    not tag_keys
+                    or (
+                        tag_keys.issubset({item.casefold() for item in prediction.tags})
+                        if tag_match_mode is ArchiveTagMatchMode.ALL
+                        else bool(
+                            tag_keys & {item.casefold() for item in prediction.tags}
+                        )
+                    )
+                )
             ),
         )
 
@@ -1366,6 +1402,13 @@ class FakePredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        tags: tuple[str, ...] = (),
+        tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
+        attention: ArchiveAttention | None = None,
+        date_meaning: ArchiveDateMeaning = ArchiveDateMeaning.CREATED,
+        date_start: date | None = None,
+        date_end: date | None = None,
+        sort: ArchiveSort = ArchiveSort.RELEVANCE,
     ) -> PredictionSearchResults:
         self.search_calls.append(
             (text, match_mode, include_superseded, status, tag, prediction_type)
@@ -1375,6 +1418,13 @@ class FakePredictionOperations:
             status=status,
             tag=tag,
             prediction_type=prediction_type,
+            tags=tags,
+            tag_match_mode=tag_match_mode,
+            attention=attention,
+            date_meaning=date_meaning,
+            date_start=date_start,
+            date_end=date_end,
+            sort=sort,
         )
         parsed = parse_search_text(text)
         hits = tuple(
@@ -1386,8 +1436,12 @@ class FakePredictionOperations:
                     status=item.status,
                     created_at=item.created_at,
                     forecast_deadline=item.forecast_deadline,
+                    expected_resolution=item.expected_resolution,
                     tags=item.tags,
                     latest_revision_at=item.latest_revision_at,
+                    latest_review_at=item.latest_review_at,
+                    terminal_decision_at=item.terminal_decision_at,
+                    needs_postmortem=item.needs_postmortem,
                     probability_percent=item.probability_percent,
                     numeric_lower_bound=item.numeric_lower_bound,
                     numeric_median_estimate=item.numeric_median_estimate,
@@ -1515,6 +1569,8 @@ def test_main_window_has_expected_navigation(window: MainWindow) -> None:
     navigation = _required_child(window, QListWidget, "primaryNavigation")
 
     assert window.windowTitle() == "Reckonsolve"
+    assert navigation.minimumWidth() == 240
+    assert navigation.maximumWidth() == 240
     assert window.screen_names == EXPECTED_SCREEN_NAMES
     assert (
         tuple(navigation.item(index).text() for index in range(navigation.count()))
@@ -1877,7 +1933,7 @@ def test_prediction_browser_renders_all_results_and_filter_choices(
     window.navigate_to("Predictions")
 
     status_filter = _required_child(window, QComboBox, "predictionStatusFilter")
-    tag_filter = _required_child(window, QComboBox, "predictionTagFilter")
+    tag_filter = _required_child(window, QListWidget, "predictionTagFilter")
     results = _required_child(window, QListWidget, "predictionBrowserResults")
     assert [
         status_filter.itemText(index) for index in range(status_filter.count())
@@ -1888,8 +1944,7 @@ def test_prediction_browser_renders_all_results_and_filter_choices(
         "Resolved",
         "Invalid",
     ]
-    assert [tag_filter.itemText(index) for index in range(tag_filter.count())] == [
-        "All tags",
+    assert [tag_filter.item(index).text() for index in range(tag_filter.count())] == [
         "Personal",
         "Work",
     ]
@@ -1953,12 +2008,12 @@ def test_prediction_browser_combines_filters_and_clear_restores_archive(
     window.navigate_to("Predictions")
     search = _required_child(window, QLineEdit, "predictionSearchInput")
     status_filter = _required_child(window, QComboBox, "predictionStatusFilter")
-    tag_filter = _required_child(window, QComboBox, "predictionTagFilter")
+    tag_filter = _required_child(window, QListWidget, "predictionTagFilter")
     results = _required_child(window, QListWidget, "predictionBrowserResults")
 
     search.setText("THIS YEAR")
     status_filter.setCurrentIndex(status_filter.findData("resolved"))
-    tag_filter.setCurrentIndex(tag_filter.findData("Work"))
+    tag_filter.item(1).setSelected(True)
     qtbot.mouseClick(
         _required_child(window, QPushButton, "applyPredictionFiltersButton"),
         Qt.MouseButton.LeftButton,
@@ -1969,8 +2024,9 @@ def test_prediction_browser_combines_filters_and_clear_restores_archive(
     assert operations.browser_calls[-1] == (
         "THIS YEAR",
         PredictionStatus.RESOLVED,
-        "Work",
+        None,
     )
+    assert operations.archive_calls[-1][0] == ("Work",)
 
     qtbot.mouseClick(
         _required_child(window, QPushButton, "clearPredictionFiltersButton"),
@@ -1979,7 +2035,7 @@ def test_prediction_browser_combines_filters_and_clear_restores_archive(
 
     assert search.text() == ""
     assert status_filter.currentData() is None
-    assert tag_filter.currentData() is None
+    assert tag_filter.selectedItems() == []
     assert results.count() == 3
     assert operations.browser_calls[-1] == ("", None, None)
 
@@ -2004,8 +2060,8 @@ def test_prediction_browser_clears_a_filter_when_its_last_tag_is_removed(
     window = MainWindow(operations)
     qtbot.addWidget(window)
     window.navigate_to("Predictions")
-    tag_filter = _required_child(window, QComboBox, "predictionTagFilter")
-    tag_filter.setCurrentIndex(tag_filter.findData("Temporary"))
+    tag_filter = _required_child(window, QListWidget, "predictionTagFilter")
+    tag_filter.item(0).setSelected(True)
 
     operations.browser_snapshot = PredictionBrowserSnapshot(
         predictions=(replace(tagged, tags=()),),
@@ -2017,12 +2073,97 @@ def test_prediction_browser_clears_a_filter_when_its_last_tag_is_removed(
     )
 
     results = _required_child(window, QListWidget, "predictionBrowserResults")
-    assert tag_filter.currentData() is None
+    assert tag_filter.selectedItems() == []
     assert results.count() == 1
-    assert operations.browser_calls[-2:] == [
-        ("", None, "Temporary"),
-        ("", None, None),
+    assert operations.browser_calls[-2:] == [("", None, None), ("", None, None)]
+    assert [call[0] for call in operations.archive_calls[-2:]] == [
+        ("Temporary",),
+        (),
     ]
+
+
+def test_prediction_browser_sends_rich_archive_filters_and_resets_defaults(
+    qtbot: QtBot,
+) -> None:
+    instant = datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
+    operations = FakePredictionOperations()
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=(
+            PredictionBrowserItem(
+                prediction_id=1,
+                question="Will the rich archive controls remain clear?",
+                probability_percent=50,
+                status=PredictionStatus.OPEN,
+                created_at=instant,
+                latest_revision_at=instant,
+                tags=("Blue", "Red"),
+            ),
+        ),
+        available_tags=("Blue", "Green", "Red"),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Predictions")
+
+    tag_filter = _required_child(window, QListWidget, "predictionTagFilter")
+    tag_filter.item(0).setSelected(True)
+    tag_filter.item(2).setSelected(True)
+    tag_mode = _required_child(window, QComboBox, "predictionTagMatchMode")
+    tag_mode.setCurrentIndex(tag_mode.findData(ArchiveTagMatchMode.ANY.value))
+    attention = _required_child(window, QComboBox, "predictionAttentionFilter")
+    attention.setCurrentIndex(
+        attention.findData(ArchiveAttention.NEEDS_ATTENTION.value)
+    )
+    date_meaning = _required_child(window, QComboBox, "predictionDateMeaning")
+    date_meaning.setCurrentIndex(
+        date_meaning.findData(ArchiveDateMeaning.EXPECTED_RESOLUTION.value)
+    )
+    date_start_enabled = _required_child(
+        window, QCheckBox, "predictionDateStartEnabled"
+    )
+    date_start_enabled.setChecked(True)
+    date_start = _required_child(window, QDateEdit, "predictionDateStart")
+    date_start.setDate(QDate(2026, 8, 1))
+    date_end_enabled = _required_child(window, QCheckBox, "predictionDateEndEnabled")
+    date_end_enabled.setChecked(True)
+    date_end = _required_child(window, QDateEdit, "predictionDateEnd")
+    date_end.setDate(QDate(2026, 8, 31))
+    sort = _required_child(window, QComboBox, "predictionSort")
+    sort.setCurrentIndex(sort.findData(ArchiveSort.QUESTION_A_TO_Z.value))
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "applyPredictionFiltersButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.archive_calls[-1] == (
+        ("Blue", "Red"),
+        ArchiveTagMatchMode.ANY,
+        ArchiveAttention.NEEDS_ATTENTION,
+        ArchiveDateMeaning.EXPECTED_RESOLUTION,
+        date(2026, 8, 1),
+        date(2026, 8, 31),
+        ArchiveSort.QUESTION_A_TO_Z,
+    )
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "clearPredictionFiltersButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert tag_filter.selectedItems() == []
+    assert tag_mode.currentData() == ArchiveTagMatchMode.ALL.value
+    assert attention.currentData() is None
+    assert date_meaning.currentData() == ArchiveDateMeaning.CREATED.value
+    assert not date_start_enabled.isChecked()
+    assert not date_end_enabled.isChecked()
+    assert sort.currentData() == ArchiveSort.CREATED_NEWEST.value
+
+    _required_child(window, QLineEdit, "predictionSearchInput").setText("rich")
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "applyPredictionFiltersButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    assert operations.archive_calls[-1][-1] is ArchiveSort.RELEVANCE
 
 
 def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(

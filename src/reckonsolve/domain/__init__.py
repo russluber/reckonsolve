@@ -18,7 +18,20 @@ from .attention import (
     ready_to_resolve,
     validate_stale_threshold_days,
 )
-from .browser import PredictionBrowserItem, PredictionBrowserSnapshot
+from .browser import (
+    ArchiveAttention,
+    ArchiveDateMeaning,
+    ArchiveQuery,
+    ArchiveQueryValidationError,
+    ArchiveSort,
+    ArchiveTagMatchMode,
+    PredictionBrowserItem,
+    PredictionBrowserSnapshot,
+    archive_date,
+    classify_archive_items,
+    matches_archive_query,
+    sort_archive_items,
+)
 from .predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
@@ -69,6 +82,12 @@ __all__ = [
     "MIN_METADATA_DATE",
     "MIN_STALE_THRESHOLD_DAYS",
     "AnalyticsSource",
+    "ArchiveAttention",
+    "ArchiveDateMeaning",
+    "ArchiveQuery",
+    "ArchiveQueryValidationError",
+    "ArchiveSort",
+    "ArchiveTagMatchMode",
     "AttentionValidationError",
     "BackupResult",
     "BinaryOutcome",
@@ -114,9 +133,13 @@ __all__ = [
     "SearchSnippet",
     "SearchSourceKind",
     "TimelineEvent",
+    "archive_date",
     "build_search_snippet",
+    "classify_archive_items",
+    "matches_archive_query",
     "needs_attention",
     "ready_to_resolve",
     "search_source_label",
+    "sort_archive_items",
     "validate_stale_threshold_days",
 ]

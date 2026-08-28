@@ -314,6 +314,7 @@ def _select_predictions(
             prediction.status,
             prediction.created_at,
             prediction.forecast_deadline,
+            prediction.expected_resolution,
             current_revision.probability_percent,
             NULL AS numeric_lower_scaled,
             NULL AS numeric_median_scaled,
@@ -322,6 +323,39 @@ def _select_predictions(
             NULL AS numeric_unit,
             NULL AS numeric_precision,
             current_revision.created_at AS latest_revision_at,
+            (SELECT MAX(review.created_at)
+             FROM forecast_reviews AS review
+             WHERE review.prediction_id = prediction.id) AS latest_review_at,
+            COALESCE(
+                (SELECT resolution.resolved_at
+                 FROM resolutions AS resolution
+                 WHERE resolution.prediction_id = prediction.id),
+                (SELECT invalidation.invalidated_at
+                 FROM prediction_invalidations AS invalidation
+                 WHERE invalidation.prediction_id = prediction.id)
+            ) AS terminal_decision_at,
+            CASE
+                WHEN prediction.status = 'resolved'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM postmortem_completions AS completion
+                        WHERE completion.prediction_id = prediction.id
+                    )
+                    AND (
+                        SELECT COALESCE(
+                            (
+                                SELECT correction.new_postmortem
+                                FROM resolution_corrections AS correction
+                                WHERE correction.resolution_id = resolution.id
+                                ORDER BY correction.sequence DESC
+                                LIMIT 1
+                            ),
+                            resolution.postmortem
+                        )
+                        FROM resolutions AS resolution
+                        WHERE resolution.prediction_id = prediction.id
+                    ) IS NULL
+                THEN 1 ELSE 0
+            END AS needs_postmortem,
             (
                 SELECT COALESCE(
                     (
@@ -355,6 +389,7 @@ def _select_predictions(
             prediction.status,
             prediction.created_at,
             prediction.forecast_deadline,
+            prediction.expected_resolution,
             NULL AS probability_percent,
             current_revision.lower_scaled AS numeric_lower_scaled,
             current_revision.median_scaled AS numeric_median_scaled,
@@ -363,6 +398,39 @@ def _select_predictions(
             prediction.numeric_unit,
             prediction.numeric_precision,
             current_revision.created_at AS latest_revision_at,
+            (SELECT MAX(review.created_at)
+             FROM forecast_reviews AS review
+             WHERE review.prediction_id = prediction.id) AS latest_review_at,
+            COALESCE(
+                (SELECT resolution.resolved_at
+                 FROM numeric_resolutions AS resolution
+                 WHERE resolution.prediction_id = prediction.id),
+                (SELECT invalidation.invalidated_at
+                 FROM prediction_invalidations AS invalidation
+                 WHERE invalidation.prediction_id = prediction.id)
+            ) AS terminal_decision_at,
+            CASE
+                WHEN prediction.status = 'resolved'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM postmortem_completions AS completion
+                        WHERE completion.prediction_id = prediction.id
+                    )
+                    AND (
+                        SELECT COALESCE(
+                            (
+                                SELECT correction.new_postmortem
+                                FROM numeric_resolution_corrections AS correction
+                                WHERE correction.numeric_resolution_id = resolution.id
+                                ORDER BY correction.sequence DESC
+                                LIMIT 1
+                            ),
+                            resolution.postmortem
+                        )
+                        FROM numeric_resolutions AS resolution
+                        WHERE resolution.prediction_id = prediction.id
+                    ) IS NULL
+                THEN 1 ELSE 0
+            END AS needs_postmortem,
             NULL AS binary_outcome,
             (
                 SELECT COALESCE(
@@ -428,6 +496,22 @@ def _select_predictions(
             ),
             tags=tuple(tags_by_prediction.get(prediction_id, ())),
             latest_revision_at=parse_utc(str(row["latest_revision_at"])),
+            expected_resolution=(
+                None
+                if row["expected_resolution"] is None
+                else date.fromisoformat(str(row["expected_resolution"]))
+            ),
+            latest_review_at=(
+                None
+                if row["latest_review_at"] is None
+                else parse_utc(str(row["latest_review_at"]))
+            ),
+            terminal_decision_at=(
+                None
+                if row["terminal_decision_at"] is None
+                else parse_utc(str(row["terminal_decision_at"]))
+            ),
+            needs_postmortem=bool(row["needs_postmortem"]),
             probability_percent=(
                 None
                 if row["probability_percent"] is None

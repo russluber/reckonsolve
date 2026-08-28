@@ -76,6 +76,8 @@ _SCREEN_ICONS = {
     "Settings": LucideIcon.SETTINGS,
 }
 
+_NAVIGATION_WIDTH = 240
+
 
 class MainWindow(QMainWindow):
     """Display the primary navigation shell for the desktop application."""
@@ -98,6 +100,7 @@ class MainWindow(QMainWindow):
         self._navigation.setAccessibleName("Primary navigation")
         self._navigation.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self._navigation.setIconSize(QSize(20, 20))
+        self._navigation.setFixedWidth(_NAVIGATION_WIDTH)
 
         self._screen_stack = QStackedWidget(self)
         self._screen_stack.setObjectName("screenStack")

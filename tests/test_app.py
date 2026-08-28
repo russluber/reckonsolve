@@ -231,7 +231,7 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
     second.window.navigate_to("Predictions")
     search = second.window.findChild(QLineEdit, "predictionSearchInput")
     status_filter = second.window.findChild(QComboBox, "predictionStatusFilter")
-    tag_filter = second.window.findChild(QComboBox, "predictionTagFilter")
+    tag_filter = second.window.findChild(QListWidget, "predictionTagFilter")
     apply_filters = second.window.findChild(
         QPushButton,
         "applyPredictionFiltersButton",
@@ -246,7 +246,7 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
 
     search.setText("INVALID ARCHIVE")
     status_filter.setCurrentIndex(status_filter.findData("invalid"))
-    tag_filter.setCurrentIndex(tag_filter.findData("Durability"))
+    tag_filter.item(0).setSelected(True)
     qtbot.mouseClick(apply_filters, Qt.MouseButton.LeftButton)
 
     assert results.count() == 1

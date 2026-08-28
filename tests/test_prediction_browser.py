@@ -1,11 +1,17 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
 from reckonsolve.application.errors import ValidationError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
+from reckonsolve.domain.browser import (
+    ArchiveAttention,
+    ArchiveDateMeaning,
+    ArchiveSort,
+    ArchiveTagMatchMode,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     PredictionStatus,
@@ -352,4 +358,137 @@ def test_browser_mixes_types_and_filters_numeric_without_losing_type_or_unit(
     assert tuple(item.prediction_id for item in resolved_numeric_only.predictions) == (
         resolved_numeric.prediction_id,
     )
+    database.close()
+
+
+def test_rich_archive_filters_and_sorts_use_one_derived_current_view(tmp_path) -> None:
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    older_clock = FixedClock(datetime(2026, 8, 1, 12, tzinfo=UTC))
+    older = PredictionOperations(database, older_clock, local_timezone=UTC)
+    binary = older.create_prediction(
+        "Will common archive evidence remain Binary?",
+        40,
+        expected_resolution=date(2026, 8, 10),
+        tags=("Blue", "Red"),
+    )
+    resolved = PredictionOperations(
+        database,
+        FixedClock(datetime(2026, 8, 2, 12, tzinfo=UTC)),
+        local_timezone=UTC,
+    ).create_prediction(
+        "Will common archive evidence resolve?",
+        60,
+        tags=("Red",),
+    )
+    resolved_at = PredictionOperations(
+        database,
+        FixedClock(datetime(2026, 8, 3, 12, tzinfo=UTC)),
+        local_timezone=UTC,
+    ).resolve_prediction(
+        resolved.prediction_id,
+        BinaryOutcome.YES,
+        expected_revision_id=resolved.current_revision_id,
+        expected_metadata_version=resolved.metadata_version,
+    )
+    PredictionOperations(
+        database,
+        FixedClock(datetime(2026, 8, 8, 12, tzinfo=UTC)),
+        local_timezone=UTC,
+    ).correct_binary_resolution(
+        resolved.prediction_id,
+        BinaryOutcome.NO,
+        resolution_notes=None,
+        postmortem=None,
+        correction_reason="The original terminal answer was corrected.",
+        expected_correction_id=None,
+    )
+    numeric = PredictionOperations(
+        database,
+        FixedClock(datetime(2026, 8, 18, 12, tzinfo=UTC)),
+        local_timezone=UTC,
+    ).create_numeric_prediction(
+        "How many common archive items?",
+        "items",
+        0,
+        1,
+        2,
+        3,
+        80,
+        expected_resolution=date(2026, 8, 19),
+        tags=("Blue", "Green"),
+    )
+    invalid = PredictionOperations(
+        database,
+        FixedClock(datetime(2026, 8, 4, 12, tzinfo=UTC)),
+        local_timezone=UTC,
+    ).create_prediction(
+        "Will common archive evidence become Invalid?",
+        50,
+    )
+    invalidated = PredictionOperations(
+        database,
+        FixedClock(datetime(2026, 8, 5, 12, tzinfo=UTC)),
+        local_timezone=UTC,
+    ).invalidate_prediction(
+        invalid.prediction_id,
+        expected_revision_id=invalid.current_revision_id,
+        expected_metadata_version=invalid.metadata_version,
+    )
+    operations = PredictionOperations(
+        database,
+        FixedClock(datetime(2026, 8, 20, 12, tzinfo=UTC)),
+        local_timezone=UTC,
+    )
+
+    all_tags = operations.browse_predictions(
+        tags=("blue", "red"),
+        tag_match_mode=ArchiveTagMatchMode.ALL,
+    )
+    any_tags = operations.browse_predictions(
+        tags=("blue", "red"),
+        tag_match_mode=ArchiveTagMatchMode.ANY,
+        sort=ArchiveSort.CREATED_OLDEST,
+    )
+    ready = operations.browse_predictions(
+        attention=ArchiveAttention.READY_TO_RESOLVE,
+    )
+    needs_postmortem = operations.browse_predictions(
+        attention=ArchiveAttention.NEEDS_POSTMORTEM,
+    )
+    terminal_dates = operations.browse_predictions(
+        date_meaning=ArchiveDateMeaning.TERMINAL_DECISION,
+        date_start=date(2026, 8, 3),
+        date_end=date(2026, 8, 4),
+        sort=ArchiveSort.TERMINAL_DECISION_OLDEST,
+    )
+    expected_latest = operations.browse_predictions(
+        sort=ArchiveSort.EXPECTED_RESOLUTION_LATEST,
+    )
+
+    assert [item.prediction_id for item in all_tags.predictions] == [
+        binary.prediction_id
+    ]
+    assert [item.prediction_id for item in any_tags.predictions] == [
+        binary.prediction_id,
+        resolved.prediction_id,
+        numeric.prediction_id,
+    ]
+    assert [item.prediction_id for item in ready.predictions] == [
+        numeric.prediction_id,
+        binary.prediction_id,
+    ]
+    assert [item.prediction_id for item in needs_postmortem.predictions] == [
+        resolved.prediction_id
+    ]
+    assert [item.prediction_id for item in terminal_dates.predictions] == [
+        resolved.prediction_id
+    ]
+    assert [item.prediction_id for item in expected_latest.predictions] == [
+        numeric.prediction_id,
+        binary.prediction_id,
+        resolved.prediction_id,
+        invalid.prediction_id,
+    ]
+    assert resolved_at.resolution is not None
+    assert invalidated.invalidation is not None
     database.close()

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from html import escape
 from typing import Protocol
 
-from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import QDate, QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDateEdit,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -25,6 +26,10 @@ from PySide6.QtWidgets import (
 
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.browser import (
+    ArchiveAttention,
+    ArchiveDateMeaning,
+    ArchiveSort,
+    ArchiveTagMatchMode,
     PredictionBrowserItem,
     PredictionBrowserSnapshot,
 )
@@ -58,6 +63,13 @@ class PredictionBrowserOperations(Protocol):
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        tags: tuple[str, ...] = (),
+        tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
+        attention: ArchiveAttention | None = None,
+        date_meaning: ArchiveDateMeaning = ArchiveDateMeaning.CREATED,
+        date_start: date | None = None,
+        date_end: date | None = None,
+        sort: ArchiveSort = ArchiveSort.CREATED_NEWEST,
     ) -> PredictionBrowserSnapshot:
         """Return filtered current summaries and the associated tag choices."""
 
@@ -70,6 +82,13 @@ class PredictionBrowserOperations(Protocol):
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        tags: tuple[str, ...] = (),
+        tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
+        attention: ArchiveAttention | None = None,
+        date_meaning: ArchiveDateMeaning = ArchiveDateMeaning.CREATED,
+        date_start: date | None = None,
+        date_end: date | None = None,
+        sort: ArchiveSort = ArchiveSort.RELEVANCE,
     ) -> PredictionSearchResults:
         """Return grouped explainable full-text results."""
 
@@ -167,12 +186,99 @@ class PredictionBrowserScreen(QWidget):
         self.type_filter.addItem("Numeric", PredictionType.NUMERIC.value)
         type_label.setBuddy(self.type_filter)
 
-        tag_label = QLabel("Tag", self)
-        self.tag_filter = QComboBox(self)
+        tag_label = QLabel("Tags", self)
+        self.tag_filter = QListWidget(self)
         self.tag_filter.setObjectName("predictionTagFilter")
-        self.tag_filter.setAccessibleName("Filter predictions by tag")
-        self.tag_filter.addItem("All tags", None)
+        self.tag_filter.setAccessibleName("Filter predictions by one or more tags")
+        self.tag_filter.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        self.tag_filter.setMaximumHeight(72)
         tag_label.setBuddy(self.tag_filter)
+
+        tag_mode_label = QLabel("Tag match", self)
+        self.tag_match_mode = QComboBox(self)
+        self.tag_match_mode.setObjectName("predictionTagMatchMode")
+        self.tag_match_mode.addItem("All selected", ArchiveTagMatchMode.ALL.value)
+        self.tag_match_mode.addItem("Any selected", ArchiveTagMatchMode.ANY.value)
+        tag_mode_label.setBuddy(self.tag_match_mode)
+
+        attention_label = QLabel("Attention", self)
+        self.attention_filter = QComboBox(self)
+        self.attention_filter.setObjectName("predictionAttentionFilter")
+        self.attention_filter.addItem("Any", None)
+        self.attention_filter.addItem(
+            "Needs Attention", ArchiveAttention.NEEDS_ATTENTION.value
+        )
+        self.attention_filter.addItem(
+            "Ready to Resolve", ArchiveAttention.READY_TO_RESOLVE.value
+        )
+        self.attention_filter.addItem(
+            "Needs Postmortem", ArchiveAttention.NEEDS_POSTMORTEM.value
+        )
+        attention_label.setBuddy(self.attention_filter)
+
+        date_label = QLabel("Date", self)
+        self.date_meaning = QComboBox(self)
+        self.date_meaning.setObjectName("predictionDateMeaning")
+        self.date_meaning.addItem("Created", ArchiveDateMeaning.CREATED.value)
+        self.date_meaning.addItem(
+            "Forecast deadline", ArchiveDateMeaning.FORECAST_DEADLINE.value
+        )
+        self.date_meaning.addItem(
+            "Expected resolution", ArchiveDateMeaning.EXPECTED_RESOLUTION.value
+        )
+        self.date_meaning.addItem(
+            "Terminal decision", ArchiveDateMeaning.TERMINAL_DECISION.value
+        )
+        date_label.setBuddy(self.date_meaning)
+
+        self.date_start_enabled = QCheckBox("From", self)
+        self.date_start_enabled.setObjectName("predictionDateStartEnabled")
+        self.date_start = self._new_date_edit("predictionDateStart")
+        self.date_end_enabled = QCheckBox("To", self)
+        self.date_end_enabled.setObjectName("predictionDateEndEnabled")
+        self.date_end = self._new_date_edit("predictionDateEnd")
+
+        sort_label = QLabel("Sort", self)
+        self.sort_filter = QComboBox(self)
+        self.sort_filter.setObjectName("predictionSort")
+        self.sort_filter.addItem("Relevance", ArchiveSort.RELEVANCE.value)
+        self.sort_filter.addItem("Created (newest)", ArchiveSort.CREATED_NEWEST.value)
+        self.sort_filter.addItem("Created (oldest)", ArchiveSort.CREATED_OLDEST.value)
+        self.sort_filter.addItem("Question (A–Z)", ArchiveSort.QUESTION_A_TO_Z.value)
+        self.sort_filter.addItem("Question (Z–A)", ArchiveSort.QUESTION_Z_TO_A.value)
+        self.sort_filter.addItem(
+            "Forecast considered (newest)",
+            ArchiveSort.FORECAST_CONSIDERED_NEWEST.value,
+        )
+        self.sort_filter.addItem(
+            "Forecast considered (oldest)",
+            ArchiveSort.FORECAST_CONSIDERED_OLDEST.value,
+        )
+        self.sort_filter.addItem(
+            "Expected resolution (soonest)",
+            ArchiveSort.EXPECTED_RESOLUTION_SOONEST.value,
+        )
+        self.sort_filter.addItem(
+            "Expected resolution (latest)",
+            ArchiveSort.EXPECTED_RESOLUTION_LATEST.value,
+        )
+        self.sort_filter.addItem(
+            "Terminal decision (newest)",
+            ArchiveSort.TERMINAL_DECISION_NEWEST.value,
+        )
+        self.sort_filter.addItem(
+            "Terminal decision (oldest)",
+            ArchiveSort.TERMINAL_DECISION_OLDEST.value,
+        )
+        relevance_index = self.sort_filter.findData(ArchiveSort.RELEVANCE.value)
+        relevance_item = self.sort_filter.model().item(relevance_index)
+        if relevance_item is not None:
+            relevance_item.setEnabled(False)
+        self.sort_filter.setCurrentIndex(
+            self.sort_filter.findData(ArchiveSort.CREATED_NEWEST.value)
+        )
+        self._sort_is_default = True
+        sort_label.setBuddy(self.sort_filter)
 
         self.apply_button = QPushButton("Apply filters", self)
         self.apply_button.setObjectName("applyPredictionFiltersButton")
@@ -193,15 +299,31 @@ class PredictionBrowserScreen(QWidget):
         filter_controls.addWidget(self.status_filter)
         filter_controls.addWidget(type_label)
         filter_controls.addWidget(self.type_filter)
-        filter_controls.addWidget(tag_label)
-        filter_controls.addWidget(self.tag_filter)
+        filter_controls.addWidget(attention_label)
+        filter_controls.addWidget(self.attention_filter)
+        filter_controls.addWidget(sort_label)
+        filter_controls.addWidget(self.sort_filter)
         filter_controls.addWidget(self.apply_button)
         filter_controls.addWidget(self.clear_button)
         filter_controls.addStretch()
 
+        archive_controls = QHBoxLayout()
+        archive_controls.addWidget(tag_label)
+        archive_controls.addWidget(self.tag_filter)
+        archive_controls.addWidget(tag_mode_label)
+        archive_controls.addWidget(self.tag_match_mode)
+        archive_controls.addWidget(date_label)
+        archive_controls.addWidget(self.date_meaning)
+        archive_controls.addWidget(self.date_start_enabled)
+        archive_controls.addWidget(self.date_start)
+        archive_controls.addWidget(self.date_end_enabled)
+        archive_controls.addWidget(self.date_end)
+        archive_controls.addStretch()
+
         filters_layout = QVBoxLayout()
         filters_layout.addLayout(search_layout)
         filters_layout.addLayout(filter_controls)
+        filters_layout.addLayout(archive_controls)
 
         self.error_label = QLabel(self)
         self.error_label.setObjectName("predictionBrowserError")
@@ -279,7 +401,15 @@ class PredictionBrowserScreen(QWidget):
         self.include_history.toggled.connect(self.refresh)
         self.status_filter.currentIndexChanged.connect(self.refresh)
         self.type_filter.currentIndexChanged.connect(self.refresh)
-        self.tag_filter.currentIndexChanged.connect(self.refresh)
+        self.tag_filter.itemSelectionChanged.connect(self.refresh)
+        self.tag_match_mode.currentIndexChanged.connect(self.refresh)
+        self.attention_filter.currentIndexChanged.connect(self.refresh)
+        self.date_meaning.currentIndexChanged.connect(self.refresh)
+        self.date_start_enabled.toggled.connect(self.refresh)
+        self.date_end_enabled.toggled.connect(self.refresh)
+        self.date_start.dateChanged.connect(self.refresh)
+        self.date_end.dateChanged.connect(self.refresh)
+        self.sort_filter.currentIndexChanged.connect(self._sort_selected)
         self.results_list.currentItemChanged.connect(self._selection_changed)
         self.results_list.itemActivated.connect(self._open_item)
         self.open_button.clicked.connect(self._open_current_item)
@@ -303,15 +433,18 @@ class PredictionBrowserScreen(QWidget):
         """Reload the current filter, retaining prior rows only with a warning."""
 
         self._search_debounce.stop()
-        selected_tag = self._selected_tag()
+        self._sync_default_sort(bool(self.search_input.text().strip()))
+        selected_tags = self._selected_tags()
         try:
-            snapshot = self._query(selected_tag)
-            if selected_tag is not None and selected_tag.casefold() not in {
-                item.casefold() for item in snapshot.available_tags
-            }:
+            snapshot = self._query()
+            available_keys = {item.casefold() for item in snapshot.available_tags}
+            retained_tags = tuple(
+                tag for tag in selected_tags if tag.casefold() in available_keys
+            )
+            if retained_tags != selected_tags:
                 with QSignalBlocker(self.tag_filter):
-                    self.tag_filter.setCurrentIndex(0)
-                snapshot = self._query(None)
+                    self._set_selected_tags(retained_tags)
+                snapshot = self._query()
         except ApplicationError as error:
             if self._loaded_snapshot is None:
                 self.error_label.setText(f"Predictions unavailable. {error}")
@@ -332,25 +465,30 @@ class PredictionBrowserScreen(QWidget):
         self._update_tag_choices(snapshot.available_tags)
         self._render(snapshot)
 
-    def _query(
-        self,
-        selected_tag: str | None,
-    ) -> PredictionBrowserSnapshot | PredictionSearchResults:
+    def _query(self) -> PredictionBrowserSnapshot | PredictionSearchResults:
         text = self.search_input.text()
+        sort = self._selected_sort()
+        shared_arguments = {
+            "status": self._selected_status(),
+            "prediction_type": self._selected_prediction_type(),
+            "tags": self._selected_tags(),
+            "tag_match_mode": self._selected_tag_match_mode(),
+            "attention": self._selected_attention(),
+            "date_meaning": self._selected_date_meaning(),
+            "date_start": self._selected_date(self.date_start_enabled, self.date_start),
+            "date_end": self._selected_date(self.date_end_enabled, self.date_end),
+            "sort": sort,
+        }
         if text.strip():
             return self._operations.search_predictions(
                 text,
                 match_mode=self._selected_match_mode(),
                 include_superseded=self.include_history.isChecked(),
-                status=self._selected_status(),
-                tag=selected_tag,
-                prediction_type=self._selected_prediction_type(),
+                **shared_arguments,
             )
         return self._operations.browse_predictions(
             "",
-            status=self._selected_status(),
-            tag=selected_tag,
-            prediction_type=self._selected_prediction_type(),
+            **shared_arguments,
         )
 
     def clear_filters(self) -> None:
@@ -361,14 +499,33 @@ class PredictionBrowserScreen(QWidget):
             QSignalBlocker(self.status_filter),
             QSignalBlocker(self.type_filter),
             QSignalBlocker(self.tag_filter),
+            QSignalBlocker(self.tag_match_mode),
+            QSignalBlocker(self.attention_filter),
+            QSignalBlocker(self.date_meaning),
+            QSignalBlocker(self.date_start_enabled),
+            QSignalBlocker(self.date_end_enabled),
+            QSignalBlocker(self.date_start),
+            QSignalBlocker(self.date_end),
+            QSignalBlocker(self.sort_filter),
             QSignalBlocker(self.match_mode),
             QSignalBlocker(self.include_history),
         ):
             self.status_filter.setCurrentIndex(0)
             self.type_filter.setCurrentIndex(0)
-            self.tag_filter.setCurrentIndex(0)
+            self.tag_filter.clearSelection()
+            self.tag_match_mode.setCurrentIndex(0)
+            self.attention_filter.setCurrentIndex(0)
+            self.date_meaning.setCurrentIndex(0)
+            self.date_start_enabled.setChecked(False)
+            self.date_end_enabled.setChecked(False)
+            self.date_start.setDate(QDate.currentDate())
+            self.date_end.setDate(QDate.currentDate())
+            self.sort_filter.setCurrentIndex(
+                self.sort_filter.findData(ArchiveSort.CREATED_NEWEST.value)
+            )
             self.match_mode.setCurrentIndex(0)
             self.include_history.setChecked(False)
+        self._sort_is_default = True
         self.refresh()
 
     def focus_search(self) -> None:
@@ -469,25 +626,31 @@ class PredictionBrowserScreen(QWidget):
             self.results_list.setItemWidget(item, row)
 
     def _update_tag_choices(self, tags: tuple[str, ...]) -> None:
-        selected = self._selected_tag()
-        selected_key = None if selected is None else selected.casefold()
+        selected_keys = {tag.casefold() for tag in self._selected_tags()}
         with QSignalBlocker(self.tag_filter):
             self.tag_filter.clear()
-            self.tag_filter.addItem("All tags", None)
-            selected_index = 0
             for display_name in tags:
-                self.tag_filter.addItem(display_name, display_name)
-                if display_name.casefold() == selected_key:
-                    selected_index = self.tag_filter.count() - 1
-            self.tag_filter.setCurrentIndex(selected_index)
+                item = QListWidgetItem(display_name, self.tag_filter)
+                item.setData(Qt.ItemDataRole.UserRole, display_name)
+                item.setSelected(display_name.casefold() in selected_keys)
 
     def _selected_status(self) -> PredictionStatus | None:
         value = self.status_filter.currentData()
         return None if value is None else PredictionStatus(str(value))
 
-    def _selected_tag(self) -> str | None:
-        value = self.tag_filter.currentData()
-        return None if value is None else str(value)
+    def _selected_tags(self) -> tuple[str, ...]:
+        return tuple(
+            str(item.data(Qt.ItemDataRole.UserRole))
+            for item in self.tag_filter.selectedItems()
+        )
+
+    def _set_selected_tags(self, selected_tags: tuple[str, ...]) -> None:
+        selected_keys = {tag.casefold() for tag in selected_tags}
+        for index in range(self.tag_filter.count()):
+            item = self.tag_filter.item(index)
+            item.setSelected(
+                str(item.data(Qt.ItemDataRole.UserRole)).casefold() in selected_keys
+            )
 
     def _selected_prediction_type(self) -> PredictionType | None:
         value = self.type_filter.currentData()
@@ -496,12 +659,69 @@ class PredictionBrowserScreen(QWidget):
     def _selected_match_mode(self) -> SearchMatchMode:
         return SearchMatchMode(str(self.match_mode.currentData()))
 
+    def _selected_tag_match_mode(self) -> ArchiveTagMatchMode:
+        return ArchiveTagMatchMode(str(self.tag_match_mode.currentData()))
+
+    def _selected_attention(self) -> ArchiveAttention | None:
+        value = self.attention_filter.currentData()
+        return None if value is None else ArchiveAttention(str(value))
+
+    def _selected_date_meaning(self) -> ArchiveDateMeaning:
+        return ArchiveDateMeaning(str(self.date_meaning.currentData()))
+
+    def _selected_date(self, enabled: QCheckBox, edit: QDateEdit) -> date | None:
+        if not enabled.isChecked():
+            return None
+        selected = edit.date()
+        return date(selected.year(), selected.month(), selected.day())
+
+    def _selected_sort(self) -> ArchiveSort:
+        return ArchiveSort(str(self.sort_filter.currentData()))
+
+    def _sort_selected(self, _index: int) -> None:
+        self._sort_is_default = False
+        self.refresh()
+
+    def _sync_default_sort(self, text_active: bool) -> None:
+        relevance_index = self.sort_filter.findData(ArchiveSort.RELEVANCE.value)
+        relevance_item = self.sort_filter.model().item(relevance_index)
+        if relevance_item is not None:
+            relevance_item.setEnabled(text_active)
+        if not self._sort_is_default:
+            if not text_active and self._selected_sort() is ArchiveSort.RELEVANCE:
+                with QSignalBlocker(self.sort_filter):
+                    self.sort_filter.setCurrentIndex(
+                        self.sort_filter.findData(ArchiveSort.CREATED_NEWEST.value)
+                    )
+            return
+        default = ArchiveSort.RELEVANCE if text_active else ArchiveSort.CREATED_NEWEST
+        if self._selected_sort() is not default:
+            with QSignalBlocker(self.sort_filter):
+                self.sort_filter.setCurrentIndex(
+                    self.sort_filter.findData(default.value)
+                )
+
+    @staticmethod
+    def _new_date_edit(object_name: str) -> QDateEdit:
+        edit = QDateEdit()
+        edit.setObjectName(object_name)
+        edit.setCalendarPopup(True)
+        edit.setDisplayFormat("yyyy-MM-dd")
+        edit.setDateRange(QDate(1752, 9, 14), QDate(9999, 12, 31))
+        edit.setDate(QDate.currentDate())
+        return edit
+
     def _has_active_filters(self) -> bool:
         return bool(
             self.search_input.text().strip()
             or self._selected_status() is not None
             or self._selected_prediction_type() is not None
-            or self._selected_tag() is not None
+            or bool(self._selected_tags())
+            or self._selected_attention() is not None
+            or self.date_start_enabled.isChecked()
+            or self.date_end_enabled.isChecked()
+            or self._selected_date_meaning() is not ArchiveDateMeaning.CREATED
+            or self._selected_sort() is not ArchiveSort.CREATED_NEWEST
         )
 
     def _selection_changed(
@@ -511,7 +731,8 @@ class PredictionBrowserScreen(QWidget):
     ) -> None:
         self.open_button.setEnabled(current is not None)
 
-    def _search_text_edited(self, _text: str) -> None:
+    def _search_text_edited(self, text: str) -> None:
+        self._sync_default_sort(bool(text.strip()))
         self._search_debounce.start()
 
     def _search_for_any_word(self) -> None:
