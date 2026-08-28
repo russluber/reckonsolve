@@ -562,7 +562,20 @@ Purpose
 -------
 This ZIP is a portable analytical representation of Reckonsolve prediction data.
 It is not a complete restoration format. Use a Reckonsolve .sqlite3 backup for
-application recovery. Application settings are intentionally excluded.
+application recovery.
+
+Intentional exclusions
+----------------------
+- Mutable Saved Views and application settings are interface preferences rather
+  than analytical forecast facts.
+- The prediction_search full-text rows, projection-version state, dirty queue,
+  and spelling vocabulary are disposable derivatives of canonical history.
+- Search query text, suggestions, ranking values, result order, and click history
+  are not exported; Reckonsolve does not persist hidden search telemetry.
+
+Current tag identities and Prediction/tag associations remain included in
+tags.csv and prediction_tags.csv. A complete SQLite backup retains Saved Views
+and the physical search projection, and can rebuild search from canonical data.
 
 CSV conventions
 ---------------

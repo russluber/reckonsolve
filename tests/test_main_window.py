@@ -476,6 +476,8 @@ class FakePredictionOperations:
         self.backup_error: ApplicationError | None = None
         self.export_calls: list[Path] = []
         self.export_error: ApplicationError | None = None
+        self.search_repair_calls = 0
+        self.search_repair_error: ApplicationError | None = None
         self.mutation_count = 0
 
     def create_prediction(
@@ -1727,6 +1729,11 @@ class FakePredictionOperations:
             csv_file_count=16,
         )
 
+    def repair_search_index(self) -> None:
+        self.search_repair_calls += 1
+        if self.search_repair_error is not None:
+            raise self.search_repair_error
+
 
 @pytest.fixture
 def operations() -> FakePredictionOperations:
@@ -1780,6 +1787,7 @@ def test_high_value_actions_keep_text_icons_and_accessible_names(
         "saveStaleThresholdButton": "Save threshold",
         "backUpNowButton": "Back Up Now",
         "exportCsvBundleButton": "Export CSV Bundle",
+        "repairSearchIndexButton": "Repair Search Index",
     }
 
     for object_name, text in expected_actions.items():
@@ -3289,6 +3297,30 @@ def test_cancelling_data_destination_dialogs_has_no_side_effect(
     assert operations.backup_calls == []
     assert operations.export_calls == []
     assert _required_child(window, QLabel, "dataManagementStatus").isHidden()
+
+
+def test_settings_repairs_search_index_and_reports_expected_failure(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Settings")
+    button = _required_child(window, QPushButton, "repairSearchIndexButton")
+    status = _required_child(window, QLabel, "dataManagementStatus")
+
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert operations.search_repair_calls == 1
+    assert status.text() == ("Search index repaired from canonical Prediction history.")
+
+    operations.search_repair_error = ApplicationError(
+        "Search repair could not complete."
+    )
+    qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    assert operations.search_repair_calls == 2
+    assert status.text() == "Search repair could not complete."
 
 
 def test_settings_shows_expected_backup_export_and_status_errors(

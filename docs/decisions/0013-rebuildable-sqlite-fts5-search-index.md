@@ -15,7 +15,7 @@ Use SQLite FTS5, supplied by the standard-library SQLite binding, for a contentf
 
 Schema version 14 adds the FTS table, a projection-version record, a vocabulary view, and a small dirty-Prediction queue. Narrow SQL triggers only mark affected Prediction identifiers when searchable canonical relationships change. They do not copy text, replay correction chains, or contain search rules. Immediately before `Database.transaction()` commits, Python projection code deterministically replaces every dirty Prediction's documents inside that same transaction. A projection failure therefore rolls back the canonical write as well.
 
-Startup explicitly proves that FTS5 is available. It builds the projection after migration, refreshes any safely retained dirty identifiers, and fully rebuilds when the projection algorithm version changes. Explicit integrity checking compares the complete projection with canonical replay, and an application operation can discard and rebuild the derived rows without changing canonical history.
+Startup explicitly proves that FTS5 is available. It builds the projection after migration, refreshes any safely retained dirty identifiers, and fully rebuilds when the projection algorithm version changes. It also compares the complete projection with canonical replay, so an equal-sized but incorrect recovered index is rebuilt before search can report false emptiness. An explicit Settings action can discard and rebuild the derived rows without changing canonical history.
 
 Search input is parsed as ordinary user text into parameterized FTS queries; raw FTS syntax is never accepted. Pure domain code groups fragments by Prediction and applies deterministic source-aware ranking. Effective text is searched by default, with distinct superseded documents available only when historical search is requested.
 
@@ -28,6 +28,7 @@ Search input is parsed as ordinary user text into parameterized FTS queries; raw
 - SQLite backups contain the derived tables because they copy the complete database, but those rows remain disposable and reproducible. Relational CSV export does not treat them as user data.
 - A Python or packaged runtime without FTS5 cannot use schema version 14 and fails with an explicit capability error rather than silently falling back to inferior or inconsistent search.
 - Direct canonical SQL outside Reckonsolve's transaction boundary is unsupported; startup can safely consume a retained dirty queue, while explicit integrity checking and repair cover projection corruption.
+- Complete startup verification adds work proportional to the local corpus, accepted here because the data is personal-scale and a silently wrong recovered index would violate the search contract.
 
 ## Alternatives considered
 

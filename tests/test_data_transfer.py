@@ -297,6 +297,9 @@ def test_csv_bundle_preserves_relational_history_and_raw_text(tmp_path) -> None:
     assert "Format version: 3" in readme
     assert "numeric_forecast_revisions.csv" in readme
     assert "forecast_reviews.csv" in readme
+    assert "Mutable Saved Views" in readme
+    assert "prediction_search full-text rows" in readme
+    assert "does not persist hidden search telemetry" in readme
     database.close()
 
 

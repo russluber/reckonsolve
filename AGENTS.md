@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.4. Its contract and Milestones 26 through 31 are defined in Section 32 of `docs/product-spec.md` and are complete. Future product work requires a newly authorized milestone or coherent vertical slice.
+The completed source release is v0.5. Its contract and Milestones 32 through 38 are defined in Section 33 of `docs/product-spec.md` and are complete. Future product work requires a newly authorized milestone or coherent vertical slice.
 
 The v0.1 baseline includes:
 
@@ -69,6 +69,8 @@ Milestones 21 through 25 in `docs/product-spec.md` are complete. Preserve the sh
 
 v0.4 adds schema-version-13 append-only terminal corrections and Postmortem completion; confirmed desktop correction and later-Postmortem workflows; type-aware resolved-prediction scorecards; filtered initial-versus-final feedback; the Resolved-only Needs Postmortem queue and Skip completion; historically complete CLI `show`; format-version-three relational CSV export; and migration, backup, cross-interface, and private-build hardening. Milestones 26 through 31 are complete. Preserve original terminal records, timestamps, scoring-revision capture, and one-observation-per-Prediction scoring throughout.
 
+v0.5 adds schema-version-14 rebuildable SQLite FTS5 search; explainable desktop and CLI retrieval across current and optional superseded text; rich archive filters and deterministic sorting; schema-version-15 dynamic Saved Views; transactional tag rename, merge, and deletion; explicit search repair; and migration, relevance, backup, recovery, cross-interface, and private-build hardening. Milestones 32 through 38 are complete. Preserve canonical-history authority, grouped source provenance, stable tag references, dynamic rather than stored Saved View membership, and repairable derived search state.
+
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 
 ## Technology Direction
@@ -76,7 +78,7 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Use Python managed by `uv`.
 - Build the desktop interface with PySide6.
 - Use SQLite as the canonical data store.
-- Target native Windows development and eventual packaging; v0.4 does not require a normal installer, separately packaged CLI executable, or public binary distribution.
+- Target native Windows development and eventual packaging; v0.5 does not require a normal installer, separately packaged CLI executable, or public binary distribution.
 - Keep core behavior fully functional offline.
 - Keep the architecture proportionate to a single-user local desktop application.
 - Do not add an ORM, migration framework, GUI framework, charting library, packaging system, or other production dependency casually. Prefer existing dependencies; when a new dependency is necessary, explain the need and tradeoff.

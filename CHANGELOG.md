@@ -4,6 +4,32 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
+## 0.5.0 - 2026-08-28
+
+### Added
+
+- Explainable, offline full-text search across Questions, tags, metadata, forecast rationales, Reviews, Journal history, and terminal text, with current-effective results by default and unmistakable opt-in superseded history.
+- Ordinary-word, quoted-phrase, incremental-prefix, punctuation-safe, All/Any, and explicit one-edit spelling-suggestion behavior with one grouped result per Prediction and source-aware snippets.
+- Rich archive filtering across lifecycle, forecast type, multiple tags, attention, inclusive local-calendar date meanings, and deterministic null-last sorts.
+- Named dynamic Saved Views that retain complete query configurations through stable tag identities without storing result membership.
+- Confirmed transactional tag rename, merge, and deletion with Prediction/Saved View counts, stale-metadata protection, and atomic search refresh.
+- Matching read-only CLI `search`, `saved-views`, and `saved-view --id/--name` commands through both stable and development identities.
+- An explicit Settings action that repairs the disposable search projection from canonical Prediction history.
+- A named privacy-safe relevance suite, a recorded 2,000-Prediction/6,000-fragment performance corpus, and expanded private frozen-build validation.
+
+### Changed
+
+- Existing schema-version-13 v0.4 databases migrate through version 14's rebuildable FTS5 projection to version 15's Saved View persistence without changing canonical forecast history.
+- Startup now verifies the complete search projection against canonical replay and repairs equal-sized mismatches before they can appear as false empty results.
+- SQLite backup preserves Saved Views and search capability; relational CSV remains format version 3 and now documents every intentional v0.5 exclusion.
+- The private Windows smoke workflow now covers schema-version-13 migration, FTS5, effective/history search, Saved Views, tag maintenance, independent canonical reads, failure reporting, repair, backup, recovery, and restart outside the source environment.
+
+### Release notes
+
+- Reckonsolve v0.5 remains a local-first, offline-capable, single-user source release.
+- Creating a verified SQLite backup before first opening an existing v0.4 database remains recommended.
+- This release does not add semantic search, Collections, another forecast model, logo artwork, a Windows installer, signing, automatic updates, public binaries, hidden query telemetry, or behavioral ranking.
+
 ## 0.4.0 - 2026-08-26
 
 ### Added

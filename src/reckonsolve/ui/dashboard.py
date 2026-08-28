@@ -84,6 +84,9 @@ class AttentionSettingsOperations(Protocol):
     def export_csv_bundle(self, destination: Path) -> CsvExportResult:
         """Create a documented relational CSV ZIP."""
 
+    def repair_search_index(self) -> None:
+        """Rebuild the disposable search projection from canonical history."""
+
 
 class DashboardScreen(QWidget):
     """Surface nonterminal predictions in overlapping action buckets."""
@@ -511,9 +514,14 @@ class AttentionSettingsScreen(QWidget):
         self.export_button.setObjectName("exportCsvBundleButton")
         apply_lucide_icon(self.export_button, LucideIcon.FILE_ARCHIVE)
         self.export_button.clicked.connect(self._export_csv_bundle)
+        self.repair_search_button = QPushButton("Repair Search Index", data_group)
+        self.repair_search_button.setObjectName("repairSearchIndexButton")
+        apply_lucide_icon(self.repair_search_button, LucideIcon.REFRESH)
+        self.repair_search_button.clicked.connect(self._repair_search_index)
         action_layout = QHBoxLayout()
         action_layout.addWidget(self.backup_button)
         action_layout.addWidget(self.export_button)
+        action_layout.addWidget(self.repair_search_button)
         action_layout.addStretch()
 
         self.data_status_label = QLabel(data_group)
@@ -610,6 +618,18 @@ class AttentionSettingsScreen(QWidget):
             return
         self._show_data_status(
             f"Exported {result.csv_file_count} CSV files: {result.destination}"
+        )
+
+    def _repair_search_index(self) -> None:
+        """Explicitly recreate only derived search data from canonical history."""
+
+        try:
+            self._operations.repair_search_index()
+        except ApplicationError as error:
+            self._show_data_status(str(error))
+            return
+        self._show_data_status(
+            "Search index repaired from canonical Prediction history."
         )
 
     def _choose_destination(

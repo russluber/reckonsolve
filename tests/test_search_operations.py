@@ -548,6 +548,34 @@ def test_missing_search_documents_are_rebuilt_from_canonical_data_on_restart(
     reopened.close()
 
 
+def test_equal_sized_incorrect_projection_is_rebuilt_on_restart(tmp_path) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(path)
+    created = _operations(database).create_prediction(
+        "Will canonical history repair an equal-sized projection?", 50
+    )
+    with database.transaction() as connection:
+        connection.execute(
+            """
+            UPDATE prediction_search
+            SET body = 'incorrect disposable projection'
+            WHERE prediction_id = ? AND source_kind = 'question'
+            """,
+            (created.prediction_id,),
+        )
+    with pytest.raises(SearchIndexRepairRequiredError, match="does not match"):
+        database.check_search_index()
+    database.close()
+
+    reopened = Database.open(path)
+    assert _matching_ids(_operations(reopened).search_predictions("canonical")) == [
+        created.prediction_id
+    ]
+    assert _operations(reopened).search_predictions("incorrect").hits == ()
+    reopened.check_search_index()
+    reopened.close()
+
+
 def test_stale_projection_state_is_rebuilt_on_restart_and_databases_are_isolated(
     tmp_path,
 ) -> None:

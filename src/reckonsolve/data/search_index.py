@@ -74,6 +74,15 @@ def initialize_search_index(connection: sqlite3.Connection) -> bool:
             rebuild_search_index(connection)
         else:
             refresh_pending_search_documents(connection)
+        try:
+            check_search_index(connection)
+        except SearchIndexRepairRequiredError:
+            # Counts and the projection-version marker cannot detect an
+            # equal-sized but incorrect projection. Canonical history is
+            # authoritative, so restart/recovery repairs that case before
+            # an apparently successful search can return false emptiness.
+            rebuild_search_index(connection)
+            check_search_index(connection)
         connection.execute("COMMIT")
     except BaseException as error:
         if connection.in_transaction:
