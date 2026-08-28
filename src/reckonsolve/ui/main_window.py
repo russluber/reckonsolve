@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from reckonsolve.domain.search import SearchDocument
 from reckonsolve.ui.analytics_screen import AnalyticsScreen
 from reckonsolve.ui.dashboard import AttentionSettingsScreen, DashboardScreen
 from reckonsolve.ui.icons import (
@@ -162,6 +163,9 @@ class MainWindow(QMainWindow):
         self._prediction_browser_screen.prediction_selected.connect(
             self._show_selected_prediction
         )
+        self._prediction_browser_screen.search_result_selected.connect(
+            self._show_search_result
+        )
         self._settings_screen.threshold_changed.connect(
             lambda _value: self._dashboard_screen.refresh()
         )
@@ -230,6 +234,16 @@ class MainWindow(QMainWindow):
         else:
             self._prediction_detail_host.show_prediction(prediction)
         self.navigate_to("Prediction Detail")
+
+    def _show_search_result(
+        self,
+        prediction: PredictionSnapshot | NumericPredictionSnapshot,
+        search_document: SearchDocument,
+    ) -> None:
+        """Open current Detail, then reveal the canonical source that matched."""
+
+        self._show_selected_prediction(prediction)
+        self._prediction_detail_host.focus_search_match(search_document)
 
     def _refresh_navigation_icons(self) -> None:
         for row, screen_name in enumerate(self.screen_names):

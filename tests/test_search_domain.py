@@ -7,9 +7,11 @@ from reckonsolve.domain.search import (
     SearchMatchMode,
     SearchPrediction,
     SearchSourceKind,
+    build_search_snippet,
     normalize_search_literal,
     parse_search_text,
     rank_search_candidates,
+    search_source_label,
     search_tokens,
 )
 
@@ -149,3 +151,37 @@ def test_exact_current_question_outranks_other_sources_and_history() -> None:
     assert [hit.prediction.prediction_id for hit in hits] == [1, 2, 3]
     assert hits[0].best_match.document.source_kind is SearchSourceKind.QUESTION
     assert not hits[0].best_match.document.is_superseded
+
+
+def test_snippet_preserves_plain_source_text_and_marks_unicode_matches() -> None:
+    source = (
+        "Unrelated opening context that should be clipped before the remembered "
+        "Café <evidence> changed the forecast substantially and safely."
+    )
+
+    snippet = build_search_snippet(
+        source,
+        parse_search_text("cafe evidence"),
+        maximum_length=80,
+    )
+
+    assert snippet.text.startswith("…")
+    assert "Café <evidence>" in snippet.text
+    assert "<evidence>" in snippet.text
+    emphasized = tuple(snippet.text[start:end] for start, end in snippet.match_spans)
+    assert emphasized == ("Café", "evidence")
+
+
+def test_source_labels_make_superseded_history_unmistakable() -> None:
+    document = SearchDocument(
+        prediction_id=1,
+        source_kind=SearchSourceKind.JOURNAL,
+        source_record_id=3,
+        source_version_id=None,
+        source_sequence=None,
+        occurred_at=NOW,
+        is_superseded=True,
+        text="Earlier wording",
+    )
+
+    assert search_source_label(document) == ("Journal entry match — superseded history")

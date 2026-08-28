@@ -55,7 +55,10 @@ from .search import (
     SearchMatchMode,
     SearchPrediction,
     SearchQuery,
+    SearchSnippet,
     SearchSourceKind,
+    build_search_snippet,
+    search_source_label,
 )
 from .transfer import BackupResult, CsvExportResult, DataManagementStatus
 
@@ -108,9 +111,12 @@ __all__ = [
     "SearchMatchMode",
     "SearchPrediction",
     "SearchQuery",
+    "SearchSnippet",
     "SearchSourceKind",
     "TimelineEvent",
+    "build_search_snippet",
     "needs_attention",
     "ready_to_resolve",
+    "search_source_label",
     "validate_stale_threshold_days",
 ]

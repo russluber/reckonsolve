@@ -1477,6 +1477,9 @@ class PredictionOperations:
         *,
         match_mode: SearchMatchMode = SearchMatchMode.ALL,
         include_superseded: bool = False,
+        status: PredictionStatus | None = None,
+        tag: str | None = None,
+        prediction_type: PredictionType | None = None,
     ) -> PredictionSearchResults:
         """Search canonical Prediction text through the rebuildable projection."""
 
@@ -1489,6 +1492,18 @@ class PredictionOperations:
             parsed_text = parse_search_text(query.text)
         except SearchValidationError as error:
             raise ValidationError(str(error), field=error.field) from error
+        if status is not None and not isinstance(status, PredictionStatus):
+            raise ValidationError(
+                "The prediction status filter is invalid.", field="status"
+            )
+        if tag is not None and not isinstance(tag, str):
+            raise ValidationError("The prediction tag filter is invalid.", field="tag")
+        if prediction_type is not None and not isinstance(
+            prediction_type, PredictionType
+        ):
+            raise ValidationError(
+                "The forecast type filter is invalid.", field="prediction_type"
+            )
 
         if parsed_text.is_blank:
             return PredictionSearchResults(
@@ -1496,9 +1511,11 @@ class PredictionOperations:
             )
 
         try:
-            predictions, candidates = self._search_repository.find_candidates(
-                parsed_text,
-                include_superseded=query.include_superseded,
+            predictions, candidates, available_tags = (
+                self._search_repository.find_candidates(
+                    parsed_text,
+                    include_superseded=query.include_superseded,
+                )
             )
             current_date = (
                 as_utc(self._clock.now()).astimezone(self._local_timezone).date()
@@ -1513,6 +1530,20 @@ class PredictionOperations:
                     ),
                 )
                 for prediction_id, prediction in predictions.items()
+            }
+            tag_key = None if tag is None else tag.strip().casefold() or None
+            effective_predictions = {
+                prediction_id: prediction
+                for prediction_id, prediction in effective_predictions.items()
+                if (status is None or prediction.status is status)
+                and (
+                    prediction_type is None
+                    or prediction.prediction_type is prediction_type
+                )
+                and (
+                    tag_key is None
+                    or tag_key in {item.casefold() for item in prediction.tags}
+                )
             }
             hits = rank_search_candidates(
                 parsed_text,
@@ -1555,6 +1586,7 @@ class PredictionOperations:
             hits=hits,
             any_word_available=any_word_available,
             suggestion=suggestion,
+            available_tags=available_tags,
         )
 
     def repair_search_index(self) -> None:

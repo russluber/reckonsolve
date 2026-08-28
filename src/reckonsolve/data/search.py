@@ -8,7 +8,12 @@ from dataclasses import dataclass
 from datetime import date
 
 from reckonsolve.clock import parse_utc
-from reckonsolve.domain.predictions import PredictionStatus, PredictionType
+from reckonsolve.domain.predictions import (
+    BinaryOutcome,
+    FixedPrecisionValue,
+    PredictionStatus,
+    PredictionType,
+)
 from reckonsolve.domain.search import (
     ParsedSearchText,
     SearchClause,
@@ -51,6 +56,7 @@ class SearchRepository:
     ) -> tuple[
         dict[int, SearchPrediction],
         tuple[SearchFragmentCandidate, ...],
+        tuple[str, ...],
     ]:
         """Return every candidate needed for Prediction-level coverage ranking."""
 
@@ -75,10 +81,11 @@ class SearchRepository:
     ) -> tuple[
         dict[int, SearchPrediction],
         tuple[SearchFragmentCandidate, ...],
+        tuple[str, ...],
     ]:
 
         if parsed_text.is_blank:
-            return {}, ()
+            return {}, (), ()
         with self._database.transaction() as connection:
             _require_ready_index(connection)
             candidates: dict[int, _CandidateAccumulator] = {}
@@ -147,6 +154,20 @@ class SearchRepository:
                 {candidate.document.prediction_id for candidate in candidates.values()}
             )
             predictions = _select_predictions(connection, prediction_ids)
+            available_tags = tuple(
+                str(row[0])
+                for row in connection.execute(
+                    """
+                    SELECT display_name
+                    FROM tags
+                    WHERE EXISTS (
+                        SELECT 1 FROM prediction_tags
+                        WHERE prediction_tags.tag_id = tags.id
+                    )
+                    ORDER BY normalized_name, id
+                    """
+                ).fetchall()
+            )
 
         fragment_candidates = tuple(
             SearchFragmentCandidate(
@@ -165,7 +186,7 @@ class SearchRepository:
             )
             for candidate in candidates.values()
         )
-        return predictions, fragment_candidates
+        return predictions, fragment_candidates, available_tags
 
     def suggest_spelling(
         self,
@@ -281,34 +302,123 @@ def _select_predictions(
     connection,
     prediction_ids: list[int],
 ) -> dict[int, SearchPrediction]:
+    if not prediction_ids:
+        return {}
+    wanted_ids = set(prediction_ids)
+    rows = connection.execute(
+        """
+        SELECT
+            prediction.id AS prediction_id,
+            prediction.question,
+            prediction.prediction_type,
+            prediction.status,
+            prediction.created_at,
+            prediction.forecast_deadline,
+            current_revision.probability_percent,
+            NULL AS numeric_lower_scaled,
+            NULL AS numeric_median_scaled,
+            NULL AS numeric_upper_scaled,
+            NULL AS numeric_confidence_percent,
+            NULL AS numeric_unit,
+            NULL AS numeric_precision,
+            current_revision.created_at AS latest_revision_at,
+            (
+                SELECT COALESCE(
+                    (
+                        SELECT correction.new_outcome
+                        FROM resolution_corrections AS correction
+                        WHERE correction.resolution_id = resolution.id
+                        ORDER BY correction.sequence DESC
+                        LIMIT 1
+                    ),
+                    resolution.outcome
+                )
+                FROM resolutions AS resolution
+                WHERE resolution.prediction_id = prediction.id
+            ) AS binary_outcome,
+            NULL AS numeric_actual_scaled
+        FROM predictions AS prediction
+        JOIN forecast_revisions AS current_revision
+            ON current_revision.id = (
+                SELECT candidate.id
+                FROM forecast_revisions AS candidate
+                WHERE candidate.prediction_id = prediction.id
+                ORDER BY candidate.sequence DESC
+                LIMIT 1
+            )
+        WHERE prediction.prediction_type = 'binary'
+        UNION ALL
+        SELECT
+            prediction.id AS prediction_id,
+            prediction.question,
+            prediction.prediction_type,
+            prediction.status,
+            prediction.created_at,
+            prediction.forecast_deadline,
+            NULL AS probability_percent,
+            current_revision.lower_scaled AS numeric_lower_scaled,
+            current_revision.median_scaled AS numeric_median_scaled,
+            current_revision.upper_scaled AS numeric_upper_scaled,
+            current_revision.confidence_percent AS numeric_confidence_percent,
+            prediction.numeric_unit,
+            prediction.numeric_precision,
+            current_revision.created_at AS latest_revision_at,
+            NULL AS binary_outcome,
+            (
+                SELECT COALESCE(
+                    (
+                        SELECT correction.new_actual_scaled
+                        FROM numeric_resolution_corrections AS correction
+                        WHERE correction.numeric_resolution_id = resolution.id
+                        ORDER BY correction.sequence DESC
+                        LIMIT 1
+                    ),
+                    resolution.actual_scaled
+                )
+                FROM numeric_resolutions AS resolution
+                WHERE resolution.prediction_id = prediction.id
+            ) AS numeric_actual_scaled
+        FROM predictions AS prediction
+        JOIN numeric_forecast_revisions AS current_revision
+            ON current_revision.id = (
+                SELECT candidate.id
+                FROM numeric_forecast_revisions AS candidate
+                WHERE candidate.prediction_id = prediction.id
+                ORDER BY candidate.sequence DESC
+                LIMIT 1
+            )
+        WHERE prediction.prediction_type = 'numeric'
+        """
+    ).fetchall()
+    tag_rows = connection.execute(
+        """
+        SELECT link.prediction_id, tag.display_name
+        FROM tags AS tag
+        JOIN prediction_tags AS link ON link.tag_id = tag.id
+        ORDER BY tag.normalized_name, tag.id, link.prediction_id
+        """
+    ).fetchall()
+    tags_by_prediction: dict[int, list[str]] = {}
+    for tag_row in tag_rows:
+        prediction_id = int(tag_row["prediction_id"])
+        if prediction_id in wanted_ids:
+            tags_by_prediction.setdefault(prediction_id, []).append(
+                str(tag_row["display_name"])
+            )
+
     predictions: dict[int, SearchPrediction] = {}
-    for prediction_id in prediction_ids:
-        row = connection.execute(
-            """
-            SELECT
-                id, question, prediction_type, status,
-                created_at, forecast_deadline
-            FROM predictions
-            WHERE id = ?
-            """,
-            (prediction_id,),
-        ).fetchone()
-        if row is None:
+    for row in rows:
+        prediction_id = int(row["prediction_id"])
+        if prediction_id not in wanted_ids:
             continue
-        tag_rows = connection.execute(
-            """
-            SELECT tag.display_name
-            FROM tags AS tag
-            JOIN prediction_tags AS link ON link.tag_id = tag.id
-            WHERE link.prediction_id = ?
-            ORDER BY tag.normalized_name, tag.id
-            """,
-            (prediction_id,),
-        ).fetchall()
+        prediction_type = PredictionType(str(row["prediction_type"]))
+        decimal_places = (
+            None if row["numeric_precision"] is None else int(row["numeric_precision"])
+        )
         predictions[prediction_id] = SearchPrediction(
             prediction_id=prediction_id,
             question=str(row["question"]),
-            prediction_type=PredictionType(str(row["prediction_type"])),
+            prediction_type=prediction_type,
             status=PredictionStatus(str(row["status"])),
             created_at=parse_utc(str(row["created_at"])),
             forecast_deadline=(
@@ -316,7 +426,54 @@ def _select_predictions(
                 if row["forecast_deadline"] is None
                 else date.fromisoformat(str(row["forecast_deadline"]))
             ),
-            tags=tuple(str(tag_row[0]) for tag_row in tag_rows),
+            tags=tuple(tags_by_prediction.get(prediction_id, ())),
+            latest_revision_at=parse_utc(str(row["latest_revision_at"])),
+            probability_percent=(
+                None
+                if row["probability_percent"] is None
+                else int(row["probability_percent"])
+            ),
+            numeric_lower_bound=(
+                None
+                if decimal_places is None
+                else FixedPrecisionValue(
+                    int(row["numeric_lower_scaled"]), decimal_places
+                )
+            ),
+            numeric_median_estimate=(
+                None
+                if decimal_places is None
+                else FixedPrecisionValue(
+                    int(row["numeric_median_scaled"]), decimal_places
+                )
+            ),
+            numeric_upper_bound=(
+                None
+                if decimal_places is None
+                else FixedPrecisionValue(
+                    int(row["numeric_upper_scaled"]), decimal_places
+                )
+            ),
+            numeric_confidence_percent=(
+                None
+                if row["numeric_confidence_percent"] is None
+                else int(row["numeric_confidence_percent"])
+            ),
+            numeric_unit=(
+                None if row["numeric_unit"] is None else str(row["numeric_unit"])
+            ),
+            binary_outcome=(
+                None
+                if row["binary_outcome"] is None
+                else BinaryOutcome(str(row["binary_outcome"]))
+            ),
+            numeric_actual_value=(
+                None
+                if decimal_places is None or row["numeric_actual_scaled"] is None
+                else FixedPrecisionValue(
+                    int(row["numeric_actual_scaled"]), decimal_places
+                )
+            ),
         )
     return predictions
 

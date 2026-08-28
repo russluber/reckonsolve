@@ -7,7 +7,11 @@ from reckonsolve.application.errors import SearchUnavailableError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.search_index import SearchIndexRepairRequiredError
-from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.domain.predictions import (
+    BinaryOutcome,
+    PredictionStatus,
+    PredictionType,
+)
 from reckonsolve.domain.search import SearchMatchMode, SearchSourceKind
 
 NOW = datetime(2026, 8, 27, 18, tzinfo=UTC)
@@ -117,6 +121,13 @@ def test_binary_search_projects_every_source_and_hides_superseded_text_by_defaul
         assert results.hits[0].best_match.document.source_kind is source_kind
         assert not results.hits[0].best_match.document.is_superseded
 
+    presentation = operations.search_predictions("currentpostmortem")
+    result_prediction = presentation.hits[0].prediction
+    assert result_prediction.probability_percent == 70
+    assert result_prediction.binary_outcome is BinaryOutcome.YES
+    assert result_prediction.tags == ("Spaceflight",)
+    assert presentation.available_tags == ("Spaceflight",)
+
     for historical_query in (
         "launch",
         "originalcriterion",
@@ -202,6 +213,14 @@ def test_numeric_sources_and_actual_value_correction_reason_are_searchable(
         assert _matching_ids(operations.search_predictions(query)) == [
             created.prediction_id
         ]
+    presentation = operations.search_predictions("finalnumericpostmortem")
+    result_prediction = presentation.hits[0].prediction
+    assert str(result_prediction.numeric_lower_bound) == "2"
+    assert str(result_prediction.numeric_median_estimate) == "5"
+    assert str(result_prediction.numeric_upper_bound) == "10"
+    assert result_prediction.numeric_confidence_percent == 75
+    assert result_prediction.numeric_unit == "observations"
+    assert str(result_prediction.numeric_actual_value) == "7"
     assert operations.search_predictions("numericnotes").hits == ()
     assert _matching_ids(
         operations.search_predictions("numericnotes", include_superseded=True)
@@ -309,6 +328,52 @@ def test_exact_current_question_ranks_first_and_results_group_by_prediction(
     assert _matching_ids(results) == [exact.prediction_id, repeated.prediction_id]
     assert results.hits[0].best_match.exact_text_match is True
     assert results.hits[1].additional_match_count == 1
+    database.close()
+
+
+def test_search_applies_existing_archive_filters_before_grouped_ranking(
+    tmp_path,
+) -> None:
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
+    operations = _operations(database)
+    binary = operations.create_prediction(
+        "Will sharedneedle remain Binary?",
+        45,
+        tags=("Included",),
+    )
+    numeric = operations.create_numeric_prediction(
+        "How many sharedneedle items?",
+        "items",
+        0,
+        1,
+        2,
+        3,
+        80,
+        tags=("Excluded",),
+    )
+    operations.invalidate_prediction(
+        binary.prediction_id,
+        reason="No longer valid.",
+        expected_revision_id=binary.current_revision_id,
+        expected_metadata_version=binary.metadata_version,
+    )
+
+    filtered = operations.search_predictions(
+        "sharedneedle",
+        status=PredictionStatus.OPEN,
+        tag="excluded",
+        prediction_type=PredictionType.NUMERIC,
+    )
+    no_status_match = operations.search_predictions(
+        "sharedneedle",
+        status=PredictionStatus.OPEN,
+        tag="included",
+        prediction_type=PredictionType.BINARY,
+    )
+
+    assert _matching_ids(filtered) == [numeric.prediction_id]
+    assert no_status_match.hits == ()
+    assert filtered.available_tags == ("Excluded", "Included")
     database.close()
 
 

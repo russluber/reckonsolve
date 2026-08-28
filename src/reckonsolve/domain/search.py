@@ -8,7 +8,12 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from enum import StrEnum
 
-from .predictions import PredictionStatus, PredictionType
+from .predictions import (
+    BinaryOutcome,
+    FixedPrecisionValue,
+    PredictionStatus,
+    PredictionType,
+)
 
 
 class SearchValidationError(ValueError):
@@ -122,6 +127,15 @@ class SearchPrediction:
     created_at: datetime
     forecast_deadline: date | None
     tags: tuple[str, ...]
+    latest_revision_at: datetime | None = None
+    probability_percent: int | None = None
+    numeric_lower_bound: FixedPrecisionValue | None = None
+    numeric_median_estimate: FixedPrecisionValue | None = None
+    numeric_upper_bound: FixedPrecisionValue | None = None
+    numeric_confidence_percent: int | None = None
+    numeric_unit: str | None = None
+    binary_outcome: BinaryOutcome | None = None
+    numeric_actual_value: FixedPrecisionValue | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +161,14 @@ class SearchFragmentHit:
 
 
 @dataclass(frozen=True, slots=True)
+class SearchSnippet:
+    """Plain text plus safe half-open ranges that presentation may emphasize."""
+
+    text: str
+    match_spans: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class PredictionSearchHit:
     """One grouped Prediction result with its best matching fragment."""
 
@@ -164,6 +186,7 @@ class PredictionSearchResults:
     hits: tuple[PredictionSearchHit, ...]
     any_word_available: bool = False
     suggestion: str | None = None
+    available_tags: tuple[str, ...] = ()
 
 
 def parse_search_text(text: str) -> ParsedSearchText:
@@ -262,6 +285,84 @@ def normalize_search_literal(text: str) -> str:
         if not unicodedata.category(character).startswith("M")
     )
     return " ".join(without_marks.split())
+
+
+def build_search_snippet(
+    text: str,
+    parsed_text: ParsedSearchText,
+    *,
+    maximum_length: int = 180,
+) -> SearchSnippet:
+    """Select compact plain context and source-indexed ranges without markup."""
+
+    if maximum_length < 40:
+        raise ValueError("A search snippet must allow at least 40 characters.")
+    spans = _matching_source_spans(text, parsed_text)
+    if len(text) <= maximum_length:
+        return SearchSnippet(text=text, match_spans=spans)
+
+    first_match = spans[0][0] if spans else 0
+    slice_start = max(0, first_match - maximum_length // 3)
+    slice_end = min(len(text), slice_start + maximum_length)
+    if slice_end - slice_start < maximum_length:
+        slice_start = max(0, slice_end - maximum_length)
+
+    if slice_start:
+        next_space = text.find(" ", slice_start, min(slice_end, slice_start + 24))
+        if next_space != -1 and next_space < first_match:
+            slice_start = next_space + 1
+    if slice_end < len(text):
+        previous_space = text.rfind(" ", max(slice_start, slice_end - 24), slice_end)
+        if previous_space > first_match:
+            slice_end = previous_space
+
+    prefix = "…" if slice_start else ""
+    suffix = "…" if slice_end < len(text) else ""
+    clipped_spans = tuple(
+        (
+            max(start, slice_start) - slice_start + len(prefix),
+            min(end, slice_end) - slice_start + len(prefix),
+        )
+        for start, end in spans
+        if end > slice_start and start < slice_end
+    )
+    return SearchSnippet(
+        text=f"{prefix}{text[slice_start:slice_end]}{suffix}",
+        match_spans=clipped_spans,
+    )
+
+
+def search_source_label(document: SearchDocument) -> str:
+    """Return an inspectable user-facing classification without a raw score."""
+
+    if document.source_kind is SearchSourceKind.QUESTION:
+        label = "Question match"
+    elif document.source_kind is SearchSourceKind.TAG:
+        label = "Tag match"
+    elif document.source_kind is SearchSourceKind.BACKGROUND:
+        label = "Background match"
+    elif document.source_kind is SearchSourceKind.RESOLUTION_CRITERIA:
+        label = "Resolution Criteria match"
+    elif document.source_kind is SearchSourceKind.FORECAST_RATIONALE:
+        sequence = document.source_sequence
+        label = (
+            "Forecast rationale match"
+            if sequence is None
+            else f"Forecast revision {sequence} rationale"
+        )
+    elif document.source_kind is SearchSourceKind.FORECAST_REVIEW:
+        label = "Forecast Review note"
+    elif document.source_kind is SearchSourceKind.JOURNAL:
+        label = "Journal entry match"
+    elif document.source_kind is SearchSourceKind.RESOLUTION_NOTES:
+        label = "Resolution notes match"
+    elif document.source_kind is SearchSourceKind.POSTMORTEM:
+        label = "Postmortem match"
+    elif document.source_kind is SearchSourceKind.INVALIDATION_REASON:
+        label = "Invalidation reason match"
+    else:
+        label = "Outcome-correction explanation"
+    return f"{label} — superseded history" if document.is_superseded else label
 
 
 def rank_search_candidates(
@@ -378,3 +479,67 @@ def _source_priority(document: SearchDocument) -> int:
 def _is_token_character(character: str) -> bool:
     category = unicodedata.category(character)
     return category[0] in {"L", "N"} or category == "Co"
+
+
+def _matching_source_spans(
+    text: str,
+    parsed_text: ParsedSearchText,
+) -> tuple[tuple[int, int], ...]:
+    token_spans: list[tuple[str, int, int]] = []
+    token_start: int | None = None
+    for index, character in enumerate((*text, " ")):
+        if index < len(text) and _is_token_character(character):
+            if token_start is None:
+                token_start = index
+        elif token_start is not None:
+            normalized_tokens = search_tokens(text[token_start:index])
+            if normalized_tokens:
+                token_spans.append((normalized_tokens[0], token_start, index))
+            token_start = None
+
+    spans: list[tuple[int, int]] = []
+    for clause in parsed_text.clauses:
+        for query_token in clause.tokens:
+            for source_token, start, end in token_spans:
+                if source_token == query_token or (
+                    clause.is_prefix and source_token.startswith(query_token)
+                ):
+                    spans.append((start, end))
+
+    literal = parsed_text.literal_text
+    if literal and " " not in literal:
+        normalized_text, source_indexes = _normalized_text_with_source_indexes(text)
+        search_at = 0
+        while True:
+            match_at = normalized_text.find(literal, search_at)
+            if match_at < 0:
+                break
+            match_end = match_at + len(literal)
+            spans.append(
+                (
+                    source_indexes[match_at],
+                    source_indexes[match_end - 1] + 1,
+                )
+            )
+            search_at = match_end
+
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(set(spans)):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return tuple(merged)
+
+
+def _normalized_text_with_source_indexes(text: str) -> tuple[str, tuple[int, ...]]:
+    characters: list[str] = []
+    indexes: list[int] = []
+    for source_index, source_character in enumerate(text):
+        normalized = unicodedata.normalize("NFKD", source_character).casefold()
+        for character in normalized:
+            if unicodedata.category(character).startswith("M"):
+                continue
+            characters.append(character)
+            indexes.append(source_index)
+    return "".join(characters), tuple(indexes)

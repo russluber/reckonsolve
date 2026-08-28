@@ -7,7 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Protocol
 
-from PySide6.QtCore import QDate, QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QDate, QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QKeyEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -59,6 +59,7 @@ from reckonsolve.domain.predictions import (
     PredictionValidationError,
     ResolutionCorrection,
 )
+from reckonsolve.domain.search import SearchDocument, SearchSourceKind
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
@@ -1355,6 +1356,21 @@ class NumericPredictionDetailScreen(QWidget):
         invalidation_layout.addWidget(self.invalidation_history)
         self.invalidation_section.setHidden(True)
 
+        self.definition_history = QGroupBox("Definition history", self.detail_content)
+        self.definition_history.setObjectName("numericDefinitionHistoryGroup")
+        self.definition_history.setCheckable(True)
+        self.definition_history.setChecked(False)
+        self.definition_history_content = QWidget(self.definition_history)
+        self.definition_history_content.setObjectName("numericDefinitionHistoryContent")
+        self.definition_history_layout = QVBoxLayout(self.definition_history_content)
+        definition_group_layout = QVBoxLayout(self.definition_history)
+        definition_group_layout.addWidget(self.definition_history_content)
+        self.definition_history.toggled.connect(
+            self.definition_history_content.setVisible
+        )
+        self.definition_history_content.setHidden(True)
+        self.definition_history.setHidden(True)
+
         history_label = QLabel("INTERVAL HISTORY", self.detail_content)
         history_label.setObjectName("numericHistoryLabel")
         history_font = QFont(history_label.font())
@@ -1409,6 +1425,7 @@ class NumericPredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.rationale_section)
         detail_layout.addWidget(self.resolution_section)
         detail_layout.addWidget(self.invalidation_section)
+        detail_layout.addWidget(self.definition_history)
         detail_layout.addSpacing(10)
         detail_layout.addWidget(actions)
         detail_layout.addSpacing(14)
@@ -1422,18 +1439,18 @@ class NumericPredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.next_steps)
         detail_layout.addStretch()
 
-        scroll_area = QScrollArea(self)
-        scroll_area.setObjectName("numericPredictionDetailScrollArea")
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        scroll_area.setWidget(self.detail_content)
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setObjectName("numericPredictionDetailScrollArea")
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setWidget(self.detail_content)
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(title)
         layout.addWidget(self.empty_state)
         layout.addWidget(self.detail_error)
-        layout.addWidget(scroll_area, 1)
+        layout.addWidget(self.scroll_area, 1)
 
         self.show_prediction(None)
         self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
@@ -1452,6 +1469,89 @@ class NumericPredictionDetailScreen(QWidget):
         """Return the Numeric Prediction currently presented by the screen."""
 
         return None if self._prediction is None else self._prediction.prediction_id
+
+    def focus_search_match(self, document: SearchDocument) -> None:
+        """Reveal and briefly emphasize a matching Numeric canonical context."""
+
+        if self.prediction_id != document.prediction_id:
+            return
+        target: QWidget
+        if document.is_superseded and document.source_kind in {
+            SearchSourceKind.QUESTION,
+            SearchSourceKind.RESOLUTION_CRITERIA,
+        }:
+            self.definition_history.setChecked(True)
+            target = (
+                self.findChild(QWidget, f"definitionChange{document.source_record_id}")
+                or self.definition_history
+            )
+        elif document.source_kind is SearchSourceKind.QUESTION:
+            target = self.question
+        elif document.source_kind is SearchSourceKind.TAG:
+            target = self.tags
+        elif document.source_kind is SearchSourceKind.BACKGROUND:
+            target = self.background_section
+        elif document.source_kind is SearchSourceKind.RESOLUTION_CRITERIA:
+            target = self.resolution_criteria_section
+        elif document.source_kind is SearchSourceKind.FORECAST_RATIONALE:
+            target = (
+                self.findChild(
+                    QWidget,
+                    f"numericTimelineForecast{document.source_record_id}",
+                )
+                or self.timeline_content
+            )
+        elif document.source_kind is SearchSourceKind.FORECAST_REVIEW:
+            target = (
+                self.findChild(
+                    QWidget,
+                    f"numericTimelineReview{document.source_record_id}",
+                )
+                or self.timeline_content
+            )
+        elif document.source_kind is SearchSourceKind.JOURNAL:
+            target = (
+                self.findChild(
+                    QWidget,
+                    f"numericTimelineJournal{document.source_record_id}",
+                )
+                or self.timeline_content
+            )
+            if document.is_superseded:
+                history = target.findChild(
+                    QGroupBox,
+                    f"journalEntryEditHistory{document.source_record_id}",
+                )
+                if history is not None:
+                    history.setChecked(True)
+                    version_target_name = (
+                        f"journalEntryOriginalBody{document.source_record_id}"
+                        if document.source_version_id is None
+                        else f"journalCorrectionBody{document.source_version_id}"
+                    )
+                    target = history.findChild(QWidget, version_target_name) or history
+        elif document.source_kind in {
+            SearchSourceKind.RESOLUTION_NOTES,
+            SearchSourceKind.POSTMORTEM,
+            SearchSourceKind.OUTCOME_CORRECTION_REASON,
+        }:
+            if (
+                document.is_superseded
+                or document.source_kind is SearchSourceKind.OUTCOME_CORRECTION_REASON
+            ):
+                self.resolution_history.setChecked(True)
+                target = self.resolution_history
+            elif document.source_kind is SearchSourceKind.POSTMORTEM:
+                target = self.postmortem
+            else:
+                target = self.resolution_notes
+        else:
+            if document.is_superseded:
+                self.invalidation_history.setChecked(True)
+                target = self.invalidation_history
+            else:
+                target = self.invalidation_reason
+        _focus_search_widget(self.scroll_area, target)
 
     def show_prediction(self, prediction: NumericPredictionSnapshot | None) -> None:
         """Present one Numeric Prediction or the honest empty state."""
@@ -1481,6 +1581,7 @@ class NumericPredictionDetailScreen(QWidget):
             self.resolution_section.setHidden(True)
             self.scorecard_section.setHidden(True)
             self.invalidation_section.setHidden(True)
+            self.definition_history.setHidden(True)
             self.detail_content.setHidden(True)
             self.empty_state.setHidden(False)
             return
@@ -1533,6 +1634,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.detail_content.setHidden(False)
         self._load_history(prediction.prediction_id)
         self._load_timeline(prediction.prediction_id)
+        self._load_definition_history(prediction.prediction_id)
 
     def refresh(self) -> None:
         """Reload the presented Numeric Prediction without hiding prior data on error."""
@@ -1747,6 +1849,23 @@ class NumericPredictionDetailScreen(QWidget):
             empty.setTextFormat(Qt.TextFormat.PlainText)
             self.timeline_layout.addWidget(empty)
         self.timeline_error.setHidden(True)
+
+    def _load_definition_history(self, prediction_id: int) -> None:
+        try:
+            changes = self._operations.list_definition_changes(prediction_id)
+        except ApplicationError as error:
+            self.definition_history.setHidden(True)
+            self._show_error(str(error))
+            return
+
+        _clear_widget_layout(self.definition_history_layout)
+        for change in changes:
+            self.definition_history_layout.addWidget(
+                _definition_change_widget(change, self.definition_history_content)
+            )
+        self.definition_history.setChecked(False)
+        self.definition_history_content.setHidden(True)
+        self.definition_history.setHidden(not changes)
 
     def _clear_timeline(self) -> None:
         while self.timeline_layout.count():
@@ -2091,6 +2210,14 @@ class PredictionDetailHost(QWidget):
             self._numeric_detail.refresh()
         else:
             self.show_latest_prediction()
+
+    def focus_search_match(self, document: SearchDocument) -> None:
+        """Delegate matched-source navigation to the currently selected Detail."""
+
+        if self._current_type is PredictionType.NUMERIC:
+            self._numeric_detail.focus_search_match(document)
+        elif self._current_type is PredictionType.BINARY:
+            self._binary_detail.focus_search_match(document)
 
 
 class EditPredictionDetailsDialog(QDialog):
@@ -4408,18 +4535,18 @@ class PredictionDetailScreen(QWidget):
         detail_layout.addWidget(self.chart_placeholder)
         detail_layout.addStretch()
 
-        scroll_area = QScrollArea(self)
-        scroll_area.setObjectName("predictionDetailScrollArea")
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        scroll_area.setWidget(self.detail_content)
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setObjectName("predictionDetailScrollArea")
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setWidget(self.detail_content)
 
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(title)
         layout.addWidget(self.empty_state)
         layout.addWidget(self.detail_error)
-        layout.addWidget(scroll_area, 1)
+        layout.addWidget(self.scroll_area, 1)
 
         self.correct_resolution_button.clicked.connect(self.open_correct_resolution)
         self.correct_invalidation_button.clicked.connect(
@@ -4432,6 +4559,83 @@ class PredictionDetailScreen(QWidget):
     def prediction_id(self) -> int | None:
         """Return the identifier currently presented by the screen."""
         return None if self._prediction is None else self._prediction.prediction_id
+
+    def focus_search_match(self, document: SearchDocument) -> None:
+        """Reveal and briefly emphasize a matching Binary canonical context."""
+
+        if self.prediction_id != document.prediction_id:
+            return
+        target: QWidget
+        if document.is_superseded and document.source_kind in {
+            SearchSourceKind.QUESTION,
+            SearchSourceKind.RESOLUTION_CRITERIA,
+        }:
+            self.definition_history.setChecked(True)
+            target = (
+                self.findChild(QWidget, f"definitionChange{document.source_record_id}")
+                or self.definition_history
+            )
+        elif document.source_kind is SearchSourceKind.QUESTION:
+            target = self.question
+        elif document.source_kind is SearchSourceKind.TAG:
+            target = self.tags
+        elif document.source_kind is SearchSourceKind.BACKGROUND:
+            target = self.background_section
+        elif document.source_kind is SearchSourceKind.RESOLUTION_CRITERIA:
+            target = self.resolution_criteria_section
+        elif document.source_kind is SearchSourceKind.FORECAST_RATIONALE:
+            target = (
+                self.findChild(
+                    QWidget,
+                    f"forecastRevision{document.source_record_id}",
+                )
+                or self.forecast_timeline
+            )
+        elif document.source_kind is SearchSourceKind.FORECAST_REVIEW:
+            target = (
+                self.findChild(QWidget, f"forecastReview{document.source_record_id}")
+                or self.forecast_timeline
+            )
+        elif document.source_kind is SearchSourceKind.JOURNAL:
+            target = (
+                self.findChild(QWidget, f"journalEntry{document.source_record_id}")
+                or self.forecast_timeline
+            )
+            if document.is_superseded:
+                history = target.findChild(
+                    QGroupBox,
+                    f"journalEntryEditHistory{document.source_record_id}",
+                )
+                if history is not None:
+                    history.setChecked(True)
+                    version_target_name = (
+                        f"journalEntryOriginalBody{document.source_record_id}"
+                        if document.source_version_id is None
+                        else f"journalCorrectionBody{document.source_version_id}"
+                    )
+                    target = history.findChild(QWidget, version_target_name) or history
+        elif document.source_kind in {
+            SearchSourceKind.RESOLUTION_NOTES,
+            SearchSourceKind.POSTMORTEM,
+            SearchSourceKind.OUTCOME_CORRECTION_REASON,
+        }:
+            if (
+                document.is_superseded
+                or document.source_kind is SearchSourceKind.OUTCOME_CORRECTION_REASON
+            ):
+                self.resolution_history.setChecked(True)
+                target = self.resolution_history
+            elif document.source_kind is SearchSourceKind.POSTMORTEM:
+                target = self.postmortem
+            else:
+                target = self.resolution_notes
+        else:
+            if document.is_superseded:
+                self.invalidation_history.setChecked(True)
+                target = self.invalidation_history
+            else:
+                target = self.invalidation_reason
+        _focus_search_widget(self.scroll_area, target)
 
     def show_prediction(self, prediction: PredictionSnapshot | None) -> None:
         """Present a prediction or the new-database empty state."""
@@ -5158,6 +5362,29 @@ def _detail_text_section(
     layout.addWidget(heading)
     layout.addWidget(value)
     return section, value
+
+
+def _focus_search_widget(scroll_area: QScrollArea, target: QWidget) -> None:
+    """Scroll to one visible context and apply a temporary palette-safe cue."""
+
+    original_style = target.styleSheet()
+    target.setProperty("searchMatchEmphasis", True)
+    target.setStyleSheet(
+        f"{original_style}\n"
+        "border: 2px solid palette(highlight); "
+        "background-color: palette(alternate-base);"
+    )
+    QTimer.singleShot(0, lambda: scroll_area.ensureWidgetVisible(target, 24, 24))
+    timer = QTimer(target)
+    timer.setSingleShot(True)
+
+    def clear_emphasis() -> None:
+        target.setStyleSheet(original_style)
+        target.setProperty("searchMatchEmphasis", False)
+        timer.deleteLater()
+
+    timer.timeout.connect(clear_emphasis)
+    timer.start(4_000)
 
 
 def _collapsible_history_group(
