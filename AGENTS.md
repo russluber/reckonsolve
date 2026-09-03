@@ -168,6 +168,21 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Preserve existing user changes in a dirty working tree.
 - Do not commit, tag, push, publish a release, or rewrite Git history unless the user explicitly asks.
 
+### UI/UX milestone collaboration
+
+For v0.6 visual-system and application-shell work, and for later presentation-heavy work unless the user directs otherwise, use this feedback loop:
+
+1. Before implementing a milestone, summarize the intended visible changes in plain language and surface any consequential unresolved choices. Do not begin a broad visual rollout while its basic direction remains undecided.
+2. Implement one complete, usable slice and run the narrow relevant automated checks. Preserve existing product behavior unless the applicable specification explicitly changes it.
+3. Give the user a focused manual checklist for `uv run reckonsolve-dev`. Explain what should look or behave differently, what must remain unchanged, and which edge states deserve attention.
+4. Treat the user's visual judgment as an acceptance input that automated tests cannot replace. Screenshots and informal reactions such as **I like**, **This feels wrong**, and **I'm unsure about** are sufficient; translate them into concrete implementation changes.
+5. Make agreed visual tuning and rerun relevant checks before asking the user to commit the milestone. Do not defer known spacing, hierarchy, legibility, or interaction problems merely because the underlying operation works.
+6. After the user accepts the slice, report the final verification and provide a working commit message. The user remains responsible for adding, committing, and pushing unless they explicitly ask otherwise.
+
+Milestone 39 is the visual-language checkpoint. Establish and obtain feedback on representative colors, spacing, typography, surfaces, button roles, and focus treatment before propagating that language throughout the application. Milestones 40 and 42 require especially deliberate user feedback because they change the navigation shell and the core creation/Detail experience. Milestone 43 requires careful regression feedback because it restyles the already successful search and archive workflow. Settle major taste and hierarchy questions during Milestones 39 through 44; Milestone 45 is release hardening and should not be the first point at which a broad redesign is evaluated.
+
+Use the development identity and development database for these manual iterations. Never ask the user to expose or risk the stable personal database merely to evaluate a visual change. Routine tuning of padding, color intensity, typography, or control weight does not require a product-specification edit when it remains inside the approved contract. A requested change to navigation meaning, workflow, persistence, history, or other product behavior does require explicit authorization and an aligned `docs/product-spec.md` update before implementation.
+
 ## Python and Code Quality
 
 - Use the Python version pinned by the repository.

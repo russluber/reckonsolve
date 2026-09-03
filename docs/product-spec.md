@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5 Product Specifications
+## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6 Product Specifications
 
-Status: v0.4 source release implemented; v0.5 approved for staged implementation
+Status: v0.5 source release implemented; v0.6 approved for staged implementation
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -23,7 +23,7 @@ Build a local-first personal forecasting journal that lets one person:
 
 The product is not merely a database of current probabilities. Its defining value is an honest historical record of what the user believed, why they believed it, and how those beliefs changed.
 
-The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback. v0.5 makes the growing journal reliably retrievable and manageable through explainable full-text search, richer archive controls, dynamic Saved Views, and deliberate tag-library maintenance.
+The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback. v0.5 makes the growing journal reliably retrievable and manageable through explainable full-text search, richer archive controls, dynamic Saved Views, and deliberate tag-library maintenance. v0.6 gives the completed desktop application a coherent, responsive, accessible visual system and application shell without changing the forecasting model or canonical data.
 
 ---
 
@@ -1123,6 +1123,8 @@ The v0.3 CLI product contract, command identities, shared-data behavior, interac
 The v0.4 resolution-integrity and learning contract is resolved in Section 32. Resolved outcomes may be corrected only through append-only history, Invalid Predictions remain Invalid, Postmortems may be completed later, and initial-versus-final analytics use one paired observation per eligible Prediction rather than treating revisions independently.
 
 The v0.5 retrieval-and-organization contract is resolved in Section 33. Search is local, lexical, explainable, current/effective by default, and historically explicit when superseded text is requested. Saved Views remain dynamic queries rather than Collections, and global tag maintenance changes current organizational metadata without rewriting forecast, Journal, or terminal history.
+
+The v0.6 visual-system and application-shell contract is resolved in Section 34. The desktop follows the system light/dark preference, retains the native window frame, uses comfortable density and one restrained green accent, separates primary destinations from creation and contextual Detail, supports remembered expanded and compact navigation, and uses nonblocking status notifications only where acknowledgment does not require a decision. Presentation preferences remain noncanonical and separate from forecast data.
 
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
@@ -2240,7 +2242,412 @@ v0.5 is not complete unless all of the following are true:
 
 ---
 
-## 34. Instruction to coding agents
+## 34. v0.6 visual system and application shell product contract and milestone plan
+
+v0.6 is a desktop presentation release over the completed v0.5 product. It gives Reckonsolve a coherent visual language, corrects the information hierarchy of the application shell, improves responsiveness and keyboard access, and makes routine feedback less interruptive. It does not add a forecasting workflow merely to justify a new version number.
+
+The governing objective is:
+
+> Make the existing forecasting journal feel calm, deliberate, responsive, and internally consistent without changing what any saved forecasting fact means.
+
+The interaction and visual discipline of Super Productivity is inspiration at the pattern level only. Reckonsolve does not copy that application's task-management structure, source code, artwork, branding, or feature density. The implementation remains native PySide6 and preserves Reckonsolve's identity as a personal forecasting journal.
+
+### 34.1 Included in v0.6
+
+v0.6 includes:
+
+- a centralized, palette-aware desktop visual system for spacing, typography, surfaces, borders, radii, icons, control states, action roles, focus, and restrained motion;
+- a reorganized application shell that distinguishes primary destinations, the New Prediction action, contextual Prediction Detail, and Settings;
+- manually toggleable and remembered expanded and compact sidebar modes;
+- contextual return navigation from Prediction Detail without making Detail a permanent primary destination;
+- comfortable, consistent page headers, content panels, status indicators, action groups, rows, dialogs, empty states, and error states;
+- clear primary, secondary, quiet, and destructive action hierarchy;
+- nonblocking status notifications for routine acknowledgments, while retaining persistent messages and modal confirmation when the information requires attention or a decision;
+- responsive layouts that remain usable at the supported minimum window size and under common Windows display scaling;
+- safe restoration of window geometry, maximized state, and preferred sidebar mode as noncanonical presentation preferences;
+- documented keyboard shortcuts, deliberate tab order, visible keyboard focus, accessible names, and no essential hover-only interaction;
+- type-aware visual refinement across Dashboard, New Prediction, Prediction Detail, Predictions, Analytics, Settings, tag management, and existing dialogs; and
+- migration-free backup, CLI, search, frozen-build, and release hardening proving that presentation changes leave canonical behavior untouched.
+
+### 34.2 Product and visual principles
+
+#### Existing behavior is the baseline
+
+v0.6 restyles and reorganizes existing desktop behavior. It does not redefine Prediction eligibility, lifecycle, revision history, Journal anchoring, Review freshness, terminal correction, scoring, search matching, Saved View membership, tag identity, backup, or export semantics.
+
+A visual refactor must not quietly create a new product rule. If a proposed layout would require a new domain state, workflow, database fact, or interpretation of history, that work is outside v0.6 unless the specification is revised again.
+
+#### Calm, comfortable density
+
+The desktop should resemble a thoughtful journal rather than a dense task manager, trading terminal, or enterprise dashboard. Ordinary controls have comfortable targets and breathing room. Increased polish must not reduce legibility merely to display more information at once.
+
+Question and the current type-appropriate forecast remain the strongest elements in creation and Detail. Supporting metadata, timestamps, tags, historical annotations, and explanatory text use quieter presentation without becoming inaccessible.
+
+#### Consistency over decoration
+
+The visual system uses a small shared scale rather than screen-specific pixel choices. It defines semantic roles for:
+
+- compact, ordinary, and section spacing;
+- body, secondary, label, section-title, page-title, and forecast-emphasis typography;
+- base, raised, selected, input, warning, error, and destructive surfaces;
+- subtle panel borders and corner radii;
+- primary, secondary, quiet, and destructive controls;
+- hover, selected, pressed, disabled, and keyboard-focus states; and
+- short entrance or disclosure motion where it improves continuity.
+
+Exact values are implementation details, but they must be centralized and tested in context rather than independently improvised in each widget.
+
+#### System theme and native window behavior
+
+Reckonsolve continues to follow the operating system's effective light/dark palette. v0.6 may add a centralized palette-relative Qt stylesheet and reusable presentation widgets, but it adds no theme framework, theme gallery, custom stylesheet editor, bundled font, or independent Light/Dark setting.
+
+The native Windows title bar, window controls, resizing, taskbar behavior, and standard dialogs remain native. v0.6 does not adopt a custom-drawn title bar, glass background, wallpaper, or translucent application shell.
+
+The current restrained green cue becomes Reckonsolve's single ordinary accent family. Separate contrast-safe light and dark values may be tuned during implementation. Status, warning, destructive, and analytical colors retain their semantic roles. No meaning may rely on green or any other color alone.
+
+#### Content before chrome
+
+Visual chrome must not compete with the forecast. Icons support labels rather than replace unfamiliar actions. Shadows remain minimal, borders remain subtle, and animation never delays navigation, saving, or error display.
+
+### 34.3 Application-shell and navigation contract
+
+The completed desktop still contains Dashboard, New Prediction, Prediction Detail, Predictions, Analytics, and Settings screens, but v0.6 changes how the shell presents them.
+
+The expanded sidebar has this information hierarchy:
+
+1. Reckonsolve identity and the compact/expanded toggle;
+2. a visually distinct **New prediction** action;
+3. the primary destinations **Dashboard**, **Predictions**, and **Analytics**;
+4. flexible empty space; and
+5. the utility destination **Settings** anchored at the bottom.
+
+**New prediction** opens the existing creation screen but is styled and exposed as an action rather than as one peer among navigation destinations. It remains available by keyboard and retains the existing atomic creation behavior.
+
+**Prediction Detail** is contextual and no longer appears as a permanent sidebar destination. Selecting a Prediction from Dashboard or Predictions, or successfully creating one, opens the same type-appropriate Detail host as before. Detail displays a clear return action. That action returns to the immediately preceding primary screen when one exists and otherwise returns to Predictions. Returning to Predictions preserves its current search text, filters, Saved View state, sort, loaded results, and scroll context when practical; it must not silently rerun a different query solely because Detail was opened.
+
+The compact sidebar shows the same destinations and creation action using icons. Every compact item has an accessible name and a concise tooltip. Labels are either completely visible in expanded mode or deliberately hidden in compact mode; they must never be clipped into ambiguous fragments. Compact mode must retain clear active, hover, pressed, disabled, and keyboard-focus states.
+
+The user may toggle the sidebar manually. The preferred mode is remembered separately for stable and development identities. Resizing the window must not overwrite that preference. The sidebar may enforce only the width required by its declared mode and may not squeeze the main content below its supported minimum.
+
+Opening a contextual screen must not create a fake navigation destination or select an unrelated sidebar item. Exactly one primary destination may appear active at a time; New prediction has its own active-action treatment while its form is visible.
+
+### 34.4 Shared visual language
+
+#### Typography
+
+Reckonsolve uses the native application font and respects operating-system text and display scaling. It adds no bundled typeface. A centralized relative type scale distinguishes:
+
+- page titles;
+- section titles;
+- the current Binary probability or Numeric interval and median;
+- ordinary body text;
+- labels and compact row metadata; and
+- secondary explanatory or historical text.
+
+Manual per-widget point-size additions should be replaced when practical by shared semantic helpers. Long Questions and user-authored text wrap naturally and remain selectable where they are currently selectable. Styling must not truncate canonical user text in Detail or dialogs.
+
+#### Surfaces and panels
+
+The main canvas, sidebar, input areas, raised content panels, selected rows, and modal dialogs use a restrained surface hierarchy derived from the active palette. Reusable panels replace inconsistent native-looking boxes where doing so improves hierarchy. A panel is not added around every label merely for decoration.
+
+Borders and separators must remain visible in both system modes without becoming the most prominent elements. Rounded corners are used consistently. Layout shadows, if any, are subtle and never the sole indication that two regions are separate.
+
+#### Status and forecast emphasis
+
+Binary probability or the complete Numeric interval remains readable without opening another view. Lifecycle and forecast type may use compact badges or labels, but the words **Open**, **Locked**, **Resolved**, **Invalid**, **Binary**, and **Numeric** remain present. Attention classifications remain explicit text and are not reduced to color or an unexplained icon.
+
+Tags remain text labels with their stored display spelling. v0.6 does not introduce tag colors or semantic color assignment.
+
+#### Icons
+
+The existing local Lucide assets remain the icon source. Icons continue to derive legible colors from the active Qt palette and retain visible text for unfamiliar or consequential actions. Icon-only controls are limited to conventional shell actions such as collapsing the sidebar or closing a dismissible notification, and they require tooltips and accessible names.
+
+v0.6 does not copy Super Productivity icons, assets, or branding.
+
+#### Motion
+
+Motion is limited to short sidebar width changes, disclosure expansion, and nonblocking status-notification entrance or exit where supported cleanly. It must not animate data values, charts, row ordering, or lifecycle changes in a way that obscures the final state. When Qt or the platform indicates that widget animation should be reduced or disabled, Reckonsolve follows that preference. A motion failure must degrade to an immediate state change.
+
+### 34.5 Controls and action hierarchy
+
+Every existing action is assigned one of four presentation roles:
+
+- **Primary**: the intended next committed action in the current context, such as Create Prediction, Save Revision, or Resolve Prediction inside its deliberate dialog.
+- **Secondary**: a normal alternative, such as Add Journal Entry, Still at N%, Keep this interval, or Edit details.
+- **Quiet**: navigation or maintenance that should remain available without competing with the main action, such as Clear filters, Refresh, Back, or a disclosure toggle.
+- **Destructive**: irreversible deletion or a historically consequential action requiring especially clear wording and confirmation.
+
+One dialog or action region should ordinarily contain no more than one visually primary committed action. A Cancel action remains plainly available and never receives destructive styling. Disabled state must be distinguishable from ordinary text and must retain an explanation through nearby text or a tooltip when the reason is not obvious.
+
+Hover, mouse selection, keyboard focus, and activated state are distinct. Hover must never masquerade as selection, and merely entering Predictions must not automatically select its newest row. Essential actions cannot exist only on hover; any hover-revealed convenience must have an equivalent keyboard-accessible and persistently discoverable route.
+
+Buttons retain concise visible labels where consequences matter. Existing confirmation text, optimistic-concurrency checks, and no-op validation remain authoritative regardless of visual role.
+
+### 34.6 Page and workflow presentation
+
+#### Shared page frame
+
+Every primary or contextual screen receives a consistent page header with a page title, optional concise supporting text, and an action region when needed. Header, content, empty state, and persistent error placement remain stable as content changes. A zero-result, loading, or error state must not cause the search controls or other page header content to jump vertically.
+
+Form-like and reading-focused content may use a comfortable maximum readable width. Archive results, filter controls, tables, and charts may use the available width. The choice follows content type rather than applying one fixed width to every screen.
+
+#### Dashboard
+
+Dashboard retains its implemented Open, Locked, Needs Attention, Ready to Resolve, and Needs Postmortem behavior. v0.6 may refine section headers, counts, empty states, rows, spacing, and navigation affordances, but it adds no Review Forecasts queue, scheduling rule, notification, or new attention classification.
+
+Each row keeps Question, type-appropriate current forecast or terminal summary, lifecycle or attention labels, and last-considered or relevant date context readable. Empty sections remain explicit. Visual compactness must not conceal the fact that attention sections can overlap.
+
+#### New Prediction
+
+The creation screen keeps Question and the type-appropriate forecast inputs visually primary. Binary remains the default forecast type. The collapsed optional-details design remains intact. Optional fields must not acquire new required-looking styling, and no decorative stepper may imply that creation has multiple mandatory stages.
+
+The form gains consistent label alignment, field spacing, error placement, button roles, focus order, and responsive wrapping. Switching type, validation failure, cancellation, and successful atomic creation retain their existing behavior.
+
+#### Prediction Detail
+
+Detail begins with a compact identity region containing the complete Question, forecast type, lifecycle state, current Binary probability or complete Numeric interval/median/confidence, and nonempty tags. The current forecast is visually stronger than supporting metadata. The contextual Back action is always reachable by mouse and keyboard.
+
+Common lifecycle-eligible actions remain immediately visible and use the shared action hierarchy. Rare correction, invalidation, or deletion actions may be grouped in a clearly labeled secondary area or menu only if their wording, availability, keyboard access, confirmation, and discoverability remain intact. No action may be hidden solely to achieve a cleaner screenshot.
+
+Metadata, terminal summary, scorecard, history chart, timeline, Definition history, correction history, and Journal edit history use consistent sections and disclosures. Existing rules about hiding or de-emphasizing empty optional content remain. Collapsing a visual section changes no product data.
+
+Binary and Numeric Detail must share the same visual grammar while retaining type-appropriate values and operations. User-authored rationale, Journal, Review, terminal, Postmortem, and correction text remains plain, selectable, wrap-safe, and historically explicit.
+
+#### Predictions and search
+
+Predictions retains the complete v0.5 search, filter, sort, Saved View, tag-management, failure-retention, and matched-context navigation contract. v0.6 changes presentation only.
+
+One result row continues to represent one Prediction. Question is primary; forecast or terminal summary and lifecycle remain immediately legible; type, tags, dates, best matching source, snippet, and additional matches use a consistent secondary hierarchy. Clicking an ordinary row body or pressing Enter on a keyboard-selected row opens it. Hover alone selects nothing and opening the screen starts with no selected Prediction.
+
+Search, Words mode, history scope, status, type, tags, attention, date, sort, Saved View, and maintenance controls wrap into deliberate rows or disclosures as width decreases. Their logical values and combination order remain unchanged. Empty and failed-result states occupy the result region without moving the search and filter frame.
+
+Search emphasis remains safe and source-explainable. A cosmetic refactor must not flatten historical labels, hide suggestions, replace retained-results warnings with an empty list, or change ranking.
+
+#### Analytics
+
+Analytics retains exactly the existing observation selection, filters, Binary/Numeric separation, unit boundaries, score calculations, sparse-data guidance, tables, and chart summaries. v0.6 may organize headlines, tables, charts, guidance, and retrospective feedback into consistent panels with improved responsive sizing.
+
+Visual emphasis must not imply that a sparse or descriptive metric is statistically conclusive. Charts continue to expose nonvisual summaries, and color remains supplementary to labels, axes, marker shapes, or text.
+
+#### Settings, tag management, and dialogs
+
+Settings uses consistent sections for attention preferences and data management. The canonical database path, backup time, destination, and export results remain selectable and persistent where the user may need to inspect or copy them.
+
+Tag management retains current previews, counts, confirmations, stable identity rules, and transactional behavior. Modal and secondary windows receive consistent spacing, action placement, focus, error regions, and safe minimum sizing.
+
+Dialogs must remain usable at the supported window and display scales. Expected validation appears within the relevant dialog without destroying entered text. The default focused button must not make a destructive or terminal action easy to confirm accidentally.
+
+### 34.7 Feedback and nonblocking status notifications
+
+v0.6 distinguishes acknowledgment, retained information, failure, and decision:
+
+- A routine successful action that is immediately visible in refreshed content may show a short nonblocking status notification, for example **Forecast revised to 65%**, **Journal entry added**, or **Saved View renamed**.
+- Information the user may need to copy or revisit, including a backup or export destination, remains in a persistent inline status region rather than disappearing automatically.
+- An expected or unexpected failure remains visible until the user retries, dismisses it deliberately where safe, or leaves the affected context. A failure must never auto-dismiss into apparent success.
+- An action requiring a decision, including permanent deletion, Resolution, Invalidation, score-affecting correction, tag merge, or tag deletion, retains an explicit modal confirmation before the write.
+
+Routine notifications appear in a stable application-level overlay or reserved shell region that does not reflow the active page. They are plain text, announced through Qt accessibility support, and dismiss automatically after a short readable interval unless the pointer or keyboard is interacting with them. Repeated identical acknowledgments may be coalesced; notifications must not accumulate into a permanent log or obscure a required dialog.
+
+Closing or missing a routine notification loses no unique information: the committed result must remain visible in the refreshed canonical view or recoverable from existing history. v0.6 adds no Windows notification-center integration, background alert, reminder, sound, or telemetry.
+
+### 34.8 Responsiveness and presentation preferences
+
+The supported desktop minimum remains a usable window approximately equivalent to the existing 760 by 520 logical-pixel minimum. At that size and at ordinary larger desktop sizes:
+
+- sidebar labels are fully visible or deliberately compact, never partially clipped;
+- the main page has a usable content region;
+- control groups wrap or scroll rather than overlap;
+- primary committed actions remain reachable;
+- long Questions and metadata wrap without horizontal page scrolling;
+- charts retain their documented nonvisual alternative when visual space is constrained; and
+- empty, loading, success, warning, and error states do not unexpectedly relocate page controls.
+
+The implementation must also be exercised at common Windows scaling factors, including 100%, 150%, and 200%, using Qt's logical sizing and font metrics rather than assuming one physical pixel density.
+
+Reckonsolve remembers the user's preferred sidebar mode, last safe normal window geometry, and maximized state using Qt's platform-local presentation settings or an equivalently isolated presentation store. It does not restore a minimized state. On startup it restores geometry only when a meaningful portion intersects an available screen; otherwise it uses the tested default size and placement. Removing a monitor, changing scale, or corrupting presentation settings must not make the application inaccessible.
+
+These values are disposable interface preferences, not forecasting records. They are separated by stable and development application identity, omitted from SQLite backup and CSV export, never indexed or searched, and never accessed by the CLI. Clearing them restores safe defaults without affecting a Prediction or any canonical history.
+
+v0.6 does not persist transient notifications, open dialogs, hover state, keyboard focus, temporary form input, current scroll position across process restart, or a new history of visited screens. Existing Saved Views remain the only persisted archive-query configurations.
+
+### 34.9 Keyboard and accessibility contract
+
+The desktop adds these default global shortcuts where they do not conflict with active text editing or a modal dialog:
+
+- **Ctrl+N** opens New Prediction and focuses Question;
+- **Ctrl+F** opens Predictions and focuses Search;
+- **Ctrl+1** opens Dashboard;
+- **Ctrl+2** opens Predictions;
+- **Ctrl+3** opens Analytics;
+- **Ctrl+,** opens Settings;
+- **Ctrl+B** toggles expanded and compact sidebar modes; and
+- **Alt+Left** returns from contextual Prediction Detail to its source screen.
+
+Existing dialog and multiline-text conventions, including Ctrl+Enter where already specified, remain unchanged unless a milestone explicitly verifies an equivalent safe mapping. Global navigation shortcuts must not submit, resolve, invalidate, delete, correct, or otherwise mutate a Prediction.
+
+Shortcuts are discoverable through tooltips, accessible descriptions, or a compact reference in Settings or README; v0.6 does not add a command palette or configurable shortcut editor.
+
+All interactive controls have meaningful accessible names. Logical focus order follows visual reading order. Focus is visibly distinguishable in both system modes. Enter and Space activate conventional controls, Escape cancels or closes only where safe, and returning from a dialog restores focus to a sensible initiating control when practical.
+
+No essential information or action depends exclusively on hover, color, animation, a chart, or an icon. Status labels, analytical summaries, and historical relationships remain available as text.
+
+### 34.10 Technical and data boundaries
+
+v0.6 requires no SQLite schema migration. It creates no new Prediction, forecast, Journal, Review, terminal, tag, Saved View, analytics, search, backup, or export field. Schema version 15 remains current throughout the release.
+
+The visual system belongs in a small centralized UI boundary rather than scattered widget-local styles. Reusable page headers, panels, action roles, badges, status regions, and palette helpers may be introduced where they remove real repetition. Domain, analytics, application, and data-access modules must not import the visual layer.
+
+Qt palette roles, font metrics, style hints, layouts, and local Lucide resources remain authoritative inputs. v0.6 adds no production dependency, web renderer, Material framework, QML rewrite, second GUI toolkit, external theme package, or copied Super Productivity component.
+
+Presentation preference storage is opened and tested independently of the canonical SQLite data path. Failure to read or write a presentation preference falls back to safe defaults and must not prevent database startup or a forecasting operation. Automated tests isolate presentation settings just as they isolate databases and must never read or modify the user's real settings.
+
+The paired stable and development CLI commands retain their completed v0.5 behavior and output except for the package version. No CLI command, option, prompt, or persistence rule is added for visual preferences. Simultaneous reads and sequential GUI/CLI writes retain their existing contract.
+
+Backup remains a complete schema-version-15 canonical recovery artifact. CSV remains format version 3. Neither artifact contains window geometry, sidebar mode, transient messages, or other v0.6 presentation state.
+
+### 34.11 Implementation milestones
+
+Milestones 39 through 45 implement v0.6.0. Work remains one coherent vertical slice at a time, and each milestone must leave the application usable rather than applying half of a visual contract across unrelated screens.
+
+#### Milestone 39: Central visual-system foundation
+
+- Introduce one palette-aware UI styling boundary with semantic spacing, typography, surface, border, radius, interaction-state, focus, action-role, and restrained-motion definitions.
+- Add reusable presentation helpers only for recurring concepts such as page headers, content panels, action roles, text status badges, and persistent error/status regions.
+- Define contrast-safe light/dark treatment for the restrained Reckonsolve green accent and every custom text, border, selection, warning, and destructive role.
+- Keep the native font, title bar, dialogs, system theme selection, high-DPI behavior, and existing local Lucide assets.
+- Replace representative ad hoc widget-local styling without changing layout, signals, operations, or persisted data, then prove palette changes refresh custom icons and semantic colors correctly.
+- Add focused Qt tests for semantic role assignment, focus visibility, accessible names, disabled state, palette changes, and absence of domain/data imports from the visual layer.
+- Record a technical decision only if the chosen stylesheet, proxy-style, or reusable-widget boundary will constrain future UI work.
+
+Acceptance demonstration:
+
+> Run the same representative page and dialog under Windows light and dark palettes -> headings, panels, inputs, buttons, focus, disabled controls, warning/destructive roles, and Lucide icons remain coherent and legible -> no forecast or application behavior changes.
+
+#### Milestone 40: Responsive application shell and navigation hierarchy
+
+- Rebuild the main shell around the approved New prediction action; Dashboard, Predictions, and Analytics primary destinations; bottom-anchored Settings utility; and contextual Prediction Detail.
+- Remove Prediction Detail from permanent sidebar navigation without removing or duplicating either type-specific Detail implementation.
+- Add expanded and compact sidebar modes with a clear toggle, complete labels or complete icon-only presentation, tooltips, accessible names, and remembered preference isolated by application identity.
+- Add contextual return navigation that restores the source primary screen and preserves current Predictions query/filter/Saved View/result context when returning from Detail.
+- Ensure active, hover, pressed, disabled, and focus states remain distinct and that opening Predictions selects no result automatically.
+- Add safe window geometry and maximized-state restoration with off-screen recovery and default fallback, without restoring minimized state.
+- Cover direct navigation, creation-to-Detail, Dashboard-to-Detail, search-result-to-matched-Detail, Back, compact toggling, restart, corrupted settings, removed-monitor geometry, stable/development isolation, and keyboard navigation.
+
+Acceptance demonstration:
+
+> Start expanded -> search and filter Predictions -> open a result -> Detail shows no fake primary destination and Back returns to the unchanged archive context -> collapse the sidebar -> restart -> the compact mode and safe window state return while all forecast data remains unchanged.
+
+#### Milestone 41: Shared page frame, Dashboard, Settings, and feedback
+
+- Apply the shared page-title, supporting-text, action-region, content-panel, badge, empty-state, persistent-error, and status-region grammar to Dashboard and Settings.
+- Refine Dashboard section hierarchy, counts, type-aware rows, overlapping-attention labels, and empty sections without changing membership, ordering, timers, or navigation.
+- Refine Settings grouping, attention controls, database path, backup status, backup/export actions, and persistent destination results without changing storage or artifact semantics.
+- Add the application-level nonblocking status-notification host with no page reflow, accessible announcement, short dismissal, coalescing, and safe behavior during modal dialogs and navigation.
+- Route only routine, immediately verifiable acknowledgments through transient notification; retain persistent backup/export paths and errors and every consequential confirmation.
+- Cover long text, repeated notifications, navigation during display, palette changes, keyboard dismissal where offered, success/failure separation, and proof that notification failure cannot roll back or disguise an application operation.
+
+#### Milestone 42: Creation and type-aware Prediction Detail refinement
+
+- Apply the visual system to Binary and Numeric creation while preserving the default type, required fields, collapsed optional details, exact validation, cancellation, and atomic save.
+- Standardize field labels, explanatory text, error placement, focus order, responsive wrapping, and primary/secondary action presentation across creation and every existing dialog.
+- Recompose Binary and Numeric Detail headers so complete Question, lifecycle, current forecast, type, and tags establish a shared visual hierarchy.
+- Group common, historical, correction, terminal, scorecard, chart, and metadata content consistently while preserving all current hidden-empty and collapsed-history behavior.
+- Keep common actions immediately available; place rare or destructive actions only in a clearly discoverable secondary region that retains visible wording, accessible access, and existing confirmations.
+- Preserve exact forecast history, Journal and Review distinctions, Definition and correction history, matched-search focusing, terminal finality, scoring-revision capture, and plain selectable user text.
+- Cover every lifecycle and both forecast types at short and long content lengths, including no-history, extensive-history, corrected-terminal, skipped-Postmortem, endpoint probability, signed-decimal Numeric, and stale-context failures.
+
+Acceptance demonstration:
+
+> Create one Binary and one Numeric Prediction, revise and Journal each, resolve one, and open the other from search -> every value and action remains type-correct, the hierarchy is consistent, long text wraps, history remains honest, and no visual control bypasses existing validation or confirmation.
+
+#### Milestone 43: Predictions, search, Saved Views, and tag-management refinement
+
+- Apply the shared page frame and control roles to Predictions without changing the v0.5 archive/search query boundary.
+- Redesign result rows around primary Question, type-appropriate forecast or terminal summary, lifecycle, tags, date context, best source, snippet, and additional matches while retaining one row per Prediction.
+- Make ordinary row-body click and keyboard Enter open Detail while preserving a distinct nonautomatic selection model and no essential hover-only control.
+- Make Saved View, query, word mode, history, structured filter, date, sort, clear, suggestion, repair, and tag-management controls wrap predictably at supported widths.
+- Keep the search/filter frame fixed while populated, zero-result, loading, suggestion, retained-warning, and repairable-error content changes below it.
+- Apply the same dialog, panel, action-role, selection, focus, and persistent-status grammar to Saved View and tag-management workflows.
+- Re-run the full v0.5 relevance corpus and combined-filter tests to prove that no visual or activation change alters matching, ranking, source provenance, dynamic membership, tag transactions, or historical navigation.
+
+Acceptance demonstration:
+
+> At both minimum and ordinary window sizes, move between blank archive, matching search, zero-result search, suggestion, Saved View, and tag-management states -> controls remain stable and usable, no row begins selected, mouse and keyboard activation agree, and results remain semantically identical to v0.5.
+
+#### Milestone 44: Analytics, keyboard, accessibility, and responsive completion
+
+- Apply the visual system to Binary, Numeric, and All-types Analytics while preserving exact filters, unit boundaries, observation selection, calculations, sparse-data language, tables, charts, and retrospective cautions.
+- Make analytical headlines, tables, charts, score guidance, and empty/error states readable at supported sizes without implying false statistical certainty.
+- Implement and document the approved global shortcuts and ensure they do not fire through conflicting modal or text-editing contexts.
+- Audit tab order, focus restoration, accessible names/descriptions, screen-reader text, keyboard row activation, tooltip availability, and no-color/no-hover alternatives across every primary and secondary desktop workflow.
+- Exercise responsive behavior at the minimum supported logical size and common larger sizes, plus 100%, 150%, and 200% Windows display scaling.
+- Verify palette changes, font scaling, disabled actions, long translated-style labels, long user text, and reduced/no-animation fallback without clipping essential information or controls.
+- Keep chart calculations outside widgets and retain every existing nonvisual chart summary.
+
+#### Milestone 45: v0.6 regression, frozen-build, and release closure
+
+- Run the complete automated suite and add regression coverage for shell navigation, presentation preferences, nonblocking feedback, screen activation, keyboard shortcuts, responsive layouts, palette changes, and accessibility contracts.
+- Prove that schema version 15 remains unchanged and that opening and using v0.6 does not rewrite any v0.5 Prediction, history, Saved View, tag, setting, search document, or analytics fact merely for presentation.
+- Re-run search relevance and performance evidence, backup/recovery, CSV format-version-three validation, stable/development isolation, simultaneous reads, sequential GUI/CLI writes, restart, and explicit search repair.
+- Extend the relocated private frozen-build smoke workflow to load the new style resources, expanded and compact shell, both forecast types, every primary screen, keyboard navigation, safe presentation defaults, backup, search, and restart without the source environment.
+- Perform and record a manual visual matrix across system light/dark mode, 100%/150%/200% scaling, minimum/default/large window sizes, expanded/compact sidebar, new/ordinary/long-text databases, and representative success/error/confirmation states.
+- Align README, architecture, applicable decision records, screenshots or visual-reference documentation, version metadata, changelog, and release notes with the implemented behavior.
+- Close v0.6 as a source release without adding a Review Queue, new forecast model, custom theme framework, installer, signing, update system, public binary distribution, or logo artwork.
+
+### 34.12 v0.6 acceptance criteria
+
+v0.6 is not complete unless all of the following are true:
+
+1. Every completed v0.5 forecasting, history, lifecycle, scoring, search, Saved View, tag, CLI, backup, and export behavior remains semantically unchanged.
+2. Schema version 15 remains current and no database migration runs solely for v0.6 presentation work.
+3. New prediction is visibly an action, Dashboard/Predictions/Analytics are primary destinations, Settings is a bottom utility, and Prediction Detail is contextual rather than permanent navigation.
+4. Binary and Numeric creation still require exactly their established minimum fields and save the parent plus first revision atomically.
+5. Expanded and compact sidebar modes expose the same destinations and creation action with no clipped label, missing tooltip, or inaccessible icon-only control.
+6. The preferred sidebar mode and safe window state survive restart, remain isolated by stable/development identity, and recover from invalid or off-screen geometry.
+7. Presentation preferences never enter SQLite backup, CSV export, search, CLI output, history, freshness, lifecycle, or analytics.
+8. Contextual Detail Back returns to the appropriate source and preserves the active Predictions archive context when applicable.
+9. Opening Predictions does not automatically select its newest or first result, and hover never masquerades as selection.
+10. Page controls retain stable placement across populated, empty, loading, success, warning, and error content states.
+11. Question and the current type-appropriate forecast remain visually primary in creation and Detail.
+12. Every custom surface, border, text role, accent, warning, destructive state, disabled state, and focus indicator remains legible in system light and dark modes.
+13. Lifecycle, attention, forecast type, analytical meaning, and action consequence never rely on color or iconography alone.
+14. Primary, secondary, quiet, and destructive action roles are consistent, and one action region ordinarily has only one primary committed action.
+15. No common forecasting action is hidden solely for visual cleanliness, and every secondary or overflow action remains discoverable by mouse and keyboard.
+16. Routine success acknowledgment does not require dismissal and does not reflow the active page.
+17. Backup/export destinations and all actionable failures remain persistent; consequential writes retain explicit pre-write confirmation.
+18. A transient notification contains no unique information whose disappearance would make the committed result unknowable.
+19. Every listed global shortcut reaches the documented screen or shell action without mutating forecast data or overriding an unsafe modal context.
+20. Logical tab order, visible focus, accessible names, tooltips for icon-only controls, and keyboard activation cover all primary workflows.
+21. No essential action or information is available only through hover, color, animation, an icon, or a visual chart.
+22. Long Questions, metadata, rationales, Journal entries, Reviews, terminal text, correction history, and Postmortems wrap and remain readable without silent truncation in canonical Detail contexts.
+23. At the supported minimum logical size, controls do not overlap, required actions remain reachable, and scrolling is available wherever content cannot fit.
+24. The desktop remains usable at 100%, 150%, and 200% Windows scaling with font-aware sizing and no machine-specific absolute geometry.
+25. Search and structured filters produce the same grouped results, ranking, provenance, suggestions, Saved View behavior, and matched-context navigation as v0.5.
+26. Analytics selects the same exactly-once observations and produces the same type-safe calculations as v0.5.
+27. GUI and CLI continue to share the same canonical databases without adding visual-preference coupling or a synchronization subsystem.
+28. Automated tests never read or write the user's real canonical database or real presentation settings.
+29. The private frozen build contains and renders every required local style and icon resource after relocation.
+30. The complete v0.6 application remains offline, local-first, single-user, and proportionate to a personal forecasting journal.
+
+### 34.13 Explicitly outside v0.6
+
+- A Review Forecasts queue, review scheduling, review sessions, concealed prior forecasts, anti-anchoring mode, or prompted forecasting checklist.
+- Any new Prediction type, interval model, distribution, scoring method, analytical observation, lifecycle state, attention classification, or historical record.
+- Any change to search parsing, source coverage, relevance weights, ranking, suggestion policy, Saved View semantics, or tag identity beyond a regression fix required to preserve v0.5.
+- Semantic search, embeddings, a language model, web search, recommendation feed, behavioral telemetry, or query-history collection.
+- Collections, favorites, pins, structured Sources/Evidence, attachments, Prediction relationships, graphs, or backlinks.
+- A master-detail archive, permanent right-side inspector, task board, calendar, project tree, drag-and-drop workflow, timer, or productivity dashboard.
+- Custom themes, a theme marketplace, custom CSS, wallpapers, glass effects, a bundled font, an independent Light/Dark selector, or user-selected tag colors.
+- A custom-drawn title bar, system tray workflow, global operating-system hotkey, command palette, configurable shortcut editor, sound, notification-center integration, reminder, or background monitoring.
+- A web frontend, QML rewrite, second GUI toolkit, Material framework, or new production UI dependency.
+- CLI presentation preferences, a CLI review wizard, new CLI mutation behavior, machine-readable output, or live inter-process push refresh.
+- A database migration, new CSV format, JSON or Markdown export, or restoration from analytical export solely for visual presentation state.
+- Logo artwork, a normal Windows installer, signing, automatic updates, or public binary distribution.
+- Copying Super Productivity source code, assets, branding, or its task-management feature structure.
+
+---
+
+## 35. Instruction to coding agents
 
 Before implementing a milestone:
 
