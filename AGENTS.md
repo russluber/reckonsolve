@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.5. Its contract and Milestones 32 through 38 are defined in Section 33 of `docs/product-spec.md` and are complete. The approved v0.6 presentation release is now implemented through Milestone 40; each remaining milestone still requires explicit authorization as one coherent vertical slice.
+The completed source release is v0.5. Its contract and Milestones 32 through 38 are defined in Section 33 of `docs/product-spec.md` and are complete. The approved v0.6 presentation release is now implemented through Milestone 41; each remaining milestone still requires explicit authorization as one coherent vertical slice.
 
 The v0.1 baseline includes:
 
@@ -74,6 +74,8 @@ v0.5 adds schema-version-14 rebuildable SQLite FTS5 search; explainable desktop 
 v0.6 Milestone 39 adds one UI-only, palette-aware visual-system boundary with shared semantic colors, native-font typography, spacing, radii, interaction/focus/disabled states, action roles, text badges, persistent-message treatments, and restrained motion limits. New Prediction and Forecast Review are its representative page and dialog; palette changes refresh both semantic styling and local Lucide icons. Preserve this centralized presentation boundary during Milestones 40 through 45; do not scatter widget-local colors/fonts, import domain/data behavior into it, add a theme framework, or persist visual state in canonical SQLite.
 
 v0.6 Milestone 40 adds the application-shell hierarchy: New Prediction is a prominent action; Dashboard, Predictions, and Analytics are permanent primary destinations; Settings is a bottom utility; and Prediction Detail is contextual with a source-aware return path. Expanded/icon-only compact sidebar mode and safe normal-window geometry/maximized state are stored outside SQLite in identity-scoped presentation settings. Preserve in-memory Predictions query, filter, Saved View, result, selection, and scroll context when returning from Detail; keep hidden compact labels available through accessible names and tooltips; never restore a minimized window or unsafe off-screen geometry.
+
+v0.6 Milestone 41 adds shared page headers, raised content panels, textual count/status badges, explicit empty states, and persistent message regions to Dashboard and Settings. Dashboard rows remain type-aware and now expose overlapping attention labels visibly; Settings retains selectable recovery facts and persistent backup/export destinations and failures. A shell-level notification host carries only routine, already-verifiable acknowledgments without page reflow, pauses around interaction and modal dialogs, coalesces repeats, and never participates in an application transaction. Preserve this success/persistent-error/decision boundary during later presentation milestones.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 

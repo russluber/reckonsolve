@@ -7,17 +7,20 @@ from functools import partial
 from pathlib import Path
 from typing import Protocol
 
-from PySide6.QtCore import QStandardPaths, Qt, QTimer, Signal
-from PySide6.QtGui import QHideEvent, QShowEvent
+from PySide6.QtCore import QSize, QStandardPaths, Qt, QTimer, Signal
+from PySide6.QtGui import QHideEvent, QIcon, QPaintEvent, QShowEvent
 from PySide6.QtWidgets import (
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
+    QStyle,
+    QStyleOptionButton,
+    QStylePainter,
     QVBoxLayout,
     QWidget,
 )
@@ -36,7 +39,22 @@ from reckonsolve.domain.transfer import (
     CsvExportResult,
     DataManagementStatus,
 )
+from reckonsolve.ui.components import (
+    ContentPanel,
+    EmptyStateLabel,
+    PageHeader,
+    PersistentMessageLabel,
+    StatusBadge,
+)
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.visual_system import (
+    ActionRole,
+    Spacing,
+    StatusTone,
+    TextRole,
+    apply_action_role,
+    apply_text_role,
+)
 
 
 class DashboardPredictionSnapshot(Protocol):
@@ -88,10 +106,111 @@ class AttentionSettingsOperations(Protocol):
         """Rebuild the disposable search projection from canonical history."""
 
 
+class _DashboardRowButton(QPushButton):
+    """A keyboard-native row with wrap-safe text and explicit text badges."""
+
+    def __init__(
+        self,
+        full_text: str,
+        *,
+        question: str,
+        forecast_summary: str,
+        badges: tuple[tuple[str, StatusTone], ...],
+        timing_text: str,
+        parent: QWidget,
+    ) -> None:
+        super().__init__(full_text.replace("&", "&&"), parent)
+        self.setProperty("reckonsolveDashboardRow", True)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(0)
+        apply_action_role(self, ActionRole.SECONDARY)
+
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(
+            int(Spacing.ORDINARY),
+            int(Spacing.ORDINARY),
+            int(Spacing.ORDINARY),
+            int(Spacing.ORDINARY),
+        )
+        root_layout.setSpacing(int(Spacing.COMPACT))
+
+        heading_row = QHBoxLayout()
+        heading_row.setSpacing(int(Spacing.CONTROL))
+        question_label = QLabel(question, self)
+        question_label.setObjectName("dashboardRowQuestion")
+        question_label.setTextFormat(Qt.TextFormat.PlainText)
+        question_label.setWordWrap(True)
+        apply_text_role(question_label, TextRole.SECTION_TITLE)
+        open_hint = QLabel("Open detail  →", self)
+        open_hint.setObjectName("dashboardRowOpenHint")
+        open_hint.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(open_hint, TextRole.SECONDARY)
+        heading_row.addWidget(question_label, 1)
+        heading_row.addWidget(open_hint, 0, Qt.AlignmentFlag.AlignTop)
+        root_layout.addLayout(heading_row)
+
+        forecast_label = QLabel(forecast_summary, self)
+        forecast_label.setObjectName("dashboardRowForecast")
+        forecast_label.setTextFormat(Qt.TextFormat.PlainText)
+        forecast_label.setWordWrap(True)
+        apply_text_role(forecast_label, TextRole.LABEL)
+        root_layout.addWidget(forecast_label)
+
+        badge_row = QHBoxLayout()
+        badge_row.setSpacing(int(Spacing.COMPACT))
+        for text, tone in badges:
+            badge = StatusBadge(text, tone, parent=self)
+            badge.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            badge_row.addWidget(badge)
+        badge_row.addStretch()
+        root_layout.addLayout(badge_row)
+
+        timing_label = QLabel(timing_text, self)
+        timing_label.setObjectName("dashboardRowTiming")
+        timing_label.setTextFormat(Qt.TextFormat.PlainText)
+        timing_label.setWordWrap(True)
+        apply_text_role(timing_label, TextRole.SECONDARY)
+        root_layout.addWidget(timing_label)
+
+        for label in self.findChildren(QLabel):
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """Draw native/QSS button chrome; child labels draw structured content."""
+
+        del event
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        option.text = ""
+        option.icon = QIcon()
+        painter = QStylePainter(self)
+        painter.drawControl(QStyle.ControlElement.CE_PushButton, option)
+
+    def sizeHint(self) -> QSize:
+        layout = self.layout()
+        if layout is None:
+            return QSize(420, super().sizeHint().height())
+        return QSize(420, layout.sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(240, self.heightForWidth(240))
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        layout = self.layout()
+        if layout is None:
+            return super().heightForWidth(width)
+        height = layout.heightForWidth(width)
+        return height if height > 0 else layout.sizeHint().height()
+
+
 class DashboardScreen(QWidget):
     """Surface nonterminal predictions in overlapping action buckets."""
 
     prediction_selected = Signal(object)
+    routine_notification_requested = Signal(str)
 
     def __init__(
         self,
@@ -107,38 +226,37 @@ class DashboardScreen(QWidget):
         self._refresh_timer.setInterval(60_000)
         self._refresh_timer.timeout.connect(self.refresh)
 
-        title = QLabel("Dashboard", self)
-        title.setObjectName("dashboardScreenTitle")
-
-        introduction = QLabel(
+        header = PageHeader(
+            "Dashboard",
             "Your active Binary and Numeric forecasts, with attention signals "
-            "derived from the latest forecast revision.",
-            self,
+            "derived from the latest forecast revision. Attention sections can "
+            "overlap, so one Prediction may appear in more than one section.",
+            title_object_name="dashboardScreenTitle",
+            supporting_object_name="dashboardIntroduction",
+            parent=self,
         )
-        introduction.setObjectName("dashboardIntroduction")
-        introduction.setWordWrap(True)
-        introduction.setTextFormat(Qt.TextFormat.PlainText)
+        header.setObjectName("dashboardPageHeader")
 
-        self.error_label = QLabel(self)
+        self.error_label = PersistentMessageLabel(
+            accessible_name="Dashboard error",
+            tone=StatusTone.ERROR,
+            parent=self,
+        )
         self.error_label.setObjectName("dashboardError")
-        self.error_label.setWordWrap(True)
-        self.error_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.error_label.setHidden(True)
 
-        self.status_label = QLabel(self)
-        self.status_label.setObjectName("dashboardStatus")
-        self.status_label.setWordWrap(True)
-        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.status_label.setHidden(True)
-
-        self.threshold_label = QLabel(self)
+        self.threshold_label = StatusBadge(
+            "Needs Attention threshold: loading...",
+            StatusTone.NEUTRAL,
+            parent=self,
+        )
         self.threshold_label.setObjectName("dashboardThreshold")
-        self.threshold_label.setTextFormat(Qt.TextFormat.PlainText)
 
         content = QWidget(self)
         content.setObjectName("dashboardContent")
         content_layout = QVBoxLayout(content)
-        self._sections: dict[str, tuple[QGroupBox, QVBoxLayout, str]] = {}
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(int(Spacing.SECTION))
+        self._sections: dict[str, tuple[ContentPanel, str]] = {}
         for key, title_text, empty_text in (
             ("open", "Open", "No open predictions."),
             (
@@ -158,25 +276,31 @@ class DashboardScreen(QWidget):
                 "No Resolved Predictions need a Postmortem decision.",
             ),
         ):
-            group = QGroupBox(content)
-            group.setObjectName(f"dashboard{key[0].upper()}{key[1:]}Section")
-            group_layout = QVBoxLayout(group)
-            self._sections[key] = (group, group_layout, empty_text)
-            group.setProperty("baseTitle", title_text)
-            content_layout.addWidget(group)
+            panel = ContentPanel(title_text, parent=content)
+            panel.setObjectName(f"dashboard{key[0].upper()}{key[1:]}Section")
+            panel.title_label.setObjectName(
+                f"dashboard{key[0].upper()}{key[1:]}SectionTitle"
+            )
+            panel.count_badge.setObjectName(f"dashboard{key[0].upper()}{key[1:]}Count")
+            self._sections[key] = (panel, empty_text)
+            content_layout.addWidget(panel)
         content_layout.addStretch()
 
         self.scroll_area = QScrollArea(self)
         self.scroll_area.setObjectName("dashboardScrollArea")
         self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
         self.scroll_area.setWidget(content)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(title)
-        layout.addWidget(introduction)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.ORDINARY))
+        layout.addWidget(header)
         layout.addWidget(self.error_label)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.threshold_label)
+        layout.addWidget(
+            self.threshold_label,
+            alignment=Qt.AlignmentFlag.AlignLeft,
+        )
         layout.addWidget(self.scroll_area, 1)
 
         self._render_empty_sections()
@@ -197,22 +321,24 @@ class DashboardScreen(QWidget):
     def refresh(self) -> None:
         """Re-query buckets, retaining prior rows only with an explicit warning."""
 
-        self.status_label.setHidden(True)
         try:
             snapshot = self._operations.get_dashboard()
         except ApplicationError as error:
             if self._loaded_snapshot is None:
-                self.error_label.setText(f"Dashboard unavailable. {error}")
+                self.error_label.show_message(
+                    f"Dashboard unavailable. {error}",
+                    StatusTone.ERROR,
+                )
                 self.threshold_label.setHidden(True)
                 self.scroll_area.setHidden(True)
             else:
-                self.error_label.setText(
+                self.error_label.show_message(
                     f"Dashboard could not refresh; showing the last loaded "
-                    f"results. {error}"
+                    f"results. {error}",
+                    StatusTone.WARNING,
                 )
-            self.error_label.setHidden(False)
             return
-        self.error_label.setHidden(True)
+        self.error_label.clear_message()
         self.threshold_label.setHidden(False)
         self.scroll_area.setHidden(False)
         self._loaded_snapshot = snapshot
@@ -241,19 +367,26 @@ class DashboardScreen(QWidget):
         key: str,
         predictions: tuple[DashboardPrediction, ...],
     ) -> None:
-        group, layout, empty_text = self._sections[key]
+        panel, empty_text = self._sections[key]
+        layout = panel.body_layout
         self._clear_layout(layout)
-        group.setTitle(f"{group.property('baseTitle')} ({len(predictions)})")
+        panel.set_count(len(predictions))
         if not predictions:
-            empty = QLabel(empty_text, group)
+            empty = EmptyStateLabel(empty_text, parent=panel.body)
             empty.setObjectName(f"dashboard{key[0].upper()}{key[1:]}Empty")
-            empty.setTextFormat(Qt.TextFormat.PlainText)
             layout.addWidget(empty)
             return
         for prediction in predictions:
-            button = QPushButton(
-                self._row_text(prediction).replace("&", "&&"),
-                group,
+            button = _DashboardRowButton(
+                self._row_text(prediction),
+                question=prediction.question,
+                forecast_summary=_forecast_summary(prediction),
+                badges=self._row_badges(prediction),
+                timing_text=(
+                    "Forecast last considered "
+                    f"{_format_local_timestamp(prediction.attention_reference_at)}"
+                ),
+                parent=panel.body,
             )
             button.setObjectName(
                 f"dashboard{key[0].upper()}{key[1:]}Prediction"
@@ -262,7 +395,6 @@ class DashboardScreen(QWidget):
             button.setToolTip("Open Prediction Detail")
             button.setAccessibleName(prediction.question)
             button.setAccessibleDescription(self._row_description(prediction))
-            apply_lucide_icon(button, LucideIcon.ARROW_RIGHT, size=16)
             button.clicked.connect(
                 partial(self._open_prediction, prediction.prediction_id)
             )
@@ -275,33 +407,43 @@ class DashboardScreen(QWidget):
         """Render optional Resolved reflection work without lifecycle badges."""
 
         key = "needsPostmortem"
-        group, layout, empty_text = self._sections[key]
+        panel, empty_text = self._sections[key]
+        layout = panel.body_layout
         self._clear_layout(layout)
-        group.setTitle(f"{group.property('baseTitle')} ({len(predictions)})")
+        panel.set_count(len(predictions))
         if not predictions:
-            empty = QLabel(empty_text, group)
+            empty = EmptyStateLabel(empty_text, parent=panel.body)
             empty.setObjectName("dashboardNeedsPostmortemEmpty")
-            empty.setTextFormat(Qt.TextFormat.PlainText)
             layout.addWidget(empty)
             return
         explanation = QLabel(
             "Optional reflection after resolution. Skip records that you consider "
             "the Postmortem complete without prose; it does not change the outcome, "
             "score, or lifecycle.",
-            group,
+            panel.body,
         )
         explanation.setObjectName("dashboardNeedsPostmortemExplanation")
         explanation.setTextFormat(Qt.TextFormat.PlainText)
         explanation.setWordWrap(True)
+        apply_text_role(explanation, TextRole.SECONDARY)
         layout.addWidget(explanation)
         for prediction in predictions:
-            row = QWidget(group)
+            row = QWidget(panel.body)
             row.setObjectName(f"dashboardNeedsPostmortemRow{prediction.prediction_id}")
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(0, 0, 0, 0)
-            open_button = QPushButton(
-                self._postmortem_row_text(prediction).replace("&", "&&"),
-                row,
+            open_button = _DashboardRowButton(
+                self._postmortem_row_text(prediction),
+                question=prediction.question,
+                forecast_summary=_postmortem_outcome_summary(prediction),
+                badges=(
+                    ("RESOLVED", StatusTone.SUCCESS),
+                    ("NEEDS POSTMORTEM", StatusTone.WARNING),
+                ),
+                timing_text=(
+                    f"Resolved {_format_local_timestamp(prediction.resolved_at)}"
+                ),
+                parent=row,
             )
             open_button.setObjectName(
                 f"dashboardNeedsPostmortemPrediction{prediction.prediction_id}"
@@ -311,7 +453,6 @@ class DashboardScreen(QWidget):
             open_button.setAccessibleDescription(
                 self._postmortem_row_description(prediction)
             )
-            apply_lucide_icon(open_button, LucideIcon.ARROW_RIGHT, size=16)
             open_button.clicked.connect(
                 partial(self._open_prediction, prediction.prediction_id)
             )
@@ -323,6 +464,7 @@ class DashboardScreen(QWidget):
                 "Record that reflection is complete without writing a Postmortem."
             )
             skip_button.setAccessibleName(f"Skip Postmortem for {prediction.question}")
+            apply_action_role(skip_button, ActionRole.SECONDARY)
             apply_lucide_icon(skip_button, LucideIcon.CIRCLE_CHECK)
             skip_button.clicked.connect(partial(self._skip_postmortem, prediction))
             row_layout.addWidget(open_button, 1)
@@ -333,10 +475,9 @@ class DashboardScreen(QWidget):
         try:
             prediction = self._operations.get_prediction_for_navigation(prediction_id)
         except ApplicationError as error:
-            self.error_label.setText(str(error))
-            self.error_label.setHidden(False)
+            self.error_label.show_message(str(error), StatusTone.ERROR)
             return
-        self.error_label.setHidden(True)
+        self.error_label.clear_message()
         self.prediction_selected.emit(prediction)
 
     def _skip_postmortem(self, prediction: NeedsPostmortemPrediction) -> None:
@@ -358,15 +499,13 @@ class DashboardScreen(QWidget):
                 expected_correction_id=prediction.current_correction_id,
             )
         except ApplicationError as error:
-            self.error_label.setText(str(error))
-            self.error_label.setHidden(False)
+            self.error_label.show_message(str(error), StatusTone.ERROR)
             return
         self.refresh()
-        self.status_label.setText(
+        self.routine_notification_requested.emit(
             "Postmortem skipped. You can still add one later; the completion "
             "remains in history."
         )
-        self.status_label.setHidden(False)
 
     @staticmethod
     def _row_text(prediction: DashboardPrediction) -> str:
@@ -377,7 +516,8 @@ class DashboardScreen(QWidget):
             badges.append("READY TO RESOLVE")
         return (
             f"{prediction.question}\n"
-            f"{_forecast_summary(prediction)}  |  {'  |  '.join(badges)}\n"
+            f"{_forecast_summary(prediction)}\n"
+            f"{'  |  '.join(badges)}\n"
             "Forecast last considered "
             f"{_format_local_timestamp(prediction.attention_reference_at)}"
         )
@@ -394,6 +534,24 @@ class DashboardScreen(QWidget):
             f"{', '.join(classifications)}. Forecast last considered "
             f"{_format_local_timestamp(prediction.attention_reference_at)}."
         )
+
+    @staticmethod
+    def _row_badges(
+        prediction: DashboardPrediction,
+    ) -> tuple[tuple[str, StatusTone], ...]:
+        lifecycle_tone = (
+            StatusTone.WARNING
+            if prediction.status.value == "locked"
+            else StatusTone.ACCENT
+        )
+        badges: list[tuple[str, StatusTone]] = [
+            (prediction.status.value.upper(), lifecycle_tone)
+        ]
+        if prediction.needs_attention:
+            badges.append(("NEEDS ATTENTION", StatusTone.WARNING))
+        if prediction.ready_to_resolve:
+            badges.append(("READY TO RESOLVE", StatusTone.ACCENT))
+        return tuple(badges)
 
     @staticmethod
     def _postmortem_row_text(prediction: NeedsPostmortemPrediction) -> str:
@@ -424,6 +582,7 @@ class AttentionSettingsScreen(QWidget):
     """Expose the small set of v0.1 attention and data-management controls."""
 
     threshold_changed = Signal(int)
+    routine_notification_requested = Signal(str)
 
     def __init__(
         self,
@@ -436,22 +595,39 @@ class AttentionSettingsScreen(QWidget):
         self._suggested_backup_filename = "reckonsolve-backup.sqlite3"
         self._suggested_export_filename = "reckonsolve-export.zip"
 
-        title = QLabel("Settings", self)
-        title.setObjectName("settingsScreenTitle")
+        header = PageHeader(
+            "Settings",
+            "Adjust forecast-attention timing and manage local recovery data.",
+            title_object_name="settingsScreenTitle",
+            supporting_object_name="settingsIntroduction",
+            parent=self,
+        )
+        header.setObjectName("settingsPageHeader")
 
-        attention_group = QGroupBox("Needs Attention", self)
-        attention_layout = QVBoxLayout(attention_group)
+        attention_group = ContentPanel(
+            "Needs Attention",
+            "Choose how long an unchanged forecast can go before Reckonsolve "
+            "surfaces it for another look.",
+            parent=self,
+        )
+        attention_group.setObjectName("attentionSettingsPanel")
+        attention_layout = attention_group.body_layout
         description = QLabel(
             "A nonterminal forecast needs attention after this many complete "
             "24-hour days without a forecast revision. Journal entries do not "
             "reset it.",
-            attention_group,
+            attention_group.body,
         )
         description.setObjectName("staleThresholdDescription")
         description.setWordWrap(True)
         description.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(description, TextRole.SECONDARY)
 
-        self.threshold_input = QSpinBox(attention_group)
+        threshold_label = QLabel("Review after", attention_group.body)
+        threshold_label.setObjectName("staleThresholdInputLabel")
+        apply_text_role(threshold_label, TextRole.LABEL)
+
+        self.threshold_input = QSpinBox(attention_group.body)
         self.threshold_input.setObjectName("staleThresholdInput")
         self.threshold_input.setRange(
             MIN_STALE_THRESHOLD_DAYS,
@@ -460,62 +636,86 @@ class AttentionSettingsScreen(QWidget):
         self.threshold_input.setSuffix(" days")
         self.threshold_input.setAccessibleName("Needs Attention threshold in days")
 
-        self.save_button = QPushButton("Save threshold", attention_group)
+        threshold_label.setBuddy(self.threshold_input)
+
+        self.save_button = QPushButton("Save threshold", attention_group.body)
         self.save_button.setObjectName("saveStaleThresholdButton")
+        apply_action_role(self.save_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.save_button, LucideIcon.SAVE)
         self.save_button.clicked.connect(self._save)
 
         control_layout = QHBoxLayout()
+        control_layout.addWidget(threshold_label)
         control_layout.addWidget(self.threshold_input)
         control_layout.addWidget(self.save_button)
         control_layout.addStretch()
 
-        self.status_label = QLabel(attention_group)
+        self.status_label = PersistentMessageLabel(
+            accessible_name="Needs Attention setting error",
+            tone=StatusTone.ERROR,
+            parent=attention_group.body,
+        )
         self.status_label.setObjectName("staleThresholdStatus")
-        self.status_label.setWordWrap(True)
-        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.status_label.setHidden(True)
 
         attention_layout.addWidget(description)
         attention_layout.addLayout(control_layout)
         attention_layout.addWidget(self.status_label)
 
-        data_group = QGroupBox("Data and recovery", self)
-        data_layout = QVBoxLayout(data_group)
+        data_group = ContentPanel(
+            "Data and recovery",
+            "Create a complete recovery copy or a portable analytical export.",
+            parent=self,
+        )
+        data_group.setObjectName("dataManagementPanel")
+        data_layout = data_group.body_layout
         data_description = QLabel(
             "A SQLite backup can restore the complete application. A CSV bundle "
             "is a portable analytical export and cannot restore Reckonsolve.",
-            data_group,
+            data_group.body,
         )
         data_description.setObjectName("dataManagementDescription")
         data_description.setWordWrap(True)
         data_description.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(data_description, TextRole.SECONDARY)
 
-        self.database_path_label = QLabel("Database: loading...", data_group)
+        self.database_path_label = QLabel("Database: loading...", data_group.body)
         self.database_path_label.setObjectName("databaseLocation")
         self.database_path_label.setWordWrap(True)
         self.database_path_label.setTextFormat(Qt.TextFormat.PlainText)
         self.database_path_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
         )
+        apply_text_role(self.database_path_label, TextRole.BODY)
 
         self.last_backup_label = QLabel(
             "Last successful backup: loading...",
-            data_group,
+            data_group.body,
         )
         self.last_backup_label.setObjectName("lastSuccessfulBackup")
         self.last_backup_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.last_backup_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        apply_text_role(self.last_backup_label, TextRole.SECONDARY)
 
-        self.backup_button = QPushButton("Back Up Now", data_group)
+        self.backup_button = QPushButton("Back Up Now", data_group.body)
         self.backup_button.setObjectName("backUpNowButton")
+        apply_action_role(self.backup_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.backup_button, LucideIcon.DATABASE_BACKUP)
         self.backup_button.clicked.connect(self._back_up_now)
-        self.export_button = QPushButton("Export CSV Bundle", data_group)
+        self.export_button = QPushButton("Export CSV Bundle", data_group.body)
         self.export_button.setObjectName("exportCsvBundleButton")
+        apply_action_role(self.export_button, ActionRole.SECONDARY)
         apply_lucide_icon(self.export_button, LucideIcon.FILE_ARCHIVE)
         self.export_button.clicked.connect(self._export_csv_bundle)
-        self.repair_search_button = QPushButton("Repair Search Index", data_group)
+        self.repair_search_button = QPushButton(
+            "Repair Search Index",
+            data_group.body,
+        )
         self.repair_search_button.setObjectName("repairSearchIndexButton")
+        apply_action_role(self.repair_search_button, ActionRole.QUIET)
         apply_lucide_icon(self.repair_search_button, LucideIcon.REFRESH)
         self.repair_search_button.clicked.connect(self._repair_search_index)
         action_layout = QHBoxLayout()
@@ -524,11 +724,12 @@ class AttentionSettingsScreen(QWidget):
         action_layout.addWidget(self.repair_search_button)
         action_layout.addStretch()
 
-        self.data_status_label = QLabel(data_group)
+        self.data_status_label = PersistentMessageLabel(
+            accessible_name="Data management result",
+            tone=StatusTone.NEUTRAL,
+            parent=data_group.body,
+        )
         self.data_status_label.setObjectName("dataManagementStatus")
-        self.data_status_label.setWordWrap(True)
-        self.data_status_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.data_status_label.setHidden(True)
 
         data_layout.addWidget(data_description)
         data_layout.addWidget(self.database_path_label)
@@ -536,12 +737,26 @@ class AttentionSettingsScreen(QWidget):
         data_layout.addLayout(action_layout)
         data_layout.addWidget(self.data_status_label)
 
+        content = QWidget(self)
+        content.setObjectName("settingsContent")
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(int(Spacing.SECTION))
+        content_layout.addWidget(attention_group)
+        content_layout.addWidget(data_group)
+        content_layout.addStretch()
+
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setObjectName("settingsScrollArea")
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.scroll_area.setWidget(content)
+
         layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(title)
-        layout.addWidget(attention_group)
-        layout.addWidget(data_group)
-        layout.addStretch()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.ORDINARY))
+        layout.addWidget(header)
+        layout.addWidget(self.scroll_area, 1)
 
     def refresh(self) -> None:
         """Load persisted attention and recovery status when Settings is entered."""
@@ -551,22 +766,22 @@ class AttentionSettingsScreen(QWidget):
         except ApplicationError as error:
             self.threshold_input.setEnabled(False)
             self.save_button.setEnabled(False)
-            self._show_status(str(error))
+            self._show_status(str(error), StatusTone.ERROR)
         else:
             self.threshold_input.setEnabled(True)
             self.save_button.setEnabled(True)
             self.threshold_input.setValue(value)
-            self.status_label.setHidden(True)
+            self.status_label.clear_message()
         try:
             status = self._operations.get_data_management_status()
         except ApplicationError as error:
-            self._show_data_status(str(error))
+            self._show_data_status(str(error), StatusTone.ERROR)
             return
         self._suggested_backup_filename = status.suggested_backup_filename
         self._suggested_export_filename = status.suggested_export_filename
         self.database_path_label.setText(f"Database: {status.database_path}")
         self._show_last_backup(status.last_successful_backup_at)
-        self.data_status_label.setHidden(True)
+        self.data_status_label.clear_message()
 
     def _save(self) -> None:
         try:
@@ -574,10 +789,13 @@ class AttentionSettingsScreen(QWidget):
                 self.threshold_input.value()
             )
         except ApplicationError as error:
-            self._show_status(str(error))
+            self._show_status(str(error), StatusTone.ERROR)
             return
-        self._show_status(f"Saved. Dashboard now uses {value} days.")
+        self.status_label.clear_message()
         self.threshold_changed.emit(value)
+        self.routine_notification_requested.emit(
+            f"Needs Attention threshold saved at {value} days."
+        )
 
     def _back_up_now(self) -> None:
         destination = self._choose_destination(
@@ -591,7 +809,7 @@ class AttentionSettingsScreen(QWidget):
         try:
             result = self._operations.create_backup(destination)
         except ApplicationError as error:
-            self._show_data_status(str(error))
+            self._show_data_status(str(error), StatusTone.ERROR)
             return
         self._show_last_backup(result.completed_at)
         message = f"Backup created: {result.destination}"
@@ -600,7 +818,14 @@ class AttentionSettingsScreen(QWidget):
                 " The file is usable, but its successful time could not be "
                 "recorded in Settings."
             )
-        self._show_data_status(message)
+        self._show_data_status(
+            message,
+            (
+                StatusTone.SUCCESS
+                if result.last_successful_time_recorded
+                else StatusTone.WARNING
+            ),
+        )
 
     def _export_csv_bundle(self) -> None:
         destination = self._choose_destination(
@@ -614,10 +839,11 @@ class AttentionSettingsScreen(QWidget):
         try:
             result = self._operations.export_csv_bundle(destination)
         except ApplicationError as error:
-            self._show_data_status(str(error))
+            self._show_data_status(str(error), StatusTone.ERROR)
             return
         self._show_data_status(
-            f"Exported {result.csv_file_count} CSV files: {result.destination}"
+            f"Exported {result.csv_file_count} CSV files: {result.destination}",
+            StatusTone.SUCCESS,
         )
 
     def _repair_search_index(self) -> None:
@@ -626,10 +852,11 @@ class AttentionSettingsScreen(QWidget):
         try:
             self._operations.repair_search_index()
         except ApplicationError as error:
-            self._show_data_status(str(error))
+            self._show_data_status(str(error), StatusTone.ERROR)
             return
         self._show_data_status(
-            "Search index repaired from canonical Prediction history."
+            "Search index repaired from canonical Prediction history.",
+            StatusTone.SUCCESS,
         )
 
     def _choose_destination(
@@ -670,13 +897,11 @@ class AttentionSettingsScreen(QWidget):
             else f"Last successful backup: {_format_local_timestamp(value)}"
         )
 
-    def _show_data_status(self, message: str) -> None:
-        self.data_status_label.setText(message)
-        self.data_status_label.setHidden(False)
+    def _show_data_status(self, message: str, tone: StatusTone) -> None:
+        self.data_status_label.show_message(message, tone)
 
-    def _show_status(self, message: str) -> None:
-        self.status_label.setText(message)
-        self.status_label.setHidden(False)
+    def _show_status(self, message: str, tone: StatusTone) -> None:
+        self.status_label.show_message(message, tone)
 
 
 def _format_local_timestamp(value: datetime) -> str:

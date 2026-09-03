@@ -257,6 +257,14 @@ QDialog {{
     color: {color.text};
 }}
 
+QScrollArea#dashboardScrollArea,
+QScrollArea#settingsScrollArea,
+QScrollArea#dashboardScrollArea > QWidget > QWidget,
+QScrollArea#settingsScrollArea > QWidget > QWidget {{
+    background-color: transparent;
+    border: none;
+}}
+
 QLabel[reckonsolveTextRole="secondary"] {{
     color: {color.secondary_text};
 }}
@@ -384,6 +392,11 @@ QPushButton:disabled {{
     background-color: {color.disabled_surface};
     color: {color.disabled_text};
     border-color: {color.border};
+}}
+
+QPushButton[reckonsolveDashboardRow="true"] {{
+    text-align: left;
+    padding: {ordinary}px;
 }}
 
 QPushButton[reckonsolveActionRole="primary"] {{

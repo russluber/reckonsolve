@@ -32,6 +32,7 @@ from reckonsolve.ui.icons import (
     lucide_icon,
     refresh_lucide_icons,
 )
+from reckonsolve.ui.notifications import NotificationHost
 from reckonsolve.ui.prediction_browser import PredictionBrowserScreen
 from reckonsolve.ui.presentation_settings import (
     MINIMUM_WINDOW_SIZE,
@@ -328,6 +329,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._sidebar)
         layout.addWidget(self._screen_stack, 1)
         self.setCentralWidget(content)
+        self._notification_host = NotificationHost(content)
 
         install_visual_system(self)
         self._fit_primary_navigation_height()
@@ -359,6 +361,12 @@ class MainWindow(QMainWindow):
         )
         self._settings_screen.threshold_changed.connect(
             lambda _value: self._dashboard_screen.refresh()
+        )
+        self._dashboard_screen.routine_notification_requested.connect(
+            self._show_routine_notification
+        )
+        self._settings_screen.routine_notification_requested.connect(
+            self._show_routine_notification
         )
         self._activate_route("Dashboard", refresh=True, focus=False)
 
@@ -534,6 +542,16 @@ class MainWindow(QMainWindow):
 
         self._show_selected_prediction(prediction)
         self._prediction_detail_host.focus_search_match(search_document)
+
+    def _show_routine_notification(self, message: str) -> None:
+        """Keep acknowledgment rendering outside committed application work."""
+
+        try:
+            self._notification_host.show_message(message)
+        except (RuntimeError, TypeError, ValueError):
+            # The operation has already completed and refreshed its canonical view.
+            # A disposable presentation failure must not turn that into false failure.
+            return
 
     def _sync_navigation_state(self) -> None:
         route = self.current_screen_name

@@ -97,6 +97,8 @@ from reckonsolve.ui.analytics_charts import (
     CalibrationChart,
     ContainmentCalibrationChart,
 )
+from reckonsolve.ui.components import ContentPanel
+from reckonsolve.ui.notifications import NotificationHost
 from reckonsolve.ui.presentation_settings import (
     MemoryPresentationSettings,
     WindowPresentationState,
@@ -108,10 +110,12 @@ from reckonsolve.ui.visual_system import (
     MESSAGE_TONE_PROPERTY,
     NAVIGATION_ACTIVE_PROPERTY,
     NAVIGATION_COMPACT_PROPERTY,
+    SURFACE_ROLE_PROPERTY,
     TEXT_ROLE_PROPERTY,
     ActionRole,
     Radius,
     StatusTone,
+    SurfaceRole,
     TextRole,
     semantic_colors,
 )
@@ -2056,6 +2060,8 @@ def test_palette_change_refreshes_semantic_colors_and_navigation_icons(
     qtbot: QtBot,
 ) -> None:
     navigation = _required_child(window, QListWidget, "primaryNavigation")
+    notification = _required_child(window, NotificationHost, "notificationHost")
+    notification.show_message("Palette-safe acknowledgment.")
     light = QPalette(window.palette())
     dark = QPalette(window.palette())
     for palette, background, base, text, mid in (
@@ -2089,6 +2095,8 @@ def test_palette_change_refreshes_semantic_colors_and_navigation_icons(
     assert dark_colors.is_dark is True
     assert light_colors.accent != dark_colors.accent
     assert light_icon_key != dark_icon_key
+    assert notification.current_message == "Palette-safe acknowledgment."
+    assert not notification.isHidden()
 
 
 def test_high_value_actions_keep_text_icons_and_accessible_names(
@@ -3400,28 +3408,15 @@ def test_dashboard_renders_overlapping_buckets_without_losing_classifications(
     window = MainWindow(operations)
     qtbot.addWidget(window)
 
-    assert _required_child(window, QGroupBox, "dashboardOpenSection").title() == (
-        "Open (1)"
-    )
-    assert (
-        _required_child(
-            window,
-            QGroupBox,
-            "dashboardNeedsAttentionSection",
-        ).title()
-        == "Needs Attention (1)"
-    )
-    assert (
-        _required_child(
-            window,
-            QGroupBox,
-            "dashboardReadyToResolveSection",
-        ).title()
-        == "Ready to Resolve (1)"
-    )
-    assert _required_child(window, QGroupBox, "dashboardLockedSection").title() == (
-        "Locked (1)"
-    )
+    for object_name, title in (
+        ("dashboardOpenSection", "Open"),
+        ("dashboardNeedsAttentionSection", "Needs Attention"),
+        ("dashboardReadyToResolveSection", "Ready to Resolve"),
+        ("dashboardLockedSection", "Locked"),
+    ):
+        panel = _required_child(window, ContentPanel, object_name)
+        assert panel.title_label.text() == title
+        assert panel.count_badge.text() == "1"
     for object_name in (
         "dashboardNeedsAttentionPrediction7",
         "dashboardReadyToResolvePrediction7",
@@ -3432,8 +3427,23 @@ def test_dashboard_renders_overlapping_buckets_without_losing_classifications(
         assert "70%" in row.text()
         assert "needs attention" in row.accessibleDescription()
         assert "ready to resolve" in row.accessibleDescription()
+        question = _required_child(row, QLabel, "dashboardRowQuestion")
+        assert question.textFormat() is Qt.TextFormat.PlainText
+        assert question.wordWrap()
+        badges = {badge.text() for badge in row.findChildren(QLabel) if badge.text()}
+        assert "LOCKED" in badges
+        assert "NEEDS ATTENTION" in badges
+        assert "READY TO RESOLVE" in badges
     assert _required_child(window, QLabel, "dashboardThreshold").text() == (
         "Needs Attention threshold: 14 days"
+    )
+    assert (
+        "one Prediction may appear in more than one section"
+        in _required_child(
+            window,
+            QLabel,
+            "dashboardIntroduction",
+        ).text()
     )
 
 
@@ -3629,9 +3639,12 @@ def test_settings_persists_threshold_and_refreshes_dashboard(qtbot: QtBot) -> No
     assert operations.threshold_set_calls == [30]
     assert operations.stale_threshold_days == 30
     assert operations.dashboard_calls == dashboard_calls + 1
-    assert _required_child(window, QLabel, "staleThresholdStatus").text() == (
-        "Saved. Dashboard now uses 30 days."
+    assert _required_child(window, QLabel, "staleThresholdStatus").isHidden()
+    notification = _required_child(window, NotificationHost, "notificationHost")
+    assert notification.current_message == (
+        "Needs Attention threshold saved at 30 days."
     )
+    assert not notification.isHidden()
     window.navigate_to("Dashboard")
     assert _required_child(window, QLabel, "dashboardThreshold").text() == (
         "Needs Attention threshold: 30 days"
@@ -3660,6 +3673,45 @@ def test_settings_displays_database_and_persisted_backup_status(qtbot: QtBot) ->
     )
     assert _required_child(window, QLabel, "lastSuccessfulBackup").text() == (
         f"Last successful backup: {expected_local}"
+    )
+    for panel_name in ("attentionSettingsPanel", "dataManagementPanel"):
+        panel = _required_child(window, ContentPanel, panel_name)
+        assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
+    assert (
+        _required_child(
+            window,
+            QPushButton,
+            "saveStaleThresholdButton",
+        ).property(ACTION_ROLE_PROPERTY)
+        == ActionRole.PRIMARY.value
+    )
+    assert (
+        _required_child(
+            window,
+            QPushButton,
+            "backUpNowButton",
+        ).property(ACTION_ROLE_PROPERTY)
+        == ActionRole.PRIMARY.value
+    )
+    assert (
+        _required_child(
+            window,
+            QPushButton,
+            "exportCsvBundleButton",
+        ).property(ACTION_ROLE_PROPERTY)
+        == ActionRole.SECONDARY.value
+    )
+    assert (
+        _required_child(
+            window,
+            QPushButton,
+            "repairSearchIndexButton",
+        ).property(ACTION_ROLE_PROPERTY)
+        == ActionRole.QUIET.value
+    )
+    database_path = _required_child(window, QLabel, "databaseLocation")
+    assert database_path.textInteractionFlags() & (
+        Qt.TextInteractionFlag.TextSelectableByKeyboard
     )
 
 
@@ -3695,6 +3747,14 @@ def test_settings_creates_backup_and_csv_bundle_from_selected_destinations(
     assert operations.backup_calls == [expected_backup]
     assert _required_child(window, QLabel, "dataManagementStatus").text() == (
         f"Backup created: {expected_backup}"
+    )
+    assert (
+        _required_child(
+            window,
+            QLabel,
+            "dataManagementStatus",
+        ).property(MESSAGE_TONE_PROPERTY)
+        == StatusTone.SUCCESS.value
     )
     assert (
         "Not yet"
@@ -3801,11 +3861,65 @@ def test_settings_shows_expected_backup_export_and_status_errors(
         Qt.MouseButton.LeftButton,
     )
     assert status.text() == "Backup destination is locked."
+    assert status.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
     qtbot.mouseClick(
         _required_child(window, QPushButton, "exportCsvBundleButton"),
         Qt.MouseButton.LeftButton,
     )
     assert status.text() == "Export destination is locked."
+    assert status.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
+
+
+def test_routine_notification_survives_navigation_without_reflow(qtbot: QtBot) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    window.navigate_to("Settings")
+    stack = _required_child(window, QStackedWidget, "screenStack")
+    geometry_before = stack.geometry()
+    threshold = _required_child(window, QSpinBox, "staleThresholdInput")
+    threshold.setValue(21)
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "saveStaleThresholdButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    notification = _required_child(window, NotificationHost, "notificationHost")
+    window.navigate_to("Dashboard")
+
+    assert notification.isVisible()
+    assert notification.current_message == (
+        "Needs Attention threshold saved at 21 days."
+    )
+    assert stack.geometry() == geometry_before
+
+
+def test_notification_failure_cannot_roll_back_a_saved_setting(
+    qtbot: QtBot,
+    monkeypatch,
+) -> None:
+    operations = FakePredictionOperations()
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Settings")
+    threshold = _required_child(window, QSpinBox, "staleThresholdInput")
+    threshold.setValue(22)
+    notification = _required_child(window, NotificationHost, "notificationHost")
+    monkeypatch.setattr(
+        notification,
+        "show_message",
+        lambda _message: (_ for _ in ()).throw(RuntimeError("paint failed")),
+    )
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "saveStaleThresholdButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.threshold_set_calls == [22]
+    assert operations.stale_threshold_days == 22
+    assert _required_child(window, QLabel, "staleThresholdStatus").isHidden()
 
 
 def test_dashboard_and_settings_show_expected_read_errors(qtbot: QtBot) -> None:

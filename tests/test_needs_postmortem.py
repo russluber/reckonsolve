@@ -3,13 +3,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QGroupBox, QLabel, QMessageBox, QPushButton, QWidget
+from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QWidget
 
 from reckonsolve.application.errors import ConcurrentTerminalCorrectionError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
+from reckonsolve.ui.components import ContentPanel
 from reckonsolve.ui.main_window import MainWindow
+from reckonsolve.ui.notifications import NotificationHost
 
 CREATED = datetime(2026, 8, 27, 9, tzinfo=UTC)
 RESOLVED = CREATED + timedelta(days=1)
@@ -171,8 +173,9 @@ def test_dashboard_skip_confirmation_and_detail_completion_display(
     window.show()
     window.navigate_to("Dashboard")
 
-    section = _child(window, QGroupBox, "dashboardNeedsPostmortemSection")
-    assert section.title() == "Needs Postmortem (1)"
+    section = _child(window, ContentPanel, "dashboardNeedsPostmortemSection")
+    assert section.title_label.text() == "Needs Postmortem"
+    assert section.count_badge.text() == "1"
     row = _child(
         window,
         QPushButton,
@@ -190,7 +193,7 @@ def test_dashboard_skip_confirmation_and_detail_completion_display(
         lambda *_args: QMessageBox.StandardButton.Cancel,
     )
     qtbot.mouseClick(skip, Qt.MouseButton.LeftButton)
-    assert section.title() == "Needs Postmortem (1)"
+    assert section.count_badge.text() == "1"
     assert (
         operations.get_numeric_resolution_history(
             created.prediction_id
@@ -204,8 +207,10 @@ def test_dashboard_skip_confirmation_and_detail_completion_display(
         lambda *_args: QMessageBox.StandardButton.Yes,
     )
     qtbot.mouseClick(skip, Qt.MouseButton.LeftButton)
-    assert section.title() == "Needs Postmortem (0)"
-    assert not _child(window, QLabel, "dashboardStatus").isHidden()
+    assert section.count_badge.text() == "0"
+    notification = _child(window, NotificationHost, "notificationHost")
+    assert notification.current_message.startswith("Postmortem skipped.")
+    assert notification.isVisible()
     assert _child(window, QLabel, "dashboardNeedsPostmortemEmpty").text() == (
         "No Resolved Predictions need a Postmortem decision."
     )
