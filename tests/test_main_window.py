@@ -5,14 +5,15 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QDate, Qt, QTimer
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import QDate, QPoint, QRect, Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
     QFileDialog,
+    QFrame,
     QGroupBox,
     QLabel,
     QLineEdit,
@@ -96,13 +97,20 @@ from reckonsolve.ui.analytics_charts import (
     CalibrationChart,
     ContainmentCalibrationChart,
 )
+from reckonsolve.ui.presentation_settings import (
+    MemoryPresentationSettings,
+    WindowPresentationState,
+)
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.tag_manager import TagManagerDialog
 from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
     MESSAGE_TONE_PROPERTY,
+    NAVIGATION_ACTIVE_PROPERTY,
+    NAVIGATION_COMPACT_PROPERTY,
     TEXT_ROLE_PROPERTY,
     ActionRole,
+    Radius,
     StatusTone,
     TextRole,
     semantic_colors,
@@ -115,6 +123,11 @@ EXPECTED_SCREEN_NAMES = (
     "Predictions",
     "Analytics",
     "Settings",
+)
+EXPECTED_NAVIGATION_NAMES = (
+    "Dashboard",
+    "Predictions",
+    "Analytics",
 )
 
 
@@ -1762,21 +1775,266 @@ def window(
 
 def test_main_window_has_expected_navigation(window: MainWindow) -> None:
     navigation = _required_child(window, QListWidget, "primaryNavigation")
+    sidebar = _required_child(window, QFrame, "applicationSidebar")
+    new_prediction = _required_child(
+        window,
+        QPushButton,
+        "newPredictionNavigationButton",
+    )
+    settings = _required_child(window, QPushButton, "settingsNavigationButton")
+    toggle = _required_child(window, QPushButton, "sidebarModeToggle")
 
     assert window.windowTitle() == "Reckonsolve"
-    assert navigation.minimumWidth() == 240
-    assert navigation.maximumWidth() == 240
+    assert sidebar.minimumWidth() == 240
+    assert sidebar.maximumWidth() == 240
     assert window.screen_names == EXPECTED_SCREEN_NAMES
+    assert window.navigation_names == EXPECTED_NAVIGATION_NAMES
     assert (
         tuple(navigation.item(index).text() for index in range(navigation.count()))
-        == EXPECTED_SCREEN_NAMES
+        == EXPECTED_NAVIGATION_NAMES
     )
+    assert "Prediction Detail" not in tuple(
+        navigation.item(index).text() for index in range(navigation.count())
+    )
+    assert new_prediction.text() == "New Prediction"
+    assert new_prediction.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
+    assert settings.text() == "Settings"
+    assert toggle.accessibleName() == "Collapse sidebar"
     assert window.current_screen_name == "Dashboard"
     assert navigation.currentRow() == 0
+    assert navigation.property(NAVIGATION_COMPACT_PROPERTY) is False
     assert all(
         not navigation.item(index).icon().isNull()
         for index in range(navigation.count())
     )
+
+
+def test_primary_navigation_never_scrolls_or_clips_a_destination(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    navigation = _required_child(window, QListWidget, "primaryNavigation")
+    window.show()
+    qtbot.waitUntil(lambda: navigation.viewport().height() > 0)
+
+    for row in range(navigation.count()):
+        navigation.setCurrentRow(row)
+        item_rectangle = navigation.visualItemRect(navigation.item(row))
+        assert navigation.viewport().rect().contains(item_rectangle)
+        assert navigation.verticalScrollBar().value() == 0
+
+    assert navigation.verticalScrollBar().maximum() == 0
+    assert navigation.visualItemRect(navigation.item(0)).top() >= 0
+    assert (
+        navigation.visualItemRect(navigation.item(navigation.count() - 1)).bottom()
+        <= navigation.viewport().rect().bottom()
+    )
+
+
+def test_sidebar_compact_mode_is_complete_accessible_and_remembered(
+    qtbot: QtBot,
+) -> None:
+    settings = MemoryPresentationSettings()
+    first = MainWindow(
+        FakePredictionOperations(),
+        presentation_settings=settings,
+        available_screens=(QRect(0, 0, 1920, 1080),),
+    )
+    qtbot.addWidget(first)
+    first.show()
+    sidebar = _required_child(first, QFrame, "applicationSidebar")
+    navigation = _required_child(first, QListWidget, "primaryNavigation")
+    new_prediction = _required_child(
+        first,
+        QPushButton,
+        "newPredictionNavigationButton",
+    )
+    settings_button = _required_child(first, QPushButton, "settingsNavigationButton")
+    identity = _required_child(first, QLabel, "sidebarIdentity")
+    toggle = _required_child(first, QPushButton, "sidebarModeToggle")
+
+    qtbot.mouseClick(toggle, Qt.MouseButton.LeftButton)
+
+    assert first.sidebar_compact
+    assert navigation.property(NAVIGATION_COMPACT_PROPERTY) is True
+    assert sidebar.minimumWidth() == 68
+    assert sidebar.maximumWidth() == 68
+    assert identity.isHidden()
+    assert new_prediction.text() == ""
+    assert new_prediction.accessibleName() == "New Prediction"
+    assert new_prediction.toolTip() == "Create a new prediction"
+    assert settings_button.text() == ""
+    assert settings_button.accessibleName() == "Settings"
+    assert toggle.accessibleName() == "Expand sidebar"
+    for index, screen_name in enumerate(EXPECTED_NAVIGATION_NAMES):
+        item = navigation.item(index)
+        assert item.text() == ""
+        assert item.data(Qt.ItemDataRole.AccessibleTextRole) == screen_name
+        assert item.toolTip() == screen_name
+        assert not item.icon().isNull()
+        item_rectangle = navigation.visualItemRect(item)
+        assert item_rectangle.width() > item_rectangle.height()
+        assert (
+            abs(item_rectangle.center().x() - navigation.viewport().rect().center().x())
+            <= 1
+        )
+    assert settings.state.sidebar_compact
+
+    first.close()
+    reopened = MainWindow(
+        FakePredictionOperations(),
+        presentation_settings=settings,
+        available_screens=(QRect(0, 0, 1920, 1080),),
+    )
+    qtbot.addWidget(reopened)
+
+    assert reopened.sidebar_compact
+    assert (
+        _required_child(
+            reopened,
+            QFrame,
+            "applicationSidebar",
+        ).width()
+        == 68
+    )
+
+
+def test_compact_navigation_paints_each_icon_in_the_center_of_its_tile(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    navigation = _required_child(window, QListWidget, "primaryNavigation")
+    toggle = _required_child(window, QPushButton, "sidebarModeToggle")
+    window.show()
+    qtbot.mouseClick(toggle, Qt.MouseButton.LeftButton)
+    navigation.setCurrentRow(0)
+    test_icon_color = QColor("#ff00ff")
+    test_icon_pixmap = QPixmap(navigation.iconSize())
+    test_icon_pixmap.fill(test_icon_color)
+    test_icon = QIcon()
+    for mode in (QIcon.Mode.Normal, QIcon.Mode.Active, QIcon.Mode.Selected):
+        test_icon.addPixmap(test_icon_pixmap, mode, QIcon.State.Off)
+    navigation.item(0).setIcon(test_icon)
+    image = navigation.viewport().grab().toImage()
+    tile = navigation.visualItemRect(navigation.item(0))
+    icon_pixels = tuple(
+        QPoint(x, y)
+        for y in range(tile.top(), tile.bottom() + 1)
+        for x in range(tile.left(), tile.right() + 1)
+        if image.pixelColor(x, y) == test_icon_color
+    )
+
+    assert icon_pixels
+    painted_icon = QRect(
+        QPoint(
+            min(point.x() for point in icon_pixels),
+            min(point.y() for point in icon_pixels),
+        ),
+        QPoint(
+            max(point.x() for point in icon_pixels),
+            max(point.y() for point in icon_pixels),
+        ),
+    )
+    assert painted_icon.size() == navigation.iconSize()
+    assert abs(painted_icon.center().x() - tile.center().x()) <= 1
+    assert abs(painted_icon.center().y() - tile.center().y()) <= 1
+
+
+def test_window_geometry_and_maximized_state_restore_without_minimized_state(
+    qtbot: QtBot,
+) -> None:
+    screens = (QRect(0, 0, 1920, 1080),)
+    settings = MemoryPresentationSettings(
+        WindowPresentationState(
+            normal_geometry=(140, 90, 1100, 720),
+            maximized=True,
+        )
+    )
+    first = MainWindow(
+        FakePredictionOperations(),
+        presentation_settings=settings,
+        available_screens=screens,
+    )
+    qtbot.addWidget(first)
+
+    assert first.windowState() & Qt.WindowState.WindowMaximized
+    assert not first.windowState() & Qt.WindowState.WindowMinimized
+    first.close()
+
+    reopened = MainWindow(
+        FakePredictionOperations(),
+        presentation_settings=settings,
+        available_screens=screens,
+    )
+    qtbot.addWidget(reopened)
+
+    assert reopened.windowState() & Qt.WindowState.WindowMaximized
+    assert not reopened.windowState() & Qt.WindowState.WindowMinimized
+    assert reopened.normalGeometry() == QRect(140, 90, 1100, 720)
+
+
+def test_shell_distinguishes_action_primary_and_bottom_utility_routes(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    navigation = _required_child(window, QListWidget, "primaryNavigation")
+    new_prediction = _required_child(
+        window,
+        QPushButton,
+        "newPredictionNavigationButton",
+    )
+    settings = _required_child(window, QPushButton, "settingsNavigationButton")
+    sidebar = _required_child(window, QFrame, "applicationSidebar")
+    sidebar_layout = sidebar.layout()
+    assert sidebar_layout is not None
+    assert sidebar_layout.itemAt(sidebar_layout.count() - 2).spacerItem() is not None
+    assert sidebar_layout.itemAt(sidebar_layout.count() - 1).widget() is settings
+
+    qtbot.mouseClick(new_prediction, Qt.MouseButton.LeftButton)
+    assert window.current_screen_name == "New Prediction"
+    assert navigation.currentRow() == -1
+    assert new_prediction.property(NAVIGATION_ACTIVE_PROPERTY) is True
+    assert settings.property(NAVIGATION_ACTIVE_PROPERTY) is False
+
+    qtbot.mouseClick(settings, Qt.MouseButton.LeftButton)
+    assert window.current_screen_name == "Settings"
+    assert navigation.currentRow() == -1
+    assert new_prediction.property(NAVIGATION_ACTIVE_PROPERTY) is False
+    assert settings.property(NAVIGATION_ACTIVE_PROPERTY) is True
+
+    navigation.setCurrentRow(1)
+    assert window.current_screen_name == "Predictions"
+    assert settings.property(NAVIGATION_ACTIVE_PROPERTY) is False
+
+
+def test_shell_navigation_remains_keyboard_operable_in_compact_mode(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    navigation = _required_child(window, QListWidget, "primaryNavigation")
+    toggle = _required_child(window, QPushButton, "sidebarModeToggle")
+    new_prediction = _required_child(
+        window,
+        QPushButton,
+        "newPredictionNavigationButton",
+    )
+    settings = _required_child(window, QPushButton, "settingsNavigationButton")
+    qtbot.keyClick(toggle, Qt.Key.Key_Space)
+    assert window.sidebar_compact
+
+    navigation.setFocus()
+    qtbot.keyClick(navigation, Qt.Key.Key_Down)
+    assert window.current_screen_name == "Predictions"
+    qtbot.keyClick(navigation, Qt.Key.Key_Down)
+    assert window.current_screen_name == "Analytics"
+
+    new_prediction.setFocus()
+    qtbot.keyClick(new_prediction, Qt.Key.Key_Space)
+    assert window.current_screen_name == "New Prediction"
+
+    settings.setFocus()
+    qtbot.keyClick(settings, Qt.Key.Key_Space)
+    assert window.current_screen_name == "Settings"
 
 
 def test_main_window_applies_foundational_semantic_roles(window: MainWindow) -> None:
@@ -2855,6 +3113,24 @@ def test_prediction_browser_opens_fresh_detail_from_keyboard_activation(
     )
 
 
+def test_prediction_result_rows_are_inset_from_the_rounded_frame(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    window.show()
+    window.navigate_to("Predictions")
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+    results.setFocus()
+    qtbot.waitUntil(lambda: results.viewport().width() > 0)
+
+    viewport = results.viewport().geometry()
+    inset = int(Radius.SMALL)
+    assert viewport.left() >= inset
+    assert viewport.top() >= inset
+    assert results.width() - viewport.right() - 1 >= inset
+    assert results.height() - viewport.bottom() - 1 >= inset
+
+
 def test_prediction_search_renders_safe_explainable_rows_and_shared_controls(
     qtbot: QtBot,
 ) -> None:
@@ -3175,6 +3451,114 @@ def test_dashboard_row_opens_fresh_prediction_detail(qtbot: QtBot) -> None:
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
         latest.question
     )
+
+
+def test_contextual_detail_returns_to_dashboard_without_a_fake_destination(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(7, "Return this to Dashboard", 55)
+    operations = FakePredictionOperations(latest)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    navigation = _required_child(window, QListWidget, "primaryNavigation")
+    dashboard_calls = operations.dashboard_calls
+
+    qtbot.mouseClick(
+        _required_child(window, QPushButton, "dashboardOpenPrediction7"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    back = _required_child(window, QPushButton, "backFromPredictionDetailButton")
+    assert window.current_screen_name == "Prediction Detail"
+    assert back.text() == "Back to Dashboard"
+    assert navigation.currentRow() == 0
+    assert all(
+        navigation.item(index).data(Qt.ItemDataRole.UserRole) != "Prediction Detail"
+        for index in range(navigation.count())
+    )
+
+    qtbot.mouseClick(back, Qt.MouseButton.LeftButton)
+
+    assert window.current_screen_name == "Dashboard"
+    assert operations.dashboard_calls == dashboard_calls
+
+
+def test_contextual_detail_preserves_prediction_search_state_without_refresh(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(30, "Archive context item 30", 64)
+    operations = FakePredictionOperations(latest)
+    operations.browser_snapshot = PredictionBrowserSnapshot(
+        predictions=tuple(
+            PredictionBrowserItem(
+                prediction_id=index,
+                question=f"Archive context item {index}",
+                probability_percent=64,
+                status=PredictionStatus.OPEN,
+                created_at=datetime(2026, 8, 20, 19, index, tzinfo=UTC),
+                latest_revision_at=datetime(2026, 8, 20, 19, index, tzinfo=UTC),
+            )
+            for index in range(1, 31)
+        ),
+        available_tags=(),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    window.navigate_to("Predictions")
+    search = _required_child(window, QLineEdit, "predictionSearchInput")
+    status = _required_child(window, QComboBox, "predictionStatusFilter")
+    results = _required_child(window, QListWidget, "predictionBrowserResults")
+    search.setText("archive context")
+    status.setCurrentIndex(status.findData(PredictionStatus.OPEN.value))
+    _required_child(window, QPushButton, "applyPredictionFiltersButton").click()
+    assert results.count() == 30
+    results.setCurrentRow(29)
+    results.verticalScrollBar().setValue(results.verticalScrollBar().maximum())
+    scroll_position = results.verticalScrollBar().value()
+    assert scroll_position > 0
+    search_call_count = len(operations.search_calls)
+    browser_call_count = len(operations.browser_calls)
+
+    results.itemActivated.emit(results.item(29))
+
+    back = _required_child(window, QPushButton, "backFromPredictionDetailButton")
+    assert window.current_screen_name == "Prediction Detail"
+    assert back.text() == "Back to Predictions"
+    assert _required_child(window, QListWidget, "primaryNavigation").currentRow() == 1
+
+    qtbot.mouseClick(back, Qt.MouseButton.LeftButton)
+
+    assert window.current_screen_name == "Predictions"
+    assert search.text() == "archive context"
+    assert status.currentData() == PredictionStatus.OPEN.value
+    assert results.count() == 30
+    assert results.currentRow() == 29
+    assert results.verticalScrollBar().value() == scroll_position
+    assert len(operations.search_calls) == search_call_count
+    assert len(operations.browser_calls) == browser_call_count
+
+
+def test_created_prediction_detail_returns_to_last_primary_destination(
+    qtbot: QtBot,
+) -> None:
+    latest = FakePrediction(12, "Return creation to Analytics", 50)
+    operations = FakePredictionOperations(latest)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.navigate_to("Analytics")
+    window.navigate_to("New Prediction")
+
+    window._new_prediction_screen.prediction_created.emit(latest)
+
+    back = _required_child(window, QPushButton, "backFromPredictionDetailButton")
+    assert window.current_screen_name == "Prediction Detail"
+    assert back.text() == "Back to Analytics"
+    assert _required_child(window, QListWidget, "primaryNavigation").currentRow() == 2
+
+    qtbot.mouseClick(back, Qt.MouseButton.LeftButton)
+
+    assert window.current_screen_name == "Analytics"
 
 
 def test_dashboard_refreshes_when_reentered(qtbot: QtBot) -> None:

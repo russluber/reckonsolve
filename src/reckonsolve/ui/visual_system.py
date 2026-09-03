@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
 TEXT_ROLE_PROPERTY = "reckonsolveTextRole"
 SURFACE_ROLE_PROPERTY = "reckonsolveSurfaceRole"
 ACTION_ROLE_PROPERTY = "reckonsolveActionRole"
+NAVIGATION_ACTIVE_PROPERTY = "reckonsolveNavigationActive"
+NAVIGATION_COMPACT_PROPERTY = "reckonsolveCompactNavigation"
 BADGE_TONE_PROPERTY = "reckonsolveBadgeTone"
 MESSAGE_TONE_PROPERTY = "reckonsolveMessageTone"
 VISUAL_SYSTEM_PROPERTY = "reckonsolveVisualSystem"
@@ -421,6 +423,17 @@ QPushButton[reckonsolveActionRole="quiet"]:hover {{
     color: {color.on_accent_soft};
     border-color: {color.accent_soft};
 }}
+QPushButton[reckonsolveNavigationActive="true"] {{
+    background-color: {color.accent_soft};
+    color: {color.on_accent_soft};
+    border-color: {color.accent};
+    border-left: 3px solid {color.accent};
+}}
+QPushButton[reckonsolveActionRole="primary"][reckonsolveNavigationActive="true"] {{
+    background-color: {color.focus};
+    color: {color.on_accent};
+    border-color: {color.focus};
+}}
 QPushButton[reckonsolveActionRole="destructive"] {{
     background-color: transparent;
     color: {color.destructive};
@@ -520,6 +533,13 @@ QListWidget {{
     border-radius: {panel_radius}px;
     outline: 0;
 }}
+QListWidget#primaryNavigation {{
+    background-color: transparent;
+    border: none;
+}}
+QListWidget#predictionBrowserResults {{
+    padding: {int(Radius.SMALL)}px;
+}}
 QListWidget::item {{
     border-radius: {int(Radius.SMALL)}px;
     padding: {control}px;
@@ -532,6 +552,16 @@ QListWidget::item:selected {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border-left: 3px solid {color.accent};
+}}
+QListWidget#primaryNavigation[reckonsolveCompactNavigation="true"]::item {{
+    border: 1px solid transparent;
+    border-radius: {control_radius}px;
+    padding: 0;
+}}
+QListWidget#primaryNavigation[reckonsolveCompactNavigation="true"]::item:selected {{
+    background-color: {color.accent_soft};
+    color: {color.on_accent_soft};
+    border: 1px solid {color.accent};
 }}
 QListWidget:focus {{
     border: 2px solid {color.focus};
@@ -607,6 +637,20 @@ def apply_action_role(
     button.setAccessibleName(resolved_name)
     button.setProperty(ACTION_ROLE_PROPERTY, role.value)
     refresh_widget_style(button)
+
+
+def apply_navigation_active(button: QAbstractButton, active: bool) -> None:
+    """Expose shell-route state without turning navigation into stored data."""
+
+    button.setProperty(NAVIGATION_ACTIVE_PROPERTY, active)
+    refresh_widget_style(button)
+
+
+def apply_navigation_compact(navigation: QWidget, compact: bool) -> None:
+    """Switch the primary navigation's centralized expanded/compact treatment."""
+
+    navigation.setProperty(NAVIGATION_COMPACT_PROPERTY, compact)
+    refresh_widget_style(navigation)
 
 
 def apply_badge_role(label: QLabel, tone: StatusTone = StatusTone.NEUTRAL) -> None:
@@ -763,6 +807,8 @@ __all__ = [
     "ACTION_ROLE_PROPERTY",
     "BADGE_TONE_PROPERTY",
     "MESSAGE_TONE_PROPERTY",
+    "NAVIGATION_ACTIVE_PROPERTY",
+    "NAVIGATION_COMPACT_PROPERTY",
     "SURFACE_ROLE_PROPERTY",
     "TEXT_ROLE_PROPERTY",
     "VISUAL_SYSTEM_PROPERTY",
@@ -778,6 +824,8 @@ __all__ = [
     "apply_action_role",
     "apply_badge_role",
     "apply_message_role",
+    "apply_navigation_active",
+    "apply_navigation_compact",
     "apply_surface_role",
     "apply_text_role",
     "build_stylesheet",

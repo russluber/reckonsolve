@@ -8,6 +8,7 @@ ship the complete icon catalog. The release license is preserved in
 
 Selected filenames:
 
+- `arrow-left.svg`
 - `arrow-right.svg`
 - `ban.svg`
 - `chart-no-axes-combined.svg`

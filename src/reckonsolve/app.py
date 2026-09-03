@@ -15,6 +15,7 @@ from reckonsolve.data.migrations import MigrationError
 from reckonsolve.identity import STABLE_APPLICATION, ApplicationIdentity
 from reckonsolve.paths import ApplicationDataPathError, resolve_database_path
 from reckonsolve.ui.main_window import MainWindow
+from reckonsolve.ui.presentation_settings import QtPresentationSettings
 
 APPLICATION_NAME = STABLE_APPLICATION.application_name
 
@@ -50,7 +51,13 @@ def create_runtime(
     database = Database.open(resolved_database_path)
     try:
         operations = PredictionOperations(database)
-        window = MainWindow(operations, window_title=identity.window_title)
+        window = MainWindow(
+            operations,
+            window_title=identity.window_title,
+            presentation_settings=QtPresentationSettings(
+                resolved_database_path.parent / "presentation.ini"
+            ),
+        )
     except BaseException:
         database.close()
         raise

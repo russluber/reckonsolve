@@ -78,6 +78,8 @@ def test_development_runtime_has_visible_isolated_identity(
     assert development.database.path == (
         tmp_path / "Reckonsolve Dev" / "reckonsolve.sqlite3"
     )
+    development.window.toggle_sidebar()
+    assert development.window.sidebar_compact
     development.close()
 
     stable = create_runtime(identity=STABLE_APPLICATION)
@@ -85,7 +87,15 @@ def test_development_runtime_has_visible_isolated_identity(
     assert stable.window.windowTitle() == "Reckonsolve"
     assert stable.database.path == tmp_path / "Reckonsolve" / "reckonsolve.sqlite3"
     assert stable.database.path != development.database.path
+    assert not stable.window.sidebar_compact
     stable.close()
+
+    reopened_development = create_runtime(identity=DEVELOPMENT_APPLICATION)
+    qtbot.addWidget(reopened_development.window)
+    assert reopened_development.window.sidebar_compact
+    assert (tmp_path / "Reckonsolve Dev" / "presentation.ini").is_file()
+    assert (tmp_path / "Reckonsolve" / "presentation.ini").is_file()
+    reopened_development.close()
 
 
 def test_settings_backup_and_export_work_end_to_end_across_restart(

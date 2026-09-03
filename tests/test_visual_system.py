@@ -12,6 +12,8 @@ from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
     BADGE_TONE_PROPERTY,
     MESSAGE_TONE_PROPERTY,
+    NAVIGATION_ACTIVE_PROPERTY,
+    NAVIGATION_COMPACT_PROPERTY,
     SURFACE_ROLE_PROPERTY,
     TEXT_ROLE_PROPERTY,
     VISUAL_SYSTEM_PROPERTY,
@@ -26,6 +28,8 @@ from reckonsolve.ui.visual_system import (
     apply_action_role,
     apply_badge_role,
     apply_message_role,
+    apply_navigation_active,
+    apply_navigation_compact,
     apply_surface_role,
     apply_text_role,
     build_stylesheet,
@@ -110,6 +114,9 @@ def test_stylesheet_covers_semantic_roles_and_interaction_states() -> None:
         'reckonsolveActionRole="primary"',
         'reckonsolveActionRole="quiet"',
         'reckonsolveActionRole="destructive"',
+        'reckonsolveNavigationActive="true"',
+        'reckonsolveCompactNavigation="true"',
+        "QListWidget#predictionBrowserResults {\n    padding:",
         'reckonsolveBadgeTone="warning"',
         'reckonsolveMessageTone="error"',
         'searchMatchEmphasis="true"',
@@ -141,6 +148,8 @@ def test_visual_helpers_assign_roles_fonts_and_accessible_names(qtbot: QtBot) ->
     apply_text_role(title, TextRole.PAGE_TITLE)
     apply_surface_role(panel, SurfaceRole.RAISED)
     apply_action_role(button, ActionRole.PRIMARY)
+    apply_navigation_active(button, True)
+    apply_navigation_compact(panel, True)
     apply_badge_role(badge, StatusTone.ACCENT)
     apply_message_role(
         message,
@@ -154,6 +163,8 @@ def test_visual_helpers_assign_roles_fonts_and_accessible_names(qtbot: QtBot) ->
     assert title.font().pointSizeF() > root.font().pointSizeF()
     assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
     assert button.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
+    assert button.property(NAVIGATION_ACTIVE_PROPERTY) is True
+    assert panel.property(NAVIGATION_COMPACT_PROPERTY) is True
     assert button.accessibleName() == "Save Review"
     assert badge.property(BADGE_TONE_PROPERTY) == StatusTone.ACCENT.value
     assert badge.accessibleName() == "Open"

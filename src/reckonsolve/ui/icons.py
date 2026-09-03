@@ -26,6 +26,7 @@ _ICON_NAME_PROPERTY = "reckonsolveLucideIcon"
 class LucideIcon(StrEnum):
     """The deliberately small Lucide subset used by Reckonsolve."""
 
+    ARROW_LEFT = "arrow-left"
     ARROW_RIGHT = "arrow-right"
     BAN = "ban"
     CHART = "chart-no-axes-combined"
