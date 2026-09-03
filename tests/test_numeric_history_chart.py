@@ -3,8 +3,11 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from PySide6.QtGui import QColor, QPalette
+
 from reckonsolve.domain.predictions import FixedPrecisionValue
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
+from reckonsolve.ui.visual_system import semantic_colors
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +51,43 @@ def test_numeric_chart_renders_one_interval_and_describes_it(qtbot) -> None:
     assert chart.samples[0].median_estimate == 7.0
     assert "Revision 1" in chart.accessibleDescription()
     assert not chart.grab().isNull()
+
+
+def test_numeric_chart_draws_readable_axes_and_interval_in_dark_mode(qtbot) -> None:
+    chart = NumericHistoryChart()
+    palette = QPalette()
+    for role, value in (
+        (QPalette.ColorRole.Window, "#171a18"),
+        (QPalette.ColorRole.Base, "#202421"),
+        (QPalette.ColorRole.AlternateBase, "#ffffff"),
+        (QPalette.ColorRole.WindowText, "#edf3ef"),
+        (QPalette.ColorRole.Text, "#edf3ef"),
+        (QPalette.ColorRole.Mid, "#505852"),
+    ):
+        palette.setColor(role, QColor(value))
+    chart.setPalette(palette)
+    qtbot.addWidget(chart)
+    chart.resize(640, 280)
+    chart.set_revisions((_revision(1, created_at=datetime(2026, 8, 21, tzinfo=UTC)),))
+    chart.show()
+
+    image = chart.grab().toImage()
+    plot_rect = chart._plot_rect()
+    axis_pixels = 0
+    for x in range(max(0, int(plot_rect.left()))):
+        for y in range(image.height()):
+            if image.pixelColor(x, y).lightnessF() > 0.7:
+                axis_pixels += 1
+
+    colors = semantic_colors(palette)
+    assert colors.is_dark
+    assert axis_pixels > 20
+    assert image.pixelColor(
+        int(plot_rect.center().x()), int(plot_rect.top())
+    ).name() in {
+        colors.accent,
+        colors.text,
+    }
 
 
 def test_numeric_chart_uses_revision_sequence_when_instants_tie_or_regress(

@@ -8,6 +8,11 @@ from pytestqt.qtbot import QtBot
 
 from reckonsolve.ui.assets.icons import LUCIDE_VERSION
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon, lucide_icon
+from reckonsolve.ui.visual_system import (
+    ActionRole,
+    apply_action_role,
+    semantic_colors,
+)
 
 
 def test_selected_lucide_resources_are_complete_and_pinned() -> None:
@@ -50,6 +55,28 @@ def test_lucide_icons_are_recolored_for_the_active_palette(qtbot: QtBot) -> None
     assert "#e5e7eb" in _opaque_colors(dark_icon)
 
 
+def test_selected_and_primary_icons_follow_semantic_action_colors(
+    qtbot: QtBot,
+) -> None:
+    button = QPushButton("Create Prediction")
+    qtbot.addWidget(button)
+    palette = QPalette(button.palette())
+    palette.setColor(QPalette.ColorRole.Window, QColor("#f4f5f4"))
+    palette.setColor(QPalette.ColorRole.Text, QColor("#1c211f"))
+    button.setPalette(palette)
+    colors = semantic_colors(palette)
+
+    navigation_icon = lucide_icon(LucideIcon.LAYOUT_DASHBOARD, palette)
+    assert colors.on_accent_soft in _opaque_colors(
+        navigation_icon,
+        mode=QIcon.Mode.Selected,
+    )
+
+    apply_action_role(button, ActionRole.PRIMARY)
+    apply_lucide_icon(button, LucideIcon.CIRCLE_PLUS)
+    assert colors.on_accent in _opaque_colors(button.icon())
+
+
 def test_applying_icon_keeps_visible_text_and_accessible_name(qtbot: QtBot) -> None:
     button = QPushButton("&Save Changes")
     qtbot.addWidget(button)
@@ -62,8 +89,12 @@ def test_applying_icon_keeps_visible_text_and_accessible_name(qtbot: QtBot) -> N
     assert button.iconSize().width() == 18
 
 
-def _opaque_colors(icon: QIcon) -> set[str]:
-    image = icon.pixmap(24, 24, QIcon.Mode.Normal, QIcon.State.Off).toImage()
+def _opaque_colors(
+    icon: QIcon,
+    *,
+    mode: QIcon.Mode = QIcon.Mode.Normal,
+) -> set[str]:
+    image = icon.pixmap(24, 24, mode, QIcon.State.Off).toImage()
     return {
         image.pixelColor(x, y).name()
         for x in range(image.width())

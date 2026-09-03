@@ -33,6 +33,12 @@ from reckonsolve.ui.screens import (
     PredictionOperations,
     PredictionSnapshot,
 )
+from reckonsolve.ui.visual_system import (
+    Spacing,
+    install_visual_system,
+    is_visual_system_change,
+    refresh_visual_system,
+)
 
 _SCREEN_DEFINITIONS: tuple[tuple[str, str, str | None], ...] = (
     (
@@ -94,6 +100,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(window_title)
         self.setMinimumSize(760, 520)
         self.resize(960, 640)
+        self._refreshing_visual_system = False
 
         self._navigation = QListWidget(self)
         self._navigation.setObjectName("primaryNavigation")
@@ -124,7 +131,7 @@ class MainWindow(QMainWindow):
             navigation_item = QListWidgetItem(screen_name)
             navigation_item.setData(Qt.ItemDataRole.UserRole, screen_name)
             navigation_item.setIcon(
-                lucide_icon(_SCREEN_ICONS[screen_name], self._navigation.palette())
+                lucide_icon(_SCREEN_ICONS[screen_name], self.palette())
             )
             self._navigation.addItem(navigation_item)
             if screen_name == "Dashboard":
@@ -152,9 +159,20 @@ class MainWindow(QMainWindow):
         content = QWidget(self)
         content.setObjectName("mainContent")
         layout = QHBoxLayout(content)
+        layout.setContentsMargins(
+            int(Spacing.ORDINARY),
+            int(Spacing.ORDINARY),
+            int(Spacing.ORDINARY),
+            int(Spacing.ORDINARY),
+        )
+        layout.setSpacing(int(Spacing.ORDINARY))
         layout.addWidget(self._navigation)
         layout.addWidget(self._screen_stack, 1)
         self.setCentralWidget(content)
+
+        install_visual_system(self)
+        self._refresh_navigation_icons()
+        refresh_lucide_icons(self)
 
         self._navigation.currentRowChanged.connect(self._show_screen)
         self._new_prediction_screen.prediction_created.connect(
@@ -175,9 +193,19 @@ class MainWindow(QMainWindow):
         self._navigation.setCurrentRow(0)
 
     def changeEvent(self, event: QEvent) -> None:
-        """Keep palette-colored icons legible when the native theme changes."""
+        """Refresh semantic styling and icons after native theme changes."""
 
         super().changeEvent(event)
+        if (
+            is_visual_system_change(event)
+            and hasattr(self, "_screen_stack")
+            and not self._refreshing_visual_system
+        ):
+            self._refreshing_visual_system = True
+            try:
+                refresh_visual_system(self)
+            finally:
+                self._refreshing_visual_system = False
         if is_palette_change(event) and hasattr(self, "_navigation"):
             self._refresh_navigation_icons()
             refresh_lucide_icons(self)
@@ -251,7 +279,7 @@ class MainWindow(QMainWindow):
     def _refresh_navigation_icons(self) -> None:
         for row, screen_name in enumerate(self.screen_names):
             self._navigation.item(row).setIcon(
-                lucide_icon(_SCREEN_ICONS[screen_name], self._navigation.palette())
+                lucide_icon(_SCREEN_ICONS[screen_name], self.palette())
             )
 
     @staticmethod

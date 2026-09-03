@@ -63,6 +63,19 @@ from reckonsolve.domain.search import SearchDocument, SearchSourceKind
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
+from reckonsolve.ui.visual_system import (
+    ActionRole,
+    Spacing,
+    StatusTone,
+    SurfaceRole,
+    TextRole,
+    apply_action_role,
+    apply_badge_role,
+    apply_message_role,
+    apply_surface_role,
+    apply_text_role,
+    refresh_widget_style,
+)
 
 
 class PredictionSnapshot(Protocol):
@@ -618,11 +631,13 @@ class NewPredictionScreen(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("newPredictionScreen")
+        apply_surface_role(self, SurfaceRole.CANVAS)
         self._operations = operations
 
         title = QLabel("New Prediction", self)
         title.setObjectName("newPredictionScreenTitle")
         title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        apply_text_role(title, TextRole.PAGE_TITLE)
 
         question_label = QLabel("Question", self)
         question_label.setObjectName("questionLabel")
@@ -667,11 +682,12 @@ class NewPredictionScreen(QWidget):
         shortcuts.setObjectName("probabilityShortcuts")
         shortcuts_layout = QHBoxLayout(shortcuts)
         shortcuts_layout.setContentsMargins(0, 0, 0, 0)
-        shortcuts_layout.setSpacing(6)
+        shortcuts_layout.setSpacing(int(Spacing.COMPACT))
         for probability in range(10, 100, 10):
             shortcut = QPushButton(str(probability), shortcuts)
             shortcut.setObjectName(f"probabilityShortcut{probability}")
             shortcut.setAccessibleName(f"Set probability to {probability}%")
+            apply_action_role(shortcut, ActionRole.QUIET)
             shortcut.clicked.connect(
                 lambda _checked=False, value=probability: (
                     self.probability_input.setValue(value)
@@ -686,6 +702,11 @@ class NewPredictionScreen(QWidget):
         )
         self.endpoint_note.setObjectName("probabilityEndpointNote")
         self.endpoint_note.setWordWrap(True)
+        apply_message_role(
+            self.endpoint_note,
+            StatusTone.WARNING,
+            accessible_name="Absolute-certainty forecast note",
+        )
 
         binary_fields_layout.addWidget(probability_label)
         binary_fields_layout.addWidget(self.probability_input)
@@ -755,11 +776,12 @@ class NewPredictionScreen(QWidget):
         numeric_shortcuts.setObjectName("numericConfidenceShortcuts")
         numeric_shortcuts_layout = QHBoxLayout(numeric_shortcuts)
         numeric_shortcuts_layout.setContentsMargins(0, 0, 0, 0)
-        numeric_shortcuts_layout.setSpacing(6)
+        numeric_shortcuts_layout.setSpacing(int(Spacing.COMPACT))
         for confidence in (50, 80, 90, 95):
             shortcut = QPushButton(f"{confidence}%", numeric_shortcuts)
             shortcut.setObjectName(f"numericConfidenceShortcut{confidence}")
             shortcut.setAccessibleName(f"Set confidence to {confidence}%")
+            apply_action_role(shortcut, ActionRole.QUIET)
             shortcut.clicked.connect(
                 lambda _checked=False, value=confidence: (
                     self.numeric_confidence_input.setValue(value)
@@ -786,11 +808,18 @@ class NewPredictionScreen(QWidget):
         self.more_details.setObjectName("newPredictionMoreDetailsGroup")
         self.more_details.setCheckable(True)
         self.more_details.setChecked(False)
+        apply_surface_role(self.more_details, SurfaceRole.RAISED)
 
         self.more_details_content = QWidget(self.more_details)
         self.more_details_content.setObjectName("newPredictionMoreDetailsContent")
         more_details_layout = QVBoxLayout(self.more_details_content)
-        more_details_layout.setContentsMargins(4, 8, 4, 4)
+        more_details_layout.setContentsMargins(
+            int(Spacing.CONTROL),
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+            int(Spacing.CONTROL),
+        )
+        more_details_layout.setSpacing(int(Spacing.CONTROL))
 
         rationale_label = QLabel(
             "Initial rationale (optional)", self.more_details_content
@@ -882,27 +911,41 @@ class NewPredictionScreen(QWidget):
         self.form_error.setTextFormat(Qt.TextFormat.PlainText)
         self.form_error.setWordWrap(True)
         self.form_error.setHidden(True)
+        apply_message_role(
+            self.form_error,
+            StatusTone.ERROR,
+            accessible_name="Prediction form error",
+        )
 
         self.create_button = QPushButton("Create Prediction", self)
         self.create_button.setObjectName("createPredictionButton")
         self.create_button.setAccessibleName("Create prediction")
+        apply_action_role(self.create_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.create_button, LucideIcon.CIRCLE_PLUS)
 
         form_content = QWidget(self)
         form_content.setObjectName("newPredictionFormContent")
+        apply_surface_role(form_content, SurfaceRole.CANVAS)
         layout = QVBoxLayout(form_content)
+        layout.setContentsMargins(
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+        )
+        layout.setSpacing(int(Spacing.CONTROL))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(title)
-        layout.addSpacing(18)
+        layout.addSpacing(int(Spacing.SECTION))
         layout.addWidget(question_label)
         layout.addWidget(self.question_input)
-        layout.addSpacing(14)
+        layout.addSpacing(int(Spacing.ORDINARY))
         layout.addWidget(prediction_type_label)
         layout.addWidget(self.prediction_type_input)
-        layout.addSpacing(10)
+        layout.addSpacing(int(Spacing.CONTROL))
         layout.addWidget(self.binary_forecast_fields)
         layout.addWidget(self.numeric_forecast_fields)
-        layout.addSpacing(10)
+        layout.addSpacing(int(Spacing.CONTROL))
         layout.addWidget(self.more_details)
         layout.addWidget(self.form_error)
         layout.addWidget(self.create_button, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1036,9 +1079,7 @@ class NewPredictionScreen(QWidget):
 
     @staticmethod
     def _make_primary_label(label: QLabel) -> None:
-        font = QFont(label.font())
-        font.setBold(True)
-        label.setFont(font)
+        apply_text_role(label, TextRole.LABEL)
 
     def _update_endpoint_note(self, probability: int) -> None:
         self.endpoint_note.setHidden(
@@ -1118,6 +1159,8 @@ class NumericPredictionDetailScreen(QWidget):
         self.status = QLabel("", self.detail_content)
         self.status.setObjectName("numericPredictionStatus")
         self.status.setTextFormat(Qt.TextFormat.PlainText)
+        self.status.setAccessibleName("Prediction status")
+        apply_badge_role(self.status)
 
         forecast_label = QLabel("Current Forecast", self.detail_content)
         forecast_label.setObjectName("numericCurrentForecastLabel")
@@ -1210,6 +1253,7 @@ class NumericPredictionDetailScreen(QWidget):
         apply_lucide_icon(self.mark_invalid_button, LucideIcon.BAN)
         self.delete_button = QPushButton("Delete", actions)
         self.delete_button.setObjectName("deleteNumericPredictionButton")
+        apply_action_role(self.delete_button, ActionRole.DESTRUCTIVE)
         apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
         actions_layout.addWidget(self.revise_forecast_button)
         actions_layout.addWidget(self.add_journal_entry_button)
@@ -3573,9 +3617,7 @@ class ForecastReviewDialog(QDialog):
 
         title = QLabel(action_text, self)
         title.setObjectName("forecastReviewTitle")
-        title_font = QFont(title.font())
-        title_font.setBold(True)
-        title.setFont(title_font)
+        apply_text_role(title, TextRole.SECTION_TITLE)
         explanation = QLabel(
             "Record that you deliberately reconsidered this forecast and chose to "
             "keep it unchanged.",
@@ -3584,10 +3626,13 @@ class ForecastReviewDialog(QDialog):
         explanation.setObjectName("forecastReviewExplanation")
         explanation.setTextFormat(Qt.TextFormat.PlainText)
         explanation.setWordWrap(True)
+        apply_text_role(explanation, TextRole.SECONDARY)
         context = QLabel(context_text, self)
         context.setObjectName("forecastReviewContext")
         context.setTextFormat(Qt.TextFormat.PlainText)
         context.setWordWrap(True)
+        apply_text_role(context, TextRole.FORECAST)
+        apply_surface_role(context, SurfaceRole.SELECTED)
 
         note_label = QLabel("Review note (optional)", self)
         self.note_input = QPlainTextEdit(self)
@@ -3604,6 +3649,11 @@ class ForecastReviewDialog(QDialog):
         self.form_error.setTextFormat(Qt.TextFormat.PlainText)
         self.form_error.setWordWrap(True)
         self.form_error.setHidden(True)
+        apply_message_role(
+            self.form_error,
+            StatusTone.ERROR,
+            accessible_name="Forecast Review error",
+        )
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel,
@@ -3613,13 +3663,17 @@ class ForecastReviewDialog(QDialog):
         save.setObjectName("saveForecastReviewButton")
         save.setText("Save Review")
         save.setDefault(True)
+        apply_action_role(save, ActionRole.PRIMARY)
         apply_lucide_icon(save, LucideIcon.SAVE)
+        cancel = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        cancel.setObjectName("cancelForecastReviewButton")
+        apply_action_role(cancel, ActionRole.SECONDARY)
 
         layout = QVBoxLayout(self)
         layout.addWidget(title)
         layout.addWidget(explanation)
         layout.addWidget(context)
-        layout.addSpacing(8)
+        layout.addSpacing(int(Spacing.CONTROL))
         layout.addWidget(note_label)
         layout.addWidget(self.note_input, 1)
         layout.addWidget(self.form_error)
@@ -4235,6 +4289,7 @@ class PredictionDetailScreen(QWidget):
         self.status = QLabel("", self.detail_content)
         self.status.setObjectName("predictionDetailStatus")
         self.status.setAccessibleName("Prediction status")
+        apply_badge_role(self.status)
 
         self.tags = QLabel("", self.detail_content)
         self.tags.setObjectName("predictionDetailTags")
@@ -4293,6 +4348,7 @@ class PredictionDetailScreen(QWidget):
         action_layout.addWidget(self.mark_invalid_button)
         self.delete_button = QPushButton("Delete", action_row)
         self.delete_button.setObjectName("deletePredictionButton")
+        apply_action_role(self.delete_button, ActionRole.DESTRUCTIVE)
         apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
         self.delete_button.clicked.connect(self.delete_prediction)
         action_layout.addWidget(self.delete_button)
@@ -5367,20 +5423,15 @@ def _detail_text_section(
 def _focus_search_widget(scroll_area: QScrollArea, target: QWidget) -> None:
     """Scroll to one visible context and apply a temporary palette-safe cue."""
 
-    original_style = target.styleSheet()
     target.setProperty("searchMatchEmphasis", True)
-    target.setStyleSheet(
-        f"{original_style}\n"
-        "border: 2px solid palette(highlight); "
-        "background-color: palette(alternate-base);"
-    )
+    refresh_widget_style(target)
     QTimer.singleShot(0, lambda: scroll_area.ensureWidgetVisible(target, 24, 24))
     timer = QTimer(target)
     timer.setSingleShot(True)
 
     def clear_emphasis() -> None:
-        target.setStyleSheet(original_style)
         target.setProperty("searchMatchEmphasis", False)
+        refresh_widget_style(target)
         timer.deleteLater()
 
     timer.timeout.connect(clear_emphasis)

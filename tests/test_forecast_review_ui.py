@@ -9,6 +9,16 @@ from reckonsolve.data.database import Database
 from reckonsolve.ui.main_window import MainWindow
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
+from reckonsolve.ui.visual_system import (
+    ACTION_ROLE_PROPERTY,
+    MESSAGE_TONE_PROPERTY,
+    SURFACE_ROLE_PROPERTY,
+    TEXT_ROLE_PROPERTY,
+    ActionRole,
+    StatusTone,
+    SurfaceRole,
+    TextRole,
+)
 
 
 @dataclass(frozen=True)
@@ -38,6 +48,19 @@ def test_binary_review_dialog_cancel_save_timeline_and_chart(qtbot, tmp_path) ->
     dialog = window.findChild(QDialog, "forecastReviewDialog")
     assert dialog is not None
     qtbot.waitUntil(dialog.isVisible)
+    title = dialog.findChild(QLabel, "forecastReviewTitle")
+    context = dialog.findChild(QLabel, "forecastReviewContext")
+    error = dialog.findChild(QLabel, "forecastReviewError")
+    save = dialog.findChild(QPushButton, "saveForecastReviewButton")
+    assert title is not None
+    assert context is not None
+    assert error is not None
+    assert save is not None
+    assert title.property(TEXT_ROLE_PROPERTY) == TextRole.SECTION_TITLE.value
+    assert context.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.SELECTED.value
+    assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
+    assert save.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
+    assert save.accessibleName() == "Save Review"
     cancel = dialog.findChild(QPushButton, "cancelButton")
     if cancel is None:
         cancel = dialog.findChildren(QPushButton)[-1]

@@ -2565,14 +2565,16 @@ Acceptance demonstration:
 - Apply the shared page frame and control roles to Predictions without changing the v0.5 archive/search query boundary.
 - Redesign result rows around primary Question, type-appropriate forecast or terminal summary, lifecycle, tags, date context, best source, snippet, and additional matches while retaining one row per Prediction.
 - Make ordinary row-body click and keyboard Enter open Detail while preserving a distinct nonautomatic selection model and no essential hover-only control.
-- Make Saved View, query, word mode, history, structured filter, date, sort, clear, suggestion, repair, and tag-management controls wrap predictably at supported widths.
+- Recompose the archive controls into clear groups in reading order: Saved View management; the primary search query with word mode and history scope; common status, type, attention, sort, apply, and clear controls; and the more detailed tag and date filters. Related labels and actions must remain visually associated rather than forming one undifferentiated control strip.
+- Give the multi-select tag control enough height and width to show a useful set of choices at ordinary window sizes. No menu, search field, date input, or action may be compressed to an illegible or misleading box merely to keep every control on one row.
+- Make Saved View, query, word mode, history, structured filter, date, sort, clear, suggestion, repair, and tag-management controls stack or wrap predictably at supported widths while preserving logical keyboard order.
 - Keep the search/filter frame fixed while populated, zero-result, loading, suggestion, retained-warning, and repairable-error content changes below it.
 - Apply the same dialog, panel, action-role, selection, focus, and persistent-status grammar to Saved View and tag-management workflows.
 - Re-run the full v0.5 relevance corpus and combined-filter tests to prove that no visual or activation change alters matching, ranking, source provenance, dynamic membership, tag transactions, or historical navigation.
 
 Acceptance demonstration:
 
-> At both minimum and ordinary window sizes, move between blank archive, matching search, zero-result search, suggestion, Saved View, and tag-management states -> controls remain stable and usable, no row begins selected, mouse and keyboard activation agree, and results remain semantically identical to v0.5.
+> At both minimum and ordinary window sizes, move between blank archive, matching search, zero-result search, suggestion, Saved View, and tag-management states -> the grouped controls remain stable and readable, the tag picker shows useful choices rather than a compressed strip, no row begins selected, mouse and keyboard activation agree, and results remain semantically identical to v0.5.
 
 #### Milestone 44: Analytics, keyboard, accessibility, and responsive completion
 

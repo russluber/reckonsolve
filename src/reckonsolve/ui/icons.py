@@ -12,6 +12,11 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
 from reckonsolve.ui.assets import icons as icon_resources
+from reckonsolve.ui.visual_system import (
+    ACTION_ROLE_PROPERTY,
+    ActionRole,
+    semantic_colors,
+)
 
 _RESOURCE_PACKAGE = "reckonsolve.ui.assets.icons"
 _RENDER_SIZES = (16, 20, 24, 32, 40, 48)
@@ -48,19 +53,12 @@ class LucideResourceError(RuntimeError):
 def lucide_icon(name: LucideIcon, palette: QPalette) -> QIcon:
     """Return one multi-size icon colored for normal, disabled, and selected UI."""
 
+    colors = semantic_colors(palette)
     return _cached_icon(
         name.value,
         _palette_color(palette, QPalette.ColorGroup.Normal, QPalette.ColorRole.Text),
-        _palette_color(
-            palette,
-            QPalette.ColorGroup.Disabled,
-            QPalette.ColorRole.Text,
-        ),
-        _palette_color(
-            palette,
-            QPalette.ColorGroup.Normal,
-            QPalette.ColorRole.HighlightedText,
-        ),
+        colors.disabled_text,
+        colors.on_accent_soft,
     )
 
 
@@ -74,7 +72,7 @@ def apply_lucide_icon(
 
     button.setProperty(_ICON_NAME_PROPERTY, name.value)
     button.setProperty(f"{_ICON_NAME_PROPERTY}Size", size)
-    button.setIcon(lucide_icon(name, button.palette()))
+    button.setIcon(_button_icon(name, button))
     button.setIconSize(QSize(size, size))
     if not button.accessibleName() and button.text():
         button.setAccessibleName(button.text().replace("&", ""))
@@ -154,6 +152,28 @@ def _render_svg(svg: str, color: QColor, size: int) -> QPixmap:
     finally:
         painter.end()
     return pixmap
+
+
+def _button_icon(name: LucideIcon, button: QAbstractButton) -> QIcon:
+    palette = button.palette()
+    colors = semantic_colors(button.window().palette())
+    action_role = button.property(ACTION_ROLE_PROPERTY)
+    if action_role == ActionRole.PRIMARY.value:
+        normal_color = colors.on_accent
+    elif action_role == ActionRole.DESTRUCTIVE.value:
+        normal_color = colors.destructive
+    else:
+        normal_color = _palette_color(
+            palette,
+            QPalette.ColorGroup.Normal,
+            QPalette.ColorRole.Text,
+        )
+    return _cached_icon(
+        name.value,
+        normal_color,
+        colors.disabled_text,
+        colors.on_accent_soft,
+    )
 
 
 def _palette_color(

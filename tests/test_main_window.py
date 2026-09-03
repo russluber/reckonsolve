@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QDate, Qt, QTimer
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -97,6 +98,15 @@ from reckonsolve.ui.analytics_charts import (
 )
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.tag_manager import TagManagerDialog
+from reckonsolve.ui.visual_system import (
+    ACTION_ROLE_PROPERTY,
+    MESSAGE_TONE_PROPERTY,
+    TEXT_ROLE_PROPERTY,
+    ActionRole,
+    StatusTone,
+    TextRole,
+    semantic_colors,
+)
 
 EXPECTED_SCREEN_NAMES = (
     "Dashboard",
@@ -1767,6 +1777,60 @@ def test_main_window_has_expected_navigation(window: MainWindow) -> None:
         not navigation.item(index).icon().isNull()
         for index in range(navigation.count())
     )
+
+
+def test_main_window_applies_foundational_semantic_roles(window: MainWindow) -> None:
+    title = _required_child(window, QLabel, "newPredictionScreenTitle")
+    create = _required_child(window, QPushButton, "createPredictionButton")
+    error = _required_child(window, QLabel, "predictionFormError")
+    delete = _required_child(window, QPushButton, "deletePredictionButton")
+
+    assert title.property(TEXT_ROLE_PROPERTY) == TextRole.PAGE_TITLE.value
+    assert create.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
+    assert create.accessibleName() == "Create prediction"
+    assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
+    assert error.accessibleName() == "Prediction form error"
+    assert delete.property(ACTION_ROLE_PROPERTY) == ActionRole.DESTRUCTIVE.value
+
+
+def test_palette_change_refreshes_semantic_colors_and_navigation_icons(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    navigation = _required_child(window, QListWidget, "primaryNavigation")
+    light = QPalette(window.palette())
+    dark = QPalette(window.palette())
+    for palette, background, base, text, mid in (
+        (light, "#f4f5f4", "#ffffff", "#1c211f", "#c7ceca"),
+        (dark, "#171a18", "#202421", "#edf3ef", "#505852"),
+    ):
+        for role, value in (
+            (QPalette.ColorRole.Window, background),
+            (QPalette.ColorRole.Base, base),
+            (QPalette.ColorRole.AlternateBase, background),
+            (QPalette.ColorRole.WindowText, text),
+            (QPalette.ColorRole.Text, text),
+            (QPalette.ColorRole.ButtonText, text),
+            (QPalette.ColorRole.HighlightedText, text),
+            (QPalette.ColorRole.PlaceholderText, text),
+            (QPalette.ColorRole.Mid, mid),
+        ):
+            palette.setColor(role, QColor(value))
+
+    window.setPalette(light)
+    light_colors = semantic_colors(light)
+    qtbot.waitUntil(lambda: light_colors.accent in window.styleSheet())
+    light_icon_key = navigation.item(0).icon().cacheKey()
+
+    window.setPalette(dark)
+    dark_colors = semantic_colors(dark)
+    qtbot.waitUntil(lambda: dark_colors.accent in window.styleSheet())
+    dark_icon_key = navigation.item(0).icon().cacheKey()
+
+    assert light_colors.is_dark is False
+    assert dark_colors.is_dark is True
+    assert light_colors.accent != dark_colors.accent
+    assert light_icon_key != dark_icon_key
 
 
 def test_high_value_actions_keep_text_icons_and_accessible_names(
