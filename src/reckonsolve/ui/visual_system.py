@@ -259,8 +259,14 @@ QDialog {{
 
 QScrollArea#dashboardScrollArea,
 QScrollArea#settingsScrollArea,
+QScrollArea#newPredictionScrollArea,
+QScrollArea#predictionDetailScrollArea,
+QScrollArea#numericPredictionDetailScrollArea,
 QScrollArea#dashboardScrollArea > QWidget > QWidget,
-QScrollArea#settingsScrollArea > QWidget > QWidget {{
+QScrollArea#settingsScrollArea > QWidget > QWidget,
+QScrollArea#newPredictionScrollArea > QWidget > QWidget,
+QScrollArea#predictionDetailScrollArea > QWidget > QWidget,
+QScrollArea#numericPredictionDetailScrollArea > QWidget > QWidget {{
     background-color: transparent;
     border: none;
 }}
@@ -288,7 +294,8 @@ QFrame[reckonsolveSurfaceRole="canvas"] {{
     border: none;
 }}
 QWidget[reckonsolveSurfaceRole="base"],
-QFrame[reckonsolveSurfaceRole="base"] {{
+QFrame[reckonsolveSurfaceRole="base"],
+QGroupBox[reckonsolveSurfaceRole="base"] {{
     background-color: {color.surface};
     border: 1px solid {color.border};
     border-radius: {panel_radius}px;

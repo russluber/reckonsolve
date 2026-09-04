@@ -2246,6 +2246,8 @@ v0.5 is not complete unless all of the following are true:
 
 v0.6 is a desktop presentation release over the completed v0.5 product. It gives Reckonsolve a coherent visual language, corrects the information hierarchy of the application shell, improves responsiveness and keyboard access, and makes routine feedback less interruptive. It does not add a forecasting workflow merely to justify a new version number.
 
+Milestone 42A is one narrow behavior-parity correction promoted after the type-aware Detail redesign exposed an existing omission: Numeric Predictions can display but cannot yet edit their type-neutral metadata. It applies the established Binary metadata-editing contract to Numeric Predictions without introducing a new field, forecast meaning, historical concept, or lifecycle state.
+
 The governing objective is:
 
 > Make the existing forecasting journal feel calm, deliberate, responsive, and internally consistent without changing what any saved forecasting fact means.
@@ -2266,7 +2268,8 @@ v0.6 includes:
 - responsive layouts that remain usable at the supported minimum window size and under common Windows display scaling;
 - safe restoration of window geometry, maximized state, and preferred sidebar mode as noncanonical presentation preferences;
 - documented keyboard shortcuts, deliberate tab order, visible keyboard focus, accessible names, and no essential hover-only interaction;
-- type-aware visual refinement across Dashboard, New Prediction, Prediction Detail, Predictions, Analytics, Settings, tag management, and existing dialogs; and
+- type-aware visual refinement across Dashboard, New Prediction, Prediction Detail, Predictions, Analytics, Settings, tag management, and existing dialogs;
+- type-aware **Edit Details** parity for Binary and Numeric Predictions while keeping Numeric unit and decimal precision immutable; and
 - migration-free backup, CLI, search, frozen-build, and release hardening proving that presentation changes leave canonical behavior untouched.
 
 ### 34.2 Product and visual principles
@@ -2413,6 +2416,12 @@ Metadata, terminal summary, scorecard, history chart, timeline, Definition histo
 
 Binary and Numeric Detail must share the same visual grammar while retaining type-appropriate values and operations. User-authored rationale, Journal, Review, terminal, Postmortem, and correction text remains plain, selectable, wrap-safe, and historically explicit.
 
+Milestone 42A adds **Edit Details** to Numeric Detail with the same lifecycle availability and safety contract as the existing Binary action. The editable fields are Question, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags. Numeric unit and decimal precision remain immutable after creation, and interval bounds, median, confidence, and revision rationale remain ForecastRevision data rather than metadata edits.
+
+Question and Resolution Criteria changes receive the existing proposition-meaning warning. Forecast Deadline additions, changes, and removals receive the existing cutoff-and-Locked warning. A confirmed save that changes any protected field appends the same complete immutable Definition snapshot used by Binary editing; ordinary Background, Expected Resolution, and tag changes do not fabricate Definition history. Cancellation and effective no-ops write nothing. Every save carries and transactionally rechecks the Numeric Prediction's metadata version so a stale dialog cannot overwrite a newer GUI or CLI change.
+
+The metadata row, tag associations, metadata version, Definition snapshot when required, and derived search documents update atomically. Editing metadata creates no Numeric ForecastRevision, Journal entry, Review, terminal record, scoring observation, or freshness reset. A Forecast Deadline edit may change the subsequently derived Open/Locked display exactly as it already does for Binary. The action remains desktop-only; v0.6 does not add CLI metadata editing.
+
 #### Predictions and search
 
 Predictions retains the complete v0.5 search, filter, sort, Saved View, tag-management, failure-retention, and matched-context navigation contract. v0.6 changes presentation only.
@@ -2501,13 +2510,13 @@ Qt palette roles, font metrics, style hints, layouts, and local Lucide resources
 
 Presentation preference storage is opened and tested independently of the canonical SQLite data path. Failure to read or write a presentation preference falls back to safe defaults and must not prevent database startup or a forecasting operation. Automated tests isolate presentation settings just as they isolate databases and must never read or modify the user's real settings.
 
-The paired stable and development CLI commands retain their completed v0.5 behavior and output except for the package version. No CLI command, option, prompt, or persistence rule is added for visual preferences. Simultaneous reads and sequential GUI/CLI writes retain their existing contract.
+The paired stable and development CLI commands retain their completed v0.5 behavior and output except for the package version. No CLI command, option, prompt, or persistence rule is added for visual preferences or metadata editing. Simultaneous reads and sequential GUI/CLI writes retain their existing contract; a CLI-side tag or other metadata-context change must still cause an already-open Numeric Edit Details dialog to fail safely as stale.
 
 Backup remains a complete schema-version-15 canonical recovery artifact. CSV remains format version 3. Neither artifact contains window geometry, sidebar mode, transient messages, or other v0.6 presentation state.
 
 ### 34.11 Implementation milestones
 
-Milestones 39 through 45 implement v0.6.0. Work remains one coherent vertical slice at a time, and each milestone must leave the application usable rather than applying half of a visual contract across unrelated screens.
+Milestones 39 through 45, including the separately authorized Milestone 42A, implement v0.6.0. Work remains one coherent vertical slice at a time, and each milestone must leave the application usable rather than applying half of a visual contract across unrelated screens.
 
 #### Milestone 39: Central visual-system foundation
 
@@ -2559,6 +2568,22 @@ Acceptance demonstration:
 Acceptance demonstration:
 
 > Create one Binary and one Numeric Prediction, revise and Journal each, resolve one, and open the other from search -> every value and action remains type-correct, the hierarchy is consistent, long text wraps, history remains honest, and no visual control bypasses existing validation or confirmation.
+
+#### Milestone 42A: Numeric Edit Details parity
+
+- Generalize the existing metadata-edit operation and repository boundary to return and update the correct Binary or Numeric Detail type without direct UI SQL or duplicated domain rules.
+- Add **Edit Details** to Numeric Detail in the same secondary action position used by Binary Detail and make it available wherever the existing Binary metadata action is available.
+- Reuse one type-aware dialog contract for Question, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags while displaying Numeric unit and decimal precision as immutable context rather than editable controls.
+- Preserve the existing field-specific warnings: proposition-meaning confirmation for Question or Resolution Criteria and cutoff/Locked confirmation for Forecast Deadline.
+- Atomically update canonical metadata, tag relationships, metadata version, any required Definition snapshot, and affected derived search documents; cancellation, no-op validation, or failure must update none of them.
+- Preserve all Numeric ForecastRevisions, Journal entries and anchors, Reviews, resolution/invalidation history, scoring-revision capture, analytics observations, and Needs Attention freshness.
+- Reject stale metadata context across sequential GUI and CLI activity rather than restoring older tags or overwriting a newer definition.
+- Cover Open, Locked, Resolved, and Invalid Numeric Predictions; absent and populated optional fields; date addition/change/removal; protected and ordinary edits; cancel; no-op; confirmation cancellation; validation failure; concurrent change; search refresh; Definition history; restart; and exact preservation of immutable unit and precision.
+- Require no schema migration, new export format, new CLI command, or new production dependency.
+
+Acceptance demonstration:
+
+> Open a Numeric Prediction -> Edit Details -> change ordinary metadata and confirm it refreshes without new forecast history -> change the Question or Forecast Deadline and accept the tailored warning -> Definition history records the protected change -> reopen after restart with the same unit, precision, interval history, and edited metadata -> attempt a stale save and receive an inline rejection without overwriting the newer state.
 
 #### Milestone 43: Predictions, search, Saved Views, and tag-management refinement
 
@@ -2630,6 +2655,7 @@ v0.6 is not complete unless all of the following are true:
 28. Automated tests never read or write the user's real canonical database or real presentation settings.
 29. The private frozen build contains and renders every required local style and icon resource after relocation.
 30. The complete v0.6 application remains offline, local-first, single-user, and proportionate to a personal forecasting journal.
+31. Numeric Edit Details updates exactly the established type-neutral metadata with Binary-equivalent confirmation, Definition-history, search, tag, and concurrency behavior while unit, decimal precision, forecast history, freshness, terminal facts, and scoring remain unchanged.
 
 ### 34.13 Explicitly outside v0.6
 

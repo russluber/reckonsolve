@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QLabel,
     QLineEdit,
@@ -107,6 +108,7 @@ from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.tag_manager import TagManagerDialog
 from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
+    BADGE_TONE_PROPERTY,
     MESSAGE_TONE_PROPERTY,
     NAVIGATION_ACTIVE_PROPERTY,
     NAVIGATION_COMPACT_PROPERTY,
@@ -114,6 +116,7 @@ from reckonsolve.ui.visual_system import (
     TEXT_ROLE_PROPERTY,
     ActionRole,
     Radius,
+    Spacing,
     StatusTone,
     SurfaceRole,
     TextRole,
@@ -3988,6 +3991,152 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
     assert more_details_content.isHidden()
 
 
+def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
+    window: MainWindow,
+) -> None:
+    window.navigate_to("New Prediction")
+
+    title = _required_child(window, QLabel, "newPredictionScreenTitle")
+    supporting = _required_child(
+        window,
+        QLabel,
+        "newPredictionScreenSupportingText",
+    )
+    panel = _required_child(window, ContentPanel, "newPredictionForecastPanel")
+    create = _required_child(window, QPushButton, "createPredictionButton")
+    error = _required_child(window, QLabel, "predictionFormError")
+
+    assert title.property(TEXT_ROLE_PROPERTY) == TextRole.PAGE_TITLE.value
+    assert supporting.property(TEXT_ROLE_PROPERTY) == TextRole.SECONDARY.value
+    assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
+    assert panel.supporting_label.text() == (
+        "Binary forecasts need only a Question and Probability."
+    )
+    assert create.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
+    assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
+
+    prediction_type = _required_child(window, QComboBox, "predictionTypeInput")
+    prediction_type.setCurrentIndex(
+        prediction_type.findData(PredictionType.NUMERIC.value)
+    )
+
+    assert panel.supporting_label.text() == (
+        "Numeric forecasts need a Question, unit, precision, interval, median, "
+        "and confidence."
+    )
+
+
+def test_m42_binary_detail_separates_identity_common_and_lifecycle_actions(
+    qtbot: QtBot,
+) -> None:
+    prediction = FakePrediction(
+        42,
+        "Will this long question remain fully legible in the refreshed detail view?",
+        65,
+        tags=("presentation", "long-context"),
+    )
+    window = MainWindow(FakePredictionOperations(prediction))
+    qtbot.addWidget(window)
+    window.resize(800, 640)
+    window.show()
+    window.navigate_to("Prediction Detail")
+    qtbot.waitUntil(window.isVisible)
+
+    question = _required_child(window, QLabel, "predictionDetailQuestion")
+    forecast_type = _required_child(window, QLabel, "predictionDetailType")
+    status = _required_child(window, QLabel, "predictionDetailStatus")
+    summary = _required_child(window, QFrame, "predictionDetailSummaryPanel")
+    action_panel = _required_child(window, QFrame, "predictionDetailActionPanel")
+    action_help = _required_child(window, QLabel, "predictionDetailActionHelp")
+    action_container = _required_child(
+        window,
+        QWidget,
+        "futurePredictionActions",
+    )
+    action_grid = action_container.layout()
+    assert isinstance(action_grid, QGridLayout)
+
+    assert question.text() == prediction.question
+    assert question.property(TEXT_ROLE_PROPERTY) == TextRole.PAGE_TITLE.value
+    assert (
+        question.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
+    )
+    assert forecast_type.text() == "BINARY"
+    assert status.property(BADGE_TONE_PROPERTY) == StatusTone.ACCENT.value
+    assert summary.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
+    assert action_panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
+    assert window.findChild(QLabel, "predictionDetailLifecycleHeading") is None
+    assert action_help.property(TEXT_ROLE_PROPERTY) == TextRole.LABEL.value
+    assert action_help.contentsMargins().bottom() == int(Spacing.CONTROL)
+    assert (
+        _required_child(window, QPushButton, "reviseForecastButton").property(
+            ACTION_ROLE_PROPERTY
+        )
+        == ActionRole.PRIMARY.value
+    )
+    assert (
+        _required_child(window, QPushButton, "deletePredictionButton").property(
+            ACTION_ROLE_PROPERTY
+        )
+        == ActionRole.DESTRUCTIVE.value
+    )
+    edit = _required_child(window, QPushButton, "editPredictionDetailsButton")
+    invalid = _required_child(window, QPushButton, "markInvalidButton")
+    delete = _required_child(window, QPushButton, "deletePredictionButton")
+    journal = _required_child(window, QPushButton, "addJournalEntryButton")
+    revise = _required_child(window, QPushButton, "reviseForecastButton")
+    review = _required_child(window, QPushButton, "reviewForecastButton")
+    resolve = _required_child(window, QPushButton, "resolvePredictionButton")
+    assert edit.property(ACTION_ROLE_PROPERTY) == ActionRole.SECONDARY.value
+    assert invalid.property(ACTION_ROLE_PROPERTY) == ActionRole.SECONDARY.value
+    assert action_grid.getItemPosition(action_grid.indexOf(journal)) == (0, 1, 1, 1)
+    assert action_grid.getItemPosition(action_grid.indexOf(revise)) == (0, 2, 1, 1)
+    assert action_grid.getItemPosition(action_grid.indexOf(review)) == (0, 3, 1, 1)
+    assert action_grid.getItemPosition(action_grid.indexOf(edit)) == (1, 1, 1, 1)
+    assert action_grid.getItemPosition(action_grid.indexOf(resolve)) == (1, 2, 1, 1)
+    assert action_grid.getItemPosition(action_grid.indexOf(invalid)) == (1, 3, 1, 1)
+    assert action_grid.getItemPosition(action_grid.indexOf(delete)) == (2, 2, 1, 1)
+    action_buttons = (
+        revise,
+        journal,
+        review,
+        edit,
+        resolve,
+        invalid,
+        delete,
+    )
+    assert all(button.width() <= 210 for button in action_buttons)
+    assert len({button.width() for button in action_buttons}) == 1
+
+
+def test_m42_dialogs_share_heading_context_error_and_action_roles(
+    qtbot: QtBot,
+) -> None:
+    window = MainWindow(
+        FakePredictionOperations(FakePrediction(7, "Will this dialog stay clear?", 60))
+    )
+    qtbot.addWidget(window)
+    dialog = _open_revision_dialog(qtbot, window)
+
+    title = _required_child(dialog, QLabel, "reviseForecastTitle")
+    context = _required_child(dialog, QLabel, "reviseCurrentProbability")
+    error = _required_child(dialog, QLabel, "reviseForecastError")
+    save = _required_child(dialog, QPushButton, "saveForecastRevisionButton")
+    cancel = _required_child(dialog, QPushButton, "cancelForecastRevisionButton")
+
+    assert title.property(TEXT_ROLE_PROPERTY) == TextRole.SECTION_TITLE.value
+    assert context.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.SELECTED.value
+    assert context.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
+    assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
+    assert save.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
+    assert cancel.property(ACTION_ROLE_PROPERTY) == ActionRole.SECONDARY.value
+    assert dialog.focusWidget() is _required_child(
+        dialog,
+        QSpinBox,
+        "revisionProbabilityInput",
+    )
+
+
 def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detail(
     qtbot: QtBot,
     window: MainWindow,
@@ -4080,6 +4229,32 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
     )
     assert _required_child(window, QLabel, "numericCurrentMedian").text() == (
         "Median estimate: 7.5 days"
+    )
+    numeric_actions = _required_child(
+        window,
+        QWidget,
+        "numericPredictionActions",
+    ).layout()
+    assert isinstance(numeric_actions, QGridLayout)
+    numeric_delete = _required_child(
+        window,
+        QPushButton,
+        "deleteNumericPredictionButton",
+    )
+    assert numeric_actions.getItemPosition(numeric_actions.indexOf(numeric_delete)) == (
+        2,
+        2,
+        1,
+        1,
+    )
+    assert window.findChild(QLabel, "numericPredictionLifecycleHeading") is None
+    assert (
+        _required_child(
+            window,
+            QPushButton,
+            "markNumericPredictionInvalidButton",
+        ).property(ACTION_ROLE_PROPERTY)
+        == ActionRole.SECONDARY.value
     )
     assert _required_child(window, QLabel, "numericPredictionStatus").text() == "OPEN"
     assert _required_child(window, QLabel, "numericForecastDeadlineValue").text() == (

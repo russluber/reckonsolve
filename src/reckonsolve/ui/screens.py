@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
     QVBoxLayout,
@@ -60,6 +62,12 @@ from reckonsolve.domain.predictions import (
     ResolutionCorrection,
 )
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
+from reckonsolve.ui.components import (
+    ContentPanel,
+    EmptyStateLabel,
+    PageHeader,
+    StatusBadge,
+)
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
@@ -634,10 +642,16 @@ class NewPredictionScreen(QWidget):
         apply_surface_role(self, SurfaceRole.CANVAS)
         self._operations = operations
 
-        title = QLabel("New Prediction", self)
-        title.setObjectName("newPredictionScreenTitle")
-        title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        apply_text_role(title, TextRole.PAGE_TITLE)
+        header = PageHeader(
+            "New Prediction",
+            "Capture the question first, then state the forecast you believe now.",
+            title_object_name="newPredictionScreenTitle",
+            supporting_object_name="newPredictionScreenSupportingText",
+            parent=self,
+        )
+        header.title_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
 
         question_label = QLabel("Question", self)
         question_label.setObjectName("questionLabel")
@@ -730,6 +744,7 @@ class NewPredictionScreen(QWidget):
 
         precision_label = QLabel("Decimal places", self.numeric_forecast_fields)
         precision_label.setObjectName("numericPrecisionLabel")
+        self._make_primary_label(precision_label)
         self.numeric_precision_input = QSpinBox(self.numeric_forecast_fields)
         self.numeric_precision_input.setObjectName("numericPrecisionInput")
         self.numeric_precision_input.setAccessibleName("Numeric decimal places")
@@ -739,6 +754,7 @@ class NewPredictionScreen(QWidget):
 
         lower_label = QLabel("Lower bound", self.numeric_forecast_fields)
         lower_label.setObjectName("numericLowerBoundLabel")
+        self._make_primary_label(lower_label)
         self.numeric_lower_bound_input = QLineEdit(self.numeric_forecast_fields)
         self.numeric_lower_bound_input.setObjectName("numericLowerBoundInput")
         self.numeric_lower_bound_input.setAccessibleName("Numeric lower bound")
@@ -747,6 +763,7 @@ class NewPredictionScreen(QWidget):
 
         median_label = QLabel("Median estimate", self.numeric_forecast_fields)
         median_label.setObjectName("numericMedianEstimateLabel")
+        self._make_primary_label(median_label)
         self.numeric_median_estimate_input = QLineEdit(self.numeric_forecast_fields)
         self.numeric_median_estimate_input.setObjectName("numericMedianEstimateInput")
         self.numeric_median_estimate_input.setAccessibleName("Numeric median estimate")
@@ -755,6 +772,7 @@ class NewPredictionScreen(QWidget):
 
         upper_label = QLabel("Upper bound", self.numeric_forecast_fields)
         upper_label.setObjectName("numericUpperBoundLabel")
+        self._make_primary_label(upper_label)
         self.numeric_upper_bound_input = QLineEdit(self.numeric_forecast_fields)
         self.numeric_upper_bound_input.setObjectName("numericUpperBoundInput")
         self.numeric_upper_bound_input.setAccessibleName("Numeric upper bound")
@@ -763,6 +781,7 @@ class NewPredictionScreen(QWidget):
 
         confidence_label = QLabel("Confidence", self.numeric_forecast_fields)
         confidence_label.setObjectName("numericConfidenceLabel")
+        self._make_primary_label(confidence_label)
         self.numeric_confidence_input = QSpinBox(self.numeric_forecast_fields)
         self.numeric_confidence_input.setObjectName("numericConfidenceInput")
         self.numeric_confidence_input.setAccessibleName("Numeric interval confidence")
@@ -824,6 +843,7 @@ class NewPredictionScreen(QWidget):
         rationale_label = QLabel(
             "Initial rationale (optional)", self.more_details_content
         )
+        apply_text_role(rationale_label, TextRole.LABEL)
         self.rationale_input = QPlainTextEdit(self.more_details_content)
         self.rationale_input.setObjectName("initialRationaleInput")
         self.rationale_input.setAccessibleName("Initial rationale")
@@ -833,6 +853,7 @@ class NewPredictionScreen(QWidget):
         rationale_label.setBuddy(self.rationale_input)
 
         background_label = QLabel("Background (optional)", self.more_details_content)
+        apply_text_role(background_label, TextRole.LABEL)
         self.background_input = QPlainTextEdit(self.more_details_content)
         self.background_input.setObjectName("initialBackgroundInput")
         self.background_input.setAccessibleName("Background")
@@ -844,6 +865,7 @@ class NewPredictionScreen(QWidget):
             "Resolution Criteria (optional)",
             self.more_details_content,
         )
+        apply_text_role(criteria_label, TextRole.LABEL)
         self.resolution_criteria_input = QPlainTextEdit(self.more_details_content)
         self.resolution_criteria_input.setObjectName("initialResolutionCriteriaInput")
         self.resolution_criteria_input.setAccessibleName("Resolution criteria")
@@ -874,6 +896,7 @@ class NewPredictionScreen(QWidget):
             "Tags (optional, comma-separated)",
             self.more_details_content,
         )
+        apply_text_role(tags_label, TextRole.LABEL)
         self.tags_input = QLineEdit(self.more_details_content)
         self.tags_input.setObjectName("initialTagsInput")
         self.tags_input.setAccessibleName("Tags")
@@ -923,33 +946,53 @@ class NewPredictionScreen(QWidget):
         apply_action_role(self.create_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.create_button, LucideIcon.CIRCLE_PLUS)
 
+        self.forecast_panel = ContentPanel(
+            "Forecast",
+            "Binary forecasts need only a Question and Probability.",
+            parent=self,
+        )
+        self.forecast_panel.setObjectName("newPredictionForecastPanel")
+        core_layout = self.forecast_panel.body_layout
+        core_layout.addWidget(question_label)
+        core_layout.addWidget(self.question_input)
+        core_layout.addSpacing(int(Spacing.ORDINARY))
+        core_layout.addWidget(prediction_type_label)
+        core_layout.addWidget(self.prediction_type_input)
+        core_layout.addSpacing(int(Spacing.CONTROL))
+        core_layout.addWidget(self.binary_forecast_fields)
+        core_layout.addWidget(self.numeric_forecast_fields)
+
+        form_column = QWidget(self)
+        form_column.setObjectName("newPredictionFormColumn")
+        form_column.setMaximumWidth(980)
+        form_column.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        column_layout = QVBoxLayout(form_column)
+        column_layout.setContentsMargins(0, 0, 0, 0)
+        column_layout.setSpacing(int(Spacing.SECTION))
+        column_layout.addWidget(header)
+        column_layout.addWidget(self.forecast_panel)
+        column_layout.addWidget(self.more_details)
+        column_layout.addWidget(self.form_error)
+        column_layout.addWidget(
+            self.create_button,
+            alignment=Qt.AlignmentFlag.AlignLeft,
+        )
+        column_layout.addStretch()
+
         form_content = QWidget(self)
         form_content.setObjectName("newPredictionFormContent")
         apply_surface_role(form_content, SurfaceRole.CANVAS)
-        layout = QVBoxLayout(form_content)
+        layout = QHBoxLayout(form_content)
         layout.setContentsMargins(
             int(Spacing.PAGE),
             int(Spacing.PAGE),
             int(Spacing.PAGE),
             int(Spacing.PAGE),
         )
-        layout.setSpacing(int(Spacing.CONTROL))
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(title)
-        layout.addSpacing(int(Spacing.SECTION))
-        layout.addWidget(question_label)
-        layout.addWidget(self.question_input)
-        layout.addSpacing(int(Spacing.ORDINARY))
-        layout.addWidget(prediction_type_label)
-        layout.addWidget(self.prediction_type_input)
-        layout.addSpacing(int(Spacing.CONTROL))
-        layout.addWidget(self.binary_forecast_fields)
-        layout.addWidget(self.numeric_forecast_fields)
-        layout.addSpacing(int(Spacing.CONTROL))
-        layout.addWidget(self.more_details)
-        layout.addWidget(self.form_error)
-        layout.addWidget(self.create_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        layout.addStretch()
+        layout.addWidget(form_column, 1, Qt.AlignmentFlag.AlignTop)
 
         scroll_area = QScrollArea(self)
         scroll_area.setObjectName("newPredictionScrollArea")
@@ -1090,6 +1133,12 @@ class NewPredictionScreen(QWidget):
         is_numeric = self._is_numeric_type()
         self.binary_forecast_fields.setHidden(is_numeric)
         self.numeric_forecast_fields.setHidden(not is_numeric)
+        self.forecast_panel.supporting_label.setText(
+            "Numeric forecasts need a Question, unit, precision, interval, median, "
+            "and confidence."
+            if is_numeric
+            else "Binary forecasts need only a Question and Probability."
+        )
         self._update_endpoint_note(self.probability_input.value())
 
     def _is_numeric_type(self) -> bool:
@@ -1119,13 +1168,16 @@ class NumericPredictionDetailScreen(QWidget):
         self._resolution_history: NumericResolutionHistory | None = None
         self._invalidation_history: InvalidationHistory | None = None
 
-        title = QLabel("Prediction Detail", self)
-        title.setObjectName("numericPredictionDetailScreenTitle")
-        title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        header = PageHeader(
+            "Prediction Detail",
+            "Current belief, supporting context, and the complete preserved history.",
+            title_object_name="numericPredictionDetailScreenTitle",
+            parent=self,
+        )
 
-        self.empty_state = QLabel(
+        self.empty_state = EmptyStateLabel(
             "No Numeric Prediction has been created yet.",
-            self,
+            parent=self,
         )
         self.empty_state.setObjectName("numericPredictionDetailEmptyState")
         self.empty_state.setWordWrap(True)
@@ -1136,6 +1188,11 @@ class NumericPredictionDetailScreen(QWidget):
         self.detail_error.setTextFormat(Qt.TextFormat.PlainText)
         self.detail_error.setWordWrap(True)
         self.detail_error.setHidden(True)
+        apply_message_role(
+            self.detail_error,
+            StatusTone.ERROR,
+            accessible_name="Numeric Prediction Detail error",
+        )
 
         self.detail_content = QWidget(self)
         self.detail_content.setObjectName("numericPredictionDetailContent")
@@ -1146,15 +1203,22 @@ class NumericPredictionDetailScreen(QWidget):
         self.question.setObjectName("numericPredictionQuestion")
         self.question.setTextFormat(Qt.TextFormat.PlainText)
         self.question.setWordWrap(True)
-        question_font = QFont(self.question.font())
-        question_font.setPointSize(question_font.pointSize() + 2)
-        question_font.setBold(True)
-        self.question.setFont(question_font)
+        _make_selectable(self.question)
+        apply_text_role(self.question, TextRole.PAGE_TITLE)
 
         self.tags = QLabel("", self.detail_content)
         self.tags.setObjectName("numericPredictionTags")
         self.tags.setTextFormat(Qt.TextFormat.PlainText)
         self.tags.setWordWrap(True)
+        _make_selectable(self.tags)
+        apply_text_role(self.tags, TextRole.SECONDARY)
+
+        self.forecast_type = StatusBadge(
+            "NUMERIC",
+            StatusTone.NEUTRAL,
+            parent=self.detail_content,
+        )
+        self.forecast_type.setObjectName("numericPredictionType")
 
         self.status = QLabel("", self.detail_content)
         self.status.setObjectName("numericPredictionStatus")
@@ -1164,23 +1228,21 @@ class NumericPredictionDetailScreen(QWidget):
 
         forecast_label = QLabel("Current Forecast", self.detail_content)
         forecast_label.setObjectName("numericCurrentForecastLabel")
-        forecast_font = QFont(forecast_label.font())
-        forecast_font.setBold(True)
-        forecast_label.setFont(forecast_font)
+        apply_text_role(forecast_label, TextRole.LABEL)
 
         self.interval = QLabel("", self.detail_content)
         self.interval.setObjectName("numericCurrentInterval")
         self.interval.setTextFormat(Qt.TextFormat.PlainText)
         self.interval.setWordWrap(True)
-        interval_font = QFont(self.interval.font())
-        interval_font.setPointSize(interval_font.pointSize() + 1)
-        interval_font.setBold(True)
-        self.interval.setFont(interval_font)
+        _make_selectable(self.interval)
+        apply_text_role(self.interval, TextRole.FORECAST)
 
         self.median = QLabel("", self.detail_content)
         self.median.setObjectName("numericCurrentMedian")
         self.median.setTextFormat(Qt.TextFormat.PlainText)
         self.median.setWordWrap(True)
+        _make_selectable(self.median)
+        apply_text_role(self.median, TextRole.LABEL)
 
         self.unit_row, self.unit = _detail_value_row(
             "Unit",
@@ -1229,8 +1291,10 @@ class NumericPredictionDetailScreen(QWidget):
 
         actions = QWidget(self.detail_content)
         actions.setObjectName("numericPredictionActions")
-        actions_layout = QHBoxLayout(actions)
+        actions_layout = QGridLayout(actions)
         actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.setHorizontalSpacing(int(Spacing.CONTROL))
+        actions_layout.setVerticalSpacing(int(Spacing.CONTROL))
         self.revise_forecast_button = QPushButton("Revise Interval", actions)
         self.revise_forecast_button.setObjectName("reviseNumericForecastButton")
         self.revise_forecast_button.setAccessibleName("Revise numeric interval")
@@ -1255,16 +1319,32 @@ class NumericPredictionDetailScreen(QWidget):
         self.delete_button.setObjectName("deleteNumericPredictionButton")
         apply_action_role(self.delete_button, ActionRole.DESTRUCTIVE)
         apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
-        actions_layout.addWidget(self.revise_forecast_button)
-        actions_layout.addWidget(self.add_journal_entry_button)
-        actions_layout.addWidget(self.review_forecast_button)
-        actions_layout.addWidget(self.resolve_button)
-        actions_layout.addWidget(self.mark_invalid_button)
-        actions_layout.addWidget(self.delete_button)
-        actions_layout.addStretch()
+        apply_action_role(self.revise_forecast_button, ActionRole.PRIMARY)
+        apply_action_role(self.add_journal_entry_button, ActionRole.SECONDARY)
+        apply_action_role(self.review_forecast_button, ActionRole.SECONDARY)
+        apply_action_role(self.resolve_button, ActionRole.SECONDARY)
+        apply_action_role(self.mark_invalid_button, ActionRole.SECONDARY)
+        _configure_detail_action_grid(
+            actions_layout,
+            (
+                self.revise_forecast_button,
+                self.add_journal_entry_button,
+                self.review_forecast_button,
+                self.resolve_button,
+                self.mark_invalid_button,
+                self.delete_button,
+            ),
+        )
+        actions_layout.addWidget(self.add_journal_entry_button, 0, 1)
+        actions_layout.addWidget(self.revise_forecast_button, 0, 2)
+        actions_layout.addWidget(self.review_forecast_button, 0, 3)
+        actions_layout.addWidget(self.resolve_button, 1, 1)
+        actions_layout.addWidget(self.mark_invalid_button, 1, 3)
+        actions_layout.addWidget(self.delete_button, 2, 2)
 
         self.resolution_section = QGroupBox("RESOLVED", self.detail_content)
         self.resolution_section.setObjectName("numericResolutionSection")
+        apply_surface_role(self.resolution_section, SurfaceRole.RAISED)
         resolution_layout = QVBoxLayout(self.resolution_section)
         self.resolution_actual = QLabel("", self.resolution_section)
         self.resolution_actual.setObjectName("numericResolutionActualValue")
@@ -1278,6 +1358,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.resolution_scoring.setWordWrap(True)
         self.scorecard_section = QGroupBox("SCORECARD", self.resolution_section)
         self.scorecard_section.setObjectName("numericPredictionScorecard")
+        apply_surface_role(self.scorecard_section, SurfaceRole.BASE)
         scorecard_layout = QVBoxLayout(self.scorecard_section)
         self.scorecard_interval = QLabel("", self.scorecard_section)
         self.scorecard_interval.setObjectName("numericScorecardScoringInterval")
@@ -1321,14 +1402,17 @@ class NumericPredictionDetailScreen(QWidget):
         self.resolution_notes.setObjectName("numericResolutionNotes")
         self.resolution_notes.setTextFormat(Qt.TextFormat.PlainText)
         self.resolution_notes.setWordWrap(True)
+        _make_selectable(self.resolution_notes)
         self.postmortem = QLabel("", self.resolution_section)
         self.postmortem.setObjectName("numericResolutionPostmortem")
         self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem.setWordWrap(True)
+        _make_selectable(self.postmortem)
         self.postmortem_completion = QLabel("", self.resolution_section)
         self.postmortem_completion.setObjectName("numericPostmortemCompletion")
         self.postmortem_completion.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem_completion.setWordWrap(True)
+        _make_selectable(self.postmortem_completion)
         self.correct_resolution_button = QPushButton(
             "Correct Resolution",
             self.resolution_section,
@@ -1366,6 +1450,7 @@ class NumericPredictionDetailScreen(QWidget):
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
         self.invalidation_section.setObjectName("numericInvalidationSection")
+        apply_surface_role(self.invalidation_section, SurfaceRole.RAISED)
         invalidation_layout = QVBoxLayout(self.invalidation_section)
         self.invalidation_time = QLabel("", self.invalidation_section)
         self.invalidation_time.setObjectName("numericInvalidationTime")
@@ -1374,6 +1459,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.invalidation_reason.setObjectName("numericInvalidationReason")
         self.invalidation_reason.setTextFormat(Qt.TextFormat.PlainText)
         self.invalidation_reason.setWordWrap(True)
+        _make_selectable(self.invalidation_reason)
         self.correct_invalidation_button = QPushButton(
             "Correct Reason",
             self.invalidation_section,
@@ -1402,6 +1488,7 @@ class NumericPredictionDetailScreen(QWidget):
 
         self.definition_history = QGroupBox("Definition history", self.detail_content)
         self.definition_history.setObjectName("numericDefinitionHistoryGroup")
+        apply_surface_role(self.definition_history, SurfaceRole.BASE)
         self.definition_history.setCheckable(True)
         self.definition_history.setChecked(False)
         self.definition_history_content = QWidget(self.definition_history)
@@ -1425,6 +1512,11 @@ class NumericPredictionDetailScreen(QWidget):
         self.history_error.setTextFormat(Qt.TextFormat.PlainText)
         self.history_error.setWordWrap(True)
         self.history_error.setHidden(True)
+        apply_message_role(
+            self.history_error,
+            StatusTone.ERROR,
+            accessible_name="Numeric interval history error",
+        )
         self.history_chart = NumericHistoryChart(self.detail_content)
 
         timeline_label = QLabel("TIMELINE", self.detail_content)
@@ -1437,6 +1529,11 @@ class NumericPredictionDetailScreen(QWidget):
         self.timeline_error.setTextFormat(Qt.TextFormat.PlainText)
         self.timeline_error.setWordWrap(True)
         self.timeline_error.setHidden(True)
+        apply_message_role(
+            self.timeline_error,
+            StatusTone.ERROR,
+            accessible_name="Numeric timeline error",
+        )
         self.timeline_content = QWidget(self.detail_content)
         self.timeline_content.setObjectName("numericTimelineContent")
         self.timeline_layout = QVBoxLayout(self.timeline_content)
@@ -1451,36 +1548,95 @@ class NumericPredictionDetailScreen(QWidget):
         self.next_steps.setObjectName("numericPredictionNextSteps")
         self.next_steps.setTextFormat(Qt.TextFormat.PlainText)
         self.next_steps.setWordWrap(True)
+        self.next_steps.setHidden(True)
 
-        detail_layout.addWidget(self.question)
-        detail_layout.addWidget(self.tags)
-        detail_layout.addWidget(self.status)
-        detail_layout.addSpacing(14)
-        detail_layout.addWidget(forecast_label)
-        detail_layout.addWidget(self.interval)
-        detail_layout.addWidget(self.median)
-        detail_layout.addWidget(self.unit_row)
-        detail_layout.addWidget(self.precision_row)
-        detail_layout.addSpacing(10)
-        detail_layout.addWidget(self.forecast_deadline_row)
-        detail_layout.addWidget(self.expected_resolution_row)
-        detail_layout.addWidget(self.background_section)
-        detail_layout.addWidget(self.resolution_criteria_section)
-        detail_layout.addWidget(self.rationale_section)
+        summary_panel, summary_layout = _detail_panel(
+            "numericPredictionSummaryPanel",
+            self.detail_content,
+        )
+        identity_row = QWidget(summary_panel)
+        identity_layout = QHBoxLayout(identity_row)
+        identity_layout.setContentsMargins(0, 0, 0, 0)
+        identity_layout.setSpacing(int(Spacing.CONTROL))
+        identity_layout.addWidget(self.forecast_type)
+        identity_layout.addWidget(self.status)
+        identity_layout.addStretch()
+        summary_layout.addWidget(identity_row)
+        summary_layout.addWidget(self.question)
+        summary_layout.addWidget(self.tags)
+        summary_layout.addSpacing(int(Spacing.CONTROL))
+        summary_layout.addWidget(forecast_label)
+        summary_layout.addWidget(self.interval)
+        summary_layout.addWidget(self.median)
+
+        action_panel, action_panel_layout = _detail_panel(
+            "numericPredictionActionPanel",
+            self.detail_content,
+        )
+        action_heading = QLabel("Forecast actions", action_panel)
+        action_heading.setObjectName("numericPredictionActionHeading")
+        apply_text_role(action_heading, TextRole.SECTION_TITLE)
+        action_help = QLabel(
+            "Revise or reconsider the forecast, record reasoning, or finish its lifecycle.",
+            action_panel,
+        )
+        action_help.setObjectName("numericPredictionActionHelp")
+        action_help.setWordWrap(True)
+        action_help.setContentsMargins(0, 0, 0, int(Spacing.CONTROL))
+        apply_text_role(action_help, TextRole.LABEL)
+        action_panel_layout.addWidget(action_heading)
+        action_panel_layout.addWidget(action_help)
+        action_panel_layout.addWidget(actions)
+
+        self.metadata_panel, metadata_layout = _detail_panel(
+            "numericPredictionMetadataPanel",
+            self.detail_content,
+        )
+        metadata_heading = QLabel("Prediction details", self.metadata_panel)
+        metadata_heading.setObjectName("numericPredictionMetadataHeading")
+        apply_text_role(metadata_heading, TextRole.SECTION_TITLE)
+        metadata_layout.addWidget(metadata_heading)
+        metadata_layout.addWidget(self.unit_row)
+        metadata_layout.addWidget(self.precision_row)
+        metadata_layout.addWidget(self.forecast_deadline_row)
+        metadata_layout.addWidget(self.expected_resolution_row)
+        metadata_layout.addWidget(self.background_section)
+        metadata_layout.addWidget(self.resolution_criteria_section)
+        metadata_layout.addWidget(self.rationale_section)
+        metadata_layout.addWidget(self.definition_history)
+
+        timeline_panel, timeline_panel_layout = _detail_panel(
+            "numericPredictionTimelinePanel",
+            self.detail_content,
+        )
+        apply_text_role(timeline_label, TextRole.SECTION_TITLE)
+        timeline_panel_layout.addWidget(timeline_label)
+        timeline_panel_layout.addWidget(self.timeline_error)
+        timeline_panel_layout.addWidget(self.timeline_content)
+
+        history_panel, history_panel_layout = _detail_panel(
+            "numericPredictionHistoryPanel",
+            self.detail_content,
+        )
+        apply_text_role(history_label, TextRole.SECTION_TITLE)
+        history_panel_layout.addWidget(history_label)
+        history_panel_layout.addWidget(self.history_error)
+        history_panel_layout.addWidget(self.history_chart)
+
+        detail_layout.setContentsMargins(
+            int(Spacing.PAGE),
+            int(Spacing.ORDINARY),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+        )
+        detail_layout.setSpacing(int(Spacing.SECTION))
+        detail_layout.addWidget(summary_panel)
+        detail_layout.addWidget(action_panel)
+        detail_layout.addWidget(self.metadata_panel)
         detail_layout.addWidget(self.resolution_section)
         detail_layout.addWidget(self.invalidation_section)
-        detail_layout.addWidget(self.definition_history)
-        detail_layout.addSpacing(10)
-        detail_layout.addWidget(actions)
-        detail_layout.addSpacing(14)
-        detail_layout.addWidget(history_label)
-        detail_layout.addWidget(self.history_error)
-        detail_layout.addWidget(self.history_chart)
-        detail_layout.addSpacing(14)
-        detail_layout.addWidget(timeline_label)
-        detail_layout.addWidget(self.timeline_error)
-        detail_layout.addWidget(self.timeline_content)
-        detail_layout.addWidget(self.next_steps)
+        detail_layout.addWidget(timeline_panel)
+        detail_layout.addWidget(history_panel)
         detail_layout.addStretch()
 
         self.scroll_area = QScrollArea(self)
@@ -1490,8 +1646,10 @@ class NumericPredictionDetailScreen(QWidget):
         self.scroll_area.setWidget(self.detail_content)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.CONTROL))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(title)
+        layout.addWidget(header)
         layout.addWidget(self.empty_state)
         layout.addWidget(self.detail_error)
         layout.addWidget(self.scroll_area, 1)
@@ -1635,6 +1793,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.tags.setText("  ".join(f"#{tag}" for tag in prediction.tags))
         self.tags.setHidden(not prediction.tags)
         self.status.setText(prediction.status.value.upper())
+        apply_badge_role(self.status, _status_tone(prediction.status))
         self.interval.setText(
             f"{revision.confidence_percent}% interval: "
             f"{revision.lower_bound} to {revision.upper_bound} {prediction.unit}"
@@ -1910,6 +2069,8 @@ class NumericPredictionDetailScreen(QWidget):
         self.definition_history.setChecked(False)
         self.definition_history_content.setHidden(True)
         self.definition_history.setHidden(not changes)
+        if changes:
+            self.metadata_panel.setHidden(False)
 
     def _clear_timeline(self) -> None:
         while self.timeline_layout.count():
@@ -1921,10 +2082,17 @@ class NumericPredictionDetailScreen(QWidget):
     def _forecast_timeline_row(self, event: NumericForecastTimelineSnapshot) -> QWidget:
         row = QWidget(self.timeline_content)
         row.setObjectName(f"numericTimelineForecast{event.revision_id}")
+        apply_surface_role(row, SurfaceRole.BASE)
         layout = QVBoxLayout(row)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+        )
         timestamp = QLabel(_format_local_timestamp(event.created_at), row)
         timestamp.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(timestamp, TextRole.SECONDARY)
         values = QLabel(
             f"FORECAST  {event.confidence_percent}% interval: "
             f"{event.lower_bound} to {event.upper_bound} {self._prediction.unit if self._prediction else ''}; "
@@ -1934,6 +2102,8 @@ class NumericPredictionDetailScreen(QWidget):
         values.setObjectName(f"numericForecastValues{event.revision_id}")
         values.setTextFormat(Qt.TextFormat.PlainText)
         values.setWordWrap(True)
+        apply_text_role(values, TextRole.LABEL)
+        _make_selectable(values)
         layout.addWidget(timestamp)
         layout.addWidget(values)
         if event.rationale:
@@ -1941,22 +2111,32 @@ class NumericPredictionDetailScreen(QWidget):
             rationale.setObjectName(f"numericForecastRationale{event.revision_id}")
             rationale.setTextFormat(Qt.TextFormat.PlainText)
             rationale.setWordWrap(True)
+            _make_selectable(rationale)
             layout.addWidget(rationale)
         return row
 
     def _journal_timeline_row(self, event: NumericJournalTimelineSnapshot) -> QWidget:
         row = QWidget(self.timeline_content)
         row.setObjectName(f"numericTimelineJournal{event.entry_id}")
+        apply_surface_role(row, SurfaceRole.BASE)
         layout = QVBoxLayout(row)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+        )
         timestamp = QLabel(_format_local_timestamp(event.created_at), row)
         timestamp.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(timestamp, TextRole.SECONDARY)
         heading = QLabel("JOURNAL", row)
         heading.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(heading, TextRole.LABEL)
         body = QLabel(event.body, row)
         body.setObjectName(f"numericJournalBody{event.entry_id}")
         body.setTextFormat(Qt.TextFormat.PlainText)
         body.setWordWrap(True)
+        _make_selectable(body)
         context = QLabel(
             f"Forecast at the time: {event.confidence_percent}% interval: "
             f"{event.lower_bound} to {event.upper_bound} {self._prediction.unit if self._prediction else ''}; "
@@ -1965,6 +2145,8 @@ class NumericPredictionDetailScreen(QWidget):
         )
         context.setTextFormat(Qt.TextFormat.PlainText)
         context.setWordWrap(True)
+        apply_text_role(context, TextRole.SECONDARY)
+        _make_selectable(context)
         layout.addWidget(timestamp)
         layout.addWidget(heading)
         layout.addWidget(body)
@@ -1975,10 +2157,13 @@ class NumericPredictionDetailScreen(QWidget):
                 row,
             )
             edited.setTextFormat(Qt.TextFormat.PlainText)
+            apply_text_role(edited, TextRole.SECONDARY)
             layout.addWidget(edited)
             layout.addWidget(_journal_edit_history_widget(event, row))
         correct = QPushButton("Correct Entry", row)
         correct.setObjectName(f"correctNumericJournalEntryButton{event.entry_id}")
+        apply_action_role(correct, ActionRole.QUIET)
+        apply_lucide_icon(correct, LucideIcon.PENCIL, size=16)
         correct.clicked.connect(
             lambda _checked=False, current=event: self.open_correct_journal_entry(
                 current
@@ -1993,12 +2178,20 @@ class NumericPredictionDetailScreen(QWidget):
     ) -> QWidget:
         row = QWidget(self.timeline_content)
         row.setObjectName(f"numericTimelineReview{event.review_id}")
+        apply_surface_role(row, SurfaceRole.BASE)
         layout = QVBoxLayout(row)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+        )
         timestamp = QLabel(_format_local_timestamp(event.created_at), row)
         timestamp.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(timestamp, TextRole.SECONDARY)
         heading = QLabel("REVIEW  INTERVAL RETAINED", row)
         heading.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(heading, TextRole.LABEL)
         unit = self._prediction.unit if self._prediction else ""
         context = QLabel(
             f"{event.confidence_percent}% interval: {event.lower_bound} to "
@@ -2007,6 +2200,8 @@ class NumericPredictionDetailScreen(QWidget):
         )
         context.setTextFormat(Qt.TextFormat.PlainText)
         context.setWordWrap(True)
+        apply_text_role(context, TextRole.SECONDARY)
+        _make_selectable(context)
         layout.addWidget(timestamp)
         layout.addWidget(heading)
         layout.addWidget(context)
@@ -2015,6 +2210,7 @@ class NumericPredictionDetailScreen(QWidget):
             note.setObjectName(f"numericReviewNote{event.review_id}")
             note.setTextFormat(Qt.TextFormat.PlainText)
             note.setWordWrap(True)
+            _make_selectable(note)
             layout.addWidget(note)
         return row
 
@@ -2264,7 +2460,15 @@ class PredictionDetailHost(QWidget):
             self._binary_detail.focus_search_match(document)
 
 
-class EditPredictionDetailsDialog(QDialog):
+class _StyledDialog(QDialog):
+    """Apply the shared dialog grammar after a complete dialog is constructed."""
+
+    def showEvent(self, event: QShowEvent) -> None:
+        _apply_dialog_presentation(self)
+        super().showEvent(event)
+
+
+class EditPredictionDetailsDialog(_StyledDialog):
     """Edit stable prediction metadata through one complete application operation."""
 
     metadata_saved = Signal(object)
@@ -2494,7 +2698,7 @@ class EditPredictionDetailsDialog(QDialog):
         )
 
 
-class ReviseForecastDialog(QDialog):
+class ReviseForecastDialog(_StyledDialog):
     """Collect a new probability and append exactly one forecast revision."""
 
     revision_saved = Signal(object)
@@ -2655,7 +2859,7 @@ class ReviseForecastDialog(QDialog):
         self.form_error.setHidden(True)
 
 
-class ReviseNumericForecastDialog(QDialog):
+class ReviseNumericForecastDialog(_StyledDialog):
     """Collect a changed numeric interval and append one immutable revision."""
 
     revision_saved = Signal(object)
@@ -2798,7 +3002,7 @@ class ReviseNumericForecastDialog(QDialog):
         self.form_error.setHidden(True)
 
 
-class AddNumericJournalEntryDialog(QDialog):
+class AddNumericJournalEntryDialog(_StyledDialog):
     """Append reasoning while preserving the current numeric interval."""
 
     journal_saved = Signal(object)
@@ -2887,7 +3091,7 @@ class AddNumericJournalEntryDialog(QDialog):
         self.form_error.setHidden(True)
 
 
-class ResolveNumericPredictionDialog(QDialog):
+class ResolveNumericPredictionDialog(_StyledDialog):
     """Record one exact, immutable Numeric outcome and scoring interval."""
 
     prediction_resolved = Signal(object)
@@ -2998,7 +3202,7 @@ class ResolveNumericPredictionDialog(QDialog):
         self.accept()
 
 
-class MarkNumericPredictionInvalidDialog(QDialog):
+class MarkNumericPredictionInvalidDialog(_StyledDialog):
     """Record one immutable Numeric Invalid decision and optional reason."""
 
     prediction_invalidated = Signal(object)
@@ -3079,7 +3283,7 @@ class MarkNumericPredictionInvalidDialog(QDialog):
         self.accept()
 
 
-class CorrectBinaryResolutionDialog(QDialog):
+class CorrectBinaryResolutionDialog(_StyledDialog):
     """Append one confirmed Binary Resolution correction snapshot."""
 
     correction_saved = Signal(object)
@@ -3243,7 +3447,7 @@ class CorrectBinaryResolutionDialog(QDialog):
         self.form_error.setHidden(False)
 
 
-class CorrectNumericResolutionDialog(QDialog):
+class CorrectNumericResolutionDialog(_StyledDialog):
     """Append one confirmed exact Numeric Resolution correction snapshot."""
 
     correction_saved = Signal(object)
@@ -3413,7 +3617,7 @@ class CorrectNumericResolutionDialog(QDialog):
         self.form_error.setHidden(False)
 
 
-class CorrectInvalidationReasonDialog(QDialog):
+class CorrectInvalidationReasonDialog(_StyledDialog):
     """Append one confirmed Invalidation-reason correction."""
 
     correction_saved = Signal(object)
@@ -3496,7 +3700,7 @@ class CorrectInvalidationReasonDialog(QDialog):
         self.form_error.setHidden(False)
 
 
-class CorrectNumericJournalEntryDialog(QDialog):
+class CorrectNumericJournalEntryDialog(_StyledDialog):
     """Append a transparent correction to a Numeric Journal entry."""
 
     correction_saved = Signal(object)
@@ -3582,7 +3786,7 @@ class CorrectNumericJournalEntryDialog(QDialog):
         self.form_error.setHidden(True)
 
 
-class ForecastReviewDialog(QDialog):
+class ForecastReviewDialog(_StyledDialog):
     """Record deliberate reconsideration without changing the forecast."""
 
     review_saved = Signal(object)
@@ -3712,7 +3916,7 @@ class ForecastReviewDialog(QDialog):
         self.accept()
 
 
-class AddJournalEntryDialog(QDialog):
+class AddJournalEntryDialog(_StyledDialog):
     """Append reasoning without changing the current forecast."""
 
     journal_saved = Signal(object)
@@ -3833,7 +4037,7 @@ class AddJournalEntryDialog(QDialog):
         self.form_error.setHidden(True)
 
 
-class CorrectJournalEntryDialog(QDialog):
+class CorrectJournalEntryDialog(_StyledDialog):
     """Append a visible correction while retaining every prior Journal body."""
 
     correction_saved = Signal(object)
@@ -3957,7 +4161,7 @@ class CorrectJournalEntryDialog(QDialog):
         self.form_error.setHidden(True)
 
 
-class ResolvePredictionDialog(QDialog):
+class ResolvePredictionDialog(_StyledDialog):
     """Record one deliberate Yes/No terminal outcome."""
 
     prediction_resolved = Signal(object)
@@ -4122,7 +4326,7 @@ class ResolvePredictionDialog(QDialog):
         self.form_error.setHidden(True)
 
 
-class MarkInvalidDialog(QDialog):
+class MarkInvalidDialog(_StyledDialog):
     """Record one deliberate terminal Invalid decision."""
 
     prediction_invalidated = Signal(object)
@@ -4252,13 +4456,16 @@ class PredictionDetailScreen(QWidget):
         self._invalidation_history: InvalidationHistory | None = None
         self._chart_prediction_id: int | None = None
 
-        title = QLabel("Prediction Detail", self)
-        title.setObjectName("predictionDetailScreenTitle")
-        title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        header = PageHeader(
+            "Prediction Detail",
+            "Current belief, supporting context, and the complete preserved history.",
+            title_object_name="predictionDetailScreenTitle",
+            parent=self,
+        )
 
-        self.empty_state = QLabel(
+        self.empty_state = EmptyStateLabel(
             "No prediction yet. Create one from New Prediction to see it here.",
-            self,
+            parent=self,
         )
         self.empty_state.setObjectName("predictionDetailEmptyState")
         self.empty_state.setWordWrap(True)
@@ -4268,6 +4475,11 @@ class PredictionDetailScreen(QWidget):
         self.detail_error.setTextFormat(Qt.TextFormat.PlainText)
         self.detail_error.setWordWrap(True)
         self.detail_error.setHidden(True)
+        apply_message_role(
+            self.detail_error,
+            StatusTone.ERROR,
+            accessible_name="Prediction Detail error",
+        )
 
         self.detail_content = QWidget(self)
         self.detail_content.setObjectName("predictionDetailContent")
@@ -4278,13 +4490,15 @@ class PredictionDetailScreen(QWidget):
         self.question.setObjectName("predictionDetailQuestion")
         self.question.setWordWrap(True)
         self.question.setTextFormat(Qt.TextFormat.PlainText)
-        self.question.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
+        _make_selectable(self.question)
+        apply_text_role(self.question, TextRole.PAGE_TITLE)
+
+        self.forecast_type = StatusBadge(
+            "BINARY",
+            StatusTone.NEUTRAL,
+            parent=self.detail_content,
         )
-        question_font = QFont(self.question.font())
-        question_font.setPointSize(question_font.pointSize() + 3)
-        question_font.setBold(True)
-        self.question.setFont(question_font)
+        self.forecast_type.setObjectName("predictionDetailType")
 
         self.status = QLabel("", self.detail_content)
         self.status.setObjectName("predictionDetailStatus")
@@ -4295,64 +4509,85 @@ class PredictionDetailScreen(QWidget):
         self.tags.setObjectName("predictionDetailTags")
         self.tags.setWordWrap(True)
         self.tags.setTextFormat(Qt.TextFormat.PlainText)
+        _make_selectable(self.tags)
+        apply_text_role(self.tags, TextRole.SECONDARY)
 
         current_forecast_label = QLabel("Current Forecast", self.detail_content)
         current_forecast_label.setObjectName("currentForecastLabel")
+        apply_text_role(current_forecast_label, TextRole.LABEL)
         self.probability = QLabel("", self.detail_content)
         self.probability.setObjectName("predictionDetailProbability")
         self.probability.setAccessibleName("Current probability")
-        probability_font = QFont(self.probability.font())
-        probability_font.setPointSize(probability_font.pointSize() + 8)
-        probability_font.setBold(True)
-        self.probability.setFont(probability_font)
+        _make_selectable(self.probability)
+        apply_text_role(self.probability, TextRole.FORECAST)
 
         self.edit_details_button = QPushButton("Edit Details", self.detail_content)
         self.edit_details_button.setObjectName("editPredictionDetailsButton")
+        apply_action_role(self.edit_details_button, ActionRole.SECONDARY)
         apply_lucide_icon(self.edit_details_button, LucideIcon.PENCIL)
         self.edit_details_button.clicked.connect(self.open_edit_details)
 
         action_row = QWidget(self.detail_content)
         action_row.setObjectName("futurePredictionActions")
-        action_layout = QHBoxLayout(action_row)
+        action_layout = QGridLayout(action_row)
         action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setHorizontalSpacing(int(Spacing.CONTROL))
+        action_layout.setVerticalSpacing(int(Spacing.CONTROL))
         self.revise_forecast_button = QPushButton("Revise Forecast", action_row)
         self.revise_forecast_button.setObjectName("reviseForecastButton")
+        apply_action_role(self.revise_forecast_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.revise_forecast_button, LucideIcon.REFRESH)
         self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
-        action_layout.addWidget(self.revise_forecast_button)
         self.add_journal_entry_button = QPushButton(
             "Add Journal Entry",
             action_row,
         )
         self.add_journal_entry_button.setObjectName("addJournalEntryButton")
+        apply_action_role(self.add_journal_entry_button, ActionRole.SECONDARY)
         apply_lucide_icon(self.add_journal_entry_button, LucideIcon.NOTEBOOK_PEN)
         self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
-        action_layout.addWidget(self.add_journal_entry_button)
         self.review_forecast_button = QPushButton("Still at", action_row)
         self.review_forecast_button.setObjectName("reviewForecastButton")
+        apply_action_role(self.review_forecast_button, ActionRole.SECONDARY)
         self.review_forecast_button.setAccessibleName(
             "Record a Review retaining this probability"
         )
         apply_lucide_icon(self.review_forecast_button, LucideIcon.CIRCLE_CHECK)
         self.review_forecast_button.clicked.connect(self.open_forecast_review)
-        action_layout.addWidget(self.review_forecast_button)
         self.resolve_button = QPushButton("Resolve", action_row)
         self.resolve_button.setObjectName("resolvePredictionButton")
+        apply_action_role(self.resolve_button, ActionRole.SECONDARY)
         apply_lucide_icon(self.resolve_button, LucideIcon.CIRCLE_CHECK)
         self.resolve_button.clicked.connect(self.open_resolve_prediction)
-        action_layout.addWidget(self.resolve_button)
         self.mark_invalid_button = QPushButton("Mark Invalid", action_row)
         self.mark_invalid_button.setObjectName("markInvalidButton")
+        apply_action_role(self.mark_invalid_button, ActionRole.SECONDARY)
         apply_lucide_icon(self.mark_invalid_button, LucideIcon.BAN)
         self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
-        action_layout.addWidget(self.mark_invalid_button)
         self.delete_button = QPushButton("Delete", action_row)
         self.delete_button.setObjectName("deletePredictionButton")
         apply_action_role(self.delete_button, ActionRole.DESTRUCTIVE)
         apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
         self.delete_button.clicked.connect(self.delete_prediction)
-        action_layout.addWidget(self.delete_button)
-        action_layout.addStretch()
+        _configure_detail_action_grid(
+            action_layout,
+            (
+                self.revise_forecast_button,
+                self.add_journal_entry_button,
+                self.review_forecast_button,
+                self.edit_details_button,
+                self.resolve_button,
+                self.mark_invalid_button,
+                self.delete_button,
+            ),
+        )
+        action_layout.addWidget(self.add_journal_entry_button, 0, 1)
+        action_layout.addWidget(self.revise_forecast_button, 0, 2)
+        action_layout.addWidget(self.review_forecast_button, 0, 3)
+        action_layout.addWidget(self.edit_details_button, 1, 1)
+        action_layout.addWidget(self.resolve_button, 1, 2)
+        action_layout.addWidget(self.mark_invalid_button, 1, 3)
+        action_layout.addWidget(self.delete_button, 2, 2)
 
         self.forecast_deadline_row, self.forecast_deadline = _detail_value_row(
             "Forecast deadline",
@@ -4383,6 +4618,7 @@ class PredictionDetailScreen(QWidget):
 
         self.resolution_section = QGroupBox("RESOLUTION", self.detail_content)
         self.resolution_section.setObjectName("predictionResolutionSection")
+        apply_surface_role(self.resolution_section, SurfaceRole.RAISED)
         resolution_layout = QVBoxLayout(self.resolution_section)
         self.resolution_outcome = QLabel("", self.resolution_section)
         self.resolution_outcome.setObjectName("predictionResolutionOutcome")
@@ -4397,6 +4633,7 @@ class PredictionDetailScreen(QWidget):
         self.resolution_scoring_forecast.setTextFormat(Qt.TextFormat.PlainText)
         self.scorecard_section = QGroupBox("SCORECARD", self.resolution_section)
         self.scorecard_section.setObjectName("predictionScorecard")
+        apply_surface_role(self.scorecard_section, SurfaceRole.BASE)
         scorecard_layout = QVBoxLayout(self.scorecard_section)
         self.scorecard_forecast = QLabel("", self.scorecard_section)
         self.scorecard_forecast.setObjectName("predictionScorecardForecast")
@@ -4433,16 +4670,19 @@ class PredictionDetailScreen(QWidget):
         self.resolution_notes.setObjectName("predictionResolutionNotes")
         self.resolution_notes.setTextFormat(Qt.TextFormat.PlainText)
         self.resolution_notes.setWordWrap(True)
+        _make_selectable(self.resolution_notes)
         self.postmortem_heading = QLabel("POSTMORTEM", self.resolution_section)
         self.postmortem_heading.setObjectName("predictionPostmortemHeading")
         self.postmortem = QLabel("", self.resolution_section)
         self.postmortem.setObjectName("predictionPostmortem")
         self.postmortem.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem.setWordWrap(True)
+        _make_selectable(self.postmortem)
         self.postmortem_completion = QLabel("", self.resolution_section)
         self.postmortem_completion.setObjectName("predictionPostmortemCompletion")
         self.postmortem_completion.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem_completion.setWordWrap(True)
+        _make_selectable(self.postmortem_completion)
         self.correct_resolution_button = QPushButton(
             "Correct Resolution",
             self.resolution_section,
@@ -4482,6 +4722,7 @@ class PredictionDetailScreen(QWidget):
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
         self.invalidation_section.setObjectName("predictionInvalidationSection")
+        apply_surface_role(self.invalidation_section, SurfaceRole.RAISED)
         invalidation_layout = QVBoxLayout(self.invalidation_section)
         self.invalidated_at = QLabel("", self.invalidation_section)
         self.invalidated_at.setObjectName("predictionInvalidatedAt")
@@ -4497,6 +4738,7 @@ class PredictionDetailScreen(QWidget):
         self.invalidation_reason.setObjectName("predictionInvalidationReason")
         self.invalidation_reason.setTextFormat(Qt.TextFormat.PlainText)
         self.invalidation_reason.setWordWrap(True)
+        _make_selectable(self.invalidation_reason)
         self.correct_invalidation_button = QPushButton(
             "Correct Reason",
             self.invalidation_section,
@@ -4526,6 +4768,7 @@ class PredictionDetailScreen(QWidget):
 
         self.definition_history = QGroupBox("Definition history", self.detail_content)
         self.definition_history.setObjectName("definitionHistoryGroup")
+        apply_surface_role(self.definition_history, SurfaceRole.BASE)
         self.definition_history.setCheckable(True)
         self.definition_history.setChecked(False)
         self.definition_history_content = QWidget(self.definition_history)
@@ -4565,30 +4808,90 @@ class PredictionDetailScreen(QWidget):
         self.chart_placeholder.setWordWrap(True)
         self.chart_placeholder.setHidden(True)
 
-        detail_layout.addWidget(self.question)
-        detail_layout.addWidget(self.tags)
-        detail_layout.addWidget(self.status)
-        detail_layout.addSpacing(14)
-        detail_layout.addWidget(current_forecast_label)
-        detail_layout.addWidget(self.probability)
-        detail_layout.addWidget(action_row)
-        detail_layout.addWidget(self.edit_details_button, 0, Qt.AlignmentFlag.AlignLeft)
-        detail_layout.addSpacing(10)
-        detail_layout.addWidget(self.forecast_deadline_row)
-        detail_layout.addWidget(self.expected_resolution_row)
-        detail_layout.addWidget(self.background_section)
-        detail_layout.addWidget(self.resolution_criteria_section)
+        summary_panel, summary_layout = _detail_panel(
+            "predictionDetailSummaryPanel",
+            self.detail_content,
+        )
+        identity_row = QWidget(summary_panel)
+        identity_layout = QHBoxLayout(identity_row)
+        identity_layout.setContentsMargins(0, 0, 0, 0)
+        identity_layout.setSpacing(int(Spacing.CONTROL))
+        identity_layout.addWidget(self.forecast_type)
+        identity_layout.addWidget(self.status)
+        identity_layout.addStretch()
+        summary_layout.addWidget(identity_row)
+        summary_layout.addWidget(self.question)
+        summary_layout.addWidget(self.tags)
+        summary_layout.addSpacing(int(Spacing.CONTROL))
+        summary_layout.addWidget(current_forecast_label)
+        summary_layout.addWidget(self.probability)
+
+        action_panel, action_panel_layout = _detail_panel(
+            "predictionDetailActionPanel",
+            self.detail_content,
+        )
+        action_heading = QLabel("Forecast actions", action_panel)
+        action_heading.setObjectName("predictionDetailActionHeading")
+        apply_text_role(action_heading, TextRole.SECTION_TITLE)
+        action_help = QLabel(
+            "Revise or reconsider the forecast, record reasoning, edit details, "
+            "or finish its lifecycle.",
+            action_panel,
+        )
+        action_help.setObjectName("predictionDetailActionHelp")
+        action_help.setWordWrap(True)
+        action_help.setContentsMargins(0, 0, 0, int(Spacing.CONTROL))
+        apply_text_role(action_help, TextRole.LABEL)
+        action_panel_layout.addWidget(action_heading)
+        action_panel_layout.addWidget(action_help)
+        action_panel_layout.addWidget(action_row)
+
+        self.metadata_panel, metadata_layout = _detail_panel(
+            "predictionDetailMetadataPanel",
+            self.detail_content,
+        )
+        metadata_heading = QLabel("Prediction details", self.metadata_panel)
+        metadata_heading.setObjectName("predictionDetailMetadataHeading")
+        apply_text_role(metadata_heading, TextRole.SECTION_TITLE)
+        metadata_layout.addWidget(metadata_heading)
+        metadata_layout.addWidget(self.forecast_deadline_row)
+        metadata_layout.addWidget(self.expected_resolution_row)
+        metadata_layout.addWidget(self.background_section)
+        metadata_layout.addWidget(self.resolution_criteria_section)
+        metadata_layout.addWidget(self.definition_history)
+
+        timeline_panel, timeline_panel_layout = _detail_panel(
+            "predictionDetailTimelinePanel",
+            self.detail_content,
+        )
+        apply_text_role(timeline_label, TextRole.SECTION_TITLE)
+        timeline_panel_layout.addWidget(timeline_label)
+        timeline_panel_layout.addWidget(self.forecast_timeline)
+        timeline_panel_layout.addWidget(self.timeline_placeholder)
+
+        chart_panel, chart_panel_layout = _detail_panel(
+            "predictionDetailHistoryPanel",
+            self.detail_content,
+        )
+        apply_text_role(chart_label, TextRole.SECTION_TITLE)
+        chart_panel_layout.addWidget(chart_label)
+        chart_panel_layout.addWidget(self.probability_history_chart)
+        chart_panel_layout.addWidget(self.chart_placeholder)
+
+        detail_layout.setContentsMargins(
+            int(Spacing.PAGE),
+            int(Spacing.ORDINARY),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+        )
+        detail_layout.setSpacing(int(Spacing.SECTION))
+        detail_layout.addWidget(summary_panel)
+        detail_layout.addWidget(action_panel)
+        detail_layout.addWidget(self.metadata_panel)
         detail_layout.addWidget(self.resolution_section)
         detail_layout.addWidget(self.invalidation_section)
-        detail_layout.addWidget(self.definition_history)
-        detail_layout.addSpacing(16)
-        detail_layout.addWidget(timeline_label)
-        detail_layout.addWidget(self.forecast_timeline)
-        detail_layout.addWidget(self.timeline_placeholder)
-        detail_layout.addSpacing(12)
-        detail_layout.addWidget(chart_label)
-        detail_layout.addWidget(self.probability_history_chart)
-        detail_layout.addWidget(self.chart_placeholder)
+        detail_layout.addWidget(timeline_panel)
+        detail_layout.addWidget(chart_panel)
         detail_layout.addStretch()
 
         self.scroll_area = QScrollArea(self)
@@ -4598,8 +4901,10 @@ class PredictionDetailScreen(QWidget):
         self.scroll_area.setWidget(self.detail_content)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.CONTROL))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(title)
+        layout.addWidget(header)
         layout.addWidget(self.empty_state)
         layout.addWidget(self.detail_error)
         layout.addWidget(self.scroll_area, 1)
@@ -4725,6 +5030,7 @@ class PredictionDetailScreen(QWidget):
 
         self.question.setText(prediction.question)
         self.status.setText(prediction.status.value.upper())
+        apply_badge_role(self.status, _status_tone(prediction.status))
         self.probability.setText(f"{prediction.probability_percent}%")
         self.review_forecast_button.setText(
             f"Still at {prediction.probability_percent}%"
@@ -5107,6 +5413,12 @@ class PredictionDetailScreen(QWidget):
         self.background_section.setHidden(not prediction.background)
         self.resolution_criteria.setText(prediction.resolution_criteria or "")
         self.resolution_criteria_section.setHidden(not prediction.resolution_criteria)
+        self.metadata_panel.setHidden(
+            prediction.forecast_deadline is None
+            and prediction.expected_resolution is None
+            and not prediction.background
+            and not prediction.resolution_criteria
+        )
 
     def _show_terminal_information(self, prediction: PredictionSnapshot) -> None:
         """Render latest effective facts plus inspectable append-only history."""
@@ -5245,6 +5557,8 @@ class PredictionDetailScreen(QWidget):
         self.definition_history.setChecked(False)
         self.definition_history_content.setHidden(True)
         self.definition_history.setHidden(not changes)
+        if changes:
+            self.metadata_panel.setHidden(False)
 
     def _load_timeline(self, prediction_id: int) -> bool:
         try:
@@ -5379,6 +5693,62 @@ def _to_qdate(value: date) -> QDate:
     return QDate(value.year, value.month, value.day)
 
 
+def _detail_panel(
+    object_name: str,
+    parent: QWidget,
+) -> tuple[QFrame, QVBoxLayout]:
+    panel = QFrame(parent)
+    panel.setObjectName(object_name)
+    panel.setSizePolicy(
+        QSizePolicy.Policy.Expanding,
+        QSizePolicy.Policy.Preferred,
+    )
+    apply_surface_role(panel, SurfaceRole.RAISED)
+    layout = QVBoxLayout(panel)
+    layout.setContentsMargins(
+        int(Spacing.ORDINARY),
+        int(Spacing.ORDINARY),
+        int(Spacing.ORDINARY),
+        int(Spacing.ORDINARY),
+    )
+    layout.setSpacing(int(Spacing.CONTROL))
+    return panel, layout
+
+
+def _configure_detail_action_grid(
+    layout: QGridLayout,
+    buttons: tuple[QPushButton, ...],
+) -> None:
+    """Center a compact three-column action block that can still shrink safely."""
+
+    layout.setColumnStretch(0, 1)
+    for column in range(1, 4):
+        layout.setColumnStretch(column, 5)
+    layout.setColumnStretch(4, 1)
+    for button in buttons:
+        button.setMaximumWidth(210)
+        button.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
+
+
+def _status_tone(status: PredictionStatus) -> StatusTone:
+    if status is PredictionStatus.OPEN:
+        return StatusTone.ACCENT
+    if status is PredictionStatus.LOCKED:
+        return StatusTone.WARNING
+    if status is PredictionStatus.RESOLVED:
+        return StatusTone.SUCCESS
+    return StatusTone.ERROR
+
+
+def _make_selectable(label: QLabel) -> None:
+    """Allow copying text without adding read-only labels to keyboard tab order."""
+
+    label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+
 def _detail_value_row(
     label: str,
     row_name: str,
@@ -5390,9 +5760,11 @@ def _detail_value_row(
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
     heading = QLabel(f"{label}:", row)
+    apply_text_role(heading, TextRole.LABEL)
     value = QLabel("", row)
     value.setObjectName(value_name)
     value.setTextFormat(Qt.TextFormat.PlainText)
+    _make_selectable(value)
     layout.addWidget(heading)
     layout.addWidget(value)
     layout.addStretch()
@@ -5410,11 +5782,12 @@ def _detail_text_section(
     layout = QVBoxLayout(section)
     layout.setContentsMargins(0, 8, 0, 0)
     heading = QLabel(heading_text, section)
+    apply_text_role(heading, TextRole.LABEL)
     value = QLabel("", section)
     value.setObjectName(value_name)
     value.setTextFormat(Qt.TextFormat.PlainText)
     value.setWordWrap(True)
-    value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    _make_selectable(value)
     layout.addWidget(heading)
     layout.addWidget(value)
     return section, value
@@ -5561,18 +5934,20 @@ def _terminal_history_frame(
     frame = QFrame(parent)
     frame.setObjectName(object_name)
     frame.setFrameShape(QFrame.Shape.StyledPanel)
+    apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
     heading = QLabel(
         f"{heading_text} · {_format_local_timestamp(timestamp)}",
         frame,
     )
     heading.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(heading, TextRole.LABEL)
     layout.addWidget(heading)
     for label, value in values:
         item = QLabel(f"{label}: {_terminal_history_value(value)}", frame)
         item.setTextFormat(Qt.TextFormat.PlainText)
         item.setWordWrap(True)
-        item.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        _make_selectable(item)
         layout.addWidget(item)
     return frame
 
@@ -5661,12 +6036,14 @@ def _terminal_correction_frame(
     frame = QFrame(parent)
     frame.setObjectName(f"{object_name_prefix}{correction_id}")
     frame.setFrameShape(QFrame.Shape.StyledPanel)
+    apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
     heading = QLabel(
         f"Correction {sequence} · {_format_local_timestamp(corrected_at)}",
         frame,
     )
     heading.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(heading, TextRole.LABEL)
     layout.addWidget(heading)
     for field_name in changed_fields:
         old_value, new_value = values[field_name]
@@ -5681,16 +6058,79 @@ def _terminal_correction_frame(
         )
         change.setTextFormat(Qt.TextFormat.PlainText)
         change.setWordWrap(True)
-        change.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        _make_selectable(change)
         layout.addWidget(change)
     if correction_reason is not None:
         reason = QLabel(f"Explanation: {correction_reason}", frame)
         reason.setObjectName(f"{object_name_prefix}{correction_id}Reason")
         reason.setTextFormat(Qt.TextFormat.PlainText)
         reason.setWordWrap(True)
-        reason.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        _make_selectable(reason)
         layout.addWidget(reason)
     return frame
+
+
+def _apply_dialog_presentation(dialog: QDialog) -> None:
+    """Apply one visual and accessibility grammar to existing focused dialogs."""
+
+    root_layout = dialog.layout()
+    if root_layout is not None:
+        root_layout.setContentsMargins(
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+        )
+        root_layout.setSpacing(int(Spacing.CONTROL))
+
+    direct_labels = [
+        label
+        for label in dialog.findChildren(QLabel)
+        if label.parentWidget() is dialog and label.text().strip()
+    ]
+    if direct_labels:
+        apply_text_role(direct_labels[0], TextRole.SECTION_TITLE)
+
+    for label in dialog.findChildren(QLabel):
+        name = label.objectName().casefold()
+        if label.buddy() is not None:
+            apply_text_role(label, TextRole.LABEL)
+        if "error" in name:
+            apply_message_role(
+                label,
+                StatusTone.ERROR,
+                accessible_name=label.accessibleName()
+                or f"{dialog.windowTitle()} error",
+            )
+        elif "scorechangenotice" in name or "endpointnote" in name:
+            apply_message_role(
+                label,
+                StatusTone.WARNING,
+                accessible_name=label.accessibleName() or label.text(),
+            )
+        elif "explanation" in name or "helper" in name:
+            apply_text_role(label, TextRole.SECONDARY)
+        if any(
+            token in name
+            for token in (
+                "currentprobability",
+                "currentforecast",
+                "forecastattime",
+                "scoringforecast",
+                "reviewcontext",
+            )
+        ):
+            label.setWordWrap(True)
+            _make_selectable(label)
+            apply_surface_role(label, SurfaceRole.SELECTED)
+
+    for buttons in dialog.findChildren(QDialogButtonBox):
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        if save is not None:
+            apply_action_role(save, ActionRole.PRIMARY)
+        cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel is not None:
+            apply_action_role(cancel, ActionRole.SECONDARY)
 
 
 def _dialog_error_label(object_name: str, parent: QWidget) -> QLabel:
@@ -5773,10 +6213,12 @@ def _definition_change_widget(
     frame = QFrame(parent)
     frame.setObjectName(f"definitionChange{change.change_id}")
     frame.setFrameShape(QFrame.Shape.StyledPanel)
+    apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
     timestamp = QLabel(_format_local_timestamp(change.changed_at), frame)
     timestamp.setObjectName(f"definitionChangeTimestamp{change.change_id}")
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(timestamp, TextRole.SECONDARY)
     layout.addWidget(timestamp)
     values = {
         "question": (change.old_question, change.new_question),
@@ -5801,9 +6243,7 @@ def _definition_change_widget(
         )
         field_change.setTextFormat(Qt.TextFormat.PlainText)
         field_change.setWordWrap(True)
-        field_change.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
+        _make_selectable(field_change)
         layout.addWidget(field_change)
     return frame
 
@@ -5815,11 +6255,13 @@ def _forecast_timeline_widget(
     frame = QFrame(parent)
     frame.setObjectName(f"forecastRevision{revision.revision_id}")
     frame.setFrameShape(QFrame.Shape.StyledPanel)
+    apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
 
     timestamp = QLabel(_format_local_timestamp(revision.created_at), frame)
     timestamp.setObjectName(f"forecastRevisionTimestamp{revision.revision_id}")
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(timestamp, TextRole.SECONDARY)
     layout.addWidget(timestamp)
 
     if revision.previous_probability_percent is None:
@@ -5832,6 +6274,8 @@ def _forecast_timeline_widget(
     probability = QLabel(probability_text, frame)
     probability.setObjectName(f"forecastRevisionProbability{revision.revision_id}")
     probability.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(probability, TextRole.LABEL)
+    _make_selectable(probability)
     layout.addWidget(probability)
 
     if revision.rationale:
@@ -5839,7 +6283,7 @@ def _forecast_timeline_widget(
         rationale.setObjectName(f"forecastRevisionRationale{revision.revision_id}")
         rationale.setTextFormat(Qt.TextFormat.PlainText)
         rationale.setWordWrap(True)
-        rationale.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        _make_selectable(rationale)
         layout.addWidget(rationale)
     return frame
 
@@ -5852,11 +6296,13 @@ def _journal_entry_widget(
     frame = QFrame(parent)
     frame.setObjectName(f"journalEntry{entry.entry_id}")
     frame.setFrameShape(QFrame.Shape.StyledPanel)
+    apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
 
     timestamp = QLabel(_format_local_timestamp(entry.created_at), frame)
     timestamp.setObjectName(f"journalEntryTimestamp{entry.entry_id}")
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(timestamp, TextRole.SECONDARY)
     layout.addWidget(timestamp)
 
     heading_row = QWidget(frame)
@@ -5865,6 +6311,7 @@ def _journal_entry_widget(
     kind = QLabel("JOURNAL", heading_row)
     kind.setObjectName(f"journalEntryKind{entry.entry_id}")
     kind.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(kind, TextRole.LABEL)
     heading_layout.addWidget(kind)
     if entry.current_correction_id is not None:
         latest_correction = entry.corrections[-1]
@@ -5874,10 +6321,12 @@ def _journal_entry_widget(
         )
         edited.setObjectName(f"journalEntryEdited{entry.entry_id}")
         edited.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(edited, TextRole.SECONDARY)
         heading_layout.addWidget(edited)
     heading_layout.addStretch()
     correct_button = QPushButton("Correct Entry", heading_row)
     correct_button.setObjectName(f"correctJournalEntryButton{entry.entry_id}")
+    apply_action_role(correct_button, ActionRole.QUIET)
     apply_lucide_icon(correct_button, LucideIcon.PENCIL, size=16)
     correct_button.setToolTip(
         "Save a correction while preserving the original and prior versions."
@@ -5892,7 +6341,7 @@ def _journal_entry_widget(
     body.setObjectName(f"journalEntryBody{entry.entry_id}")
     body.setTextFormat(Qt.TextFormat.PlainText)
     body.setWordWrap(True)
-    body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    _make_selectable(body)
     layout.addWidget(body)
 
     forecast_context = QLabel(
@@ -5901,6 +6350,8 @@ def _journal_entry_widget(
     )
     forecast_context.setObjectName(f"journalEntryForecastAtTime{entry.entry_id}")
     forecast_context.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(forecast_context, TextRole.SECONDARY)
+    _make_selectable(forecast_context)
     layout.addWidget(forecast_context)
 
     if entry.corrections:
@@ -5915,15 +6366,18 @@ def _forecast_review_widget(
     frame = QFrame(parent)
     frame.setObjectName(f"forecastReview{review.review_id}")
     frame.setFrameShape(QFrame.Shape.StyledPanel)
+    apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
     timestamp = QLabel(_format_local_timestamp(review.created_at), frame)
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(timestamp, TextRole.SECONDARY)
     heading = QLabel(
         f"REVIEW  STILL AT {review.forecast_probability_percent}%",
         frame,
     )
     heading.setObjectName(f"forecastReviewHeading{review.review_id}")
     heading.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(heading, TextRole.LABEL)
     layout.addWidget(timestamp)
     layout.addWidget(heading)
     if review.note:
@@ -5931,7 +6385,7 @@ def _forecast_review_widget(
         note.setObjectName(f"forecastReviewNote{review.review_id}")
         note.setTextFormat(Qt.TextFormat.PlainText)
         note.setWordWrap(True)
-        note.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        _make_selectable(note)
         layout.addWidget(note)
     return frame
 
@@ -5947,6 +6401,7 @@ def _journal_edit_history_widget(
         parent,
     )
     history.setObjectName(f"journalEntryEditHistory{entry.entry_id}")
+    apply_surface_role(history, SurfaceRole.BASE)
     history.setCheckable(True)
     history.setChecked(False)
 
@@ -5965,7 +6420,7 @@ def _journal_edit_history_widget(
     original_body.setObjectName(f"journalEntryOriginalBody{entry.entry_id}")
     original_body.setTextFormat(Qt.TextFormat.PlainText)
     original_body.setWordWrap(True)
-    original_body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    _make_selectable(original_body)
     content_layout.addWidget(original_heading)
     content_layout.addWidget(original_body)
 
@@ -5984,9 +6439,7 @@ def _journal_edit_history_widget(
         )
         correction_body.setTextFormat(Qt.TextFormat.PlainText)
         correction_body.setWordWrap(True)
-        correction_body.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
+        _make_selectable(correction_body)
         content_layout.addWidget(correction_heading)
         content_layout.addWidget(correction_body)
 
