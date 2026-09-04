@@ -1279,7 +1279,7 @@ class FakePredictionOperations:
         tags: tuple[str, ...],
         expected_metadata_version: int,
         confirm_meaning_change: bool = False,
-    ) -> FakePrediction:
+    ) -> FakePrediction | FakeNumericPrediction:
         self.update_calls.append(
             MetadataUpdateCall(
                 prediction_id=prediction_id,
@@ -1297,12 +1297,20 @@ class FakePredictionOperations:
             raise self.update_error
         if self.confirmation_fields is not None and not confirm_meaning_change:
             raise MeaningChangeConfirmationRequired(self.confirmation_fields)
-        if self.latest is None or self.latest.prediction_id != prediction_id:
+        target: FakePrediction | FakeNumericPrediction | None = None
+        if self.latest is not None and self.latest.prediction_id == prediction_id:
+            target = self.latest
+        elif (
+            self.numeric_latest is not None
+            and self.numeric_latest.prediction_id == prediction_id
+        ):
+            target = self.numeric_latest
+        if target is None:
             raise ApplicationError("Prediction not found.")
-        if self.latest.metadata_version != expected_metadata_version:
+        if target.metadata_version != expected_metadata_version:
             raise ConcurrentPredictionUpdateError(prediction_id)
         updated = replace(
-            self.latest,
+            target,
             question=question.strip(),
             background=(background or "").strip() or None,
             resolution_criteria=(resolution_criteria or "").strip() or None,
@@ -1310,15 +1318,18 @@ class FakePredictionOperations:
             expected_resolution=expected_resolution,
             tags=tags,
         )
-        if updated != self.latest:
+        if updated != target:
             self.mutation_count += 1
             updated = replace(
                 updated,
-                metadata_version=self.latest.metadata_version + 1,
+                metadata_version=target.metadata_version + 1,
                 deletion_allowed=False,
             )
+        if isinstance(updated, FakeNumericPrediction):
+            self.numeric_latest = updated
+            return updated
         self.latest = updated
-        return self.latest
+        return updated
 
     def list_definition_changes(
         self,
@@ -4241,6 +4252,30 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
         QPushButton,
         "deleteNumericPredictionButton",
     )
+    numeric_edit = _required_child(
+        window,
+        QPushButton,
+        "editNumericPredictionDetailsButton",
+    )
+    numeric_resolve = _required_child(
+        window,
+        QPushButton,
+        "resolveNumericPredictionButton",
+    )
+    assert numeric_actions.getItemPosition(numeric_actions.indexOf(numeric_edit)) == (
+        1,
+        1,
+        1,
+        1,
+    )
+    assert numeric_actions.getItemPosition(
+        numeric_actions.indexOf(numeric_resolve)
+    ) == (
+        1,
+        2,
+        1,
+        1,
+    )
     assert numeric_actions.getItemPosition(numeric_actions.indexOf(numeric_delete)) == (
         2,
         2,
@@ -4279,6 +4314,114 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
     assert prediction_type.currentData() == PredictionType.BINARY.value
     assert _required_child(window, QLineEdit, "numericUnitInput").text() == ""
     assert _required_child(window, QSpinBox, "numericConfidenceInput").value() == 80
+
+
+def test_numeric_edit_details_reuses_metadata_dialog_and_preserves_definition(
+    qtbot: QtBot,
+) -> None:
+    instant = datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
+    revision = FakeNumericRevision(
+        revision_id=20,
+        prediction_id=2,
+        lower_bound=FixedPrecisionValue(125, 2),
+        median_estimate=FixedPrecisionValue(350, 2),
+        upper_bound=FixedPrecisionValue(1075, 2),
+        confidence_percent=80,
+        sequence=1,
+        created_at=instant,
+        rationale="Initial rationale",
+    )
+    numeric = FakeNumericPrediction(
+        prediction_id=2,
+        question="How many days will this take?",
+        unit="days",
+        decimal_places=2,
+        status=PredictionStatus.OPEN,
+        created_at=instant,
+        updated_at=instant,
+        current_revision=revision,
+        background="Original background",
+        tags=("Original",),
+    )
+    operations = FakePredictionOperations()
+    operations.numeric_latest = numeric
+    operations.numeric_revisions = [revision]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    dialog = _open_numeric_edit_dialog(qtbot, window)
+    context = _required_child(dialog, QLabel, "editNumericDefinitionContext")
+    assert "fixed after creation" in context.text()
+    assert "Unit: days" in context.text()
+    assert "Precision: 2 decimal places" in context.text()
+    assert context.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
+    assert dialog.findChild(QLineEdit, "editNumericUnitInput") is None
+    assert dialog.findChild(QSpinBox, "editNumericPrecisionInput") is None
+
+    _required_child(dialog, QPlainTextEdit, "editBackgroundInput").setPlainText(
+        "Updated numeric background"
+    )
+    _required_child(dialog, QLineEdit, "editTagsInput").setText("Planning, Numeric")
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert len(operations.update_calls) == 1
+    assert operations.update_calls[0].prediction_id == numeric.prediction_id
+    assert operations.update_calls[0].expected_metadata_version == 1
+    assert operations.numeric_latest is not None
+    assert operations.numeric_latest.background == "Updated numeric background"
+    assert operations.numeric_latest.unit == numeric.unit
+    assert operations.numeric_latest.decimal_places == numeric.decimal_places
+    assert operations.numeric_latest.current_revision == revision
+    assert _required_child(window, QLabel, "numericBackgroundValue").text() == (
+        "Updated numeric background"
+    )
+    assert not dialog.isVisible()
+
+
+def test_numeric_edit_details_cancel_is_side_effect_free(qtbot: QtBot) -> None:
+    instant = datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
+    revision = FakeNumericRevision(
+        revision_id=20,
+        prediction_id=2,
+        lower_bound=FixedPrecisionValue(125, 2),
+        median_estimate=FixedPrecisionValue(350, 2),
+        upper_bound=FixedPrecisionValue(1075, 2),
+        confidence_percent=80,
+        sequence=1,
+        created_at=instant,
+    )
+    numeric = FakeNumericPrediction(
+        prediction_id=2,
+        question="How many days will this take?",
+        unit="days",
+        decimal_places=2,
+        status=PredictionStatus.OPEN,
+        created_at=instant,
+        updated_at=instant,
+        current_revision=revision,
+    )
+    operations = FakePredictionOperations()
+    operations.numeric_latest = numeric
+    operations.numeric_revisions = [revision]
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+
+    dialog = _open_numeric_edit_dialog(qtbot, window)
+    _required_child(dialog, QLineEdit, "editQuestionInput").setText(
+        "Unsaved Numeric question?"
+    )
+    qtbot.mouseClick(
+        _required_child(dialog, QPushButton, "cancelPredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+
+    assert operations.update_calls == []
+    assert operations.mutation_count == 0
+    assert operations.numeric_latest == numeric
+    assert not dialog.isVisible()
 
 
 def test_numeric_creation_failure_keeps_the_form_values_for_correction(
@@ -6848,6 +6991,22 @@ def _open_edit_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
     window.navigate_to("Prediction Detail")
     qtbot.mouseClick(
         _required_child(window, QPushButton, "editPredictionDetailsButton"),
+        Qt.MouseButton.LeftButton,
+    )
+    dialog = _required_child(window, QDialog, "editPredictionDetailsDialog")
+    qtbot.waitUntil(dialog.isVisible)
+    return dialog
+
+
+def _open_numeric_edit_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:
+    window.show()
+    window.navigate_to("Prediction Detail")
+    qtbot.mouseClick(
+        _required_child(
+            window,
+            QPushButton,
+            "editNumericPredictionDetailsButton",
+        ),
         Qt.MouseButton.LeftButton,
     )
     dialog = _required_child(window, QDialog, "editPredictionDetailsDialog")

@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.5. Its contract and Milestones 32 through 38 are defined in Section 33 of `docs/product-spec.md` and are complete. The approved v0.6 presentation release is now implemented through Milestone 42. Milestone 42A is specified but not implemented; it and each remaining milestone still require explicit authorization as one coherent vertical slice.
+The completed source release is v0.5. Its contract and Milestones 32 through 38 are defined in Section 33 of `docs/product-spec.md` and are complete. The approved v0.6 presentation release is now implemented through Milestone 42A. Each remaining milestone still requires explicit authorization as one coherent vertical slice.
 
 The v0.1 baseline includes:
 
@@ -79,7 +79,7 @@ v0.6 Milestone 41 adds shared page headers, raised content panels, textual count
 
 v0.6 Milestone 42 applies that shared presentation grammar to Binary and Numeric creation, Detail, and every existing focused dialog. Creation keeps its minimum fields visually primary and optional details collapsed. Detail consistently separates identity/current forecast, routine forecast work, secondary lifecycle/destructive actions, optional metadata, terminal facts, causal timeline, and type-specific history charts; empty optional metadata and collapsed correction/definition history retain their earlier behavior. Dialogs share headings, labels, reviewed-context surfaces, persistent inline errors, and primary/secondary actions without changing validation, concurrency, lifecycle, confirmation, or atomic-save behavior. Preserve selectable user-authored/history text and the distinction among Forecast revisions, Journal entries, and Forecast Reviews.
 
-v0.6 Milestone 42A is an approved but unimplemented Numeric Edit Details parity slice. Do not merely expose the Binary-only button or dialog. When separately authorized, make the established type-neutral metadata operation, tailored protected-field confirmations, Definition history, tags, search maintenance, and stale-version safety genuinely type-aware while keeping Numeric unit, precision, forecast history, freshness, terminal facts, and scoring unchanged. It requires no schema migration or CLI metadata command.
+v0.6 Milestone 42A completes Numeric Edit Details parity through the established type-neutral metadata transaction and a shared type-aware dialog. Numeric users can edit Question, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags in every lifecycle while unit and precision remain visible immutable context. Preserve tailored protected-field confirmations, Definition history, atomic tag/search maintenance, and stale-version safety while keeping Numeric forecast history, freshness, terminal facts, and scoring unchanged. The slice adds no schema migration or CLI metadata command.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 

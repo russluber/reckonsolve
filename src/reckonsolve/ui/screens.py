@@ -589,7 +589,7 @@ class PredictionOperations(Protocol):
         tags: tuple[str, ...],
         expected_metadata_version: int,
         confirm_meaning_change: bool = False,
-    ) -> PredictionSnapshot:
+    ) -> PredictionSnapshot | NumericPredictionSnapshot:
         """Apply a complete metadata edit after any required confirmation."""
 
     def list_definition_changes(
@@ -1165,6 +1165,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.setObjectName("numericPredictionDetailScreen")
         self._operations = operations
         self._prediction: NumericPredictionSnapshot | None = None
+        self._edit_dialog: EditPredictionDetailsDialog | None = None
         self._resolution_history: NumericResolutionHistory | None = None
         self._invalidation_history: InvalidationHistory | None = None
 
@@ -1309,6 +1310,11 @@ class NumericPredictionDetailScreen(QWidget):
             "Record a Review retaining this numeric interval"
         )
         apply_lucide_icon(self.review_forecast_button, LucideIcon.CIRCLE_CHECK)
+        self.edit_details_button = QPushButton("Edit Details", actions)
+        self.edit_details_button.setObjectName("editNumericPredictionDetailsButton")
+        self.edit_details_button.setAccessibleName("Edit Numeric Prediction details")
+        apply_action_role(self.edit_details_button, ActionRole.SECONDARY)
+        apply_lucide_icon(self.edit_details_button, LucideIcon.PENCIL)
         self.resolve_button = QPushButton("Resolve", actions)
         self.resolve_button.setObjectName("resolveNumericPredictionButton")
         apply_lucide_icon(self.resolve_button, LucideIcon.CIRCLE_CHECK)
@@ -1330,6 +1336,7 @@ class NumericPredictionDetailScreen(QWidget):
                 self.revise_forecast_button,
                 self.add_journal_entry_button,
                 self.review_forecast_button,
+                self.edit_details_button,
                 self.resolve_button,
                 self.mark_invalid_button,
                 self.delete_button,
@@ -1338,7 +1345,8 @@ class NumericPredictionDetailScreen(QWidget):
         actions_layout.addWidget(self.add_journal_entry_button, 0, 1)
         actions_layout.addWidget(self.revise_forecast_button, 0, 2)
         actions_layout.addWidget(self.review_forecast_button, 0, 3)
-        actions_layout.addWidget(self.resolve_button, 1, 1)
+        actions_layout.addWidget(self.edit_details_button, 1, 1)
+        actions_layout.addWidget(self.resolve_button, 1, 2)
         actions_layout.addWidget(self.mark_invalid_button, 1, 3)
         actions_layout.addWidget(self.delete_button, 2, 2)
 
@@ -1658,6 +1666,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.revise_forecast_button.clicked.connect(self.open_revise_forecast)
         self.add_journal_entry_button.clicked.connect(self.open_add_journal_entry)
         self.review_forecast_button.clicked.connect(self.open_forecast_review)
+        self.edit_details_button.clicked.connect(self.open_edit_details)
         self.resolve_button.clicked.connect(self.open_resolve_prediction)
         self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
         self.delete_button.clicked.connect(self.delete_prediction)
@@ -2227,6 +2236,28 @@ class NumericPredictionDetailScreen(QWidget):
         dialog.revision_saved.connect(self.show_prediction)
         dialog.open()
 
+    def open_edit_details(self) -> None:
+        """Open a prefilled type-aware metadata dialog for this Numeric Prediction."""
+
+        if self._prediction is None:
+            return
+        try:
+            prediction = self._operations.get_numeric_prediction(
+                self._prediction.prediction_id
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        self.show_prediction(prediction)
+        dialog = EditPredictionDetailsDialog(self._operations, prediction, self)
+        self._edit_dialog = dialog
+        dialog.metadata_saved.connect(self.show_prediction)
+        dialog.finished.connect(self._edit_dialog_finished)
+        dialog.open()
+
+    def _edit_dialog_finished(self, _result: int) -> None:
+        self._edit_dialog = None
+
     def open_add_journal_entry(self) -> None:
         if self._prediction is None:
             return
@@ -2476,7 +2507,7 @@ class EditPredictionDetailsDialog(_StyledDialog):
     def __init__(
         self,
         operations: PredictionOperations,
-        prediction: PredictionSnapshot,
+        prediction: PredictionSnapshot | NumericPredictionSnapshot,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -2491,6 +2522,30 @@ class EditPredictionDetailsDialog(_StyledDialog):
 
         title = QLabel("Edit Prediction Details", self)
         title.setObjectName("editPredictionDetailsTitle")
+
+        self.numeric_definition_context = QLabel("", self)
+        self.numeric_definition_context.setObjectName("editNumericDefinitionContext")
+        self.numeric_definition_context.setTextFormat(Qt.TextFormat.PlainText)
+        self.numeric_definition_context.setWordWrap(True)
+        self.numeric_definition_context.setAccessibleName(
+            "Immutable Numeric Prediction definition"
+        )
+        _make_selectable(self.numeric_definition_context)
+        apply_surface_role(
+            self.numeric_definition_context,
+            SurfaceRole.BASE,
+        )
+        if hasattr(prediction, "unit") and hasattr(prediction, "decimal_places"):
+            decimal_label = (
+                "decimal place" if prediction.decimal_places == 1 else "decimal places"
+            )
+            self.numeric_definition_context.setText(
+                "Numeric definition (fixed after creation)\n"
+                f"Unit: {prediction.unit}\n"
+                f"Precision: {prediction.decimal_places} {decimal_label}"
+            )
+        else:
+            self.numeric_definition_context.setHidden(True)
 
         question_label = QLabel("Question", self)
         self.question_input = QLineEdit(prediction.question, self)
@@ -2573,6 +2628,7 @@ class EditPredictionDetailsDialog(_StyledDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(title)
         layout.addSpacing(10)
+        layout.addWidget(self.numeric_definition_context)
         layout.addWidget(question_label)
         layout.addWidget(self.question_input)
         layout.addWidget(background_label)
@@ -2630,7 +2686,11 @@ class EditPredictionDetailsDialog(_StyledDialog):
         self.metadata_saved.emit(prediction)
         self.accept()
 
-    def _save(self, *, confirm_meaning_change: bool) -> PredictionSnapshot:
+    def _save(
+        self,
+        *,
+        confirm_meaning_change: bool,
+    ) -> PredictionSnapshot | NumericPredictionSnapshot:
         return self._operations.update_metadata(
             self._prediction_id,
             question=self.question_input.text(),

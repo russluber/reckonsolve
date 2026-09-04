@@ -1,6 +1,7 @@
 """Purpose-specific SQLite access for binary predictions."""
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import date, datetime
 
 from reckonsolve.clock import format_utc, parse_utc
@@ -29,6 +30,7 @@ from reckonsolve.domain.predictions import (
     NewJournalEntry,
     NewPrediction,
     NewResolution,
+    NumericPrediction,
     PredictionDetail,
     PredictionMetadataUpdate,
     PredictionStatus,
@@ -1147,18 +1149,18 @@ class PredictionRepository:
         prediction_id: int,
         update: PredictionMetadataUpdate,
         *,
-        expected: PredictionDetail,
+        expected: PredictionDetail | NumericPrediction,
         expected_metadata_version: int,
         changed_at: datetime,
-    ) -> PredictionDetail | None:
-        """Replace metadata and append any definition record atomically."""
+    ) -> bool | None:
+        """Replace shared metadata and append any definition record atomically."""
 
         timestamp = format_utc(changed_at)
         with self._database.transaction() as connection:
-            row = _select_prediction_detail(connection, prediction_id)
+            row = _select_editable_metadata(connection, prediction_id)
             if row is None:
                 return None
-            current = _map_prediction_detail(
+            current = _map_editable_metadata(
                 row,
                 select_tags(connection, prediction_id),
             )
@@ -1168,7 +1170,7 @@ class PredictionRepository:
             ):
                 raise PredictionChangedError
             if not metadata_would_change(current, update):
-                return current
+                return False
 
             definition_fields = changed_definition_fields(current, update)
             connection.execute(
@@ -1225,17 +1227,7 @@ class PredictionRepository:
                     ),
                 )
 
-            updated_row = _select_prediction_detail(connection, prediction_id)
-            if updated_row is None:
-                raise sqlite3.DatabaseError(
-                    "The updated prediction could not be loaded."
-                )
-            detail = _map_prediction_detail(
-                updated_row,
-                select_tags(connection, prediction_id),
-            )
-
-        return detail
+        return True
 
     def list_definition_changes(
         self,
@@ -1696,9 +1688,60 @@ def replace_tags(
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _EditableMetadata:
+    """Type-neutral persisted metadata used for optimistic save checks."""
+
+    question: str
+    background: str | None
+    resolution_criteria: str | None
+    forecast_deadline: date | None
+    expected_resolution: date | None
+    tags: tuple[str, ...]
+    updated_at: datetime
+    metadata_version: int
+
+
+def _select_editable_metadata(
+    connection: sqlite3.Connection,
+    prediction_id: int,
+) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT
+            question,
+            background,
+            resolution_criteria,
+            forecast_deadline,
+            expected_resolution,
+            updated_at,
+            metadata_version
+        FROM predictions
+        WHERE id = ?
+        """,
+        (prediction_id,),
+    ).fetchone()
+
+
+def _map_editable_metadata(
+    row: sqlite3.Row,
+    tags: tuple[str, ...],
+) -> _EditableMetadata:
+    return _EditableMetadata(
+        question=str(row["question"]),
+        background=_optional_string(row["background"]),
+        resolution_criteria=_optional_string(row["resolution_criteria"]),
+        forecast_deadline=_parse_date(row["forecast_deadline"]),
+        expected_resolution=_parse_date(row["expected_resolution"]),
+        tags=tags,
+        updated_at=parse_utc(str(row["updated_at"])),
+        metadata_version=int(row["metadata_version"]),
+    )
+
+
 def _same_editable_metadata(
-    left: PredictionDetail,
-    right: PredictionDetail,
+    left: _EditableMetadata,
+    right: PredictionDetail | NumericPrediction,
 ) -> bool:
     scalar_fields = (
         "question",

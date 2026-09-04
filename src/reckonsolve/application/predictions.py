@@ -2097,8 +2097,8 @@ class PredictionOperations:
         tags: tuple[str, ...],
         expected_metadata_version: int,
         confirm_meaning_change: bool = False,
-    ) -> PredictionDetail:
-        """Validate and atomically replace editable prediction metadata."""
+    ) -> PredictionDetail | NumericPrediction:
+        """Validate and atomically replace shared editable metadata."""
 
         try:
             update = PredictionMetadataUpdate(
@@ -2122,13 +2122,19 @@ class PredictionOperations:
                 field="expected_metadata_version",
             )
 
+        current: PredictionDetail | NumericPrediction | None
         current = self._repository.get_prediction(prediction_id)
+        if current is None:
+            current = self._numeric_repository.get_prediction(prediction_id)
         if current is None:
             raise PredictionNotFoundError(prediction_id)
         if current.metadata_version != expected_metadata_version:
             raise ConcurrentPredictionUpdateError(prediction_id)
         if not metadata_would_change(current, update):
-            return self._with_derived_status(current, as_utc(self._clock.now()))
+            now = as_utc(self._clock.now())
+            if isinstance(current, NumericPrediction):
+                return self._with_derived_numeric_status(current, now)
+            return self._with_derived_status(current, now)
 
         changed_fields = changed_definition_fields(current, update)
         if changed_fields and not confirm_meaning_change:
@@ -2136,7 +2142,7 @@ class PredictionOperations:
 
         changed_at = as_utc(self._clock.now())
         try:
-            updated = self._repository.update_metadata(
+            update_applied = self._repository.update_metadata(
                 prediction_id,
                 update,
                 expected=current,
@@ -2145,9 +2151,17 @@ class PredictionOperations:
             )
         except PredictionChangedError as error:
             raise ConcurrentPredictionUpdateError(prediction_id) from error
-        if updated is None:
+        if update_applied is None:
             raise PredictionNotFoundError(prediction_id)
-        return self._with_derived_status(updated, changed_at)
+        if isinstance(current, NumericPrediction):
+            updated_numeric = self._numeric_repository.get_prediction(prediction_id)
+            if updated_numeric is None:
+                raise PredictionNotFoundError(prediction_id)
+            return self._with_derived_numeric_status(updated_numeric, changed_at)
+        updated_binary = self._repository.get_prediction(prediction_id)
+        if updated_binary is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_status(updated_binary, changed_at)
 
     def list_definition_changes(
         self,

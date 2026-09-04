@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
+from typing import Protocol
 
 
 class PredictionValidationError(ValueError):
@@ -947,8 +948,19 @@ MIN_METADATA_DATE = date(1752, 9, 14)
 MAX_METADATA_DATE = date(9999, 12, 31)
 
 
+class _PredictionMetadata(Protocol):
+    """Shared metadata shape used by Binary, Numeric, and persisted snapshots."""
+
+    question: str
+    background: str | None
+    resolution_criteria: str | None
+    forecast_deadline: date | None
+    expected_resolution: date | None
+    tags: tuple[str, ...]
+
+
 def changed_definition_fields(
-    current: PredictionDetail,
+    current: _PredictionMetadata,
     update: PredictionMetadataUpdate,
 ) -> tuple[str, ...]:
     """Return meaning-bearing fields whose normalized values would change."""
@@ -961,7 +973,7 @@ def changed_definition_fields(
 
 
 def metadata_would_change(
-    current: PredictionDetail,
+    current: _PredictionMetadata,
     update: PredictionMetadataUpdate,
 ) -> bool:
     """Whether an update differs semantically from the persisted metadata."""
