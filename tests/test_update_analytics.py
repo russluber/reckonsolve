@@ -260,9 +260,7 @@ def test_numeric_update_feedback_renders_with_existing_filters(qtbot, tmp_path) 
     unit_filter = _child(window, QComboBox, "analyticsUnitFilter")
     unit_filter.setCurrentIndex(unit_filter.findData("days"))
 
-    assert _child(window, QLabel, "numericUpdatePairedCount").text() == (
-        "Revised-and-resolved pairs: 1"
-    )
+    assert _child(window, QLabel, "numericUpdatePairedCount").text() == "1"
     assert _child(window, QLabel, "numericUpdateUnrevisedCount").text().endswith("0")
     assert (
         _child(window, QLabel, "numericUpdateInitialConfidence").text().endswith("80%")

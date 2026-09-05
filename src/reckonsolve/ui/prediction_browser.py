@@ -798,18 +798,18 @@ class PredictionBrowserScreen(QWidget):
         content_layout.setSpacing(int(Spacing.SECTION))
         content_layout.addWidget(header)
 
-        controls_scroll = QScrollArea(self)
-        controls_scroll.setObjectName("predictionBrowserControlsScrollArea")
-        controls_scroll.setAccessibleName("Prediction search and filter controls")
-        controls_scroll.setWidgetResizable(True)
-        controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        controls_scroll.setHorizontalScrollBarPolicy(
+        self._controls_scroll = QScrollArea(self)
+        self._controls_scroll.setObjectName("predictionBrowserControlsScrollArea")
+        self._controls_scroll.setAccessibleName("Prediction search and filter controls")
+        self._controls_scroll.setWidgetResizable(True)
+        self._controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._controls_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        controls_scroll.setWidget(filters_panel)
-        controls_scroll.setMinimumWidth(520)
+        self._controls_scroll.setWidget(filters_panel)
+        self._controls_scroll.setMinimumWidth(520)
         for wheel_control in self._archive_wheel_controls:
-            wheel_control.set_wheel_scroll_target(controls_scroll)
+            wheel_control.set_wheel_scroll_target(self._controls_scroll)
 
         self._workspace_splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self._workspace_splitter.setObjectName("predictionBrowserWorkspace")
@@ -818,7 +818,7 @@ class PredictionBrowserScreen(QWidget):
         )
         self._workspace_splitter.setChildrenCollapsible(False)
         self._workspace_splitter.setHandleWidth(int(Spacing.CONTROL))
-        self._workspace_splitter.addWidget(controls_scroll)
+        self._workspace_splitter.addWidget(self._controls_scroll)
         self._workspace_splitter.addWidget(results_panel)
         self._workspace_splitter.setStretchFactor(0, 0)
         self._workspace_splitter.setStretchFactor(1, 1)
@@ -914,6 +914,9 @@ class PredictionBrowserScreen(QWidget):
             wheel_control.set_wheel_changes_enabled(
                 orientation is Qt.Orientation.Horizontal
             )
+        pane_minimum_width = 520 if orientation is Qt.Orientation.Horizontal else 0
+        self._controls_scroll.setMinimumWidth(pane_minimum_width)
+        self._results_panel.setMinimumWidth(pane_minimum_width)
         if self._workspace_splitter.orientation() == orientation:
             return
         self._workspace_splitter.setOrientation(orientation)

@@ -52,8 +52,10 @@ from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
     StatusTone,
+    SurfaceRole,
     TextRole,
     apply_action_role,
+    apply_surface_role,
     apply_text_role,
     semantic_colors,
 )
@@ -93,6 +95,41 @@ def _new_summary_metric(
     value.setTextFormat(Qt.TextFormat.PlainText)
     value.setWordWrap(True)
     apply_text_role(value, TextRole.FORECAST)
+    layout.addWidget(caption_label)
+    layout.addWidget(value)
+    return metric, value
+
+
+def _new_update_metric(
+    caption: str,
+    *,
+    value_object_name: str,
+    parent: QWidget,
+) -> tuple[QFrame, QLabel]:
+    """Build one bordered retrospective metric that remains meaningful as text."""
+
+    metric = QFrame(parent)
+    metric.setObjectName(f"{value_object_name}Metric")
+    apply_surface_role(metric, SurfaceRole.BASE)
+    metric.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    layout = QVBoxLayout(metric)
+    layout.setContentsMargins(
+        int(Spacing.ORDINARY),
+        int(Spacing.CONTROL),
+        int(Spacing.ORDINARY),
+        int(Spacing.CONTROL),
+    )
+    layout.setSpacing(int(Spacing.COMPACT))
+    caption_label = QLabel(caption, metric)
+    caption_label.setTextFormat(Qt.TextFormat.PlainText)
+    caption_label.setWordWrap(True)
+    apply_text_role(caption_label, TextRole.SECONDARY)
+    value = QLabel("Loading...", metric)
+    value.setObjectName(value_object_name)
+    value.setTextFormat(Qt.TextFormat.PlainText)
+    value.setWordWrap(True)
+    value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    apply_text_role(value, TextRole.SECTION_TITLE)
     layout.addWidget(caption_label)
     layout.addWidget(value)
     return metric, value
@@ -266,6 +303,10 @@ class AnalyticsScreen(QWidget):
             parent=self,
         )
         filters_panel.setObjectName("analyticsFiltersPanel")
+        filters_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
 
         type_label = QLabel("Forecast type", filters_panel.body)
         self.type_filter = QComboBox(filters_panel.body)
@@ -361,6 +402,16 @@ class AnalyticsScreen(QWidget):
         self.empty_label = EmptyStateLabel("", parent=self)
         self.empty_label.setObjectName("analyticsEmpty")
         self.empty_label.setHidden(True)
+        self.empty_region = QWidget(self)
+        self.empty_region.setObjectName("analyticsEmptyRegion")
+        empty_layout = QVBoxLayout(self.empty_region)
+        empty_layout.setContentsMargins(0, 0, 0, 0)
+        empty_layout.setSpacing(0)
+        empty_layout.addWidget(
+            self.empty_label,
+            alignment=Qt.AlignmentFlag.AlignTop,
+        )
+        empty_layout.addStretch()
 
         content = QWidget(self)
         content.setObjectName("analyticsContent")
@@ -395,7 +446,7 @@ class AnalyticsScreen(QWidget):
         layout.addWidget(header)
         layout.addWidget(filters_panel)
         layout.addWidget(self.error_label)
-        layout.addWidget(self.empty_label)
+        layout.addWidget(self.empty_region, 1)
         layout.addWidget(self.scroll_area, 1)
 
         self.setTabOrder(self.type_filter, self.tag_filter)
@@ -616,33 +667,56 @@ class AnalyticsScreen(QWidget):
         )
         explanation.setObjectName("binaryUpdateAnalyticsExplanation")
         explanation.setWordWrap(True)
-        self.binary_update_paired_count = QLabel(section.body)
-        self.binary_update_paired_count.setObjectName("binaryUpdatePairedCount")
-        self.binary_update_unrevised_count = QLabel(section.body)
-        self.binary_update_unrevised_count.setObjectName("binaryUpdateUnrevisedCount")
-        self.binary_update_initial_brier = QLabel(section.body)
-        self.binary_update_initial_brier.setObjectName("binaryUpdateInitialBrier")
-        self.binary_update_final_brier = QLabel(section.body)
-        self.binary_update_final_brier.setObjectName("binaryUpdateFinalBrier")
-        self.binary_update_improvement = QLabel(section.body)
-        self.binary_update_improvement.setObjectName("binaryUpdateImprovement")
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(explanation, TextRole.SECONDARY)
+
+        paired_card, self.binary_update_paired_count = _new_update_metric(
+            "Revised-and-resolved pairs",
+            value_object_name="binaryUpdatePairedCount",
+            parent=section.body,
+        )
+        unrevised_card, self.binary_update_unrevised_count = _new_update_metric(
+            "Unrevised resolutions",
+            value_object_name="binaryUpdateUnrevisedCount",
+            parent=section.body,
+        )
+        coverage = _ResponsiveMetricRow(
+            (paired_card, unrevised_card),
+            stack_below=430,
+            object_name="binaryUpdateCoverageMetrics",
+            parent=section.body,
+        )
+
+        initial_card, self.binary_update_initial_brier = _new_update_metric(
+            "Mean initial Brier",
+            value_object_name="binaryUpdateInitialBrier",
+            parent=section.body,
+        )
+        final_card, self.binary_update_final_brier = _new_update_metric(
+            "Mean final Brier",
+            value_object_name="binaryUpdateFinalBrier",
+            parent=section.body,
+        )
+        improvement_card, self.binary_update_improvement = _new_update_metric(
+            "Mean improvement (initial minus final)",
+            value_object_name="binaryUpdateImprovement",
+            parent=section.body,
+        )
+        scores = _ResponsiveMetricRow(
+            (initial_card, final_card, improvement_card),
+            stack_below=760,
+            object_name="binaryUpdateScoreMetrics",
+            parent=section.body,
+        )
         self.binary_update_guidance = QLabel(section.body)
         self.binary_update_guidance.setObjectName("binaryUpdateGuidance")
         self.binary_update_guidance.setWordWrap(True)
-        for label in (
-            explanation,
-            self.binary_update_paired_count,
-            self.binary_update_unrevised_count,
-            self.binary_update_initial_brier,
-            self.binary_update_final_brier,
-            self.binary_update_improvement,
-            self.binary_update_guidance,
-        ):
-            label.setTextFormat(Qt.TextFormat.PlainText)
-            label.setWordWrap(True)
-            section_layout.addWidget(label)
-        apply_text_role(explanation, TextRole.SECONDARY)
+        self.binary_update_guidance.setTextFormat(Qt.TextFormat.PlainText)
         apply_text_role(self.binary_update_guidance, TextRole.SECONDARY)
+        section_layout.addWidget(explanation)
+        section_layout.addWidget(coverage)
+        section_layout.addWidget(scores)
+        section_layout.addWidget(self.binary_update_guidance)
         return section
 
     def _create_numeric_update_content(self, parent: QWidget) -> ContentPanel:
@@ -661,57 +735,105 @@ class AnalyticsScreen(QWidget):
         )
         explanation.setObjectName("numericUpdateAnalyticsExplanation")
         explanation.setWordWrap(True)
-        self.numeric_update_paired_count = QLabel(section.body)
-        self.numeric_update_paired_count.setObjectName("numericUpdatePairedCount")
-        self.numeric_update_unrevised_count = QLabel(section.body)
-        self.numeric_update_unrevised_count.setObjectName("numericUpdateUnrevisedCount")
-        self.numeric_update_initial_confidence = QLabel(section.body)
-        self.numeric_update_initial_confidence.setObjectName(
-            "numericUpdateInitialConfidence"
+        explanation.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(explanation, TextRole.SECONDARY)
+
+        paired_card, self.numeric_update_paired_count = _new_update_metric(
+            "Revised-and-resolved pairs",
+            value_object_name="numericUpdatePairedCount",
+            parent=section.body,
         )
-        self.numeric_update_final_confidence = QLabel(section.body)
-        self.numeric_update_final_confidence.setObjectName(
-            "numericUpdateFinalConfidence"
+        unrevised_card, self.numeric_update_unrevised_count = _new_update_metric(
+            "Unrevised resolutions",
+            value_object_name="numericUpdateUnrevisedCount",
+            parent=section.body,
         )
-        self.numeric_update_initial_containment = QLabel(section.body)
-        self.numeric_update_initial_containment.setObjectName(
-            "numericUpdateInitialContainment"
+        coverage = _ResponsiveMetricRow(
+            (paired_card, unrevised_card),
+            stack_below=430,
+            object_name="numericUpdateCoverageMetrics",
+            parent=section.body,
         )
-        self.numeric_update_final_containment = QLabel(section.body)
-        self.numeric_update_final_containment.setObjectName(
-            "numericUpdateFinalContainment"
+
+        initial_confidence_card, self.numeric_update_initial_confidence = (
+            _new_update_metric(
+                "Mean initial confidence",
+                value_object_name="numericUpdateInitialConfidence",
+                parent=section.body,
+            )
         )
+        final_confidence_card, self.numeric_update_final_confidence = (
+            _new_update_metric(
+                "Mean final confidence",
+                value_object_name="numericUpdateFinalConfidence",
+                parent=section.body,
+            )
+        )
+        initial_containment_card, self.numeric_update_initial_containment = (
+            _new_update_metric(
+                "Initial intervals containing outcome",
+                value_object_name="numericUpdateInitialContainment",
+                parent=section.body,
+            )
+        )
+        final_containment_card, self.numeric_update_final_containment = (
+            _new_update_metric(
+                "Final intervals containing outcome",
+                value_object_name="numericUpdateFinalContainment",
+                parent=section.body,
+            )
+        )
+        confidence = _ResponsiveMetricRow(
+            (initial_confidence_card, final_confidence_card),
+            stack_below=520,
+            object_name="numericUpdateConfidenceMetrics",
+            parent=section.body,
+        )
+        containment = _ResponsiveMetricRow(
+            (initial_containment_card, final_containment_card),
+            stack_below=520,
+            object_name="numericUpdateContainmentMetrics",
+            parent=section.body,
+        )
+
         self.numeric_update_raw_scope = QLabel(section.body)
         self.numeric_update_raw_scope.setObjectName("numericUpdateRawScope")
         self.numeric_update_raw_scope.setWordWrap(True)
-        self.numeric_update_median_error = QLabel(section.body)
-        self.numeric_update_median_error.setObjectName("numericUpdateMedianError")
-        self.numeric_update_width = QLabel(section.body)
-        self.numeric_update_width.setObjectName("numericUpdateWidth")
-        self.numeric_update_interval_score = QLabel(section.body)
-        self.numeric_update_interval_score.setObjectName("numericUpdateIntervalScore")
+        self.numeric_update_raw_scope.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(self.numeric_update_raw_scope, TextRole.SECONDARY)
+        median_card, self.numeric_update_median_error = _new_update_metric(
+            "Mean median error · initial to final",
+            value_object_name="numericUpdateMedianError",
+            parent=section.body,
+        )
+        width_card, self.numeric_update_width = _new_update_metric(
+            "Mean interval width · initial to final",
+            value_object_name="numericUpdateWidth",
+            parent=section.body,
+        )
+        interval_score_card, self.numeric_update_interval_score = _new_update_metric(
+            "Mean interval score · initial to final",
+            value_object_name="numericUpdateIntervalScore",
+            parent=section.body,
+        )
+        self.numeric_update_raw_metrics = _ResponsiveMetricRow(
+            (median_card, width_card, interval_score_card),
+            stack_below=820,
+            object_name="numericUpdateRawMetrics",
+            parent=section.body,
+        )
         self.numeric_update_guidance = QLabel(section.body)
         self.numeric_update_guidance.setObjectName("numericUpdateGuidance")
         self.numeric_update_guidance.setWordWrap(True)
-        for label in (
-            explanation,
-            self.numeric_update_paired_count,
-            self.numeric_update_unrevised_count,
-            self.numeric_update_initial_confidence,
-            self.numeric_update_final_confidence,
-            self.numeric_update_initial_containment,
-            self.numeric_update_final_containment,
-            self.numeric_update_raw_scope,
-            self.numeric_update_median_error,
-            self.numeric_update_width,
-            self.numeric_update_interval_score,
-            self.numeric_update_guidance,
-        ):
-            label.setTextFormat(Qt.TextFormat.PlainText)
-            label.setWordWrap(True)
-            section_layout.addWidget(label)
-        apply_text_role(explanation, TextRole.SECONDARY)
+        self.numeric_update_guidance.setTextFormat(Qt.TextFormat.PlainText)
         apply_text_role(self.numeric_update_guidance, TextRole.SECONDARY)
+        section_layout.addWidget(explanation)
+        section_layout.addWidget(coverage)
+        section_layout.addWidget(confidence)
+        section_layout.addWidget(containment)
+        section_layout.addWidget(self.numeric_update_raw_scope)
+        section_layout.addWidget(self.numeric_update_raw_metrics)
+        section_layout.addWidget(self.numeric_update_guidance)
         return section
 
     def refresh(self) -> None:
@@ -754,6 +876,7 @@ class AnalyticsScreen(QWidget):
                 self.numeric_summary.setHidden(True)
                 self.summary_row.setHidden(True)
                 self.empty_label.setHidden(True)
+                self.empty_region.setHidden(False)
                 self.scroll_area.setHidden(True)
             else:
                 message = (
@@ -801,9 +924,11 @@ class AnalyticsScreen(QWidget):
             self.scroll_area.setHidden(True)
             self.empty_label.setText(self._empty_message(snapshot.selected_type))
             self.empty_label.setHidden(False)
+            self.empty_region.setHidden(False)
         else:
             self.summary_row.setHidden(False)
             self.empty_label.setHidden(True)
+            self.empty_region.setHidden(True)
             self.scroll_area.setHidden(False)
 
     def _render_binary(self, snapshot: AnalyticsSnapshot) -> None:
@@ -926,20 +1051,32 @@ class AnalyticsScreen(QWidget):
         snapshot: BinaryUpdateAnalyticsSnapshot,
     ) -> None:
         count = snapshot.paired_count
-        self.binary_update_paired_count.setText(f"Revised-and-resolved pairs: {count}")
-        self.binary_update_unrevised_count.setText(
-            f"Unrevised Resolved Predictions (reported separately): "
-            f"{snapshot.unrevised_count}"
-        )
+        self.binary_update_paired_count.setText(str(count))
+        self.binary_update_unrevised_count.setText(str(snapshot.unrevised_count))
         self.binary_update_initial_brier.setText(
-            f"Mean initial Brier: {_optional_brier(snapshot.mean_initial_brier)}"
+            _optional_brier(snapshot.mean_initial_brier)
         )
         self.binary_update_final_brier.setText(
-            f"Mean final Brier: {_optional_brier(snapshot.mean_final_brier)}"
+            _optional_brier(snapshot.mean_final_brier)
         )
         self.binary_update_improvement.setText(
-            "Mean score improvement (initial minus final): "
-            f"{_optional_signed_float(snapshot.mean_score_improvement)}"
+            _optional_signed_float(snapshot.mean_score_improvement)
+        )
+        self.binary_update_paired_count.setAccessibleName(
+            f"Revised-and-resolved Binary pairs: {count}"
+        )
+        self.binary_update_unrevised_count.setAccessibleName(
+            f"Unrevised resolved Binary Predictions: {snapshot.unrevised_count}"
+        )
+        self.binary_update_initial_brier.setAccessibleName(
+            f"Mean initial Brier: {self.binary_update_initial_brier.text()}"
+        )
+        self.binary_update_final_brier.setAccessibleName(
+            f"Mean final Brier: {self.binary_update_final_brier.text()}"
+        )
+        self.binary_update_improvement.setAccessibleName(
+            "Mean Binary score improvement, initial minus final: "
+            f"{self.binary_update_improvement.text()}"
         )
         self.binary_update_guidance.setText(_update_guidance(count, "Brier"))
 
@@ -948,27 +1085,47 @@ class AnalyticsScreen(QWidget):
         snapshot: NumericUpdateAnalyticsSnapshot,
     ) -> None:
         count = snapshot.paired_count
-        self.numeric_update_paired_count.setText(f"Revised-and-resolved pairs: {count}")
-        self.numeric_update_unrevised_count.setText(
-            f"Unrevised Resolved Predictions (reported separately): "
-            f"{snapshot.unrevised_count}"
-        )
+        self.numeric_update_paired_count.setText(str(count))
+        self.numeric_update_unrevised_count.setText(str(snapshot.unrevised_count))
         self.numeric_update_initial_confidence.setText(
-            "Mean initial confidence: "
-            f"{_optional_percent(snapshot.mean_initial_confidence_percent)}"
+            _optional_percent(snapshot.mean_initial_confidence_percent)
         )
         self.numeric_update_final_confidence.setText(
-            "Mean final confidence: "
-            f"{_optional_percent(snapshot.mean_final_confidence_percent)}"
+            _optional_percent(snapshot.mean_final_confidence_percent)
         )
         self.numeric_update_initial_containment.setText(
-            "Initial intervals contained the outcome: "
-            f"{_containment_count(snapshot.initial_contained_count, count)}"
+            _containment_count(snapshot.initial_contained_count, count)
         )
         self.numeric_update_final_containment.setText(
-            "Final intervals contained the outcome: "
-            f"{_containment_count(snapshot.final_contained_count, count)}"
+            _containment_count(snapshot.final_contained_count, count)
         )
+        for label, accessible_name in (
+            (
+                self.numeric_update_paired_count,
+                "Revised-and-resolved Numeric pairs",
+            ),
+            (
+                self.numeric_update_unrevised_count,
+                "Unrevised resolved Numeric Predictions",
+            ),
+            (
+                self.numeric_update_initial_confidence,
+                "Mean initial Numeric confidence",
+            ),
+            (
+                self.numeric_update_final_confidence,
+                "Mean final Numeric confidence",
+            ),
+            (
+                self.numeric_update_initial_containment,
+                "Initial Numeric intervals containing the outcome",
+            ),
+            (
+                self.numeric_update_final_containment,
+                "Final Numeric intervals containing the outcome",
+            ),
+        ):
+            label.setAccessibleName(f"{accessible_name}: {label.text()}")
         unit_summary = snapshot.unit_summary
         if self._selected_unit() is None:
             self.numeric_update_raw_scope.setText(
@@ -994,40 +1151,45 @@ class AnalyticsScreen(QWidget):
         summary: NumericUnitUpdateSummary | None,
     ) -> None:
         if summary is None:
-            self.numeric_update_median_error.setText(
-                "Mean median error, initial to final: Not available"
-            )
-            self.numeric_update_width.setText(
-                "Mean interval width, initial to final: Not available"
-            )
-            self.numeric_update_interval_score.setText(
-                "Mean interval score, initial to final: Not available"
-            )
+            for label in (
+                self.numeric_update_median_error,
+                self.numeric_update_width,
+                self.numeric_update_interval_score,
+            ):
+                label.setText("Not available")
+            self.numeric_update_raw_metrics.setHidden(True)
             return
         unit = summary.unit
         self.numeric_update_median_error.setText(
-            "Mean median error, initial to final: "
             f"{_format_decimal(summary.mean_initial_median_absolute_error)} to "
-            f"{_format_decimal(summary.mean_final_median_absolute_error)} {unit}; "
-            "reduction (initial minus final): "
+            f"{_format_decimal(summary.mean_final_median_absolute_error)} {unit}\n"
+            "Reduction (initial minus final): "
             f"{_format_signed_decimal(summary.mean_median_error_reduction)} {unit}"
         )
         self.numeric_update_width.setText(
-            "Mean interval width, initial to final: "
             f"{_format_decimal(summary.mean_initial_interval_width)} to "
-            f"{_format_decimal(summary.mean_final_interval_width)} {unit}; "
-            "narrowing (initial minus final): "
-            f"{_format_signed_decimal(summary.mean_narrowing)} {unit}. "
+            f"{_format_decimal(summary.mean_final_interval_width)} {unit}\n"
+            "Narrowing (initial minus final): "
+            f"{_format_signed_decimal(summary.mean_narrowing)} {unit}\n"
             "Narrower is not automatically better."
         )
         self.numeric_update_interval_score.setText(
-            "Mean interval score, initial to final: "
             f"{_format_decimal(summary.mean_initial_interval_score)} to "
-            f"{_format_decimal(summary.mean_final_interval_score)} {unit}; "
-            "improvement (initial minus final): "
+            f"{_format_decimal(summary.mean_final_interval_score)} {unit}\n"
+            "Improvement (initial minus final): "
             f"{_format_signed_decimal(summary.mean_interval_score_improvement)} "
-            f"{unit}. Positive is better."
+            f"{unit}\nPositive is better."
         )
+        for label, accessible_name in (
+            (self.numeric_update_median_error, "Mean median error, initial to final"),
+            (self.numeric_update_width, "Mean interval width, initial to final"),
+            (
+                self.numeric_update_interval_score,
+                "Mean interval score, initial to final",
+            ),
+        ):
+            label.setAccessibleName(f"{accessible_name}: {label.text()}")
+        self.numeric_update_raw_metrics.setHidden(False)
 
     def _empty_message(self, prediction_type: PredictionType | None) -> str:
         if self._selected_tag() is not None:

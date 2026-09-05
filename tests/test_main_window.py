@@ -2418,6 +2418,43 @@ def test_analytics_uses_shared_panels_accessible_filters_and_responsive_summarie
         assert label.width() == comparison.width()
         assert label.height() <= label.fontMetrics().lineSpacing() + 2
 
+    for object_name in (
+        "binaryUpdatePairedCountMetric",
+        "binaryUpdateUnrevisedCountMetric",
+        "binaryUpdateInitialBrierMetric",
+        "binaryUpdateFinalBrierMetric",
+        "binaryUpdateImprovementMetric",
+        "numericUpdatePairedCountMetric",
+        "numericUpdateUnrevisedCountMetric",
+        "numericUpdateInitialConfidenceMetric",
+        "numericUpdateFinalConfidenceMetric",
+        "numericUpdateInitialContainmentMetric",
+        "numericUpdateFinalContainmentMetric",
+    ):
+        metric = _required_child(window, QFrame, object_name)
+        assert metric.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.BASE.value
+
+    binary_update_scores = _required_child(
+        window,
+        QWidget,
+        "binaryUpdateScoreMetrics",
+    ).layout()
+    numeric_update_confidence = _required_child(
+        window,
+        QWidget,
+        "numericUpdateConfidenceMetrics",
+    ).layout()
+    assert isinstance(binary_update_scores, QBoxLayout)
+    assert isinstance(numeric_update_confidence, QBoxLayout)
+    qtbot.waitUntil(
+        lambda: binary_update_scores.direction() == QBoxLayout.Direction.LeftToRight
+    )
+    qtbot.waitUntil(
+        lambda: (
+            numeric_update_confidence.direction() == QBoxLayout.Direction.LeftToRight
+        )
+    )
+
     window.resize(760, 520)
 
     qtbot.waitUntil(
@@ -2450,6 +2487,8 @@ def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> Non
     operations = FakePredictionOperations()
     window = MainWindow(operations)
     qtbot.addWidget(window)
+    window.resize(1600, 900)
+    window.show()
 
     window.navigate_to("Analytics")
 
@@ -2461,6 +2500,14 @@ def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> Non
         "No scored predictions yet. Resolve a prediction to begin analytics."
     )
     assert _required_child(window, QWidget, "analyticsScrollArea").isHidden()
+    filters = _required_child(window, ContentPanel, "analyticsFiltersPanel")
+    empty_region = _required_child(window, QWidget, "analyticsEmptyRegion")
+    empty_label = _required_child(window, QLabel, "analyticsEmpty")
+    assert filters.height() <= filters.sizeHint().height()
+    assert empty_region.isVisible()
+    assert empty_label.isVisible()
+    assert empty_label.mapTo(empty_region, empty_label.rect().topLeft()).y() == 0
+    assert empty_region.height() > empty_label.height()
 
 
 def test_analytics_renders_summary_bins_counts_and_cumulative_series(
@@ -2871,6 +2918,11 @@ def test_prediction_browser_groups_controls_and_keeps_detailed_inputs_readable(
         "predictionBrowserControlsScrollArea",
     )
     workspace = _required_child(window, QSplitter, "predictionBrowserWorkspace")
+    results_panel = _required_child(
+        window,
+        QFrame,
+        "predictionBrowserResultsPanel",
+    )
     content = _required_child(window, QWidget, "predictionBrowserContent")
     groups = [
         _required_child(window, QFrame, name)
@@ -2884,6 +2936,10 @@ def test_prediction_browser_groups_controls_and_keeps_detailed_inputs_readable(
     group_tops = [group.mapTo(content, group.rect().topLeft()).y() for group in groups]
     assert group_tops == sorted(group_tops)
     assert workspace.orientation() is Qt.Orientation.Vertical
+    assert scroll.minimumWidth() == 0
+    assert results_panel.minimumWidth() == 0
+    assert scroll.geometry().right() <= workspace.rect().right()
+    assert results_panel.geometry().right() <= workspace.rect().right()
     assert scroll.verticalScrollBar().maximum() > 0
     status_filter = _required_child(window, QComboBox, "predictionStatusFilter")
     wheel_position = status_filter.rect().center()
@@ -2973,11 +3029,6 @@ def test_prediction_browser_groups_controls_and_keeps_detailed_inputs_readable(
         ContentPanel,
         "predictionBrowserFiltersPanel",
     )
-    results_panel = _required_child(
-        window,
-        QFrame,
-        "predictionBrowserResultsPanel",
-    )
     assert filters_panel.isVisible()
     assert filters_panel.layout().spacing() == int(Spacing.COMPACT)
     heading = filters_panel.title_label.parentWidget()
@@ -2996,6 +3047,8 @@ def test_prediction_browser_groups_controls_and_keeps_detailed_inputs_readable(
     assert results_panel.mapTo(window, results_panel.rect().topLeft()).x() > (
         filters_panel.mapTo(window, filters_panel.rect().topLeft()).x()
     )
+    assert scroll.minimumWidth() == 520
+    assert results_panel.minimumWidth() == 520
     tag_filter = _required_child(window, TagFilterPicker, "predictionTagFilter")
     detailed_group = _required_child(
         window,

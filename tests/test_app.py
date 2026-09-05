@@ -1,3 +1,5 @@
+import sqlite3
+from pathlib import Path
 from typing import cast
 from zipfile import ZipFile
 
@@ -30,7 +32,10 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
+from reckonsolve.domain.browser import ArchiveQuery
 from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
+from reckonsolve.domain.saved_views import SavedViewConfiguration
+from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 from reckonsolve.ui.analytics_charts import (
     BrierTrendChart,
@@ -39,6 +44,45 @@ from reckonsolve.ui.analytics_charts import (
 )
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.tag_filter_picker import TagFilterPicker
+
+
+def _sqlite_logical_snapshot(
+    database_path: Path,
+) -> dict[str, tuple[tuple[object, ...], ...]]:
+    """Capture every application and derived row without changing the database."""
+
+    uri = f"{database_path.resolve().as_uri()}?mode=ro"
+    connection = sqlite3.connect(uri, uri=True, autocommit=True)
+    try:
+        table_names = tuple(
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+                ORDER BY name
+                """
+            ).fetchall()
+        )
+        snapshot: dict[str, tuple[tuple[object, ...], ...]] = {}
+        for table_name in table_names:
+            escaped_name = table_name.replace('"', '""')
+            rows = tuple(
+                sorted(
+                    (
+                        tuple(row)
+                        for row in connection.execute(
+                            f'SELECT * FROM "{escaped_name}"'
+                        ).fetchall()
+                    ),
+                    key=repr,
+                )
+            )
+            snapshot[table_name] = rows
+        return snapshot
+    finally:
+        connection.close()
 
 
 def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
@@ -57,6 +101,88 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
     assert second_runtime.database.schema_version == 15
     second_runtime.close()
+
+
+def test_v06_presentation_use_does_not_rewrite_schema_v15_data(
+    qtbot,
+    tmp_path: Path,
+) -> None:
+    """Treat every SQLite row as a v0.5 compatibility boundary for v0.6."""
+
+    database_path = tmp_path / "reckonsolve.sqlite3"
+    database = Database.open(database_path)
+    operations = PredictionOperations(database)
+    binary = operations.create_prediction(
+        "Will the v0.5 Binary record remain byte-for-byte logical history?",
+        60,
+        rationale="Preserve the original rationale.",
+        background="Preserve searchable background.",
+        tags=("Compatibility", "Binary"),
+    )
+    operations.add_journal_entry(
+        binary.prediction_id,
+        "Preserve the Binary Journal entry.",
+        expected_revision_id=binary.current_revision_id,
+        expected_metadata_version=binary.metadata_version,
+    )
+    operations.add_forecast_review(
+        binary.prediction_id,
+        note="Preserve the Binary Review.",
+        expected_revision_id=binary.current_revision_id,
+        expected_metadata_version=binary.metadata_version,
+    )
+    numeric = operations.create_numeric_prediction(
+        "How many days will the v0.5 Numeric record retain?",
+        "days",
+        1,
+        "1.0",
+        "2.0",
+        "4.0",
+        80,
+        rationale="Preserve the Numeric rationale.",
+        tags=("Compatibility", "Numeric"),
+    )
+    operations.create_saved_view(
+        "Compatibility records",
+        SavedViewConfiguration(
+            search_text="preserve",
+            match_mode=SearchMatchMode.ALL,
+            include_superseded=False,
+            archive_query=ArchiveQuery(tags=("Compatibility",)),
+        ),
+    )
+    operations.set_stale_threshold_days(23)
+    database.check_search_index()
+    assert database.schema_version == 15
+    database.close()
+
+    before = _sqlite_logical_snapshot(database_path)
+    presentation_path = database_path.parent / "presentation.ini"
+    assert not presentation_path.exists()
+
+    runtime = create_runtime(database_path=database_path)
+    qtbot.addWidget(runtime.window)
+    runtime.window.show()
+    for route in (
+        "Dashboard",
+        "Predictions",
+        "Analytics",
+        "Settings",
+        "New Prediction",
+    ):
+        runtime.window.navigate_to(route)
+        assert runtime.window.current_screen_name == route
+    runtime.window._show_selected_prediction(binary)
+    assert runtime.window.current_screen_name == "Prediction Detail"
+    runtime.window._show_selected_prediction(numeric)
+    assert runtime.window.current_screen_name == "Prediction Detail"
+    runtime.window.toggle_sidebar()
+    assert runtime.window.sidebar_compact
+    assert runtime.database.schema_version == 15
+    runtime.close()
+
+    assert presentation_path.is_file()
+    assert _sqlite_logical_snapshot(database_path) == before
 
 
 def test_development_runtime_has_visible_isolated_identity(

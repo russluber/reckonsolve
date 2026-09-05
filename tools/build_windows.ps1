@@ -8,15 +8,16 @@ $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $specPath = Join-Path $projectRoot "packaging\Reckonsolve.spec"
 $workPath = Join-Path $projectRoot "build\pyinstaller"
 $distPath = Join-Path $projectRoot "dist"
+$uvCachePath = Join-Path $projectRoot ".uv-cache"
 
 Push-Location $projectRoot
 try {
-    uv sync --locked --group packaging
+    uv --cache-dir $uvCachePath sync --locked --group packaging
     if ($LASTEXITCODE -ne 0) {
         throw "uv sync failed with exit code $LASTEXITCODE."
     }
 
-    uv run --group packaging pyinstaller `
+    uv --cache-dir $uvCachePath run --group packaging pyinstaller `
         --clean `
         --noconfirm `
         --workpath $workPath `

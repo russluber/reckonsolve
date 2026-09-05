@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QShortcut
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QLineEdit,
+    QListWidget,
+    QPushButton,
+    QWidget,
+)
 
 from reckonsolve.app import create_runtime
 from reckonsolve.application.errors import SearchUnavailableError
@@ -15,6 +27,8 @@ from reckonsolve.domain.browser import ArchiveQuery, ArchiveTagMatchMode
 from reckonsolve.domain.predictions import BinaryOutcome
 from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import SearchMatchMode
+from reckonsolve.ui.presentation_settings import MINIMUM_WINDOW_SIZE
+from reckonsolve.ui.visual_system import VISUAL_SYSTEM_PROPERTY
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +41,7 @@ class _SmokeState:
 
 
 def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
-    """Exercise frozen v0.5 migration, search, backup, repair, and restart."""
+    """Exercise frozen v0.6 presentation and the complete v0.5 data boundary."""
 
     database_path = database_path.resolve()
     backup_path = backup_path.resolve()
@@ -36,6 +50,11 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
     for path in (database_path, backup_path):
         if path.exists():
             raise FileExistsError(f"Private build smoke path already exists: {path}")
+    presentation_path = database_path.parent / "presentation.ini"
+    if presentation_path.exists():
+        raise FileExistsError(
+            f"Private build smoke presentation path already exists: {presentation_path}"
+        )
     backup_path.parent.mkdir(parents=True, exist_ok=True)
 
     previous_database = Database.open(database_path, migrations=MIGRATIONS[:13])
@@ -292,6 +311,18 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             raise RuntimeError("The frozen search repair lost canonical text.")
         runtime.database.check_search_index()
 
+        before_presentation = _sqlite_logical_snapshot(database_path)
+        _exercise_v06_presentation(
+            runtime,
+            operations,
+            binary_prediction_id=binary_prediction.prediction_id,
+            numeric_prediction_id=numeric_prediction.prediction_id,
+        )
+        if _sqlite_logical_snapshot(database_path) != before_presentation:
+            raise RuntimeError(
+                "Using the frozen v0.6 presentation rewrote schema-version-15 data."
+            )
+
         operations.create_backup(backup_path)
         state = _SmokeState(
             previous_prediction_id=previous_prediction_id,
@@ -305,6 +336,187 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
 
     _verify_smoke_database(database_path, state)
     _verify_smoke_database(backup_path, state)
+    _verify_frozen_restart(database_path, state)
+
+
+def _exercise_v06_presentation(
+    runtime,
+    operations: PredictionOperations,
+    *,
+    binary_prediction_id: int,
+    numeric_prediction_id: int,
+) -> None:
+    """Load the frozen style resources, shell states, routes, and forecast views."""
+
+    window = runtime.window
+    if window.property(VISUAL_SYSTEM_PROPERTY) is not True or not window.styleSheet():
+        raise RuntimeError("The frozen v0.6 visual system did not load.")
+    if window.sidebar_compact:
+        raise RuntimeError("A fresh frozen presentation did not use safe defaults.")
+    if (
+        window.minimumWidth() != MINIMUM_WINDOW_SIZE.width()
+        or window.minimumHeight() != MINIMUM_WINDOW_SIZE.height()
+        or window.windowState() & Qt.WindowState.WindowMinimized
+    ):
+        raise RuntimeError("The frozen window did not use safe presentation bounds.")
+
+    new_prediction = window.findChild(QPushButton, "newPredictionNavigationButton")
+    settings = window.findChild(QPushButton, "settingsNavigationButton")
+    navigation = window.findChild(QListWidget, "primaryNavigation")
+    sidebar = window.findChild(QFrame, "applicationSidebar")
+    if None in (new_prediction, settings, navigation, sidebar):
+        raise RuntimeError("The frozen application shell is incomplete.")
+    if new_prediction.icon().isNull() or settings.icon().isNull():
+        raise RuntimeError("Frozen shell button icons were not rendered.")
+    if navigation.count() != 3 or any(
+        navigation.item(row).icon().isNull() for row in range(navigation.count())
+    ):
+        raise RuntimeError("Frozen primary navigation icons were not rendered.")
+
+    route_objects = {
+        "Dashboard": "dashboardScreen",
+        "Predictions": "predictionsScreen",
+        "Analytics": "analyticsScreen",
+        "Settings": "settingsScreen",
+        "New Prediction": "newPredictionScreen",
+    }
+    for route, object_name in route_objects.items():
+        window.navigate_to(route)
+        runtime.qt_app.processEvents()
+        if (
+            window.current_screen_name != route
+            or window.findChild(
+                QWidget,
+                object_name,
+            )
+            is None
+        ):
+            raise RuntimeError(f"The frozen {route} screen did not load.")
+
+    window._show_selected_prediction(operations.get_prediction(binary_prediction_id))
+    runtime.qt_app.processEvents()
+    if window.findChild(QWidget, "predictionDetailScreen") is None:
+        raise RuntimeError("Frozen Binary Prediction Detail did not load.")
+    window._show_selected_prediction(
+        operations.get_numeric_prediction(numeric_prediction_id)
+    )
+    runtime.qt_app.processEvents()
+    if window.findChild(QWidget, "numericPredictionDetailScreen") is None:
+        raise RuntimeError("Frozen Numeric Prediction Detail did not load.")
+
+    focused = QApplication.focusWidget()
+    if focused is not None:
+        focused.clearFocus()
+    window.activateWindow()
+    navigation.setFocus(Qt.FocusReason.ShortcutFocusReason)
+    runtime.qt_app.processEvents()
+    predictions_shortcut = window.findChild(QShortcut, "globalShortcutPredictions")
+    compact_shortcut = window.findChild(QShortcut, "globalShortcutToggleSidebar")
+    if predictions_shortcut is None or compact_shortcut is None:
+        raise RuntimeError("Frozen global keyboard shortcuts are missing.")
+    shared_test_modal = QApplication.activeModalWidget()
+    if shared_test_modal is None:
+        predictions_shortcut.activated.emit()
+    else:
+        # A real frozen-smoke process has no foreign modal. The source-suite test
+        # reuses pytest-qt's one QApplication, where an earlier test may still own
+        # a deliberate modal and the production shortcut guard must respect it.
+        window.navigate_to("Predictions")
+    runtime.qt_app.processEvents()
+    if window.current_screen_name != "Predictions":
+        raise RuntimeError("Frozen keyboard navigation did not reach Predictions.")
+    if shared_test_modal is None:
+        compact_shortcut.activated.emit()
+    else:
+        window.toggle_sidebar()
+    runtime.qt_app.processEvents()
+    if not window.sidebar_compact:
+        raise RuntimeError("Frozen keyboard navigation did not enter compact mode.")
+    if any(
+        navigation.item(row).icon().isNull()
+        or not navigation.item(row).toolTip()
+        or not navigation.item(row).data(Qt.ItemDataRole.AccessibleTextRole)
+        for row in range(navigation.count())
+    ):
+        raise RuntimeError("Frozen compact navigation lost accessible icon controls.")
+
+    for width, height in ((760, 520), (960, 640), (1440, 900)):
+        window.resize(width, height)
+        runtime.qt_app.processEvents()
+        if sidebar.width() <= 0 or window.centralWidget().width() <= sidebar.width():
+            raise RuntimeError("The frozen shell failed a responsive window size.")
+
+
+def _verify_frozen_restart(database_path: Path, state: _SmokeState) -> None:
+    """Restart the frozen GUI with its external presentation preference."""
+
+    before_restart = _sqlite_logical_snapshot(database_path)
+    runtime = create_runtime(
+        argv=["Reckonsolve.exe", "--private-build-smoke-restart"],
+        database_path=database_path,
+    )
+    try:
+        runtime.window.show()
+        runtime.qt_app.processEvents()
+        if not runtime.window.sidebar_compact:
+            raise RuntimeError("The frozen compact sidebar preference did not restart.")
+        runtime.window.navigate_to("Predictions")
+        search = runtime.window.findChild(QLineEdit, "predictionSearchInput")
+        if search is None:
+            raise RuntimeError("The frozen Predictions search control did not restart.")
+        if _search_prediction_ids(
+            PredictionOperations(runtime.database),
+            "confirmed weather",
+        ) != (state.binary_prediction_id,):
+            raise RuntimeError("Frozen search did not remain usable after GUI restart.")
+        runtime.window.toggle_sidebar()
+        if runtime.window.sidebar_compact:
+            raise RuntimeError("The restarted frozen sidebar did not expand.")
+    finally:
+        runtime.close()
+    if _sqlite_logical_snapshot(database_path) != before_restart:
+        raise RuntimeError("Restarting the frozen v0.6 shell rewrote canonical data.")
+
+
+def _sqlite_logical_snapshot(
+    database_path: Path,
+) -> dict[str, tuple[tuple[object, ...], ...]]:
+    """Read every application and derived table through an independent connection."""
+
+    connection = sqlite3.connect(
+        f"{database_path.resolve().as_uri()}?mode=ro",
+        uri=True,
+        autocommit=True,
+    )
+    try:
+        table_names = tuple(
+            str(row[0])
+            for row in connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+                ORDER BY name
+                """
+            ).fetchall()
+        )
+        snapshot = {}
+        for table_name in table_names:
+            escaped = table_name.replace('"', '""')
+            snapshot[table_name] = tuple(
+                sorted(
+                    (
+                        tuple(row)
+                        for row in connection.execute(
+                            f'SELECT * FROM "{escaped}"'
+                        ).fetchall()
+                    ),
+                    key=repr,
+                )
+            )
+        return snapshot
+    finally:
+        connection.close()
 
 
 def _verify_smoke_database(

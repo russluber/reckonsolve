@@ -4,6 +4,33 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
+## 0.6.0 - 2026-09-05
+
+### Added
+
+- A centralized, palette-aware desktop visual system with shared semantic colors, native-font roles, spacing, surfaces, badges, action hierarchy, focus treatment, disabled states, persistent messages, and local Lucide icon refresh.
+- An expanded or icon-only application sidebar with a prominent New Prediction action, permanent Dashboard/Predictions/Analytics destinations, bottom Settings utility, and source-aware contextual return from Prediction Detail.
+- Identity-isolated presentation settings for safe window geometry, maximized state, and sidebar mode outside canonical SQLite data.
+- Shared page headers, content panels, count/status badges, empty states, and a non-reflowing shell notification host for disposable routine acknowledgments.
+- Numeric Edit Details parity for Question, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags while unit and decimal precision remain immutable context.
+- Searchable tag completion with removable filter chips and responsive side-by-side Predictions controls/results panes that stack when the window is narrow.
+- Guarded global navigation shortcuts, a visible Settings reference, improved focus order, accessible descriptions, tooltip-backed icon-only controls, and nonvisual chart summaries.
+- A recorded v0.6 visual-verification matrix and expanded private frozen-build checks for visual resources, shell modes, every primary screen, both Detail types, keyboard navigation, responsive sizes, schema-v15 preservation, search, backup, and restart.
+
+### Changed
+
+- New Prediction, both Prediction Detail variants, every focused forecast dialog, Dashboard, Predictions, Analytics, Settings, and tag management now use one calm, responsive presentation grammar without changing their application operations.
+- Prediction Detail separates current belief, routine forecast work, lifecycle/destructive actions, optional metadata, terminal facts, causal history, and type-specific charts; long user-authored text remains selectable and wrapped.
+- Predictions presents Search, Common filters, Detailed filters, and Saved Views in a compact stable order while retaining v0.5 matching, ranking, provenance, filtering, Saved View, and tag semantics.
+- Analytics keeps one stable filter frame above responsive summary, calibration, performance, and update-feedback panels; plot/table pairs sit side by side at normal widths and stack at narrow widths.
+- The private Windows smoke workflow now treats every schema-version-15 application and derived row as a compatibility boundary around presentation-only use.
+
+### Release notes
+
+- Reckonsolve v0.6 remains an offline, local-first, single-user source release. Existing v0.5 databases stay on schema version 15; no presentation migration is required.
+- Presentation preferences live in an identity-specific `presentation.ini` beside the database and are intentionally excluded from SQLite backup, CSV export, CLI output, search, history, lifecycle, and analytics.
+- This release does not add a Review Queue, another forecast model, a custom theme framework, logo artwork, an installer, signing, automatic updates, or public binaries.
+
 ## 0.5.0 - 2026-08-28
 
 ### Added
