@@ -100,6 +100,7 @@ class TagManagerDialog(QDialog):
         self.filter_input.setObjectName("tagManagerFilter")
         self.filter_input.setClearButtonEnabled(True)
         self.filter_input.setPlaceholderText("Type part of a tag name")
+        self.filter_input.setAccessibleName("Filter the tag library")
         filter_label.setBuddy(self.filter_input)
         apply_text_role(filter_label, TextRole.LABEL)
 
@@ -109,6 +110,10 @@ class TagManagerDialog(QDialog):
 
         self.table = QTableWidget(0, 3, self)
         self.table.setObjectName("tagManagerTable")
+        self.table.setAccessibleName("Tag library")
+        self.table.setAccessibleDescription(
+            "Tags with their current Prediction and Saved View association counts."
+        )
         self.table.setHorizontalHeaderLabels(("Tag", "Predictions", "Saved Views"))
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -172,6 +177,12 @@ class TagManagerDialog(QDialog):
         layout.addWidget(library_panel, 1)
         layout.addWidget(self.status_label)
         layout.addWidget(close_buttons)
+
+        self.setTabOrder(self.filter_input, self.table)
+        self.setTabOrder(self.table, self.rename_button)
+        self.setTabOrder(self.rename_button, self.merge_button)
+        self.setTabOrder(self.merge_button, self.delete_button)
+        self.setTabOrder(self.delete_button, close_button)
 
         self.filter_input.textChanged.connect(self.refresh)
         self.table.itemSelectionChanged.connect(self._update_action_state)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from html import escape
+from itertools import pairwise
 from typing import Protocol
 
 from PySide6.QtCore import QDate, QSignalBlocker, Qt, QTimer, Signal
@@ -346,6 +347,8 @@ class PredictionBrowserScreen(QWidget):
             "Also search earlier corrected or definition text. Historical-only "
             "matches are labeled as superseded."
         )
+        self.include_history.setAccessibleName("Include superseded search history")
+        self.include_history.setAccessibleDescription(self.include_history.toolTip())
 
         status_label = QLabel("Status", self)
         self.status_filter = _ArchiveComboBox(self)
@@ -377,6 +380,7 @@ class PredictionBrowserScreen(QWidget):
         tag_mode_label = QLabel("Tag match", self)
         self.tag_match_mode = _ArchiveComboBox(self)
         self.tag_match_mode.setObjectName("predictionTagMatchMode")
+        self.tag_match_mode.setAccessibleName("Choose how selected tags match")
         self.tag_match_mode.addItem("All selected", ArchiveTagMatchMode.ALL.value)
         self.tag_match_mode.addItem("Any selected", ArchiveTagMatchMode.ANY.value)
         tag_mode_label.setBuddy(self.tag_match_mode)
@@ -384,6 +388,9 @@ class PredictionBrowserScreen(QWidget):
         attention_label = QLabel("Attention", self)
         self.attention_filter = _ArchiveComboBox(self)
         self.attention_filter.setObjectName("predictionAttentionFilter")
+        self.attention_filter.setAccessibleName(
+            "Filter predictions by attention classification"
+        )
         self.attention_filter.addItem("Any", None)
         self.attention_filter.addItem(
             "Needs Attention", ArchiveAttention.NEEDS_ATTENTION.value
@@ -399,6 +406,7 @@ class PredictionBrowserScreen(QWidget):
         date_label = QLabel("Date", self)
         self.date_meaning = _ArchiveComboBox(self)
         self.date_meaning.setObjectName("predictionDateMeaning")
+        self.date_meaning.setAccessibleName("Choose the date field to filter")
         self.date_meaning.addItem("Created", ArchiveDateMeaning.CREATED.value)
         self.date_meaning.addItem(
             "Forecast deadline", ArchiveDateMeaning.FORECAST_DEADLINE.value
@@ -414,13 +422,16 @@ class PredictionBrowserScreen(QWidget):
         self.date_start_enabled = QCheckBox("From", self)
         self.date_start_enabled.setObjectName("predictionDateStartEnabled")
         self.date_start = self._new_date_edit("predictionDateStart")
+        self.date_start.setAccessibleName("Archive date range start")
         self.date_end_enabled = QCheckBox("To", self)
         self.date_end_enabled.setObjectName("predictionDateEndEnabled")
         self.date_end = self._new_date_edit("predictionDateEnd")
+        self.date_end.setAccessibleName("Archive date range end")
 
         sort_label = QLabel("Sort", self)
         self.sort_filter = _ArchiveComboBox(self)
         self.sort_filter.setObjectName("predictionSort")
+        self.sort_filter.setAccessibleName("Sort prediction results")
         self.sort_filter.addItem("Relevance", ArchiveSort.RELEVANCE.value)
         self.sort_filter.addItem("Created (newest)", ArchiveSort.CREATED_NEWEST.value)
         self.sort_filter.addItem("Created (oldest)", ArchiveSort.CREATED_OLDEST.value)
@@ -848,7 +859,47 @@ class PredictionBrowserScreen(QWidget):
         self.open_button.clicked.connect(self._open_current_item)
         self.any_word_button.clicked.connect(self._search_for_any_word)
         self.suggestion_button.clicked.connect(self._accept_suggestion)
+        self._set_logical_tab_order()
         self._update_saved_view_state()
+
+    def focus_search(self) -> None:
+        """Focus the primary archive query for the explicit Ctrl+F action."""
+
+        self.search_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.search_input.selectAll()
+
+    def _set_logical_tab_order(self) -> None:
+        """Follow the visible Search-to-Results reading order, not construction."""
+
+        controls = (
+            self.search_input,
+            self.match_mode,
+            self.include_history,
+            self.status_filter,
+            self.attention_filter,
+            self.type_filter,
+            self.sort_filter,
+            self.clear_button,
+            self.apply_button,
+            self.tag_filter.search_input,
+            self.date_meaning,
+            self.date_start_enabled,
+            self.date_start,
+            self.date_end_enabled,
+            self.date_end,
+            self.tag_match_mode,
+            self.manage_tags_button,
+            self.saved_view_picker,
+            self.save_current_view_button,
+            self.save_as_new_button,
+            self.update_saved_view_button,
+            self.rename_saved_view_button,
+            self.delete_saved_view_button,
+            self.results_list,
+            self.open_button,
+        )
+        for current, following in pairwise(controls):
+            self.setTabOrder(current, following)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """Keep results visible beside controls, stacking only at narrow widths."""

@@ -2,22 +2,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import partial
+
 from PySide6.QtCore import QEvent, QModelIndex, QRect, QSignalBlocker, QSize, Qt
-from PySide6.QtGui import QCloseEvent, QIcon, QPainter
+from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPainter, QShortcut
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QPlainTextEdit,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -88,6 +96,16 @@ _EXPANDED_SIDEBAR_WIDTH = 240
 _COMPACT_SIDEBAR_WIDTH = 68
 _COMPACT_NAVIGATION_ROW_HEIGHT = 40
 _COMPACT_NAVIGATION_SPACING = 1
+_GLOBAL_SHORTCUT_SPECS = (
+    ("globalShortcutNewPrediction", "Ctrl+N"),
+    ("globalShortcutFindPredictions", "Ctrl+F"),
+    ("globalShortcutDashboard", "Ctrl+1"),
+    ("globalShortcutPredictions", "Ctrl+2"),
+    ("globalShortcutAnalytics", "Ctrl+3"),
+    ("globalShortcutSettings", "Ctrl+,"),
+    ("globalShortcutToggleSidebar", "Ctrl+B"),
+    ("globalShortcutReturnFromDetail", "Alt+Left"),
+)
 
 
 class _PrimaryNavigationItemDelegate(QStyledItemDelegate):
@@ -203,6 +221,9 @@ class MainWindow(QMainWindow):
         self._back_from_detail_button.setAccessibleName(
             "Return from Prediction Detail to Predictions"
         )
+        self._back_from_detail_button.setToolTip(
+            "Return to the previous screen (Alt+Left)"
+        )
         apply_action_role(self._back_from_detail_button, ActionRole.QUIET)
         apply_lucide_icon(self._back_from_detail_button, LucideIcon.ARROW_LEFT)
 
@@ -267,7 +288,7 @@ class MainWindow(QMainWindow):
         self._new_prediction_button = QPushButton("New Prediction", self._sidebar)
         self._new_prediction_button.setObjectName("newPredictionNavigationButton")
         self._new_prediction_button.setAccessibleName("New Prediction")
-        self._new_prediction_button.setToolTip("Create a new prediction")
+        self._new_prediction_button.setToolTip("Create a new prediction (Ctrl+N)")
         apply_action_role(self._new_prediction_button, ActionRole.PRIMARY)
         apply_lucide_icon(self._new_prediction_button, LucideIcon.CIRCLE_PLUS)
 
@@ -294,7 +315,7 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(screen_name)
             item.setData(Qt.ItemDataRole.UserRole, screen_name)
             item.setData(Qt.ItemDataRole.AccessibleTextRole, screen_name)
-            item.setToolTip(screen_name)
+            item.setToolTip(_primary_destination_tooltip(screen_name))
             item.setSizeHint(QSize(0, self._expanded_navigation_row_height))
             item.setIcon(lucide_icon(_PRIMARY_ICONS[screen_name], self.palette()))
             self._navigation.addItem(item)
@@ -306,7 +327,7 @@ class MainWindow(QMainWindow):
         self._settings_button = QPushButton("Settings", self._sidebar)
         self._settings_button.setObjectName("settingsNavigationButton")
         self._settings_button.setAccessibleName("Settings")
-        self._settings_button.setToolTip("Settings")
+        self._settings_button.setToolTip("Settings (Ctrl+,)")
         apply_action_role(self._settings_button, ActionRole.QUIET)
         apply_lucide_icon(self._settings_button, LucideIcon.SETTINGS)
 
@@ -368,6 +389,10 @@ class MainWindow(QMainWindow):
         self._settings_screen.routine_notification_requested.connect(
             self._show_routine_notification
         )
+        self.setTabOrder(self._sidebar_toggle, self._new_prediction_button)
+        self.setTabOrder(self._new_prediction_button, self._navigation)
+        self.setTabOrder(self._navigation, self._settings_button)
+        self._install_global_shortcuts()
         self._activate_route("Dashboard", refresh=True, focus=False)
 
     def changeEvent(self, event: QEvent) -> None:
@@ -432,6 +457,41 @@ class MainWindow(QMainWindow):
 
     def toggle_sidebar(self) -> None:
         self._set_sidebar_mode(not self._sidebar_compact, persist=True)
+
+    def _install_global_shortcuts(self) -> None:
+        """Install navigation-only shortcuts behind one conflict guard."""
+
+        actions: tuple[Callable[[], None], ...] = (
+            partial(self.navigate_to, "New Prediction"),
+            self._focus_prediction_search,
+            partial(self.navigate_to, "Dashboard"),
+            partial(self.navigate_to, "Predictions"),
+            partial(self.navigate_to, "Analytics"),
+            partial(self.navigate_to, "Settings"),
+            self.toggle_sidebar,
+            self.return_from_detail,
+        )
+        self._global_shortcuts: dict[str, QShortcut] = {}
+        for (object_name, key), action in zip(
+            _GLOBAL_SHORTCUT_SPECS,
+            actions,
+            strict=True,
+        ):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.setObjectName(object_name)
+            shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+            shortcut.setAutoRepeat(False)
+            shortcut.activated.connect(partial(self._invoke_global_shortcut, action))
+            self._global_shortcuts[object_name] = shortcut
+
+    def _invoke_global_shortcut(self, action: Callable[[], None]) -> None:
+        if _global_shortcut_conflicts_with_current_context():
+            return
+        action()
+
+    def _focus_prediction_search(self) -> None:
+        self.navigate_to("Predictions")
+        self._prediction_browser_screen.focus_search()
 
     def return_from_detail(self) -> None:
         """Return to Detail's source without rebuilding an archive query."""
@@ -613,7 +673,7 @@ class MainWindow(QMainWindow):
             toggle_name = "Collapse sidebar"
             toggle_icon = LucideIcon.ARROW_LEFT
         self._sidebar_toggle.setAccessibleName(toggle_name)
-        self._sidebar_toggle.setToolTip(toggle_name)
+        self._sidebar_toggle.setToolTip(f"{toggle_name} (Ctrl+B)")
         apply_lucide_icon(self._sidebar_toggle, toggle_icon)
         refresh_lucide_icons(self._sidebar)
         if persist:
@@ -682,6 +742,40 @@ class MainWindow(QMainWindow):
             content_height + spacing_height + frame_height + 2
         )
         self._navigation.verticalScrollBar().setValue(0)
+
+
+def _global_shortcut_conflicts_with_current_context() -> bool:
+    """Keep global navigation out of modal decisions and active editors."""
+
+    application = QApplication.instance()
+    if not isinstance(application, QApplication):
+        return True
+    if application.activeModalWidget() is not None:
+        return True
+    focused = application.focusWidget()
+    while isinstance(focused, QWidget):
+        if isinstance(focused, QLineEdit) and not focused.isReadOnly():
+            return True
+        if isinstance(focused, QAbstractSpinBox) and not focused.isReadOnly():
+            return True
+        if (
+            isinstance(focused, (QPlainTextEdit, QTextEdit))
+            and not focused.isReadOnly()
+        ):
+            return True
+        if isinstance(focused, QComboBox) and focused.isEditable():
+            return True
+        focused = focused.parentWidget()
+    return False
+
+
+def _primary_destination_tooltip(screen_name: str) -> str:
+    shortcuts = {
+        "Dashboard": "Ctrl+1",
+        "Predictions": "Ctrl+2; Ctrl+F focuses Search",
+        "Analytics": "Ctrl+3",
+    }
+    return f"{screen_name} ({shortcuts[screen_name]})"
 
 
 __all__ = ["MainWindow"]

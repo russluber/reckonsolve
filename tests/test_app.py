@@ -338,8 +338,8 @@ def test_analytics_score_resolved_predictions_and_filters_after_restart(
     assert trend is not None
     assert table is not None
     assert tag_filter is not None
-    assert count.text() == "Scored predictions: 2"
-    assert mean.text() == "Mean Brier: 0.065"
+    assert count.text() == "2"
+    assert mean.text() == "0.065"
     assert sum(item.count for item in calibration.bins) == 2
     assert len(trend.points) == 2
     assert table.item(2, 1).text() == "1"
@@ -347,8 +347,8 @@ def test_analytics_score_resolved_predictions_and_filters_after_restart(
 
     tag_filter.setCurrentIndex(tag_filter.findData("Work"))
 
-    assert count.text() == "Scored predictions: 1"
-    assert mean.text() == "Mean Brier: 0.090"
+    assert count.text() == "1"
+    assert mean.text() == "0.090"
     assert sum(item.count for item in calibration.bins) == 1
     assert len(trend.points) == 1
     second.close()
@@ -419,9 +419,9 @@ def test_numeric_analytics_filter_type_tag_and_unit_after_restart(
     assert type_filter is not None
     assert tag_filter is not None
     assert unit_filter is not None
-    assert numeric_count.text() == "Scored Numeric Predictions: 2"
-    assert containment.text() == "Contained outcomes: 1 of 2 (50%)"
-    assert "will not average unlike units" in raw_scope.text()
+    assert numeric_count.text() == "2"
+    assert containment.text() == "1 of 2 (50%)"
+    assert "Unlike units are never averaged" in raw_scope.text()
     assert sum(item.count for item in chart.bins) == 2
     assert table.item(8, 1).text() == "2"
     assert table.item(8, 3).text() == "50%"
@@ -442,15 +442,15 @@ def test_numeric_analytics_filter_type_tag_and_unit_after_restart(
     assert median_error is not None
     assert width is not None
     assert interval_score is not None
-    assert numeric_count.text() == "Scored Numeric Predictions: 1"
-    assert median_error.text() == "Mean median absolute error: 14 days"
-    assert width.text() == "Mean interval width: 18 days"
-    assert interval_score.text() == "Mean interval score: 18 days"
+    assert numeric_count.text() == "1"
+    assert median_error.text() == "14 days"
+    assert width.text() == "18 days"
+    assert interval_score.text() == "18 days"
 
     unit_filter.setCurrentIndex(0)
     tag_filter.setCurrentIndex(tag_filter.findData("Money"))
-    assert numeric_count.text() == "Scored Numeric Predictions: 1"
-    assert containment.text() == "Contained outcomes: 0 of 1 (0%)"
+    assert numeric_count.text() == "1"
+    assert containment.text() == "0 of 1 (0%)"
     second.close()
 
 

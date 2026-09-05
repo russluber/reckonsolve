@@ -11,6 +11,7 @@ from PySide6.QtCore import QSize, QStandardPaths, Qt, QTimer, Signal
 from PySide6.QtGui import QHideEvent, QIcon, QPaintEvent, QShowEvent
 from PySide6.QtWidgets import (
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -635,6 +636,10 @@ class AttentionSettingsScreen(QWidget):
         )
         self.threshold_input.setSuffix(" days")
         self.threshold_input.setAccessibleName("Needs Attention threshold in days")
+        self.threshold_input.setAccessibleDescription(
+            "The number of complete days since the latest Forecast revision or "
+            "Review before a nonterminal Prediction needs attention."
+        )
 
         threshold_label.setBuddy(self.threshold_input)
 
@@ -702,11 +707,15 @@ class AttentionSettingsScreen(QWidget):
 
         self.backup_button = QPushButton("Back Up Now", data_group.body)
         self.backup_button.setObjectName("backUpNowButton")
+        self.backup_button.setToolTip("Create a complete recoverable SQLite backup")
         apply_action_role(self.backup_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.backup_button, LucideIcon.DATABASE_BACKUP)
         self.backup_button.clicked.connect(self._back_up_now)
         self.export_button = QPushButton("Export CSV Bundle", data_group.body)
         self.export_button.setObjectName("exportCsvBundleButton")
+        self.export_button.setToolTip(
+            "Create a portable analytical CSV bundle; it cannot restore the app"
+        )
         apply_action_role(self.export_button, ActionRole.SECONDARY)
         apply_lucide_icon(self.export_button, LucideIcon.FILE_ARCHIVE)
         self.export_button.clicked.connect(self._export_csv_bundle)
@@ -715,6 +724,9 @@ class AttentionSettingsScreen(QWidget):
             data_group.body,
         )
         self.repair_search_button.setObjectName("repairSearchIndexButton")
+        self.repair_search_button.setToolTip(
+            "Rebuild derived search data from canonical Prediction history"
+        )
         apply_action_role(self.repair_search_button, ActionRole.QUIET)
         apply_lucide_icon(self.repair_search_button, LucideIcon.REFRESH)
         self.repair_search_button.clicked.connect(self._repair_search_index)
@@ -737,6 +749,46 @@ class AttentionSettingsScreen(QWidget):
         data_layout.addLayout(action_layout)
         data_layout.addWidget(self.data_status_label)
 
+        shortcuts_group = ContentPanel(
+            "Keyboard shortcuts",
+            "Navigation shortcuts pause while you are editing text or using a "
+            "dialog, so they cannot interrupt an entry or confirm an action.",
+            parent=self,
+        )
+        shortcuts_group.setObjectName("keyboardShortcutsPanel")
+        shortcuts_layout = QGridLayout()
+        shortcuts_layout.setHorizontalSpacing(int(Spacing.SECTION))
+        shortcuts_layout.setVerticalSpacing(int(Spacing.CONTROL))
+        shortcut_items = (
+            ("New Prediction", "Ctrl+N"),
+            ("Search Predictions", "Ctrl+F"),
+            ("Dashboard", "Ctrl+1"),
+            ("Predictions", "Ctrl+2"),
+            ("Analytics", "Ctrl+3"),
+            ("Settings", "Ctrl+,"),
+            ("Toggle sidebar", "Ctrl+B"),
+            ("Back from Prediction Detail", "Alt+Left"),
+        )
+        for index, (action, keys) in enumerate(shortcut_items):
+            action_label = QLabel(action, shortcuts_group.body)
+            action_label.setTextFormat(Qt.TextFormat.PlainText)
+            apply_text_role(action_label, TextRole.BODY)
+            key_badge = StatusBadge(
+                keys,
+                StatusTone.NEUTRAL,
+                parent=shortcuts_group.body,
+            )
+            key_badge.setAccessibleName(f"{action}: {keys}")
+            shortcuts_layout.addWidget(action_label, index, 0)
+            shortcuts_layout.addWidget(
+                key_badge,
+                index,
+                1,
+                alignment=Qt.AlignmentFlag.AlignLeft,
+            )
+        shortcuts_layout.setColumnStretch(0, 1)
+        shortcuts_group.body_layout.addLayout(shortcuts_layout)
+
         content = QWidget(self)
         content.setObjectName("settingsContent")
         content_layout = QVBoxLayout(content)
@@ -744,6 +796,7 @@ class AttentionSettingsScreen(QWidget):
         content_layout.setSpacing(int(Spacing.SECTION))
         content_layout.addWidget(attention_group)
         content_layout.addWidget(data_group)
+        content_layout.addWidget(shortcuts_group)
         content_layout.addStretch()
 
         self.scroll_area = QScrollArea(self)
@@ -757,6 +810,11 @@ class AttentionSettingsScreen(QWidget):
         layout.setSpacing(int(Spacing.ORDINARY))
         layout.addWidget(header)
         layout.addWidget(self.scroll_area, 1)
+
+        self.setTabOrder(self.threshold_input, self.save_button)
+        self.setTabOrder(self.save_button, self.backup_button)
+        self.setTabOrder(self.backup_button, self.export_button)
+        self.setTabOrder(self.export_button, self.repair_search_button)
 
     def refresh(self) -> None:
         """Load persisted attention and recovery status when Settings is entered."""

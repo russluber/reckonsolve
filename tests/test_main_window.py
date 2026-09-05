@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QDate, QPoint, QPointF, QRect, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap, QWheelEvent
+from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap, QShortcut, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QBoxLayout,
     QCheckBox,
     QComboBox,
     QDateEdit,
@@ -1884,15 +1885,20 @@ def test_sidebar_compact_mode_is_complete_accessible_and_remembered(
     assert identity.isHidden()
     assert new_prediction.text() == ""
     assert new_prediction.accessibleName() == "New Prediction"
-    assert new_prediction.toolTip() == "Create a new prediction"
+    assert new_prediction.toolTip() == "Create a new prediction (Ctrl+N)"
     assert settings_button.text() == ""
     assert settings_button.accessibleName() == "Settings"
     assert toggle.accessibleName() == "Expand sidebar"
+    expected_tooltips = {
+        "Dashboard": "Dashboard (Ctrl+1)",
+        "Predictions": "Predictions (Ctrl+2; Ctrl+F focuses Search)",
+        "Analytics": "Analytics (Ctrl+3)",
+    }
     for index, screen_name in enumerate(EXPECTED_NAVIGATION_NAMES):
         item = navigation.item(index)
         assert item.text() == ""
         assert item.data(Qt.ItemDataRole.AccessibleTextRole) == screen_name
-        assert item.toolTip() == screen_name
+        assert item.toolTip() == expected_tooltips[screen_name]
         assert not item.icon().isNull()
         item_rectangle = navigation.visualItemRect(item)
         assert item_rectangle.width() > item_rectangle.height()
@@ -2059,6 +2065,109 @@ def test_shell_navigation_remains_keyboard_operable_in_compact_mode(
     assert window.current_screen_name == "Settings"
 
 
+def test_global_shortcuts_are_documented_and_reach_only_navigation_actions(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    window.show()
+    window.activateWindow()
+    qtbot.waitUntil(window.isActiveWindow)
+    navigation = _required_child(window, QListWidget, "primaryNavigation")
+    expected = {
+        "globalShortcutNewPrediction": "Ctrl+N",
+        "globalShortcutFindPredictions": "Ctrl+F",
+        "globalShortcutDashboard": "Ctrl+1",
+        "globalShortcutPredictions": "Ctrl+2",
+        "globalShortcutAnalytics": "Ctrl+3",
+        "globalShortcutSettings": "Ctrl+,",
+        "globalShortcutToggleSidebar": "Ctrl+B",
+        "globalShortcutReturnFromDetail": "Alt+Left",
+    }
+    shortcuts: dict[str, QShortcut] = {}
+    for object_name, key in expected.items():
+        shortcut = window.findChild(QShortcut, object_name)
+        assert shortcut is not None
+        assert shortcut.key().toString() == key
+        shortcuts[object_name] = shortcut
+
+    navigation.setFocus()
+    shortcuts["globalShortcutNewPrediction"].activated.emit()
+    assert window.current_screen_name == "New Prediction"
+    question = _required_child(window, QLineEdit, "questionInput")
+    qtbot.waitUntil(question.hasFocus)
+
+    navigation.setFocus()
+    shortcuts["globalShortcutFindPredictions"].activated.emit()
+    assert window.current_screen_name == "Predictions"
+    assert _required_child(window, QLineEdit, "predictionSearchInput").hasFocus()
+
+    for object_name, screen_name in (
+        ("globalShortcutDashboard", "Dashboard"),
+        ("globalShortcutPredictions", "Predictions"),
+        ("globalShortcutAnalytics", "Analytics"),
+        ("globalShortcutSettings", "Settings"),
+    ):
+        navigation.setFocus()
+        shortcuts[object_name].activated.emit()
+        assert window.current_screen_name == screen_name
+
+    navigation.setFocus()
+    compact_before = window.sidebar_compact
+    shortcuts["globalShortcutToggleSidebar"].activated.emit()
+    assert window.sidebar_compact is not compact_before
+
+    window.navigate_to("Analytics")
+    window.navigate_to("Prediction Detail")
+    navigation.setFocus()
+    shortcuts["globalShortcutReturnFromDetail"].activated.emit()
+    assert window.current_screen_name == "Analytics"
+
+    shortcuts_panel = _required_child(window, ContentPanel, "keyboardShortcutsPanel")
+    documented_keys = {label.text() for label in shortcuts_panel.findChildren(QLabel)}
+    assert set(expected.values()) <= documented_keys
+
+
+def test_global_shortcuts_pause_for_editing_and_modal_dialogs(
+    window: MainWindow,
+    qtbot: QtBot,
+) -> None:
+    window.show()
+    window.activateWindow()
+    qtbot.waitUntil(window.isActiveWindow)
+    prediction_shortcut = window.findChild(
+        QShortcut,
+        "globalShortcutPredictions",
+    )
+    analytics_shortcut = window.findChild(QShortcut, "globalShortcutAnalytics")
+    toggle_shortcut = window.findChild(QShortcut, "globalShortcutToggleSidebar")
+    assert prediction_shortcut is not None
+    assert analytics_shortcut is not None
+    assert toggle_shortcut is not None
+
+    window.navigate_to("New Prediction")
+    question = _required_child(window, QLineEdit, "questionInput")
+    qtbot.mouseClick(question, Qt.MouseButton.LeftButton)
+    assert question.hasFocus()
+    compact_before = window.sidebar_compact
+    prediction_shortcut.activated.emit()
+    toggle_shortcut.activated.emit()
+    assert window.current_screen_name == "New Prediction"
+    assert window.sidebar_compact is compact_before
+
+    window.navigate_to("Dashboard")
+    dialog = QDialog(window)
+    dialog.setModal(True)
+    modal_button = QPushButton("Keep dialog open", dialog)
+    dialog.show()
+    modal_button.setFocus()
+    qtbot.waitUntil(lambda: QApplication.activeModalWidget() is dialog)
+
+    analytics_shortcut.activated.emit()
+
+    assert window.current_screen_name == "Dashboard"
+    dialog.close()
+
+
 def test_predictions_navigation_does_not_focus_the_archive_search(
     window: MainWindow,
     qtbot: QtBot,
@@ -2183,6 +2292,160 @@ def test_analytics_screen_replaces_the_placeholder(window: MainWindow) -> None:
     assert window.findChild(QLabel, "analyticsScreenPlaceholder") is None
 
 
+def test_analytics_uses_shared_panels_accessible_filters_and_responsive_summaries(
+    qtbot: QtBot,
+) -> None:
+    operations = FakePredictionOperations()
+    operations.analytics_source = AnalyticsSource(
+        observations=(_scoring_observation(1, 60, BinaryOutcome.YES),),
+        available_tags=("Work",),
+    )
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.resize(1600, 900)
+    window.show()
+    window.navigate_to("Analytics")
+
+    assert _required_child(window, QWidget, "analyticsPageHeader").isVisible()
+    filters = _required_child(window, ContentPanel, "analyticsFiltersPanel")
+    assert filters.title_label.text() == "Analytics view"
+    binary_summary = _required_child(
+        window,
+        ContentPanel,
+        "analyticsBrierSummary",
+    )
+    numeric_summary = _required_child(
+        window,
+        ContentPanel,
+        "numericAnalyticsSummary",
+    )
+    assert binary_summary.isVisible()
+    assert numeric_summary.isVisible()
+    assert (
+        binary_summary.body_layout.itemAt(
+            binary_summary.body_layout.count() - 1
+        ).spacerItem()
+        is not None
+    )
+    assert (
+        numeric_summary.body_layout.itemAt(
+            numeric_summary.body_layout.count() - 1
+        ).spacerItem()
+        is not None
+    )
+    assert _required_child(window, QWidget, "numericRawMetricGrid").isHidden()
+    refresh = _required_child(window, QPushButton, "refreshAnalyticsButton")
+    assert refresh.property(ACTION_ROLE_PROPERTY) == ActionRole.QUIET.value
+    unit = _required_child(window, QComboBox, "analyticsUnitFilter")
+    assert "raw error" in unit.accessibleDescription()
+    table = _required_child(window, QTableWidget, "calibrationBinTable")
+    assert "count of zero" in table.accessibleDescription()
+    numeric_table = _required_child(
+        window,
+        QTableWidget,
+        "containmentCalibrationBinTable",
+    )
+    binary_chart = _required_child(window, CalibrationChart, "calibrationChart")
+    numeric_chart = _required_child(
+        window,
+        ContainmentCalibrationChart,
+        "containmentCalibrationChart",
+    )
+
+    summary_row = _required_child(window, QWidget, "analyticsSummaryRow")
+    summary_layout = summary_row.layout()
+    assert isinstance(summary_layout, QBoxLayout)
+    binary_comparison = _required_child(
+        window,
+        QWidget,
+        "binaryCalibrationComparison",
+    )
+    numeric_comparison = _required_child(
+        window,
+        QWidget,
+        "numericCalibrationComparison",
+    )
+    binary_comparison_layout = binary_comparison.layout()
+    numeric_comparison_layout = numeric_comparison.layout()
+    assert isinstance(binary_comparison_layout, QBoxLayout)
+    assert isinstance(numeric_comparison_layout, QBoxLayout)
+    qtbot.waitUntil(
+        lambda: summary_layout.direction() == QBoxLayout.Direction.LeftToRight
+    )
+    qtbot.waitUntil(
+        lambda: binary_comparison_layout.direction() == QBoxLayout.Direction.LeftToRight
+    )
+    qtbot.waitUntil(
+        lambda: (
+            numeric_comparison_layout.direction() == QBoxLayout.Direction.LeftToRight
+        )
+    )
+    qtbot.waitUntil(lambda: abs(binary_chart.width() - table.width()) <= 1)
+    qtbot.waitUntil(lambda: abs(numeric_chart.width() - numeric_table.width()) <= 1)
+    for chart, bin_table in (
+        (binary_chart, table),
+        (numeric_chart, numeric_table),
+    ):
+        assert chart.palette().color(QPalette.ColorRole.Base) == (
+            bin_table.viewport().palette().color(QPalette.ColorRole.Base)
+        )
+        assert (
+            bin_table.horizontalScrollBarPolicy()
+            == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        assert (
+            bin_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        assert bin_table.viewport().height() >= sum(
+            bin_table.rowHeight(row) for row in range(bin_table.rowCount())
+        )
+        rendered_background = chart.grab().toImage().pixelColor(0, 0)
+        assert rendered_background == QColor(semantic_colors(window.palette()).raised)
+    binary_calibration_panel = _required_child(
+        window,
+        ContentPanel,
+        "analyticsCalibrationSection",
+    )
+    numeric_calibration_panel = _required_child(
+        window,
+        ContentPanel,
+        "numericAnalyticsSection",
+    )
+    for label, comparison in (
+        (binary_calibration_panel.supporting_label, binary_comparison),
+        (numeric_calibration_panel.supporting_label, numeric_comparison),
+    ):
+        assert label.width() == comparison.width()
+        assert label.height() <= label.fontMetrics().lineSpacing() + 2
+
+    window.resize(760, 520)
+
+    qtbot.waitUntil(
+        lambda: summary_layout.direction() == QBoxLayout.Direction.TopToBottom
+    )
+    qtbot.waitUntil(
+        lambda: binary_comparison_layout.direction() == QBoxLayout.Direction.TopToBottom
+    )
+    qtbot.waitUntil(
+        lambda: (
+            numeric_comparison_layout.direction() == QBoxLayout.Direction.TopToBottom
+        )
+    )
+    qtbot.waitUntil(
+        lambda: (
+            binary_calibration_panel.supporting_label.height()
+            > binary_calibration_panel.supporting_label.fontMetrics().lineSpacing()
+        )
+    )
+    qtbot.waitUntil(
+        lambda: (
+            numeric_calibration_panel.supporting_label.height()
+            > numeric_calibration_panel.supporting_label.fontMetrics().lineSpacing()
+        )
+    )
+    assert _required_child(window, QScrollArea, "analyticsScrollArea").isVisible()
+
+
 def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> None:
     operations = FakePredictionOperations()
     window = MainWindow(operations)
@@ -2190,11 +2453,9 @@ def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> Non
 
     window.navigate_to("Analytics")
 
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
-        "Scored predictions: 0"
-    )
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "0"
     assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
-        "Mean Brier: Not available"
+        "Not available"
     )
     assert _required_child(window, QLabel, "analyticsEmpty").text() == (
         "No scored predictions yet. Resolve a prediction to begin analytics."
@@ -2231,12 +2492,8 @@ def test_analytics_renders_summary_bins_counts_and_cumulative_series(
 
     window.navigate_to("Analytics")
 
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
-        "Scored predictions: 3"
-    )
-    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
-        "Mean Brier: 0.297"
-    )
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "3"
+    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == "0.297"
     tag_filter = _required_child(window, QComboBox, "analyticsTagFilter")
     assert [tag_filter.itemText(index) for index in range(tag_filter.count())] == [
         "All tags",
@@ -2277,12 +2534,8 @@ def test_analytics_tag_filter_recomputes_all_views_from_one_subset(
     tag_filter.setCurrentIndex(tag_filter.findData("Work"))
 
     assert operations.analytics_calls[-1] == "Work"
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
-        "Scored predictions: 2"
-    )
-    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
-        "Mean Brier: 0.340"
-    )
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "2"
+    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == "0.340"
     calibration = _required_child(window, CalibrationChart, "calibrationChart")
     trend = _required_child(window, BrierTrendChart, "brierTrendChart")
     assert sum(item.count for item in calibration.bins) == 2
@@ -2307,9 +2560,7 @@ def test_analytics_reports_initial_and_stale_refresh_errors(qtbot: QtBot) -> Non
     )
     window.navigate_to("New Prediction")
     window.navigate_to("Analytics")
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == (
-        "Scored predictions: 1"
-    )
+    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "1"
     operations.analytics_error = ApplicationError("Refresh failed.")
     window.navigate_to("New Prediction")
     window.navigate_to("Analytics")
@@ -2317,9 +2568,7 @@ def test_analytics_reports_initial_and_stale_refresh_errors(qtbot: QtBot) -> Non
     assert error.text() == (
         "Analytics could not refresh; showing the last loaded results. Refresh failed."
     )
-    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
-        "Mean Brier: 0.160"
-    )
+    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == "0.160"
 
 
 def test_analytics_renders_unitless_numeric_containment_without_mixing_raw_units(
@@ -2357,17 +2606,16 @@ def test_analytics_renders_unitless_numeric_containment_without_mixing_raw_units
 
     window.navigate_to("Analytics")
 
-    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == (
-        "Scored Numeric Predictions: 2"
-    )
+    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == "2"
     assert _required_child(window, QLabel, "numericAnalyticsContainment").text() == (
-        "Contained outcomes: 1 of 2 (50%)"
+        "1 of 2 (50%)"
     )
     raw_scope = _required_child(window, QLabel, "numericAnalyticsRawScope")
-    assert "will not average unlike units" in raw_scope.text()
+    assert "Unlike units are never averaged" in raw_scope.text()
     assert _required_child(window, QLabel, "numericMeanIntervalScore").text() == (
-        "Mean interval score: Not available"
+        "Not available"
     )
+    assert _required_child(window, QWidget, "numericRawMetricGrid").isHidden()
     table = _required_child(window, QTableWidget, "containmentCalibrationBinTable")
     assert table.item(8, 0).text() == "80-89%"
     assert table.item(8, 1).text() == "2"
@@ -2428,18 +2676,17 @@ def test_numeric_type_and_exact_unit_filter_every_numeric_view(qtbot: QtBot) -> 
     )
     assert _required_child(window, QWidget, "analyticsBrierSummary").isHidden()
     assert not _required_child(window, QWidget, "numericAnalyticsSummary").isHidden()
-    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == (
-        "Scored Numeric Predictions: 1"
-    )
+    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == "1"
     assert _required_child(window, QLabel, "numericMeanMedianAbsoluteError").text() == (
-        "Mean median absolute error: 3 days"
+        "3 days"
     )
     assert _required_child(window, QLabel, "numericMeanIntervalWidth").text() == (
-        "Mean interval width: 10 days"
+        "10 days"
     )
     assert _required_child(window, QLabel, "numericMeanIntervalScore").text() == (
-        "Mean interval score: 10 days"
+        "10 days"
     )
+    assert not _required_child(window, QWidget, "numericRawMetricGrid").isHidden()
     table = _required_child(window, QTableWidget, "containmentCalibrationBinTable")
     assert table.item(8, 1).text() == "1"
     assert table.item(8, 3).text() == "100%"
