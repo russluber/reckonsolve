@@ -38,6 +38,7 @@ from reckonsolve.ui.analytics_charts import (
     ContainmentCalibrationChart,
 )
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
+from reckonsolve.ui.tag_filter_picker import TagFilterPicker
 
 
 def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
@@ -241,7 +242,7 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
     second.window.navigate_to("Predictions")
     search = second.window.findChild(QLineEdit, "predictionSearchInput")
     status_filter = second.window.findChild(QComboBox, "predictionStatusFilter")
-    tag_filter = second.window.findChild(QListWidget, "predictionTagFilter")
+    tag_filter = second.window.findChild(TagFilterPicker, "predictionTagFilter")
     apply_filters = second.window.findChild(
         QPushButton,
         "applyPredictionFiltersButton",
@@ -256,12 +257,22 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
 
     search.setText("INVALID ARCHIVE")
     status_filter.setCurrentIndex(status_filter.findData("invalid"))
-    tag_filter.item(0).setSelected(True)
+    tag_filter.select_tag("Durability")
     qtbot.mouseClick(apply_filters, Qt.MouseButton.LeftButton)
 
     assert results.count() == 1
-    assert "65%  |  INVALID" in results.item(0).text()
-    assert "Tags: Durability, Review" in results.item(0).text()
+    result_status = second.window.findChild(
+        QLabel,
+        f"predictionResultStatus{invalid.prediction_id}",
+    )
+    result_tags = second.window.findChild(
+        QLabel,
+        f"predictionResultTags{invalid.prediction_id}",
+    )
+    assert result_status is not None
+    assert result_tags is not None
+    assert result_status.text() == "INVALID"
+    assert result_tags.text() == "Tags · Durability, Review"
     results.itemActivated.emit(results.item(0))
     assert second.window.current_screen_name == "Prediction Detail"
     detail_question = second.window.findChild(QLabel, "predictionDetailQuestion")
@@ -828,7 +839,9 @@ def test_dashboard_and_browser_open_type_aware_numeric_predictions(
     assert results is not None
     type_filter.setCurrentIndex(type_filter.findData("numeric"))
     assert results.count() == 1
-    assert "NUMERIC" in results.item(0).text()
+    assert "NUMERIC" in str(
+        results.item(0).data(Qt.ItemDataRole.AccessibleDescriptionRole)
+    )
     results.itemActivated.emit(results.item(0))
     assert runtime.window.current_screen_name == "Prediction Detail"
     assert runtime.window.findChild(QLabel, "numericPredictionQuestion").text() == (

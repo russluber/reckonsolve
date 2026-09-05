@@ -88,6 +88,7 @@ class ContentPanel(QFrame):
         title: str,
         supporting_text: str | None = None,
         *,
+        content_spacing: Spacing = Spacing.CONTROL,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -101,7 +102,7 @@ class ContentPanel(QFrame):
             int(Spacing.ORDINARY),
             int(Spacing.ORDINARY),
         )
-        self._root_layout.setSpacing(int(Spacing.CONTROL))
+        self._root_layout.setSpacing(int(content_spacing))
 
         heading = QWidget(self)
         heading_layout = QHBoxLayout(heading)

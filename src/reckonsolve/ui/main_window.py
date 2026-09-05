@@ -450,9 +450,7 @@ class MainWindow(QMainWindow):
                     return
             except RuntimeError:
                 pass
-        if destination == "Predictions":
-            self._prediction_browser_screen.focus_search()
-        elif destination == "Dashboard":
+        if destination in ("Predictions", "Dashboard"):
             self._navigation.setFocus(Qt.FocusReason.BacktabFocusReason)
 
     def _primary_navigation_changed(self, row: int) -> None:
@@ -491,8 +489,6 @@ class MainWindow(QMainWindow):
         elif screen_name == "Predictions":
             if refresh:
                 self._prediction_browser_screen.refresh()
-            if focus:
-                self._prediction_browser_screen.focus_search()
         elif screen_name == "Analytics":
             if refresh:
                 self._analytics_screen.refresh()

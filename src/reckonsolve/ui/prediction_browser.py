@@ -7,12 +7,14 @@ from html import escape
 from typing import Protocol
 
 from PySide6.QtCore import QDate, QSignalBlocker, Qt, QTimer, Signal
-from PySide6.QtGui import QHideEvent, QShowEvent
+from PySide6.QtGui import QHideEvent, QResizeEvent, QShowEvent, QWheelEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDateEdit,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -21,6 +23,9 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -48,8 +53,23 @@ from reckonsolve.domain.search import (
     build_search_snippet,
     search_source_label,
 )
+from reckonsolve.ui.components import (
+    ContentPanel,
+    PageHeader,
+    PersistentMessageLabel,
+    StatusBadge,
+)
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.tag_filter_picker import TagFilterPicker
 from reckonsolve.ui.tag_manager import TagManagementOperations, TagManagerDialog
+from reckonsolve.ui.visual_system import (
+    ActionRole,
+    Spacing,
+    StatusTone,
+    TextRole,
+    apply_action_role,
+    apply_text_role,
+)
 
 
 class PredictionBrowserDetailSnapshot(Protocol):
@@ -123,8 +143,115 @@ class PredictionBrowserOperations(TagManagementOperations, Protocol):
         """Delete one mutable Saved View only."""
 
 
+def _control_section(
+    title: str,
+    supporting_text: str | None,
+    object_name: str,
+    parent: QWidget,
+) -> tuple[QFrame, QVBoxLayout]:
+    """Build one calm, labeled archive-control region."""
+
+    section = QFrame(parent)
+    section.setObjectName(object_name)
+    layout = QVBoxLayout(section)
+    layout.setContentsMargins(
+        0,
+        int(Spacing.COMPACT),
+        0,
+        int(Spacing.COMPACT),
+    )
+    layout.setSpacing(int(Spacing.CONTROL))
+    title_label = QLabel(title, section)
+    title_label.setTextFormat(Qt.TextFormat.PlainText)
+    apply_text_role(title_label, TextRole.SECTION_TITLE)
+    layout.addWidget(title_label)
+    supporting_label = QLabel(supporting_text or "", section)
+    supporting_label.setTextFormat(Qt.TextFormat.PlainText)
+    supporting_label.setWordWrap(True)
+    supporting_label.setHidden(not bool(supporting_text))
+    apply_text_role(supporting_label, TextRole.SECONDARY)
+    layout.addWidget(supporting_label)
+    return section, layout
+
+
+class _ArchiveComboBox(QComboBox):
+    """Let a narrow controls pane own wheel scrolling over closed combos."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._wheel_changes_enabled = True
+        self._wheel_scroll_target: QScrollArea | None = None
+        self._wide_focus_policy = self.focusPolicy()
+
+    @property
+    def wheel_changes_enabled(self) -> bool:
+        return self._wheel_changes_enabled
+
+    def set_wheel_changes_enabled(self, enabled: bool) -> None:
+        self._wheel_changes_enabled = enabled
+        self.setFocusPolicy(
+            self._wide_focus_policy if enabled else Qt.FocusPolicy.StrongFocus
+        )
+
+    def set_wheel_scroll_target(self, target: QScrollArea) -> None:
+        self._wheel_scroll_target = target
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        if not self._wheel_changes_enabled and not self.view().isVisible():
+            if self._wheel_scroll_target is None:
+                event.ignore()
+                return
+            forwarded_event = QWheelEvent(event)
+            QApplication.sendEvent(
+                self._wheel_scroll_target.viewport(),
+                forwarded_event,
+            )
+            event.setAccepted(forwarded_event.isAccepted())
+            return
+        super().wheelEvent(event)
+
+
+class _ArchiveDateEdit(QDateEdit):
+    """Protect a narrow archive date from incidental wheel changes."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._wheel_changes_enabled = True
+        self._wheel_scroll_target: QScrollArea | None = None
+        self._wide_focus_policy = self.focusPolicy()
+
+    @property
+    def wheel_changes_enabled(self) -> bool:
+        return self._wheel_changes_enabled
+
+    def set_wheel_changes_enabled(self, enabled: bool) -> None:
+        self._wheel_changes_enabled = enabled
+        self.setFocusPolicy(
+            self._wide_focus_policy if enabled else Qt.FocusPolicy.StrongFocus
+        )
+
+    def set_wheel_scroll_target(self, target: QScrollArea) -> None:
+        self._wheel_scroll_target = target
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        if not self._wheel_changes_enabled and not self.calendarWidget().isVisible():
+            if self._wheel_scroll_target is None:
+                event.ignore()
+                return
+            forwarded_event = QWheelEvent(event)
+            QApplication.sendEvent(
+                self._wheel_scroll_target.viewport(),
+                forwarded_event,
+            )
+            event.setAccepted(forwarded_event.isAccepted())
+            return
+        super().wheelEvent(event)
+
+
 class PredictionBrowserScreen(QWidget):
     """Browse every lifecycle state by question text, status, and tag."""
+
+    _SIDE_BY_SIDE_MINIMUM_WIDTH = 1080
 
     prediction_selected = Signal(object)
     search_result_selected = Signal(object, object)
@@ -152,36 +279,38 @@ class PredictionBrowserScreen(QWidget):
         self._search_debounce.setInterval(250)
         self._search_debounce.timeout.connect(self.refresh)
 
-        title = QLabel("Predictions", self)
-        title.setObjectName("predictionsScreenTitle")
-
-        introduction = QLabel(
+        header = PageHeader(
+            "Predictions",
             "Search questions, reasoning, Journal entries, and outcomes, or narrow "
-            "the archive by lifecycle status and tag.",
-            self,
+            "the archive with structured filters.",
+            title_object_name="predictionsScreenTitle",
+            supporting_object_name="predictionBrowserIntroduction",
+            parent=self,
         )
-        introduction.setObjectName("predictionBrowserIntroduction")
-        introduction.setWordWrap(True)
-        introduction.setTextFormat(Qt.TextFormat.PlainText)
 
         saved_view_label = QLabel("Saved View", self)
-        self.saved_view_picker = QComboBox(self)
+        saved_view_label.setObjectName("savedViewLabel")
+        self.saved_view_picker = _ArchiveComboBox(self)
         self.saved_view_picker.setObjectName("savedViewPicker")
         self.saved_view_picker.setAccessibleName("Apply a Saved View")
         self.saved_view_picker.addItem("No Saved View", None)
         saved_view_label.setBuddy(self.saved_view_picker)
-        self.saved_view_state = QLabel("No Saved View selected", self)
+        self.saved_view_state = QLabel(self)
         self.saved_view_state.setObjectName("savedViewState")
         self.saved_view_state.setTextFormat(Qt.TextFormat.PlainText)
-        self.save_current_view_button = QPushButton("Save current view…", self)
+        self.save_current_view_button = QPushButton("Save current…", self)
         self.save_current_view_button.setObjectName("saveCurrentViewButton")
+        self.save_current_view_button.setAccessibleName(
+            "Save current filters as a Saved View"
+        )
         apply_lucide_icon(self.save_current_view_button, LucideIcon.SAVE)
         self.save_as_new_button = QPushButton("Save as new…", self)
         self.save_as_new_button.setObjectName("saveViewAsNewButton")
-        apply_lucide_icon(self.save_as_new_button, LucideIcon.SAVE)
-        self.update_saved_view_button = QPushButton("Update Saved View", self)
+        apply_lucide_icon(self.save_as_new_button, LucideIcon.CIRCLE_PLUS)
+        self.update_saved_view_button = QPushButton("Update", self)
         self.update_saved_view_button.setObjectName("updateSavedViewButton")
-        apply_lucide_icon(self.update_saved_view_button, LucideIcon.SAVE)
+        self.update_saved_view_button.setAccessibleName("Update selected Saved View")
+        apply_lucide_icon(self.update_saved_view_button, LucideIcon.REFRESH)
         self.rename_saved_view_button = QPushButton("Rename", self)
         self.rename_saved_view_button.setObjectName("renameSavedViewButton")
         apply_lucide_icon(self.rename_saved_view_button, LucideIcon.PENCIL)
@@ -193,6 +322,7 @@ class PredictionBrowserScreen(QWidget):
         apply_lucide_icon(self.manage_tags_button, LucideIcon.SETTINGS)
 
         search_label = QLabel("Search", self)
+        search_label.setObjectName("predictionSearchLabel")
         self.search_input = QLineEdit(self)
         self.search_input.setObjectName("predictionSearchInput")
         self.search_input.setPlaceholderText(
@@ -203,7 +333,7 @@ class PredictionBrowserScreen(QWidget):
         search_label.setBuddy(self.search_input)
 
         match_label = QLabel("Words", self)
-        self.match_mode = QComboBox(self)
+        self.match_mode = _ArchiveComboBox(self)
         self.match_mode.setObjectName("predictionSearchMatchMode")
         self.match_mode.setAccessibleName("Choose how search words match")
         self.match_mode.addItem("All words", SearchMatchMode.ALL.value)
@@ -218,7 +348,7 @@ class PredictionBrowserScreen(QWidget):
         )
 
         status_label = QLabel("Status", self)
-        self.status_filter = QComboBox(self)
+        self.status_filter = _ArchiveComboBox(self)
         self.status_filter.setObjectName("predictionStatusFilter")
         self.status_filter.setAccessibleName("Filter predictions by status")
         self.status_filter.addItem("All", None)
@@ -232,7 +362,7 @@ class PredictionBrowserScreen(QWidget):
         status_label.setBuddy(self.status_filter)
 
         type_label = QLabel("Forecast type", self)
-        self.type_filter = QComboBox(self)
+        self.type_filter = _ArchiveComboBox(self)
         self.type_filter.setObjectName("predictionTypeFilter")
         self.type_filter.setAccessibleName("Filter predictions by forecast type")
         self.type_filter.addItem("All types", None)
@@ -241,22 +371,18 @@ class PredictionBrowserScreen(QWidget):
         type_label.setBuddy(self.type_filter)
 
         tag_label = QLabel("Tags", self)
-        self.tag_filter = QListWidget(self)
-        self.tag_filter.setObjectName("predictionTagFilter")
-        self.tag_filter.setAccessibleName("Filter predictions by one or more tags")
-        self.tag_filter.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        self.tag_filter.setMaximumHeight(72)
-        tag_label.setBuddy(self.tag_filter)
+        self.tag_filter = TagFilterPicker(self)
+        tag_label.setBuddy(self.tag_filter.search_input)
 
         tag_mode_label = QLabel("Tag match", self)
-        self.tag_match_mode = QComboBox(self)
+        self.tag_match_mode = _ArchiveComboBox(self)
         self.tag_match_mode.setObjectName("predictionTagMatchMode")
         self.tag_match_mode.addItem("All selected", ArchiveTagMatchMode.ALL.value)
         self.tag_match_mode.addItem("Any selected", ArchiveTagMatchMode.ANY.value)
         tag_mode_label.setBuddy(self.tag_match_mode)
 
         attention_label = QLabel("Attention", self)
-        self.attention_filter = QComboBox(self)
+        self.attention_filter = _ArchiveComboBox(self)
         self.attention_filter.setObjectName("predictionAttentionFilter")
         self.attention_filter.addItem("Any", None)
         self.attention_filter.addItem(
@@ -271,7 +397,7 @@ class PredictionBrowserScreen(QWidget):
         attention_label.setBuddy(self.attention_filter)
 
         date_label = QLabel("Date", self)
-        self.date_meaning = QComboBox(self)
+        self.date_meaning = _ArchiveComboBox(self)
         self.date_meaning.setObjectName("predictionDateMeaning")
         self.date_meaning.addItem("Created", ArchiveDateMeaning.CREATED.value)
         self.date_meaning.addItem(
@@ -293,7 +419,7 @@ class PredictionBrowserScreen(QWidget):
         self.date_end = self._new_date_edit("predictionDateEnd")
 
         sort_label = QLabel("Sort", self)
-        self.sort_filter = QComboBox(self)
+        self.sort_filter = _ArchiveComboBox(self)
         self.sort_filter.setObjectName("predictionSort")
         self.sort_filter.addItem("Relevance", ArchiveSort.RELEVANCE.value)
         self.sort_filter.addItem("Created (newest)", ArchiveSort.CREATED_NEWEST.value)
@@ -340,70 +466,241 @@ class PredictionBrowserScreen(QWidget):
         self.clear_button = QPushButton("Clear filters", self)
         self.clear_button.setObjectName("clearPredictionFiltersButton")
         apply_lucide_icon(self.clear_button, LucideIcon.ERASER)
+        apply_action_role(self.apply_button, ActionRole.PRIMARY)
+        apply_action_role(self.clear_button, ActionRole.QUIET)
+        apply_action_role(self.save_current_view_button, ActionRole.SECONDARY)
+        apply_action_role(self.save_as_new_button, ActionRole.SECONDARY)
+        apply_action_role(self.update_saved_view_button, ActionRole.SECONDARY)
+        apply_action_role(self.rename_saved_view_button, ActionRole.SECONDARY)
+        apply_action_role(self.delete_saved_view_button, ActionRole.DESTRUCTIVE)
+        apply_action_role(self.manage_tags_button, ActionRole.SECONDARY)
 
-        search_layout = QHBoxLayout()
-        search_layout.addWidget(search_label)
-        search_layout.addWidget(self.search_input, 1)
-        search_layout.addWidget(match_label)
-        search_layout.addWidget(self.match_mode)
-        search_layout.addWidget(self.include_history)
+        for label in (
+            saved_view_label,
+            search_label,
+            match_label,
+            status_label,
+            type_label,
+            tag_label,
+            tag_mode_label,
+            attention_label,
+            date_label,
+            sort_label,
+        ):
+            apply_text_role(label, TextRole.LABEL)
+        apply_text_role(self.saved_view_state, TextRole.SECONDARY)
 
-        filter_controls = QHBoxLayout()
-        filter_controls.addWidget(status_label)
-        filter_controls.addWidget(self.status_filter)
-        filter_controls.addWidget(type_label)
-        filter_controls.addWidget(self.type_filter)
-        filter_controls.addWidget(attention_label)
-        filter_controls.addWidget(self.attention_filter)
-        filter_controls.addWidget(sort_label)
-        filter_controls.addWidget(self.sort_filter)
-        filter_controls.addWidget(self.apply_button)
-        filter_controls.addWidget(self.clear_button)
-        filter_controls.addStretch()
+        self.saved_view_picker.setMinimumWidth(180)
+        self.search_input.setMinimumWidth(240)
+        self.date_start.setMinimumWidth(118)
+        self.date_end.setMinimumWidth(118)
+        for compact_combo in (
+            self.match_mode,
+            self.status_filter,
+            self.type_filter,
+            self.attention_filter,
+            self.sort_filter,
+            self.tag_match_mode,
+            self.date_meaning,
+        ):
+            compact_combo.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+            compact_combo.setMinimumContentsLength(10)
+        self._archive_wheel_controls = (
+            self.saved_view_picker,
+            self.match_mode,
+            self.status_filter,
+            self.type_filter,
+            self.tag_match_mode,
+            self.attention_filter,
+            self.date_meaning,
+            self.sort_filter,
+            self.date_start,
+            self.date_end,
+        )
 
-        archive_controls = QHBoxLayout()
-        archive_controls.addWidget(tag_label)
-        archive_controls.addWidget(self.tag_filter)
-        archive_controls.addWidget(tag_mode_label)
-        archive_controls.addWidget(self.tag_match_mode)
-        archive_controls.addWidget(date_label)
-        archive_controls.addWidget(self.date_meaning)
-        archive_controls.addWidget(self.date_start_enabled)
-        archive_controls.addWidget(self.date_start)
-        archive_controls.addWidget(self.date_end_enabled)
-        archive_controls.addWidget(self.date_end)
-        archive_controls.addStretch()
+        filters_panel = ContentPanel(
+            "Find predictions",
+            "Saved views restore controls dynamically; search and filters always "
+            "query the current archive.",
+            content_spacing=Spacing.COMPACT,
+            parent=self,
+        )
+        filters_panel.setObjectName("predictionBrowserFiltersPanel")
 
-        filters_layout = QVBoxLayout()
-        saved_views_layout = QHBoxLayout()
-        saved_views_layout.addWidget(saved_view_label)
-        saved_views_layout.addWidget(self.saved_view_picker)
-        saved_views_layout.addWidget(self.saved_view_state)
-        saved_views_layout.addWidget(self.save_current_view_button)
-        saved_views_layout.addWidget(self.save_as_new_button)
-        saved_views_layout.addWidget(self.update_saved_view_button)
-        saved_views_layout.addWidget(self.rename_saved_view_button)
-        saved_views_layout.addWidget(self.delete_saved_view_button)
-        saved_views_layout.addStretch()
-        filters_layout.addLayout(saved_views_layout)
-        filters_layout.addLayout(search_layout)
-        filters_layout.addLayout(filter_controls)
-        filters_layout.addLayout(archive_controls)
-        tag_management_layout = QHBoxLayout()
-        tag_management_layout.addWidget(self.manage_tags_button)
-        tag_management_layout.addStretch()
-        filters_layout.addLayout(tag_management_layout)
+        saved_section, saved_body = _control_section(
+            "Saved view",
+            None,
+            "predictionSavedViewsGroup",
+            filters_panel.body,
+        )
+        saved_selection = QVBoxLayout()
+        saved_selection.setSpacing(int(Spacing.COMPACT))
+        saved_view_label.setHidden(True)
+        saved_selection.addWidget(self.saved_view_picker)
+        saved_selection.addWidget(self.saved_view_state)
+        saved_body.addLayout(saved_selection)
+        saved_buttons = (
+            self.save_current_view_button,
+            self.save_as_new_button,
+            self.update_saved_view_button,
+            self.rename_saved_view_button,
+            self.delete_saved_view_button,
+        )
+        saved_button_width = max(
+            148,
+            *(button.sizeHint().width() for button in saved_buttons),
+        )
+        saved_primary_actions = QHBoxLayout()
+        saved_primary_actions.setSpacing(int(Spacing.CONTROL))
+        saved_primary_actions.addStretch()
+        for button in (
+            self.save_current_view_button,
+            self.save_as_new_button,
+            self.update_saved_view_button,
+        ):
+            button.setFixedWidth(saved_button_width)
+            saved_primary_actions.addWidget(button)
+        saved_primary_actions.addStretch()
+        saved_body.addLayout(saved_primary_actions)
+        saved_secondary_actions = QHBoxLayout()
+        saved_secondary_actions.setSpacing(int(Spacing.CONTROL))
+        saved_secondary_actions.addStretch()
+        for button in (
+            self.rename_saved_view_button,
+            self.delete_saved_view_button,
+        ):
+            button.setFixedWidth(saved_button_width)
+            saved_secondary_actions.addWidget(button)
+        saved_secondary_actions.addStretch()
+        saved_body.addLayout(saved_secondary_actions)
 
-        self.error_label = QLabel(self)
+        search_section, search_body = _control_section(
+            "Search",
+            None,
+            "predictionSearchGroup",
+            filters_panel.body,
+        )
+        search_label.setHidden(True)
+        search_body.addWidget(self.search_input)
+        search_options = QHBoxLayout()
+        search_options.addWidget(match_label)
+        search_options.addWidget(self.match_mode)
+        search_options.addWidget(self.include_history)
+        search_options.addStretch()
+        search_body.addLayout(search_options)
+        filters_panel.body_layout.addWidget(search_section)
+
+        common_section, common_body = _control_section(
+            "Common filters",
+            None,
+            "predictionCommonFiltersGroup",
+            filters_panel.body,
+        )
+        common_grid = QGridLayout()
+        common_grid.setHorizontalSpacing(int(Spacing.CONTROL))
+        common_grid.setVerticalSpacing(int(Spacing.CONTROL))
+        common_grid.addWidget(status_label, 0, 0)
+        common_grid.addWidget(attention_label, 0, 1)
+        common_grid.addWidget(self.status_filter, 1, 0)
+        common_grid.addWidget(self.attention_filter, 1, 1)
+        common_grid.addWidget(type_label, 2, 0)
+        common_grid.addWidget(sort_label, 2, 1)
+        common_grid.addWidget(self.type_filter, 3, 0)
+        common_grid.addWidget(self.sort_filter, 3, 1)
+        common_grid.setColumnStretch(0, 1)
+        common_grid.setColumnStretch(1, 1)
+        common_body.addLayout(common_grid)
+        common_actions = QHBoxLayout()
+        common_actions.addStretch()
+        common_actions.addWidget(self.clear_button)
+        common_actions.addWidget(self.apply_button)
+        common_body.addLayout(common_actions)
+        filters_panel.body_layout.addWidget(common_section)
+
+        detailed_section, detailed_body = _control_section(
+            "Detailed filters",
+            None,
+            "predictionDetailedFiltersGroup",
+            filters_panel.body,
+        )
+        tag_column = QVBoxLayout()
+        tag_column.setSpacing(int(Spacing.CONTROL))
+        tag_column.addWidget(tag_label)
+        tag_column.addWidget(self.tag_filter)
+        detailed_body.addLayout(tag_column)
+
+        date_column = QVBoxLayout()
+        date_column.setSpacing(int(Spacing.CONTROL))
+        date_column.addWidget(date_label)
+        date_column.addWidget(self.date_meaning)
+        date_bounds = QHBoxLayout()
+        date_bounds.setSpacing(int(Spacing.CONTROL))
+        start_region = QWidget(detailed_section)
+        start_row = QHBoxLayout(start_region)
+        start_row.setContentsMargins(0, 0, 0, 0)
+        start_row.setSpacing(int(Spacing.CONTROL))
+        start_row.addWidget(self.date_start_enabled)
+        start_row.addWidget(self.date_start, 1)
+        end_region = QWidget(detailed_section)
+        end_row = QHBoxLayout(end_region)
+        end_row.setContentsMargins(0, 0, 0, 0)
+        end_row.setSpacing(int(Spacing.CONTROL))
+        end_row.addWidget(self.date_end_enabled)
+        end_row.addWidget(self.date_end, 1)
+        date_bounds.addWidget(start_region, 1)
+        date_bounds.addWidget(end_region, 1)
+        date_column.addLayout(date_bounds)
+        detailed_body.addLayout(date_column)
+
+        tag_tools = QHBoxLayout()
+        tag_tools.setSpacing(int(Spacing.ORDINARY))
+        tag_match_region = QWidget(detailed_section)
+        tag_match_layout = QHBoxLayout(tag_match_region)
+        tag_match_layout.setContentsMargins(0, 0, 0, 0)
+        tag_match_layout.setSpacing(int(Spacing.CONTROL))
+        tag_match_layout.addWidget(tag_mode_label)
+        tag_match_layout.addWidget(self.tag_match_mode, 1)
+        manage_tags_region = QWidget(detailed_section)
+        manage_tags_layout = QHBoxLayout(manage_tags_region)
+        manage_tags_layout.setContentsMargins(0, 0, 0, 0)
+        manage_tags_layout.addStretch()
+        manage_tags_layout.addWidget(self.manage_tags_button)
+        manage_tags_layout.addStretch()
+        tag_tools.addWidget(tag_match_region, 1)
+        tag_tools.addWidget(manage_tags_region, 1)
+        detailed_body.addLayout(tag_tools)
+        filters_panel.body_layout.addWidget(detailed_section)
+        filters_panel.body_layout.addWidget(saved_section)
+        # QScrollArea expands its child to the viewport at normal window sizes.
+        # Absorb that spare height below the controls so compact headings and
+        # section geometry never stretch when the tag-chip row is empty.
+        filters_panel.body_layout.addStretch()
+
+        compact_buttons = (
+            self.manage_tags_button,
+            self.clear_button,
+            self.apply_button,
+        )
+        for button in compact_buttons:
+            button.setSizePolicy(
+                QSizePolicy.Policy.Maximum,
+                QSizePolicy.Policy.Fixed,
+            )
+
+        self.error_label = PersistentMessageLabel(
+            accessible_name="Predictions status",
+            tone=StatusTone.ERROR,
+            parent=self,
+        )
         self.error_label.setObjectName("predictionBrowserError")
-        self.error_label.setWordWrap(True)
-        self.error_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.error_label.setHidden(True)
 
         self.result_count_label = QLabel(self)
         self.result_count_label.setObjectName("predictionBrowserResultCount")
         self.result_count_label.setTextFormat(Qt.TextFormat.PlainText)
         self.result_count_label.setHidden(True)
+        apply_text_role(self.result_count_label, TextRole.SECONDARY)
 
         self.results_list = QListWidget(self)
         self.results_list.setObjectName("predictionBrowserResults")
@@ -411,6 +708,7 @@ class PredictionBrowserScreen(QWidget):
         self.results_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.results_list.setAlternatingRowColors(True)
         self.results_list.setWordWrap(True)
+        self.results_list.setMinimumHeight(220)
 
         self.empty_label = QLabel(self)
         self.empty_label.setObjectName("predictionBrowserEmpty")
@@ -424,6 +722,12 @@ class PredictionBrowserScreen(QWidget):
         self.suggestion_button = QPushButton(self)
         self.suggestion_button.setObjectName("predictionSearchSuggestionButton")
         self.suggestion_button.setHidden(True)
+        apply_action_role(self.any_word_button, ActionRole.SECONDARY)
+        apply_action_role(
+            self.suggestion_button,
+            ActionRole.SECONDARY,
+            accessible_name="Use suggested search spelling",
+        )
 
         guidance_layout = QHBoxLayout()
         guidance_layout.addWidget(self.any_word_button)
@@ -447,20 +751,72 @@ class PredictionBrowserScreen(QWidget):
         self.open_button = QPushButton("Open selected", self)
         self.open_button.setObjectName("openSelectedPredictionButton")
         apply_lucide_icon(self.open_button, LucideIcon.ARROW_RIGHT)
+        apply_action_role(self.open_button, ActionRole.SECONDARY)
         self.open_button.setEnabled(False)
 
         actions_layout = QHBoxLayout()
         actions_layout.addWidget(self.open_button)
         actions_layout.addStretch()
 
+        results_panel = ContentPanel(
+            "Results",
+            "Select with the keyboard, or open a row directly with the mouse or Enter.",
+            parent=self,
+        )
+        results_panel.setObjectName("predictionBrowserResultsPanel")
+        results_panel.setMinimumWidth(520)
+        self._results_panel = results_panel
+        results_panel.body_layout.addWidget(self.error_label)
+        results_panel.body_layout.addWidget(self.result_count_label)
+        results_panel.body_layout.addWidget(self.results_region, 1)
+        results_panel.body_layout.addLayout(actions_layout)
+        results_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+
+        content = QWidget(self)
+        content.setObjectName("predictionBrowserContent")
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+        )
+        content_layout.setSpacing(int(Spacing.SECTION))
+        content_layout.addWidget(header)
+
+        controls_scroll = QScrollArea(self)
+        controls_scroll.setObjectName("predictionBrowserControlsScrollArea")
+        controls_scroll.setAccessibleName("Prediction search and filter controls")
+        controls_scroll.setWidgetResizable(True)
+        controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        controls_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        controls_scroll.setWidget(filters_panel)
+        controls_scroll.setMinimumWidth(520)
+        for wheel_control in self._archive_wheel_controls:
+            wheel_control.set_wheel_scroll_target(controls_scroll)
+
+        self._workspace_splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        self._workspace_splitter.setObjectName("predictionBrowserWorkspace")
+        self._workspace_splitter.setAccessibleName(
+            "Prediction filters and results workspace"
+        )
+        self._workspace_splitter.setChildrenCollapsible(False)
+        self._workspace_splitter.setHandleWidth(int(Spacing.CONTROL))
+        self._workspace_splitter.addWidget(controls_scroll)
+        self._workspace_splitter.addWidget(results_panel)
+        self._workspace_splitter.setStretchFactor(0, 0)
+        self._workspace_splitter.setStretchFactor(1, 1)
+        self._workspace_splitter.setSizes([540, 900])
+        content_layout.addWidget(self._workspace_splitter, 1)
+
         layout = QVBoxLayout(self)
-        layout.addWidget(title)
-        layout.addWidget(introduction)
-        layout.addLayout(filters_layout)
-        layout.addWidget(self.error_label)
-        layout.addWidget(self.result_count_label)
-        layout.addWidget(self.results_region, 1)
-        layout.addLayout(actions_layout)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(content)
 
         self.apply_button.clicked.connect(self.refresh)
         self.clear_button.clicked.connect(self.clear_filters)
@@ -470,7 +826,7 @@ class PredictionBrowserScreen(QWidget):
         self.include_history.toggled.connect(self.refresh)
         self.status_filter.currentIndexChanged.connect(self.refresh)
         self.type_filter.currentIndexChanged.connect(self.refresh)
-        self.tag_filter.itemSelectionChanged.connect(self.refresh)
+        self.tag_filter.selection_changed.connect(self.refresh)
         self.tag_match_mode.currentIndexChanged.connect(self.refresh)
         self.attention_filter.currentIndexChanged.connect(self.refresh)
         self.date_meaning.currentIndexChanged.connect(self.refresh)
@@ -487,11 +843,41 @@ class PredictionBrowserScreen(QWidget):
         self.delete_saved_view_button.clicked.connect(self._delete_active_saved_view)
         self.manage_tags_button.clicked.connect(self._manage_tags)
         self.results_list.currentItemChanged.connect(self._selection_changed)
+        self.results_list.itemClicked.connect(self._open_item)
         self.results_list.itemActivated.connect(self._open_item)
         self.open_button.clicked.connect(self._open_current_item)
         self.any_word_button.clicked.connect(self._search_for_any_word)
         self.suggestion_button.clicked.connect(self._accept_suggestion)
         self._update_saved_view_state()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Keep results visible beside controls, stacking only at narrow widths."""
+
+        super().resizeEvent(event)
+        orientation = (
+            Qt.Orientation.Horizontal
+            if event.size().width() >= self._SIDE_BY_SIDE_MINIMUM_WIDTH
+            else Qt.Orientation.Vertical
+        )
+        for wheel_control in self._archive_wheel_controls:
+            wheel_control.set_wheel_changes_enabled(
+                orientation is Qt.Orientation.Horizontal
+            )
+        if self._workspace_splitter.orientation() == orientation:
+            return
+        self._workspace_splitter.setOrientation(orientation)
+        available = (
+            self._workspace_splitter.width()
+            if orientation is Qt.Orientation.Horizontal
+            else self._workspace_splitter.height()
+        )
+        if orientation is Qt.Orientation.Horizontal:
+            controls_size = min(560, max(520, available // 3))
+        else:
+            controls_size = max(230, available // 2)
+        self._workspace_splitter.setSizes(
+            [controls_size, max(1, available - controls_size)]
+        )
 
     def showEvent(self, event: QShowEvent) -> None:
         """Keep derived Locked status current while the browser remains visible."""
@@ -789,7 +1175,8 @@ class PredictionBrowserScreen(QWidget):
     def _update_saved_view_state(self) -> None:
         active = self._active_saved_view()
         if active is None:
-            self.saved_view_state.setText("No Saved View selected")
+            self.saved_view_state.clear()
+            self.saved_view_state.setHidden(True)
             self.update_saved_view_button.setEnabled(False)
             self.rename_saved_view_button.setEnabled(False)
             self.delete_saved_view_button.setEnabled(False)
@@ -798,6 +1185,7 @@ class PredictionBrowserScreen(QWidget):
         self.saved_view_state.setText(
             f"{active.name}: {'Modified' if modified else 'Saved'}"
         )
+        self.saved_view_state.setHidden(False)
         self.update_saved_view_button.setEnabled(modified)
         self.rename_saved_view_button.setEnabled(True)
         self.delete_saved_view_button.setEnabled(True)
@@ -849,7 +1237,7 @@ class PredictionBrowserScreen(QWidget):
         ):
             self.status_filter.setCurrentIndex(0)
             self.type_filter.setCurrentIndex(0)
-            self.tag_filter.clearSelection()
+            self.tag_filter.clear_selection()
             self.tag_match_mode.setCurrentIndex(0)
             self.attention_filter.setCurrentIndex(0)
             self.date_meaning.setCurrentIndex(0)
@@ -864,11 +1252,6 @@ class PredictionBrowserScreen(QWidget):
             self.include_history.setChecked(False)
         self._sort_is_default = True
         self.refresh()
-
-    def focus_search(self) -> None:
-        """Put keyboard focus on question search when entering the screen."""
-
-        self.search_input.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _render(
         self,
@@ -887,6 +1270,7 @@ class PredictionBrowserScreen(QWidget):
         noun = "prediction" if count == 1 else "predictions"
         self.result_count_label.setText(f"{count} {noun}")
         self.result_count_label.setHidden(False)
+        self._results_panel.set_count(count)
 
     def _render_archive(self, snapshot: PredictionBrowserSnapshot) -> None:
         self._prepare_results(len(snapshot.predictions))
@@ -904,7 +1288,10 @@ class PredictionBrowserScreen(QWidget):
         self.empty_label.setHidden(True)
         self.results_region.setCurrentWidget(self.results_list)
         for prediction in snapshot.predictions:
-            item = QListWidgetItem(self._row_text(prediction))
+            # The structured row widget is the sole visual representation.  A
+            # DisplayRole string would also be painted by QListWidget's default
+            # delegate underneath it, causing duplicate and overlapping text.
+            item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, prediction.prediction_id)
             item.setData(
                 Qt.ItemDataRole.AccessibleTextRole,
@@ -915,7 +1302,10 @@ class PredictionBrowserScreen(QWidget):
                 self._row_description(prediction),
             )
             item.setToolTip("Open Prediction Detail")
+            row = self._archive_result_widget(prediction)
+            item.setSizeHint(row.sizeHint())
             self.results_list.addItem(item)
+            self.results_list.setItemWidget(item, row)
 
     def _render_search_results(self, results: PredictionSearchResults) -> None:
         self._prepare_results(len(results.hits))
@@ -945,7 +1335,7 @@ class PredictionBrowserScreen(QWidget):
         self.empty_label.setHidden(True)
         self.results_region.setCurrentWidget(self.results_list)
         for hit in results.hits:
-            item = QListWidgetItem(self._search_row_text(hit))
+            item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, hit.prediction.prediction_id)
             item.setData(Qt.ItemDataRole.UserRole + 1, hit.best_match.document)
             item.setData(
@@ -963,31 +1353,20 @@ class PredictionBrowserScreen(QWidget):
             self.results_list.setItemWidget(item, row)
 
     def _update_tag_choices(self, tags: tuple[str, ...]) -> None:
-        selected_keys = {tag.casefold() for tag in self._selected_tags()}
+        selected_tags = self._selected_tags()
         with QSignalBlocker(self.tag_filter):
-            self.tag_filter.clear()
-            for display_name in tags:
-                item = QListWidgetItem(display_name, self.tag_filter)
-                item.setData(Qt.ItemDataRole.UserRole, display_name)
-                item.setSelected(display_name.casefold() in selected_keys)
+            self.tag_filter.set_available_tags(tags)
+            self.tag_filter.set_selected_tags(selected_tags)
 
     def _selected_status(self) -> PredictionStatus | None:
         value = self.status_filter.currentData()
         return None if value is None else PredictionStatus(str(value))
 
     def _selected_tags(self) -> tuple[str, ...]:
-        return tuple(
-            str(item.data(Qt.ItemDataRole.UserRole))
-            for item in self.tag_filter.selectedItems()
-        )
+        return self.tag_filter.selected_tags()
 
     def _set_selected_tags(self, selected_tags: tuple[str, ...]) -> None:
-        selected_keys = {tag.casefold() for tag in selected_tags}
-        for index in range(self.tag_filter.count()):
-            item = self.tag_filter.item(index)
-            item.setSelected(
-                str(item.data(Qt.ItemDataRole.UserRole)).casefold() in selected_keys
-            )
+        self.tag_filter.set_selected_tags(selected_tags)
 
     def _selected_prediction_type(self) -> PredictionType | None:
         value = self.type_filter.currentData()
@@ -1040,7 +1419,7 @@ class PredictionBrowserScreen(QWidget):
 
     @staticmethod
     def _new_date_edit(object_name: str) -> QDateEdit:
-        edit = QDateEdit()
+        edit = _ArchiveDateEdit()
         edit.setObjectName(object_name)
         edit.setCalendarPopup(True)
         edit.setDisplayFormat("yyyy-MM-dd")
@@ -1108,48 +1487,37 @@ class PredictionBrowserScreen(QWidget):
         else:
             self.prediction_selected.emit(prediction)
 
+    def _archive_result_widget(self, prediction: PredictionBrowserItem) -> QWidget:
+        row, layout = self._result_row(
+            prediction,
+            _forecast_value_summary(prediction),
+        )
+        row.setObjectName(f"predictionArchiveResult{prediction.prediction_id}")
+        question = layout.itemAt(0).widget()
+        if question is not None:
+            question.setObjectName(
+                f"predictionArchiveResultQuestion{prediction.prediction_id}"
+            )
+        return row
+
     def _search_result_widget(self, hit: PredictionSearchHit) -> QWidget:
-        row = QFrame(self.results_list)
+        row, layout = self._result_row(
+            hit.prediction,
+            _search_value_summary(hit.prediction),
+        )
         row.setObjectName(f"predictionSearchResult{hit.prediction.prediction_id}")
-        row.setFrameShape(QFrame.Shape.StyledPanel)
-        row.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        layout = QVBoxLayout(row)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(3)
-
-        question = QLabel(hit.prediction.question, row)
-        question.setObjectName(
-            f"predictionSearchResultQuestion{hit.prediction.prediction_id}"
-        )
-        question.setTextFormat(Qt.TextFormat.PlainText)
-        question.setWordWrap(True)
-        question_font = question.font()
-        question_font.setBold(True)
-        question.setFont(question_font)
-        layout.addWidget(question)
-
-        summary = QLabel(_search_prediction_summary(hit.prediction), row)
-        summary.setObjectName(
-            f"predictionSearchResultSummary{hit.prediction.prediction_id}"
-        )
-        summary.setTextFormat(Qt.TextFormat.PlainText)
-        summary.setWordWrap(True)
-        layout.addWidget(summary)
-
-        if hit.prediction.tags:
-            tags = QLabel(f"Tags: {', '.join(hit.prediction.tags)}", row)
-            tags.setTextFormat(Qt.TextFormat.PlainText)
-            tags.setWordWrap(True)
-            layout.addWidget(tags)
+        first_widget = layout.itemAt(0).widget()
+        if first_widget is not None:
+            first_widget.setObjectName(
+                f"predictionSearchResultQuestion{hit.prediction.prediction_id}"
+            )
 
         source = QLabel(search_source_label(hit.best_match.document), row)
         source.setObjectName(
             f"predictionSearchResultSource{hit.prediction.prediction_id}"
         )
         source.setTextFormat(Qt.TextFormat.PlainText)
-        source_font = source.font()
-        source_font.setItalic(True)
-        source.setFont(source_font)
+        apply_text_role(source, TextRole.LABEL)
         layout.addWidget(source)
 
         snippet = build_search_snippet(
@@ -1170,33 +1538,80 @@ class PredictionBrowserScreen(QWidget):
                 f"+{hit.additional_match_count} additional matching {noun}", row
             )
             additional.setTextFormat(Qt.TextFormat.PlainText)
+            apply_text_role(additional, TextRole.SECONDARY)
             layout.addWidget(additional)
         return row
+
+    def _result_row(
+        self,
+        prediction: PredictionBrowserItem | SearchPrediction,
+        value_summary: str,
+    ) -> tuple[QFrame, QVBoxLayout]:
+        """Compose the common archive/search result hierarchy."""
+
+        row = QFrame(self.results_list)
+        row.setFrameShape(QFrame.Shape.NoFrame)
+        row.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+            int(Spacing.ORDINARY),
+            int(Spacing.CONTROL),
+        )
+        layout.setSpacing(int(Spacing.COMPACT))
+
+        question = QLabel(prediction.question, row)
+        question.setTextFormat(Qt.TextFormat.PlainText)
+        question.setWordWrap(True)
+        apply_text_role(question, TextRole.SECTION_TITLE)
+        layout.addWidget(question)
+
+        badges = QHBoxLayout()
+        badges.setSpacing(int(Spacing.CONTROL))
+        forecast_type = StatusBadge(
+            prediction.prediction_type.value.upper(),
+            StatusTone.NEUTRAL,
+            parent=row,
+        )
+        forecast_type.setObjectName(f"predictionResultType{prediction.prediction_id}")
+        lifecycle = StatusBadge(
+            prediction.status.value.upper(),
+            _status_tone(prediction.status),
+            parent=row,
+        )
+        lifecycle.setObjectName(f"predictionResultStatus{prediction.prediction_id}")
+        badges.addWidget(forecast_type)
+        badges.addWidget(lifecycle)
+        badges.addStretch()
+        layout.addLayout(badges)
+        forecast = QLabel(value_summary, row)
+        forecast.setObjectName(f"predictionResultForecast{prediction.prediction_id}")
+        forecast.setTextFormat(Qt.TextFormat.PlainText)
+        forecast.setWordWrap(True)
+        layout.addWidget(forecast)
+
+        if prediction.tags:
+            tags = QLabel(f"Tags · {', '.join(prediction.tags)}", row)
+            tags.setObjectName(f"predictionResultTags{prediction.prediction_id}")
+            tags.setTextFormat(Qt.TextFormat.PlainText)
+            tags.setWordWrap(True)
+            apply_text_role(tags, TextRole.SECONDARY)
+            layout.addWidget(tags)
+
+        dates = QLabel(_date_context(prediction), row)
+        dates.setObjectName(f"predictionResultDates{prediction.prediction_id}")
+        dates.setTextFormat(Qt.TextFormat.PlainText)
+        dates.setWordWrap(True)
+        apply_text_role(dates, TextRole.SECONDARY)
+        layout.addWidget(dates)
+        return row, layout
 
     def _current_parsed_search_text(self) -> ParsedSearchText:
         loaded = self._loaded_snapshot
         if isinstance(loaded, PredictionSearchResults):
             return loaded.parsed_text
         raise RuntimeError("A search row requires loaded parsed search text.")
-
-    @staticmethod
-    def _search_row_text(hit: PredictionSearchHit) -> str:
-        tags = (
-            ""
-            if not hit.prediction.tags
-            else f"\nTags: {', '.join(hit.prediction.tags)}"
-        )
-        additional = (
-            ""
-            if not hit.additional_match_count
-            else f"\n+{hit.additional_match_count} additional matches"
-        )
-        return (
-            f"{hit.prediction.question}\n"
-            f"{_search_prediction_summary(hit.prediction)}{tags}\n"
-            f"{search_source_label(hit.best_match.document)}\n"
-            f"{hit.best_match.document.text}{additional}"
-        )
 
     @staticmethod
     def _search_row_description(hit: PredictionSearchHit) -> str:
@@ -1213,16 +1628,6 @@ class PredictionBrowserScreen(QWidget):
         )
 
     @staticmethod
-    def _row_text(prediction: PredictionBrowserItem) -> str:
-        tags = "" if not prediction.tags else f"\nTags: {', '.join(prediction.tags)}"
-        return (
-            f"{prediction.question}\n"
-            f"{_forecast_summary(prediction)}  |  {prediction.status.value.upper()}"
-            f"{tags}\n"
-            f"Forecast updated {_format_local_timestamp(prediction.latest_revision_at)}"
-        )
-
-    @staticmethod
     def _row_description(prediction: PredictionBrowserItem) -> str:
         tag_text = (
             "" if not prediction.tags else f" Tags: {', '.join(prediction.tags)}."
@@ -1236,6 +1641,94 @@ class PredictionBrowserScreen(QWidget):
 
 def _format_local_timestamp(value: datetime) -> str:
     return value.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+
+
+def _format_date(value: date) -> str:
+    return value.strftime("%b %d, %Y").replace(" 0", " ")
+
+
+def _status_tone(status: PredictionStatus) -> StatusTone:
+    if status is PredictionStatus.OPEN:
+        return StatusTone.ACCENT
+    if status is PredictionStatus.RESOLVED:
+        return StatusTone.SUCCESS
+    if status in (PredictionStatus.LOCKED, PredictionStatus.INVALID):
+        return StatusTone.WARNING
+    return StatusTone.NEUTRAL
+
+
+def _date_context(prediction: PredictionBrowserItem | SearchPrediction) -> str:
+    parts = [f"Created {_format_local_timestamp(prediction.created_at)}"]
+    if prediction.latest_revision_at is not None:
+        parts.append(
+            "Forecast considered "
+            f"{_format_local_timestamp(prediction.latest_revision_at)}"
+        )
+    if prediction.expected_resolution is not None:
+        parts.append(
+            f"Expected resolution {_format_date(prediction.expected_resolution)}"
+        )
+    if prediction.terminal_decision_at is not None:
+        parts.append(
+            "Terminal decision "
+            f"{_format_local_timestamp(prediction.terminal_decision_at)}"
+        )
+    return " · ".join(parts)
+
+
+def _forecast_value_summary(prediction: PredictionBrowserItem) -> str:
+    if prediction.prediction_type is PredictionType.BINARY:
+        if prediction.probability_percent is None:
+            raise ValueError("A Binary browser row requires a probability.")
+        return f"Current forecast · {prediction.probability_percent}%"
+    if (
+        prediction.numeric_lower_bound is None
+        or prediction.numeric_median_estimate is None
+        or prediction.numeric_upper_bound is None
+        or prediction.numeric_confidence_percent is None
+        or prediction.numeric_unit is None
+    ):
+        raise ValueError("A Numeric browser row requires complete interval data.")
+    return (
+        f"Current interval · {prediction.numeric_confidence_percent}%: "
+        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
+        f"{prediction.numeric_unit}; median "
+        f"{prediction.numeric_median_estimate} {prediction.numeric_unit}"
+    )
+
+
+def _search_value_summary(prediction: SearchPrediction) -> str:
+    if (
+        prediction.status is PredictionStatus.RESOLVED
+        and prediction.prediction_type is PredictionType.BINARY
+        and prediction.binary_outcome is not None
+    ):
+        return f"Outcome · {prediction.binary_outcome.value.title()}"
+    if (
+        prediction.status is PredictionStatus.RESOLVED
+        and prediction.prediction_type is PredictionType.NUMERIC
+        and prediction.numeric_actual_value is not None
+        and prediction.numeric_unit is not None
+    ):
+        return f"Actual value · {prediction.numeric_actual_value} {prediction.numeric_unit}"
+    if prediction.prediction_type is PredictionType.BINARY:
+        if prediction.probability_percent is None:
+            raise ValueError("A Binary search result requires a probability.")
+        return f"Current forecast · {prediction.probability_percent}%"
+    if (
+        prediction.numeric_lower_bound is None
+        or prediction.numeric_median_estimate is None
+        or prediction.numeric_upper_bound is None
+        or prediction.numeric_confidence_percent is None
+        or prediction.numeric_unit is None
+    ):
+        raise ValueError("A Numeric search result requires complete interval data.")
+    return (
+        f"Current interval · {prediction.numeric_confidence_percent}%: "
+        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
+        f"{prediction.numeric_unit}; median {prediction.numeric_median_estimate} "
+        f"{prediction.numeric_unit}"
+    )
 
 
 def _forecast_summary(prediction: PredictionBrowserItem) -> str:

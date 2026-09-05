@@ -29,7 +29,16 @@ from reckonsolve.domain.tags import (
     TagMergePreview,
     TagRenamePreview,
 )
+from reckonsolve.ui.components import ContentPanel, PersistentMessageLabel
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.visual_system import (
+    ActionRole,
+    Spacing,
+    StatusTone,
+    TextRole,
+    apply_action_role,
+    apply_text_role,
+)
 
 
 class TagManagementOperations(Protocol):
@@ -71,6 +80,11 @@ class TagManagerDialog(QDialog):
         self._tags_by_id: dict[int, TagLibraryItem] = {}
         self.changed = False
 
+        title = QLabel("Manage Tags", self)
+        title.setObjectName("tagManagerTitle")
+        title.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(title, TextRole.PAGE_TITLE)
+
         introduction = QLabel(
             "Rename, merge, or delete reusable tags across Predictions and Saved "
             "Views. Forecast and Journal history are not changed.",
@@ -79,6 +93,7 @@ class TagManagerDialog(QDialog):
         introduction.setObjectName("tagManagerIntroduction")
         introduction.setWordWrap(True)
         introduction.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(introduction, TextRole.SECONDARY)
 
         filter_label = QLabel("Filter tags", self)
         self.filter_input = QLineEdit(self)
@@ -86,6 +101,7 @@ class TagManagerDialog(QDialog):
         self.filter_input.setClearButtonEnabled(True)
         self.filter_input.setPlaceholderText("Type part of a tag name")
         filter_label.setBuddy(self.filter_input)
+        apply_text_role(filter_label, TextRole.LABEL)
 
         filter_layout = QHBoxLayout()
         filter_layout.addWidget(filter_label)
@@ -112,6 +128,9 @@ class TagManagerDialog(QDialog):
         self.delete_button = QPushButton("Delete…", self)
         self.delete_button.setObjectName("deleteTagButton")
         apply_lucide_icon(self.delete_button, LucideIcon.TRASH)
+        apply_action_role(self.rename_button, ActionRole.SECONDARY)
+        apply_action_role(self.merge_button, ActionRole.SECONDARY)
+        apply_action_role(self.delete_button, ActionRole.DESTRUCTIVE)
 
         actions = QHBoxLayout()
         actions.addWidget(self.rename_button)
@@ -119,20 +138,38 @@ class TagManagerDialog(QDialog):
         actions.addWidget(self.delete_button)
         actions.addStretch()
 
-        self.status_label = QLabel(self)
+        self.status_label = PersistentMessageLabel(
+            accessible_name="Tag management status",
+            parent=self,
+        )
         self.status_label.setObjectName("tagManagerStatus")
-        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.status_label.setWordWrap(True)
-        self.status_label.setHidden(True)
 
         close_buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         close_buttons.setObjectName("tagManagerCloseButtons")
+        close_button = close_buttons.button(QDialogButtonBox.StandardButton.Close)
+        apply_action_role(close_button, ActionRole.QUIET)
+
+        library_panel = ContentPanel(
+            "Tag library",
+            "Counts show current Prediction and Saved View use.",
+            parent=self,
+        )
+        library_panel.setObjectName("tagManagerLibraryPanel")
+        library_panel.body_layout.addLayout(filter_layout)
+        library_panel.body_layout.addWidget(self.table, 1)
+        library_panel.body_layout.addLayout(actions)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+            int(Spacing.PAGE),
+        )
+        layout.setSpacing(int(Spacing.ORDINARY))
+        layout.addWidget(title)
         layout.addWidget(introduction)
-        layout.addLayout(filter_layout)
-        layout.addWidget(self.table, 1)
-        layout.addLayout(actions)
+        layout.addWidget(library_panel, 1)
         layout.addWidget(self.status_label)
         layout.addWidget(close_buttons)
 
@@ -321,6 +358,7 @@ class TagManagerDialog(QDialog):
         self.delete_button.setEnabled(count == 1)
 
     def _show_status(self, message: str, *, is_error: bool = False) -> None:
-        self.status_label.setText(message)
-        self.status_label.setProperty("error", is_error)
-        self.status_label.setHidden(False)
+        self.status_label.show_message(
+            message,
+            StatusTone.ERROR if is_error else StatusTone.SUCCESS,
+        )

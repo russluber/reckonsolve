@@ -262,11 +262,13 @@ QScrollArea#settingsScrollArea,
 QScrollArea#newPredictionScrollArea,
 QScrollArea#predictionDetailScrollArea,
 QScrollArea#numericPredictionDetailScrollArea,
+QScrollArea#predictionBrowserControlsScrollArea,
 QScrollArea#dashboardScrollArea > QWidget > QWidget,
 QScrollArea#settingsScrollArea > QWidget > QWidget,
 QScrollArea#newPredictionScrollArea > QWidget > QWidget,
 QScrollArea#predictionDetailScrollArea > QWidget > QWidget,
-QScrollArea#numericPredictionDetailScrollArea > QWidget > QWidget {{
+QScrollArea#numericPredictionDetailScrollArea > QWidget > QWidget,
+QScrollArea#predictionBrowserControlsScrollArea > QWidget > QWidget {{
     background-color: transparent;
     border: none;
 }}
@@ -475,6 +477,21 @@ QPushButton[reckonsolveActionRole="destructive"]:disabled {{
     background-color: transparent;
     color: {color.disabled_text};
     border-color: {color.border};
+}}
+
+QPushButton[reckonsolveTagChip="true"] {{
+    background-color: {color.accent_soft};
+    color: {color.on_accent_soft};
+    border: 1px solid {color.accent};
+    border-radius: {control_radius}px;
+    padding: {compact}px {control}px;
+}}
+QPushButton[reckonsolveTagChip="true"]:hover {{
+    background-color: {color.focus};
+    color: {color.on_accent};
+}}
+QPushButton[reckonsolveTagChip="true"]:focus {{
+    border: 2px solid {color.focus};
 }}
 
 QLabel[reckonsolveBadgeTone] {{

@@ -5,7 +5,7 @@ from io import StringIO
 from zipfile import ZipFile
 
 import pytest
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QListWidget
 
 import reckonsolve.cli
@@ -1051,7 +1051,14 @@ def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
 
     assert results is not None
     assert results.count() == 2
-    rendered_rows = "\n".join(results.item(index).text() for index in range(2))
+    rendered_rows = "\n".join(
+        (
+            str(results.item(index).data(Qt.ItemDataRole.AccessibleTextRole))
+            + "\n"
+            + str(results.item(index).data(Qt.ItemDataRole.AccessibleDescriptionRole))
+        )
+        for index in range(2)
+    )
     assert "Will the GUI display this CLI Binary?" in rendered_rows
     assert "70%" in rendered_rows
     assert "How many CLI items will the GUI display?" in rendered_rows

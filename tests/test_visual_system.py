@@ -117,6 +117,7 @@ def test_stylesheet_covers_semantic_roles_and_interaction_states() -> None:
         'reckonsolveNavigationActive="true"',
         'reckonsolveCompactNavigation="true"',
         "QListWidget#predictionBrowserResults {\n    padding:",
+        'reckonsolveTagChip="true"',
         'reckonsolveBadgeTone="warning"',
         'reckonsolveMessageTone="error"',
         'searchMatchEmphasis="true"',
