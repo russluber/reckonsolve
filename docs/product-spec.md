@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6 Product Specifications
 
-Status: v0.5 source release implemented; v0.6 approved for staged implementation
+Status: v0.6.0 source release implemented; no later release contract approved
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -2516,7 +2516,9 @@ Backup remains a complete schema-version-15 canonical recovery artifact. CSV rem
 
 ### 34.11 Implementation milestones
 
-Milestones 39 through 45, including the separately authorized Milestone 42A, implement v0.6.0. Work remains one coherent vertical slice at a time, and each milestone must leave the application usable rather than applying half of a visual contract across unrelated screens.
+Milestones 39 through 45, including the separately authorized Milestone 42A,
+implemented v0.6.0 and are complete. Any post-v0.6 work requires a separately
+authorized contract or coherent vertical slice.
 
 #### Milestone 39: Central visual-system foundation
 

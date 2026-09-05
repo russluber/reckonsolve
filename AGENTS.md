@@ -21,7 +21,7 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.6. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15. Any post-v0.6 feature work requires an explicitly authorized specification milestone or coherent vertical slice.
+The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15. No v0.7 contract is approved yet; any post-v0.6 feature work requires an explicitly authorized specification milestone or coherent vertical slice.
 
 The v0.1 baseline includes:
 
