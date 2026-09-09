@@ -21,7 +21,9 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15. No v0.7 contract is approved yet; any post-v0.6 feature work requires an explicitly authorized specification milestone or coherent vertical slice.
+The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15.
+
+The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 55 are planned but not implemented. Work on only the milestone or coherent slice the user explicitly authorizes; do not treat the approved plan as authorization to implement the whole release at once.
 
 The v0.1 baseline includes:
 
@@ -87,6 +89,8 @@ v0.6 Milestone 44 completes the presentation rollout in Analytics and cross-appl
 
 v0.6 Milestone 45 closes the source release without a migration or product expansion. Automated compatibility coverage snapshots every schema-version-15 application and derived row around presentation-only use. The relocated private build verifies packaged styles/icons, safe shell defaults, expanded/compact navigation, all primary screens, both Detail types, shortcuts, responsive sizes, search, backup, repair, restart, and unchanged canonical data. `tools/run_visual_review.py` supplies disposable empty, representative, and long-text profiles for the recorded human palette/scaling/layout matrix without opening either real user database.
 
+v0.7 prospectively changes new forecasting commitments while preserving every legacy cohort. Every new Binary or Numeric Prediction receives a durable model/scoring identity, a mandatory exact immutable Forecast Deadline, and separate effective-resolution and recorded-at instants. New Binary Predictions use duration-weighted Trajectory Brier with Binary-only neutral truncation after early resolution. New Numeric Predictions use the fixed q05/q25/q50/q75/q95 model, exact WIS, calibration-first feedback, and continuous-style or whole-number semantics. Every pre-v0.7 Binary and Numeric Prediction keeps its legacy editor, lifecycle, and scoring contract for life; never infer exact times, quantiles, trajectories, or new scores for it.
+
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 
 ## Technology Direction
@@ -123,6 +127,9 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Opening or cancelling a revision form must not create a revision.
 - Numeric revisions require `lower <= median <= upper`, inclusive bounds, and whole-number confidence from 1% through 99%.
 - Numeric values use an exact base-ten representation at the Prediction's immutable unit and precision; canonical storage must not use binary floating-point.
+- Every new v0.7 Prediction has an immutable stored model identity and scoring-contract identity; application version and `metadata_version` are not substitutes.
+- Every new v0.7 Forecast Deadline is an exact immutable instant strictly after the first revision. New-model revisions are system-timestamped, strictly ordered, and rejected at or after that Deadline.
+- Every new v0.7 Numeric revision contains exactly q05, q25, q50, q75, and q95 with `q05 <= q25 <= q50 <= q75 <= q95`. Equality is valid; crossing is rejected without silent sorting.
 
 ### Journal entries
 
@@ -140,6 +147,7 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Invalid predictions remain in history and are excluded from scoring.
 - Ready to Resolve and Needs Attention are attention classifications, not additional canonical lifecycle states.
 - Staleness may change how a prediction is displayed, but it must never alter its forecast values.
+- New v0.7 Resolutions distinguish effective resolution time from immutable recorded-at. Scoring uses the effective instant and an audited effective-time correction may change scoring selection without rewriting any ForecastRevision.
 
 ### Scoring
 
@@ -150,6 +158,9 @@ Do not implement other Later features unless the user explicitly changes the sco
 - Numeric forecasts use inclusive containment calibration, median absolute error, and proper interval score as specified in Section 30.
 - Unitless numeric containment calibration may combine units; raw numeric errors, widths, and interval scores must not be aggregated across unlike units.
 - Test scoring selection rules separately from chart rendering.
+- Binary Trajectory Brier applies only to its explicit v0.7 cohort, uses exact standing durations and the fixed initial-to-Deadline denominator, and uses 0.25 neutral truncation only after early effective resolution.
+- Numeric five-quantile WIS applies only to its explicit v0.7 cohort and uses the final revision strictly before `min(effective_resolution_at, Forecast Deadline)`. It has no neutral truncation or Numeric trajectory score.
+- Never average legacy and new-model scores silently. Never average raw WIS or WIS improvement across heterogeneous Numeric questions merely because their unit labels match.
 
 ### Deletion and data integrity
 
@@ -160,8 +171,8 @@ Do not implement other Later features unless the user explicitly changes the sco
 
 ## UX Guardrails
 
-- Creating a binary prediction requires only Question and Probability.
-- Creating a numeric prediction requires Question, unit, precision, lower bound, median estimate, upper bound, and confidence; whole-number precision is the default.
+- Preserve the legacy Binary and Numeric editors for their existing cohorts: Binary uses Question and Probability, while Numeric interval-v1 uses Question, unit, precision, lower bound, median estimate, upper bound, and confidence.
+- New v0.7 Binary creation requires Question, Probability, and Forecast Deadline. New Numeric creation requires Question, unit, precision, value constraint, q05, q25, q50, q75, q95, and Forecast Deadline.
 - Rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags remain optional.
 - Do not force the user to enter boilerplate Resolution Criteria for self-evident questions.
 - Keep Question and the type-appropriate forecast values visually primary during creation.
@@ -273,7 +284,7 @@ Unless explicitly authorized through a change to `docs/product-spec.md`, do not 
 - cloud sync, hosted storage, or required network access;
 - social sharing, comments, groups, leaderboards, tournaments, or crowd forecasts;
 - web/PWA architecture or an application API;
-- multiple numeric intervals per revision, full numeric distributions, arbitrary quantile sets, automatic unit conversion, multiple-choice, date-distribution, or conditional forecasts;
+- multiple Numeric intervals or quantiles beyond the fixed v0.7 q05/q25/q50/q75/q95 model, arbitrary quantile sets, complete parametric distributions or invented outer tails, automatic unit conversion, multiple-choice, date-distribution, or conditional forecasts;
 - full Forecast Review sessions or anti-anchoring review modes beyond the explicit v0.2 Review record;
 - Collections, structured Sources/Evidence, attachments, or prediction graphs;
 - notifications or automatic reminders;

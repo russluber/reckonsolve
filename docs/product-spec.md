@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6 Product Specifications
+## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7 Product Specifications
 
-Status: v0.6.0 source release implemented; no later release contract approved
+Status: v0.6.0 source release implemented; v0.7.0 contract approved for implementation
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -23,7 +23,7 @@ Build a local-first personal forecasting journal that lets one person:
 
 The product is not merely a database of current probabilities. Its defining value is an honest historical record of what the user believed, why they believed it, and how those beliefs changed.
 
-The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback. v0.5 makes the growing journal reliably retrievable and manageable through explainable full-text search, richer archive controls, dynamic Saved Views, and deliberate tag-library maintenance. v0.6 gives the completed desktop application a coherent, responsive, accessible visual system and application shell without changing the forecasting model or canonical data.
+The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback. v0.5 makes the growing journal reliably retrievable and manageable through explainable full-text search, richer archive controls, dynamic Saved Views, and deliberate tag-library maintenance. v0.6 gives the completed desktop application a coherent, responsive, accessible visual system and application shell without changing the forecasting model or canonical data. v0.7 makes the forecasting commitment itself more rigorous: every new forecast uses an immutable exact forecasting window, Binary forecasts receive duration-weighted trajectory scoring, and new Numeric forecasts use one fixed five-quantile distribution with WIS and calibration-first feedback.
 
 ---
 
@@ -1125,6 +1125,8 @@ The v0.4 resolution-integrity and learning contract is resolved in Section 32. R
 The v0.5 retrieval-and-organization contract is resolved in Section 33. Search is local, lexical, explainable, current/effective by default, and historically explicit when superseded text is requested. Saved Views remain dynamic queries rather than Collections, and global tag maintenance changes current organizational metadata without rewriting forecast, Journal, or terminal history.
 
 The v0.6 visual-system and application-shell contract is resolved in Section 34. The desktop follows the system light/dark preference, retains the native window frame, uses comfortable density and one restrained green accent, separates primary destinations from creation and contextual Detail, supports remembered expanded and compact navigation, and uses nonblocking status notifications only where acknowledgment does not require a decision. Presentation preferences remain noncanonical and separate from forecast data.
+
+The v0.7 forecasting-method, Binary trajectory-scoring, and five-quantile Numeric contracts are resolved in Section 35 and their three supporting design documents. They apply prospectively to Predictions created under the new model identities. Legacy Binary and Numeric Predictions keep their earlier contracts for life and are never silently converted, reconstructed, rescored, or mixed into a new-model aggregate.
 
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
@@ -2677,7 +2679,1018 @@ v0.6 is not complete unless all of the following are true:
 
 ---
 
-## 35. Instruction to coding agents
+## 35. v0.7 forecasting discipline, Binary trajectory scoring, and five-quantile Numeric product contract
+
+v0.7 changes the forecasting commitment for newly created Predictions while
+preserving every historical contract under which an existing Prediction was
+made. It incorporates the following accepted design inputs:
+
+- [Forecasting Rulebook v0.7](reckonsolve-forecasting-rulebook-v0.7.md);
+- [Binary Trajectory Scoring Design v0.7](reckonsolve-binary-trajectory-scoring-design-v0.7.md); and
+- [Numeric Forecasting Design v0.7](reckonsolve-numeric-forecasting-design-v0.7.md).
+
+Those documents retain the complete rationale, examples, and mathematical
+derivations. This section is the repository's governing implementation
+contract. If later wording in a supporting document appears to conflict with
+this section, surface the conflict and revise this specification deliberately
+rather than choosing silently.
+
+The release promise is:
+
+> Make only forecasts that measure judgment rather than self-control, commit
+> each new forecast to an exact immutable forecasting window, score the whole
+> standing Binary probability path, and represent every new Numeric belief as
+> one fixed five-quantile distribution.
+
+Sections 1 through 34 remain authoritative for legacy Predictions and for
+behavior not changed here. For a Prediction carrying a v0.7 forecast-model
+identity, this section prospectively overrides the earlier optional,
+date-only, editable Forecast Deadline; final-revision-only Binary scoring; and
+user-selected-confidence Numeric interval contracts.
+
+### 35.1 Included scope and governing invariants
+
+v0.7 includes:
+
+- the Forecasting Rulebook as durable, local product guidance for deciding
+  which questions belong in Reckonsolve;
+- durable forecast-model and scoring-contract identities that do not depend
+  on application version or optimistic-concurrency metadata;
+- one mandatory, exact, timezone-aware, immutable Forecast Deadline for every
+  newly created Binary or Numeric Prediction;
+- separate effective-resolution and recorded-at instants for every new-model
+  Resolution, including append-only correction of effective resolution time;
+- duration-weighted Binary Trajectory Brier with neutral truncation after
+  early resolution;
+- Binary Initial Brier, Final Brier, hold-initial counterfactual, Updating
+  Gain, and Active Forecast Fraction diagnostics;
+- a new Numeric model consisting of the 5th, 25th, 50th, 75th, and 95th
+  percentiles, presented as a 90% interval, median, and 50% interval;
+- exact five-quantile WIS, individual score decomposition, and
+  initial-versus-final WIS diagnostics;
+- continuous-style and whole-number Numeric value constraints with
+  discrete-aware calibration;
+- an implied central CDF that distinguishes elicited quantiles from
+  interpolation and invents no outer-tail shape;
+- hard, visible coexistence with all pre-v0.7 Binary and Numeric records;
+- matching GUI and CLI workflows over the same canonical database; and
+- migration, search, backup, relational CSV export, recovery, and private
+  frozen-build hardening for the new records.
+
+The following invariants govern the release:
+
+- A ForecastRevision remains immutable regardless of model.
+- Forecast-model identity and scoring-contract identity are immutable
+  Prediction-level facts and are not inferred from the running package
+  version.
+- `metadata_version` remains only an optimistic-concurrency token; it never
+  doubles as model or scoring identity.
+- New creation offers only the new v0.7 model for the selected Binary or
+  Numeric forecast type. It does not expose a legacy/new model selector.
+- Existing Predictions retain their legacy model for life, including
+  existing Open Predictions and all their future revisions and Resolution.
+- No migration invents an exact deadline, effective resolution time,
+  probability trajectory, quantile, or WIS for a legacy record.
+- New Binary and Numeric Predictions share a forecasting lifecycle but retain
+  deliberately different scoring rules.
+- Every eligible Resolved Prediction contributes at most one
+  Prediction-level observation to its compatible aggregate.
+- Invalid and unresolved Predictions remain excluded from scoring.
+- Corrections recompute from immutable source facts; they never rewrite
+  ForecastRevision history or the original recorded-at audit instant.
+- All behavior remains offline, local-first, single-user, and shared between
+  only the paired stable or development GUI and CLI identities.
+
+### 35.2 Forecasting Rulebook and admissible questions
+
+Reckonsolve trains calibrated observational judgment, not compliance with
+goals, promises, habits, or commitments. A forecast may be personal because
+its outcome matters to the user; it need not be about the user.
+
+Before creating a Prediction, the user should check that it is personally
+relevant or genuinely interesting, meaningfully uncertain, and objectively
+resolvable. The user should also identify realistic post-forecast actions
+that could materially affect the outcome and consider whether seeing the
+forecast could turn it into a goal or change behavior enough to contaminate
+the result.
+
+The Rulebook recognizes three mental classifications:
+
+- **A - Observational**: little meaningful discretionary control remains
+  after commitment.
+- **B - Policy-conditioned**: substantial realistic influence remains, but a
+  clear precommitted behavioral intervention policy can hold that influence
+  fixed.
+- **C - Inadmissible**: the question mainly measures future agency,
+  self-control, compliance, or a manipulable result and does not belong in
+  Reckonsolve.
+
+This classification is guidance rather than a persisted product field.
+v0.7 adds no A/B/C database column, scoring split, archive filter, or required
+attestation. The application may present concise, collapsible pre-commit
+guidance, but it must not turn quick capture into a mandatory questionnaire.
+The complete Rulebook remains the durable reference.
+
+Prefer uncertain consequences after major discretionary choices have already
+been made or frozen. Do not pretend a forecast is observational merely
+because an unlikely theoretical intervention exists; judge practical,
+realistically available control in the ordinary course of events.
+
+For a policy-conditioned forecast:
+
+- the policy is part of the forecast's meaning;
+- it uses objective behavioral language, covers material channels of
+  influence, and distinguishes allowed ordinary interaction;
+- it must be realistic enough not to distort normal life;
+- it is written as a clearly labeled subsection of Resolution Criteria;
+- it is fixed once the initial forecast is committed; and
+- a material breach makes the Prediction Invalid rather than scored with a
+  post-hoc excuse.
+
+v0.7 does not add a dedicated Intervention Policy field because the software
+does not yet need separate programmatic semantics. Resolution Criteria
+continues to hold the policy text. A material change to the target, policy,
+source of truth, unit, measurement window, or scoring window is not a normal
+metadata correction. Resolve under the original contract when possible;
+otherwise mark the original Invalid and create a new Prediction.
+
+Real-world welfare takes precedence over preserving a score. The user should
+intervene when life requires it and invalidate the forecast if that
+intervention breaks the committed policy. Such invalidation protects the
+learning record and is not a forecasting failure.
+
+The Rulebook may evolve prospectively. A later clarification must not
+retroactively relabel, rescore, or condemn Predictions made under an earlier
+accepted contract.
+
+### 35.3 Durable model and cohort identity
+
+Every Prediction has one immutable forecast-model identity and one immutable
+scoring-contract identity. Exact stored names are an implementation detail,
+but their semantic cohorts are:
+
+| Forecast type | Legacy cohort | New v0.7 cohort |
+|---|---|---|
+| Binary | one final captured probability with ordinary Brier | standing probability trajectory with Trajectory Brier |
+| Numeric | `interval-v1`: lower, median, upper, chosen confidence | `quantiles-5-v2`: q05, q25, q50, q75, q95 with WIS |
+
+The Binary legacy cohort retains the existing optional editable date-only
+Forecast Deadline, immutable captured scoring revision, Brier score,
+calibration, and cumulative-Brier behavior.
+
+Every Numeric Prediction already present when the migration first runs is
+marked `interval-v1`. This includes Open, Locked, Resolved, and Invalid
+records. Open legacy Numeric Predictions continue to use the interval,
+median, and confidence creation-era revision editor and legacy resolution and
+analytics rules for their entire lifetime.
+
+After the v0.7 creation switch:
+
+- `create binary` creates only the Binary trajectory model;
+- `create numeric` creates only `quantiles-5-v2`;
+- there is no normal conversion command or model selector;
+- copying text from a legacy definition into a new Prediction, if ever
+  offered, is convenience only and creates no linked or inferred history; and
+- all reads, writes, anchors, scoring, and rendering dispatch from stored
+  model identity rather than guessed table population.
+
+Legacy and new-model scores must be labeled and aggregated separately. A
+blank or unrecognized model identity is a migration or compatibility error,
+not permission to guess.
+
+### 35.4 Shared exact forecasting-window and resolution-time contract
+
+For each new v0.7 Prediction, define:
+
+- `t0` as the immutable system-generated commit instant of its sequence-one
+  ForecastRevision;
+- `T` as its Forecast Deadline;
+- `R` as its effective resolution time; and
+- `C = min(R, T)` as its scoring cutoff.
+
+#### Forecast Deadline
+
+`T` is:
+
+- required during initial creation;
+- one exact timezone-aware instant converted to canonical UTC for storage;
+- strictly later than `t0`;
+- committed atomically with the Prediction and first ForecastRevision;
+- immutable after commitment; and
+- the last instant at which a ForecastRevision or Forecast Review may commit.
+
+Forecasting is allowed on the half-open interval `[t0, T)`. At exactly `T`,
+an otherwise nonterminal Prediction is Locked. Resolution and Invalidation
+remain available after locking, and Journals retain their existing Locked
+behavior.
+
+The creation UI must make Forecast Deadline prominent, explain that it cannot
+be edited later, and distinguish it from Expected Resolution. It should
+discourage deadlines chosen merely to match the modal expected outcome,
+unnecessarily short cutoffs, distant safety buffers, and choices optimized
+for a desired score. Input may use local date, time, and zone-aware platform
+controls, but the committed value must resolve to one unambiguous instant.
+
+For the new cohorts, Edit Details displays Forecast Deadline as immutable
+context and offers no addition, change, or removal action. Legacy Predictions
+retain their existing protected date-only edit and Definition-history
+behavior.
+
+#### Expected Resolution
+
+Expected Resolution remains optional, editable, date-only planning metadata.
+It predicts when the answer may become knowable and retains the existing
+Ready to Resolve behavior. It never changes `T`, `R`, lifecycle locking,
+revision eligibility, a scoring denominator, or an analytical observation.
+
+#### Revision timing
+
+New-model ForecastRevision instants are system-generated and cannot be
+backdated or forward-dated by the user. Each new revision must commit strictly
+after its preceding revision and strictly before `T`. If the supplied system
+clock does not produce a later canonical instant, the operation rejects the
+save clearly rather than inventing elapsed time or rewriting a timestamp.
+Forecast Reviews must commit before `T` but do not split a scoring interval.
+
+#### Effective resolution and recorded-at
+
+`R` is the earliest defensible exact instant at which the outcome became
+fixed and ascertainable under the committed Resolution Criteria and source of
+truth. The user enters or confirms this value during Resolution. When an
+objective source supplies an exact time, that source time should be used.
+
+`recorded_at` is the immutable system-generated instant when the Resolution
+was entered into Reckonsolve. It remains the audit and terminal-ordering fact.
+`R` must not be later than `recorded_at`. Delayed data entry never changes
+scoring because scoring uses `R`, not `recorded_at`.
+
+A revision committed before the Resolution was recorded but at or after `C`
+remains visible immutable history and is excluded from scoring. The
+application does not delete it or pretend it never stood before Reckonsolve
+learned the effective facts.
+
+If `R <= t0`, the Prediction may retain an honest Resolution record but is not
+a meaningful scored forecast. It produces no Trajectory Brier, WIS, or
+calibration observation, and the UI explains why rather than substituting the
+initial revision or a zero-duration score.
+
+### 35.5 Binary standing forecasts and Trajectory Brier
+
+For a Binary outcome `y` in `{0, 1}` and probability `p` on the zero-to-one
+scale, ordinary Brier loss remains:
+
+```text
+B(p, y) = (p - y)^2
+```
+
+For one eligible Binary trajectory Prediction, consider only revisions with
+commit instants strictly before `C`. Each probability stands from its commit
+instant until the next scoring-relevant revision or `C`. Journals, Journal
+corrections, Forecast Reviews and notes, metadata clarifications, terminal
+text, and Postmortem activity do not split or weight this path.
+
+Let the actual standing segments have exact elapsed durations `d_i` and Brier
+losses `B_i`. Define neutral truncation duration:
+
+```text
+d_N = T - R, when R < T
+d_N = 0,     when R >= T
+```
+
+Then the primary Binary score is:
+
+```text
+Trajectory Brier =
+    (sum(d_i * B_i) + d_N * 0.25)
+    / (T - t0)
+```
+
+Lower is better, and the result remains between zero and one.
+
+If `R < T`, actual forecast weighting stops at `R` and the remainder of the
+predetermined window contributes neutral Brier loss `0.25`. This neutral
+truncation:
+
+- preserves the denominator chosen before the outcome;
+- does not create a synthetic 50% ForecastRevision;
+- does not state that the user believed 50%; and
+- is Binary-specific.
+
+If `R >= T`, standing probabilities score only through `T`. Waiting to record
+or learn a late outcome adds no post-deadline time. If `R = T`, there is no
+neutral interval. Exact elapsed durations use normalized instants and
+sufficient precision for sub-day updates; the implementation must not
+discretize the path into calendar days.
+
+Every eligible Binary trajectory Prediction contributes one Trajectory Brier
+to its aggregate regardless of whether its window lasted hours or months.
+Time weighting occurs within a Prediction; longer Predictions do not receive
+more aggregate weight.
+
+### 35.6 Binary diagnostics, scorecards, and analytics
+
+For each eligible Resolved Binary trajectory Prediction, the scorecard shows
+Trajectory Brier as the primary score and may progressively disclose:
+
+- **Initial Brier**: Brier loss of the sequence-one probability against the
+  effective outcome;
+- **Final Brier**: Brier loss of the latest revision strictly before `C`;
+- **Hold-initial Trajectory Brier**: the counterfactual score obtained by
+  retaining the initial probability through the active portion while using
+  the same fixed deadline, effective time, neutral truncation, and
+  denominator;
+- **Updating Gain**: hold-initial Trajectory Brier minus actual Trajectory
+  Brier, where positive means the recorded revision path mechanically helped,
+  zero means no net effect, and negative means it mechanically hurt; and
+- **Active Forecast Fraction**: `(C - t0) / (T - t0)`, shown as the portion
+  of the planned window that contained actual forecasting.
+
+Updating Gain is a mechanical hindsight counterfactual, not proof that
+updating caused skill. Active Forecast Fraction explains heavy neutral
+truncation and never alters the score.
+
+Binary Analytics separates:
+
+- the new trajectory cohort, with count, equal-Prediction mean Trajectory
+  Brier, distribution or time summaries, and clearly labeled diagnostics;
+- final-probability calibration for eligible new-model Predictions, using one
+  final probability strictly before `C` as a diagnostic rather than a
+  trajectory score; and
+- the legacy cohort's existing final-revision Brier, calibration, and
+  cumulative performance views.
+
+No headline silently averages legacy Brier and Trajectory Brier. No revision
+is an independent aggregate observation. v0.7 adds no metric called
+trajectory calibration, no time-weighted calibration construction, and no
+Binary log score.
+
+### 35.7 Five-quantile Numeric model
+
+Every new Numeric Prediction forecasts one well-defined scalar random
+variable in one required immutable unit. A combined target such as cost and
+duration must be represented as two Predictions.
+
+In addition to unit and the existing exact fixed decimal precision, the
+Prediction records one immutable value constraint:
+
+- **Decimal / continuous-style**; or
+- **Whole-number**.
+
+This is not a third forecast type. Both constraints use the same five
+quantiles and WIS. Whole-number mode requires every quantile and realized
+value to be mathematically integral, permits repeated quantiles, and uses
+discrete-aware calibration. v0.7 adds no probability-mass-function editor.
+
+Each `quantiles-5-v2` ForecastRevision contains exactly:
+
+- `q05`, the 5th percentile;
+- `q25`, the 25th percentile;
+- `q50`, the median or 50th percentile;
+- `q75`, the 75th percentile;
+- `q95`, the 95th percentile;
+- an optional rationale;
+- one immutable system-generated commit instant; and
+- deterministic per-Prediction sequence.
+
+The UI presents those values as:
+
+```text
+90% interval: q05 to q95
+Median:       q50
+50% interval: q25 to q75
+```
+
+There is no chosen confidence level. Every new Numeric revision always
+expresses the same 90% interval, median, and 50% interval.
+
+Required ordering is:
+
+```text
+q05 <= q25 <= q50 <= q75 <= q95
+```
+
+Equality is valid. Crossed quantiles are rejected and never silently sorted.
+Negative, zero, positive, whole, and supported exact decimal values remain
+valid subject to the Prediction's fixed precision and value constraint.
+NaN, infinities, and textual sentinels are invalid.
+
+One revision is a complete five-quantile statement. Changing any subset
+appends all five current values atomically; a save identical to all five
+current values creates no revision and directs deliberate unchanged
+reconsideration to Forecast Review. Revision input is prepopulated and may be
+edited in any order. Reckonsolve may suggest the outside-in sequence 90%
+interval, median, then 50% interval, but it must not enforce a wizard or
+cognitive ordering.
+
+The Numeric Review action uses model-neutral wording such as **Keep current
+forecast** or **Keep current distribution**, not **Keep this interval**.
+Reviews and Journals preserve their existing history and freshness semantics
+and never change quantiles or scoring.
+
+Resolution Criteria should define the target, measurement start and end,
+source of truth, unit conventions, inclusions and exclusions, aggregation or
+rounding rules, exceptional cases, and any intervention policy when material.
+Unit, precision, value constraint, Forecast Deadline, and material target
+definition are scoring-critical and may not be redefined after commitment.
+
+### 35.8 Numeric scoring selection and WIS
+
+For an eligible Resolved `quantiles-5-v2` Prediction, the final scoring
+revision is the latest valid five-quantile revision committed strictly before
+`C = min(R, T)`.
+
+If `R < T`, the last revision before effective resolution is final. If
+`R >= T`, the last revision before the deadline is final. A revision at
+exactly `C` is ineligible. Numeric scoring has no neutral truncation, no
+post-resolution contribution, and no trajectory score in v0.7.
+
+For interval `[L, U]`, realized value `y`, and tail probability `alpha`:
+
+```text
+IS_alpha(L, U; y) =
+    (U - L)
+    + (2 / alpha) * (L - y), when y < L
+    + (2 / alpha) * (y - U), when y > U
+```
+
+Only the applicable miss term is added. Equality with an endpoint has zero
+outside-distance penalty.
+
+The canonical five-quantile Weighted Interval Score is:
+
+```text
+WIS =
+    (0.5 * abs(y - q50)
+     + 0.25 * IS_0.50(q25, q75; y)
+     + 0.05 * IS_0.10(q05, q95; y))
+    / 2.5
+```
+
+This is equivalent to the mean of the five corresponding quantile scores.
+Scoring uses exact stored values, never rounded display text or interpolated
+CDF points.
+
+WIS is lower-is-better and retains the target's unit and scale. It is useful
+for comparing revisions within one Prediction and interpreting one resolved
+forecast, but it is not a universal personal skill score. v0.7 does not
+average raw WIS, interval width, median error, or WIS improvement across
+heterogeneous Numeric questions; matching unit labels alone do not guarantee
+comparable scale or difficulty.
+
+A resolved Numeric scorecard shows:
+
+- actual value;
+- primary WIS;
+- median absolute error and signed median miss;
+- 50% and 90% interval width;
+- whether each interval was below, inside, or above the actual;
+- miss direction and distance when outside;
+- each interval score and weighted contribution; and
+- correction-history presence when an effective scoring fact changed.
+
+The scorecard may progressively disclose dispersion, underprediction, and
+overprediction decomposition, but WIS remains the canonical summary.
+
+Initial WIS uses sequence one. Final WIS uses the final scoring revision.
+`Delta WIS = Initial WIS - Final WIS`, so positive means the final
+distribution scored better, zero means equal, and negative means worse.
+Across heterogeneous Predictions, only counts and fractions better/equal/
+worse may be combined; raw Delta WIS magnitudes are not averaged. Do not call
+this Numeric Updating Gain.
+
+### 35.9 Numeric calibration and implied-distribution presentation
+
+Global five-quantile Numeric analytics are calibration-first. Each eligible
+Resolved `quantiles-5-v2` Prediction contributes exactly one observation
+using its final scoring revision and latest effective actual value.
+
+The view includes:
+
+- sample size;
+- calibration at nominal levels 5%, 25%, 50%, 75%, and 95%;
+- 50% interval outcomes split into below, inside, and above;
+- 90% interval outcomes split into below, inside, and above;
+- median balance; and
+- Wilson binomial uncertainty intervals or an equivalently explicit
+  small-sample treatment for displayed proportions.
+
+For Decimal / continuous-style targets, quantile calibration compares each
+nominal level `tau` with the empirical frequency of `y <= q_tau` and shows
+the perfect-calibration diagonal. It does not generate synthetic Numeric
+10%-through-90% confidence bins.
+
+For Whole-number targets, equality may carry real probability mass.
+Calibration therefore reports both empirical `P(y < q_tau)` and
+`P(y <= q_tau)` as a tie band around each nominal level. Interval and median
+views preserve below/equal/inside/above information and do not label a
+closed-interval coverage rate above nominal as automatically miscalibrated.
+
+The current Numeric forecast has an implied central CDF derived only between
+the five elicited anchors:
+
+- distinct adjacent quantiles connect by piecewise-linear interpolation in
+  cumulative-probability space;
+- repeated adjacent quantiles render as a vertical probability jump without
+  division by zero;
+- elicited anchors are visually distinguishable from interpolated segments;
+- approximately 5% below `q05` and 5% above `q95` may be described with
+  discrete-aware wording where needed; and
+- no normal, lognormal, exponential, minimum, maximum, full density, or other
+  unsupported outer-tail shape is invented.
+
+The CDF is presentation derived from the quantiles. Interpolation never
+changes WIS, calibration, stored history, or export values. Every revision
+and its five exact quantiles remains recoverable from the textual timeline,
+so the chart is not the sole historical representation.
+
+Legacy `interval-v1` containment bins and exact-unit raw summaries remain in
+a visibly separate legacy analytics section. They never enter five-quantile
+calibration or WIS feedback.
+
+### 35.10 Creation, Detail, lifecycle, and correction workflows
+
+New Prediction retains the Binary/Numeric choice and calm v0.6 visual system,
+but the minimum committed fields become:
+
+- Binary: Question, whole-number probability from 0% through 100%, and exact
+  Forecast Deadline;
+- Numeric: Question, unit, precision, value constraint, q05, q25, q50, q75,
+  q95, and exact Forecast Deadline.
+
+Rationale, Background, Resolution Criteria, Expected Resolution, and tags
+remain optional. For policy-conditioned forecasts, the Rulebook advises
+placing the policy in Resolution Criteria; the software does not force prose.
+The Prediction, immutable model identities, deadline, optional details and
+tags, and first complete revision commit atomically.
+
+Binary and Numeric Detail must show:
+
+- forecast type and model cohort;
+- complete Question and lifecycle;
+- exact immutable Forecast Deadline;
+- optional Expected Resolution separately;
+- current type-appropriate forecast;
+- full causal timeline and Review/Journal distinctions;
+- relevant history visualization;
+- terminal effective and recorded times when Resolved; and
+- type-appropriate scorecard or explicit unscored explanation.
+
+Legacy labels should be calm but unambiguous wherever the scoring or editor
+differs. The app must not shame a legacy record or suggest conversion.
+
+The shared active lifecycle is:
+
+- **Open** before `T` and before a terminal decision: revisions, Reviews, and
+  Journals are allowed.
+- **Locked** at or after `T` while nonterminal: revisions and Reviews are
+  rejected; Journals, Resolution, and Invalidation remain allowed.
+- **Resolved**: no new forecast activity; effective outcome, `R`, and
+  `recorded_at` are retained for scoring and audit.
+- **Invalid**: preserved, unscored, and unavailable for forecast activity.
+
+Needs Attention remains based on the later eligible Revision or Review.
+Journal activity does not reset it. Ready to Resolve remains driven only by
+optional Expected Resolution. Needs Postmortem remains a Resolved-only
+completion queue. No v0.7 score changes these attention classifications.
+
+For a new-model Resolution, the user supplies outcome or exact actual value,
+effective resolution time, optional Resolution notes, and optional
+Postmortem. Reckonsolve supplies recorded-at. Resolution is atomic and
+one-way.
+
+The existing append-only correction workflow is extended so one confirmed
+new-model correction may change the effective outcome, Resolution notes,
+Postmortem, and/or effective resolution time. A change to outcome, actual
+value, or effective resolution time requires a nonempty explanation because
+it may change scoring selection or score. Before/after effective-time facts,
+changed-field flags, reason, and correction timestamp are preserved.
+Recorded-at never changes.
+
+For legacy Resolutions, the existing immutable captured scoring revision and
+correction behavior remain authoritative. For new-model Resolutions, the
+canonical scoring selection is derived from immutable revision timestamps,
+immutable `T`, and latest effective `R`. An audited correction to `R` may
+therefore change the final eligible revision without rewriting any revision
+or original Resolution fact. Any cached revision identifier is derived and
+must not override those canonical facts.
+
+Question and Resolution Criteria retain Definition-history protection.
+Clarifications that preserve meaning may be audited. A material target,
+policy, source, or convention change follows Invalid/new-Prediction guidance.
+For new models, the immutable Deadline is not part of an editable Definition
+snapshot because no normal edit exists.
+
+### 35.11 Archive, search, Saved Views, Dashboard, and CLI
+
+Dashboard and Predictions remain one mixed archive. Each row renders the
+stored forecast type, model-appropriate current forecast or terminal summary,
+lifecycle, tags, dates, and attention labels. A new Numeric row shows the
+90% interval, median, and 50% interval without a confidence selector.
+Deadline date filtering projects an exact new-model deadline into the
+query's one local-calendar view while retaining date-only semantics for
+legacy records.
+
+Search keeps the v0.5 lexical, explainable, grouped behavior. Five-quantile
+values, score values, model identities, and timestamps remain structured
+facts rather than undifferentiated indexed prose. New revision rationales,
+Reviews, Journals, definitions, terminal text, and correction explanations
+enter the same current/effective and superseded projection rules. Search
+repair remains derived-only and cannot change model or scoring facts.
+
+Saved Views remain dynamic query configurations. Tags retain their stable
+identity and transactional rename/merge/delete behavior. v0.7 does not turn
+model cohorts into Collections or persist result membership. Existing status,
+forecast-type, tag, attention, date, and sort semantics remain unchanged
+unless a later explicitly approved slice adds a model-cohort filter.
+
+The existing CLI command family remains the companion interface:
+
+- `create binary` requires probability and an exact Forecast Deadline;
+- `create numeric` creates only the five-quantile model and prompts for unit,
+  precision, value constraint, all five quantiles, and exact Forecast
+  Deadline;
+- `revise` dispatches to Binary trajectory, Numeric five-quantile, or the
+  appropriate legacy editor from stored model identity;
+- `review` uses current-forecast wording and retains no-change semantics;
+- `resolve` collects a type-appropriate outcome plus effective resolution
+  time and preserves automatic recorded-at;
+- `show` displays model identity, exact deadlines, all five quantiles,
+  effective and recorded resolution facts, correction history, and
+  type-appropriate score information; and
+- `list` and `search` display model-appropriate summaries without flattening
+  legacy and new records.
+
+CLI prompts remain human-directed and line-oriented. The CLI reuses the same
+application operations, validation, migrations, model dispatch, and SQLite
+transactions as the GUI. It does not calculate scores, issue ad hoc SQL, or
+create a synchronization system.
+
+### 35.12 Persistence, migration, backup, and export
+
+The first v0.7 migration follows schema version 15 and establishes the shared
+prospective contract. It must:
+
+- add durable forecast-model and scoring-contract identities;
+- mark every existing Binary and Numeric Prediction with its exact legacy
+  identity;
+- add exact immutable deadline storage for new models without replacing or
+  guessing legacy date-only values;
+- add prospective effective-resolution storage and append-only correction
+  support while retaining original recorded terminal instants;
+- preserve every existing row and derived search document; and
+- be idempotent, history-validated, foreign-key checked, and covered by a
+  forced-failure rollback test.
+
+The Numeric persistence migration adds a clean immutable five-quantile
+revision representation rather than repurposing `numeric_forecast_revisions`.
+The physical layout may use generic child rows keyed by allowed quantile
+level, but the domain transaction must require exactly one value for each of
+5, 25, 50, 75, and 95 and no others. Journal, Review, Resolution, correction,
+search, and timeline relationships must anchor unambiguously to the
+model-appropriate complete revision.
+
+Canonical data includes model and scoring identity, exact deadline, every
+immutable revision and quantile, effective and recorded Resolution facts,
+and every correction. Trajectory Brier, WIS, calibration, CDF interpolation,
+final scoring-revision selection, and model-appropriate display summaries
+remain derived.
+
+SQLite backup continues to copy and verify the entire current database. A
+restored backup must preserve all cohorts and deterministically reproduce
+their scores and search projection.
+
+Relational CSV export advances to **format version 4**. It retains every
+format-version-three historical relationship and adds enough explicit files
+or columns to preserve:
+
+- forecast-model and scoring-contract identity;
+- exact new-model Forecast Deadlines;
+- Numeric value constraint;
+- complete five-quantile revision values and levels;
+- effective and recorded resolution times;
+- effective-time corrections and their explanations;
+- revision sequence and immutable timestamps; and
+- the legacy/new cohort boundary.
+
+Exact Numeric values remain scaled integers paired with precision or another
+documented exact base-ten form. The version-four data dictionary explains
+how to reconstruct each standing Binary segment, select the final Numeric
+revision, distinguish legacy analytics, and interpret nulls. CSV remains an
+analytical export, not an import or restoration format. Saved Views,
+application settings, presentation preferences, derived scores, CDF points,
+and search-index rows remain excluded.
+
+The implementation should record consequential ADRs for model-version
+identity and prospective exact-time/scoring semantics. It must not introduce
+an ORM, migration framework, external analytics library, charting library,
+web service, or new production dependency without a separately demonstrated
+need.
+
+### 35.13 Implementation milestones
+
+Milestones 46 through 55 implement v0.7.0. Each milestone must preserve the
+complete v0.6 application and all legacy cohorts while adding one testable
+slice.
+
+#### Milestone 46: Rulebook and shared prospective-contract foundation
+
+- Record the forecast-model/scoring-contract and exact-time persistence
+  decisions in ADRs.
+- Add the first post-version-15 migration with durable legacy/new model
+  identities, prospective exact Deadline and effective-resolution facts, and
+  append-only effective-time correction support.
+- Mark every existing Prediction with its legacy identity without inventing
+  data or changing its editor, lifecycle, score, search behavior, or export
+  meaning.
+- Add exact timezone-aware deadline and effective-resolution domain values,
+  strict `T > t0` and monotonic new-revision validation, cutoff derivation,
+  and model dispatch independently of Qt.
+- Keep new-model creation unavailable until its first complete vertical
+  workflow is ready.
+- Link the accepted Rulebook from durable project documentation and introduce
+  only concise nonblocking pre-commit guidance; add no classification field
+  or mandatory checklist record.
+
+Acceptance demonstration:
+
+> Open a representative schema-version-15 database -> migrate -> every
+> existing Binary and Numeric record behaves and scores exactly as before,
+> each has an explicit legacy identity, and no exact deadline, effective time,
+> or quantile has been fabricated.
+
+#### Milestone 47: New Binary active-forecasting vertical slice
+
+- Switch new Binary creation in GUI and shared application operations to the
+  trajectory model with required exact immutable Deadline.
+- Update CLI Binary creation, revision, and Review prompts in the same slice
+  so no established entry point can accidentally create an incomplete or
+  legacy-model new Binary Prediction.
+- Apply exact Open/Locked boundaries to Binary revision and Review operations
+  while retaining Journal behavior and all stale-context checks.
+- Update Binary Detail, timeline, probability-history context, Dashboard,
+  Predictions, search summaries, delete eligibility, and metadata editing for
+  immutable Deadline display.
+- Make the Rulebook's deadline and admissibility guidance discoverable
+  without forcing optional rationale or Resolution Criteria.
+- Preserve every legacy Binary creation-era read and mutation path after
+  migration, while preventing creation of another legacy Binary Prediction.
+- Add boundary tests for exact Deadline, local/UTC round trip, sub-day
+  windows, endpoint probability, clock regression rejection, cancellation,
+  restart, and transaction rollback.
+
+#### Milestone 48: Binary trajectory Resolution, corrections, and scorecard
+
+- Extend Binary Resolution to collect effective resolution time separately
+  from automatic recorded-at and select the trajectory cohort from stored
+  model identity.
+- Update CLI Binary Resolution and `show` output for the same effective-time
+  and scorecard contract.
+- Implement pure standing-segment construction, exact-duration Trajectory
+  Brier, early neutral truncation, Initial/Final Brier, hold-initial,
+  Updating Gain, and Active Forecast Fraction.
+- Add the resolved Binary trajectory scorecard with progressive diagnostics
+  and explicit no-score treatment for `R <= t0`.
+- Extend append-only Resolution correction to effective time, require an
+  explanation for score-affecting changes, and recompute from immutable
+  source history.
+- Preserve post-effective revisions as visible audit history while excluding
+  them from segments and final-revision selection.
+- Cover early, exact-deadline, and late Resolution; several sub-day
+  revisions; outcome and time corrections; zero neutral-row persistence;
+  stale context; restart; and legacy correction behavior.
+
+#### Milestone 49: Binary trajectory analytics and cohort separation
+
+- Add the eligible trajectory count and equal-Prediction mean Trajectory
+  Brier with type/tag filtering and clear lower-is-better language.
+- Add useful distributions or resolution-time summaries plus appropriately
+  labeled aggregate diagnostics without duration-weighting Predictions.
+- Retain final-probability calibration as a separate diagnostic and keep
+  legacy Binary Brier/calibration/trend visibly separate.
+- Ensure one Resolved Prediction contributes once, Invalid/unscored records
+  contribute none, and no post-resolution revision becomes an observation.
+- Preserve sparse-data guidance and prevent any trajectory-calibration or
+  causal updating claim.
+
+#### Milestone 50: Five-quantile Numeric domain and persistence foundation
+
+- Add the clean Numeric v2 migration, immutable model/value constraint, exact
+  five-quantile revisions, and model-appropriate Journal, Review, Resolution,
+  timeline, and search anchors.
+- Keep `numeric_forecast_revisions` and every legacy Numeric row unchanged and
+  operational.
+- Implement exact domain validation for required levels, ordering, equality,
+  whole-number constraints, complete revision replacement, no-op rejection,
+  and fixed precision.
+- Implement pure interval-score, WIS, decomposition, final-revision
+  selection, Initial/Final WIS, and Delta WIS functions with no Qt or SQLite
+  dependency.
+- Prove equivalence with five quantile scores, exact decimal behavior,
+  zero-width intervals, endpoint outcomes, misses on both sides, and no
+  cross-question raw aggregation.
+- Expose no half-working new Numeric choice until the active GUI slice is
+  complete.
+
+#### Milestone 51: Five-quantile Numeric creation, revision, and Detail
+
+- Switch new Numeric creation to value constraint plus q05/q25/q50/q75/q95,
+  required exact immutable Deadline, and no confidence or model selector.
+- Update CLI Numeric creation, revision, and Review prompts in the same slice
+  while retaining model-dispatched prompts for legacy Numeric Predictions.
+- Present the five fields as 90% interval, median, and 50% interval; permit
+  any entry order and reveal preview only after a valid complete set exists.
+- Add prepopulated complete revision editing, current-forecast Review wording,
+  anchored Journal behavior, causal timeline, and model-aware Definition
+  editing.
+- Add the implied central CDF with distinct elicited anchors, piecewise-linear
+  inner interpolation, repeated-quantile jumps, no invented outer tails, and
+  a complete textual alternative.
+- Update type-aware Detail, Dashboard, Predictions, search summaries,
+  attention, lock behavior, delete eligibility, restart, and narrow/wide
+  responsive presentation.
+- Preserve the existing legacy Numeric editor, interval history, Review
+  wording where historically appropriate, and every current lifecycle path.
+
+Acceptance demonstration:
+
+> Create a whole-number five-quantile Prediction with repeated anchors and a
+> Decimal Prediction with signed exact values -> revise one subset -> Review
+> the unchanged other -> restart -> both complete histories, deadlines,
+> summaries, and CDF semantics remain exact, while an old Open interval-v1
+> Prediction still opens in its legacy editor.
+
+#### Milestone 52: Five-quantile Numeric Resolution, corrections, and scorecard
+
+- Resolve Numeric v2 with exact actual value, effective resolution time,
+  automatic recorded-at, optional notes, and optional Postmortem.
+- Update CLI Numeric Resolution and `show` output for the same effective-time,
+  final-revision, and WIS contract.
+- Derive the final scoring revision strictly before `min(R, T)` and exclude
+  post-effective revisions without deleting them.
+- Add the individual WIS scorecard with median error, both interval widths and
+  locations, miss distances, interval scores, weighted contributions, and
+  exact unit.
+- Add Initial/Final WIS and Delta WIS feedback within the Prediction without
+  calling it trajectory scoring or Updating Gain.
+- Extend append-only actual-value/effective-time correction and recompute
+  final selection, WIS, scorecard, and eligibility without changing
+  recorded-at.
+- Cover continuous and whole-number values, repeated and zero-width
+  quantiles, early/exact/late Resolution, `R <= t0`, both correction kinds,
+  stale context, restart, and legacy Resolution parity.
+
+#### Milestone 53: Five-quantile Numeric calibration and update analytics
+
+- Build exactly-once v2 calibration observations from final scoring revisions
+  and latest effective actual values.
+- Add the five-level continuous-style calibration plot and table with sample
+  size and uncertainty.
+- Add whole-number strict/inclusive tie bands, discrete-aware 50% and 90%
+  interval outcomes, and median below/equal/above balance.
+- Add 50% and 90% below/inside/above summaries and heterogeneous-safe
+  better/equal/worse Initial-versus-Final WIS counts.
+- Keep legacy confidence-containment and exact-unit interval-score analytics
+  separate and retain their existing behavior.
+- Prove that no synthetic confidence bins, interpolated CDF points, raw WIS
+  aggregate, or Numeric trajectory metric enters Analytics.
+
+#### Milestone 54: CLI, retrieval, and cross-interface parity
+
+- Update GUI and CLI read models to dispatch all four forecast cohorts
+  explicitly and reject unknown identities.
+- Complete the cross-interface audit of CLI list, show, search, creation,
+  revise, review, and resolve behavior across all four model cohorts, closing
+  any read-model or prompt parity gaps while retaining legacy mutation paths.
+- Preserve exact local display and canonical UTC storage for Deadline,
+  effective time, and recorded-at across Windows terminal input.
+- Update search projection, repair, snippets, archive filters, Saved Views,
+  tag operations, Dashboard attention, concurrent GUI/CLI reads, sequential
+  writes, lock failures, and stale-context failures for new revision and
+  correction relationships.
+- Verify that no interface calculates its own score, issues model-specific ad
+  hoc SQL, or diverges from the shared application operation.
+
+#### Milestone 55: v0.7 portability, migration, and release closure
+
+- Advance relational CSV export to format version 4 with complete model,
+  quantile, exact-time, correction, and cohort documentation.
+- Verify complete SQLite backup and recovery, derived search rebuild, every
+  post-version-15 migration and forced rollback, restart, and
+  stable/development isolation.
+- Exercise a representative real schema-version-15-shaped database containing
+  both legacy types through upgrade and mixed-cohort use without row
+  reinterpretation.
+- Extend the relocated private frozen-build smoke across new Binary
+  trajectory and Numeric five-quantile creation, revision, Review, Resolution,
+  correction, scorecard, Analytics, CLI-compatible reads, search, backup, and
+  restart.
+- Run the full automated suite, Ruff checks, focused duration/quantile
+  property cases, and the existing manual Windows visual/accessibility
+  workflow.
+- Align README, architecture, ADRs, command help, version metadata,
+  changelog, and release notes with the implemented v0.7 behavior.
+- Close v0.7 as a source release without adding Numeric trajectory scoring,
+  trajectory calibration, a new forecast type, importer, installer, signing,
+  updates, public binaries, or logo work.
+
+### 35.14 v0.7 acceptance criteria
+
+v0.7 is not complete unless all of the following are true:
+
+1. Every completed v0.6 workflow and row retains its prior meaning unless
+   this section explicitly introduces a prospective new-model path.
+2. Every pre-upgrade Binary and Numeric Prediction receives the correct
+   durable legacy identity without an invented timestamp, quantile, score, or
+   model conversion.
+3. Every new Binary and Numeric Prediction has one exact immutable Deadline
+   strictly after its initial revision and commits parent, model identity,
+   deadline, optional details, and first revision atomically.
+4. New-model revisions are system-timestamped, strictly ordered, and rejected
+   at or after Deadline; Reviews are rejected at or after Deadline and never
+   split scoring.
+5. Expected Resolution remains optional editable planning metadata and has no
+   effect on Deadline, effective time, locking, or scoring.
+6. New-model Resolution retains distinct effective and recorded times and
+   uses effective time for scoring cutoff.
+7. A post-effective revision remains in history but never enters a segment or
+   becomes the final scoring revision.
+8. A score-affecting outcome or effective-time correction is append-only,
+   explained, and deterministically recomputes from immutable source facts;
+   recorded-at remains unchanged.
+9. `R <= t0` produces an explicit unscored record rather than a fabricated
+   zero-duration result.
+10. Binary Trajectory Brier uses exact standing durations, the fixed
+    denominator, 0.25 neutral truncation only for `R < T`, and no synthetic
+    ForecastRevision.
+11. Binary Initial Brier, Final Brier, hold-initial, Updating Gain, and Active
+    Forecast Fraction match their defined formulas and remain diagnostics.
+12. Each eligible Binary trajectory Prediction has equal aggregate weight;
+    legacy and trajectory scores are never silently averaged.
+13. Each Numeric v2 revision contains exactly q05, q25, q50, q75, and q95,
+    preserves exact precision, permits equality, rejects crossing, and
+    enforces its value constraint.
+14. New Numeric creation exposes no confidence selector or legacy-model
+    selector, while every Open legacy Numeric Prediction keeps its earlier
+    editor and scoring contract.
+15. Numeric final-revision selection is strictly before `min(R, T)` and has
+    no neutral truncation or trajectory component.
+16. WIS, its two interval scores, median term, boundary behavior,
+    decomposition, and five-quantile-score equivalence are correct from exact
+    stored values.
+17. Raw WIS and Delta WIS are not averaged across heterogeneous Predictions;
+    cross-Prediction update feedback uses only better/equal/worse counts or
+    fractions.
+18. Continuous-style calibration uses exactly the five elicited levels;
+    whole-number calibration preserves strict/inclusive ties; both show
+    sample size and uncertainty.
+19. The CDF distinguishes elicited anchors and interpolation, handles repeated
+    quantiles as jumps, invents no outer-tail distribution, and never affects
+    scoring.
+20. GUI and CLI create, mutate, resolve, display, and search the same canonical
+    mixed-cohort data through shared application operations.
+21. Dashboard, Predictions, Saved Views, tags, attention, Definition history,
+    Journal history, Reviews, Postmortems, and search retain their established
+    semantics for every cohort.
+22. Backup, CSV format version 4, migration, search repair, restart, and the
+    private frozen build preserve every new fact and every legacy boundary.
+23. Tests and smoke workflows use only explicit temporary databases and never
+    read or write stable or development user data.
+24. The complete v0.7 application remains offline, local-first, single-user,
+    and proportionate to a personal forecasting journal.
+
+### 35.15 Explicitly outside v0.7
+
+- Persisted A/B/C admissibility classification, a mandatory attestation, or
+  automated judgment of whether a user's question or policy is admissible.
+- A dedicated structured Intervention Policy field or automatic policy-breach
+  detection.
+- Conversion of a legacy Prediction to a new model, inferred legacy
+  quantiles, reconstructed legacy trajectories, or silent mixed-cohort
+  aggregates.
+- Numeric trajectory scoring, Binary trajectory calibration, Binary log
+  score, a universal cross-question Numeric score, or causal updating claims.
+- More than the fixed five Numeric quantiles, arbitrary quantile grids,
+  multiple distributions per revision, a discrete PMF editor, parametric
+  distribution fitting, invented outer tails, or automatic unit conversion.
+- Multiple-choice, date-distribution, conditional, relational, or any other
+  new forecast type.
+- A Forecast Review queue, review schedule, anti-anchoring session, concealed
+  prior forecast, or required forecast-writing wizard.
+- Collections, structured Sources/Evidence, attachments, prediction graphs,
+  reminders, background monitoring, automatic probability changes, or
+  recommendation feeds.
+- Semantic/vector/web search, an external service, cloud sync, accounts,
+  profiles, sharing, collaboration, or telemetry.
+- CSV import, JSON or Markdown export, restoration from analytical export,
+  machine-readable CLI mutation API, or bulk editing.
+- A new GUI framework, ORM, external search or analytics server, unnecessary
+  production dependency, or infrastructure for hypothetical scale.
+- Logo creation, a normal Windows installer, code signing, automatic updates,
+  public binary distribution, or other packaging expansion.
+
+---
+
+## 36. Instruction to coding agents
 
 Before implementing a milestone:
 
