@@ -7,6 +7,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
+from .forecast_contracts import check_forecast_contract_integrity
 from .migrations import (
     MIGRATIONS,
     Migration,
@@ -74,6 +75,8 @@ class Database:
             if any(migration.version >= 14 for migration in migrations):
                 require_fts5(connection)
             apply_migrations(connection, migrations)
+            if any(migration.version >= 16 for migration in migrations):
+                check_forecast_contract_integrity(connection)
             search_enabled = initialize_search_index(connection)
         except BaseException:
             if connection is not None:

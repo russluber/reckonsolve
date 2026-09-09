@@ -2619,6 +2619,730 @@ MIGRATIONS = (
             """,
         ),
     ),
+    Migration(
+        version=16,
+        name="add prospective forecast contracts and exact resolution timing",
+        statements=(
+            """
+            CREATE TABLE prediction_forecast_contracts (
+                prediction_id INTEGER PRIMARY KEY
+                    REFERENCES predictions(id) ON DELETE CASCADE,
+                forecast_model TEXT NOT NULL CHECK (
+                    forecast_model IN (
+                        'binary-final-v1',
+                        'binary-trajectory-v1',
+                        'numeric-interval-v1',
+                        'numeric-quantiles-5-v2'
+                    )
+                ),
+                scoring_contract TEXT NOT NULL CHECK (
+                    scoring_contract IN (
+                        'binary-final-brier-v1',
+                        'binary-trajectory-brier-v1',
+                        'numeric-interval-score-v1',
+                        'numeric-wis-v1'
+                    )
+                ),
+                forecast_deadline_at TEXT CHECK (
+                    forecast_deadline_at IS NULL OR (
+                        length(forecast_deadline_at) = 27
+                        AND forecast_deadline_at GLOB
+                            '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                            || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                            || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                        AND substr(forecast_deadline_at, 1, 4)
+                            BETWEEN '0001' AND '9999'
+                        AND substr(forecast_deadline_at, 12, 2)
+                            BETWEEN '00' AND '23'
+                        AND COALESCE(
+                            date(
+                                substr(forecast_deadline_at, 1, 10)
+                                    || 'T00:00:00Z',
+                                '+0 days'
+                            ) = substr(forecast_deadline_at, 1, 10),
+                            0
+                        )
+                    )
+                ),
+                CHECK (
+                    (
+                        forecast_model = 'binary-final-v1'
+                        AND scoring_contract = 'binary-final-brier-v1'
+                        AND forecast_deadline_at IS NULL
+                    ) OR (
+                        forecast_model = 'binary-trajectory-v1'
+                        AND scoring_contract = 'binary-trajectory-brier-v1'
+                        AND forecast_deadline_at IS NOT NULL
+                    ) OR (
+                        forecast_model = 'numeric-interval-v1'
+                        AND scoring_contract = 'numeric-interval-score-v1'
+                        AND forecast_deadline_at IS NULL
+                    ) OR (
+                        forecast_model = 'numeric-quantiles-5-v2'
+                        AND scoring_contract = 'numeric-wis-v1'
+                        AND forecast_deadline_at IS NOT NULL
+                    )
+                )
+            ) STRICT
+            """,
+            """
+            CREATE TRIGGER prediction_forecast_contracts_require_matching_type
+            BEFORE INSERT ON prediction_forecast_contracts
+            WHEN (
+                SELECT prediction_type
+                FROM predictions
+                WHERE id = NEW.prediction_id
+            ) IS NOT CASE
+                WHEN NEW.forecast_model IN (
+                    'binary-final-v1', 'binary-trajectory-v1'
+                ) THEN 'binary'
+                ELSE 'numeric'
+            END
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'forecast model must match the Prediction type'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_forecast_contracts_require_future_deadline
+            BEFORE INSERT ON prediction_forecast_contracts
+            WHEN NEW.forecast_deadline_at IS NOT NULL
+                AND NEW.forecast_deadline_at <= (
+                    SELECT created_at
+                    FROM predictions
+                    WHERE id = NEW.prediction_id
+                )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'Forecast Deadline must follow the initial forecast'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_forecast_contracts_are_immutable
+            BEFORE UPDATE ON prediction_forecast_contracts
+            BEGIN
+                SELECT RAISE(ABORT, 'saved forecast contracts are immutable');
+            END
+            """,
+            """
+            CREATE TRIGGER prediction_forecast_contracts_reject_direct_delete
+            BEFORE DELETE ON prediction_forecast_contracts
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'saved forecast contracts are immutable');
+            END
+            """,
+            """
+            INSERT INTO prediction_forecast_contracts (
+                prediction_id,
+                forecast_model,
+                scoring_contract,
+                forecast_deadline_at
+            )
+            SELECT
+                id,
+                CASE prediction_type
+                    WHEN 'binary' THEN 'binary-final-v1'
+                    WHEN 'numeric' THEN 'numeric-interval-v1'
+                END,
+                CASE prediction_type
+                    WHEN 'binary' THEN 'binary-final-brier-v1'
+                    WHEN 'numeric' THEN 'numeric-interval-score-v1'
+                END,
+                NULL
+            FROM predictions
+            ORDER BY id
+            """,
+            """
+            ALTER TABLE resolutions ADD COLUMN effective_resolution_at TEXT
+                CHECK (effective_resolution_at IS NULL OR (
+                    length(effective_resolution_at) = 27
+                    AND effective_resolution_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                    AND substr(effective_resolution_at, 1, 4)
+                        BETWEEN '0001' AND '9999'
+                    AND substr(effective_resolution_at, 12, 2)
+                        BETWEEN '00' AND '23'
+                    AND COALESCE(
+                        date(
+                            substr(effective_resolution_at, 1, 10)
+                                || 'T00:00:00Z',
+                            '+0 days'
+                        ) = substr(effective_resolution_at, 1, 10),
+                        0
+                    )
+                ))
+            """,
+            """
+            ALTER TABLE numeric_resolutions
+            ADD COLUMN effective_resolution_at TEXT
+                CHECK (effective_resolution_at IS NULL OR (
+                    length(effective_resolution_at) = 27
+                    AND effective_resolution_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                    AND substr(effective_resolution_at, 1, 4)
+                        BETWEEN '0001' AND '9999'
+                    AND substr(effective_resolution_at, 12, 2)
+                        BETWEEN '00' AND '23'
+                    AND COALESCE(
+                        date(
+                            substr(effective_resolution_at, 1, 10)
+                                || 'T00:00:00Z',
+                            '+0 days'
+                        ) = substr(effective_resolution_at, 1, 10),
+                        0
+                    )
+                ))
+            """,
+            """
+            CREATE TRIGGER resolutions_require_contract_timing
+            BEFORE INSERT ON resolutions
+            WHEN (
+                SELECT forecast_model
+                FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) = 'binary-trajectory-v1'
+                AND NEW.effective_resolution_at IS NULL
+            OR (
+                SELECT forecast_model
+                FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) = 'binary-final-v1'
+                AND NEW.effective_resolution_at IS NOT NULL
+            OR NEW.effective_resolution_at > NEW.resolved_at
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'Resolution timing does not match the forecast contract'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolutions_require_contract_timing
+            BEFORE INSERT ON numeric_resolutions
+            WHEN (
+                SELECT forecast_model
+                FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) = 'numeric-quantiles-5-v2'
+                AND NEW.effective_resolution_at IS NULL
+            OR (
+                SELECT forecast_model
+                FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) = 'numeric-interval-v1'
+                AND NEW.effective_resolution_at IS NOT NULL
+            OR NEW.effective_resolution_at > NEW.resolved_at
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'Numeric Resolution timing does not match the forecast contract'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER resolution_corrections_require_legacy_contract
+            BEFORE INSERT ON resolution_corrections
+            WHEN (
+                SELECT forecast_model FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) IS NOT 'binary-final-v1'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'legacy Binary correction requires its legacy contract'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_resolution_corrections_require_legacy_contract
+            BEFORE INSERT ON numeric_resolution_corrections
+            WHEN (
+                SELECT forecast_model FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) IS NOT 'numeric-interval-v1'
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'legacy Numeric correction requires its legacy contract'
+                );
+            END
+            """,
+            """
+            CREATE TABLE binary_trajectory_resolution_corrections (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL,
+                resolution_id INTEGER NOT NULL,
+                sequence INTEGER NOT NULL
+                    CHECK (typeof(sequence) = 'integer' AND sequence >= 1),
+                old_outcome TEXT NOT NULL CHECK (old_outcome IN ('yes', 'no')),
+                new_outcome TEXT NOT NULL CHECK (new_outcome IN ('yes', 'no')),
+                old_effective_resolution_at TEXT NOT NULL,
+                new_effective_resolution_at TEXT NOT NULL,
+                old_resolution_notes TEXT CHECK (
+                    old_resolution_notes IS NULL OR (
+                        length(old_resolution_notes) > 0
+                        AND old_resolution_notes = trim(
+                            old_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_resolution_notes, char(0)) = 0
+                    )
+                ),
+                new_resolution_notes TEXT CHECK (
+                    new_resolution_notes IS NULL OR (
+                        length(new_resolution_notes) > 0
+                        AND new_resolution_notes = trim(
+                            new_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_resolution_notes, char(0)) = 0
+                    )
+                ),
+                old_postmortem TEXT CHECK (
+                    old_postmortem IS NULL OR (
+                        length(old_postmortem) > 0
+                        AND old_postmortem = trim(
+                            old_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_postmortem, char(0)) = 0
+                    )
+                ),
+                new_postmortem TEXT CHECK (
+                    new_postmortem IS NULL OR (
+                        length(new_postmortem) > 0
+                        AND new_postmortem = trim(
+                            new_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_postmortem, char(0)) = 0
+                    )
+                ),
+                outcome_changed INTEGER NOT NULL CHECK (outcome_changed IN (0, 1)),
+                effective_time_changed INTEGER NOT NULL
+                    CHECK (effective_time_changed IN (0, 1)),
+                resolution_notes_changed INTEGER NOT NULL
+                    CHECK (resolution_notes_changed IN (0, 1)),
+                postmortem_changed INTEGER NOT NULL
+                    CHECK (postmortem_changed IN (0, 1)),
+                correction_reason TEXT CHECK (
+                    correction_reason IS NULL OR (
+                        length(correction_reason) > 0
+                        AND correction_reason = trim(
+                            correction_reason,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(correction_reason, char(0)) = 0
+                    )
+                ),
+                corrected_at TEXT NOT NULL,
+                FOREIGN KEY (prediction_id, resolution_id)
+                    REFERENCES resolutions(prediction_id, id) ON DELETE CASCADE,
+                UNIQUE (resolution_id, sequence),
+                CHECK (
+                    length(old_effective_resolution_at) = 27
+                    AND old_effective_resolution_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                    AND length(new_effective_resolution_at) = 27
+                    AND new_effective_resolution_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                    AND length(corrected_at) = 27
+                    AND corrected_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                ),
+                CHECK (outcome_changed = (old_outcome IS NOT new_outcome)),
+                CHECK (
+                    effective_time_changed = (
+                        old_effective_resolution_at
+                            IS NOT new_effective_resolution_at
+                    )
+                ),
+                CHECK (
+                    resolution_notes_changed =
+                        (old_resolution_notes IS NOT new_resolution_notes)
+                ),
+                CHECK (
+                    postmortem_changed = (old_postmortem IS NOT new_postmortem)
+                ),
+                CHECK (
+                    outcome_changed + effective_time_changed
+                        + resolution_notes_changed + postmortem_changed >= 1
+                ),
+                CHECK (
+                    outcome_changed + effective_time_changed = 0
+                    OR correction_reason IS NOT NULL
+                )
+            ) STRICT
+            """,
+            """
+            CREATE INDEX binary_trajectory_resolution_corrections_by_resolution
+            ON binary_trajectory_resolution_corrections (resolution_id, sequence)
+            """,
+            """
+            CREATE TABLE numeric_quantile_resolution_corrections (
+                id INTEGER PRIMARY KEY,
+                prediction_id INTEGER NOT NULL,
+                numeric_resolution_id INTEGER NOT NULL,
+                sequence INTEGER NOT NULL
+                    CHECK (typeof(sequence) = 'integer' AND sequence >= 1),
+                old_actual_scaled INTEGER NOT NULL CHECK (
+                    typeof(old_actual_scaled) = 'integer'
+                    AND abs(old_actual_scaled) <= 999999999999999999
+                ),
+                new_actual_scaled INTEGER NOT NULL CHECK (
+                    typeof(new_actual_scaled) = 'integer'
+                    AND abs(new_actual_scaled) <= 999999999999999999
+                ),
+                old_effective_resolution_at TEXT NOT NULL,
+                new_effective_resolution_at TEXT NOT NULL,
+                old_resolution_notes TEXT CHECK (
+                    old_resolution_notes IS NULL OR (
+                        length(old_resolution_notes) > 0
+                        AND old_resolution_notes = trim(
+                            old_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_resolution_notes, char(0)) = 0
+                    )
+                ),
+                new_resolution_notes TEXT CHECK (
+                    new_resolution_notes IS NULL OR (
+                        length(new_resolution_notes) > 0
+                        AND new_resolution_notes = trim(
+                            new_resolution_notes,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_resolution_notes, char(0)) = 0
+                    )
+                ),
+                old_postmortem TEXT CHECK (
+                    old_postmortem IS NULL OR (
+                        length(old_postmortem) > 0
+                        AND old_postmortem = trim(
+                            old_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(old_postmortem, char(0)) = 0
+                    )
+                ),
+                new_postmortem TEXT CHECK (
+                    new_postmortem IS NULL OR (
+                        length(new_postmortem) > 0
+                        AND new_postmortem = trim(
+                            new_postmortem,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(new_postmortem, char(0)) = 0
+                    )
+                ),
+                actual_value_changed INTEGER NOT NULL
+                    CHECK (actual_value_changed IN (0, 1)),
+                effective_time_changed INTEGER NOT NULL
+                    CHECK (effective_time_changed IN (0, 1)),
+                resolution_notes_changed INTEGER NOT NULL
+                    CHECK (resolution_notes_changed IN (0, 1)),
+                postmortem_changed INTEGER NOT NULL
+                    CHECK (postmortem_changed IN (0, 1)),
+                correction_reason TEXT CHECK (
+                    correction_reason IS NULL OR (
+                        length(correction_reason) > 0
+                        AND correction_reason = trim(
+                            correction_reason,
+                            char(9) || char(10) || char(11) || char(12)
+                                || char(13) || ' '
+                        )
+                        AND instr(correction_reason, char(0)) = 0
+                    )
+                ),
+                corrected_at TEXT NOT NULL,
+                FOREIGN KEY (prediction_id, numeric_resolution_id)
+                    REFERENCES numeric_resolutions(prediction_id, id)
+                    ON DELETE CASCADE,
+                UNIQUE (numeric_resolution_id, sequence),
+                CHECK (
+                    length(old_effective_resolution_at) = 27
+                    AND old_effective_resolution_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                    AND length(new_effective_resolution_at) = 27
+                    AND new_effective_resolution_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                    AND length(corrected_at) = 27
+                    AND corrected_at GLOB
+                        '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T'
+                        || '[0-2][0-9]:[0-5][0-9]:[0-5][0-9].'
+                        || '[0-9][0-9][0-9][0-9][0-9][0-9]Z'
+                ),
+                CHECK (
+                    actual_value_changed =
+                        (old_actual_scaled IS NOT new_actual_scaled)
+                ),
+                CHECK (
+                    effective_time_changed = (
+                        old_effective_resolution_at
+                            IS NOT new_effective_resolution_at
+                    )
+                ),
+                CHECK (
+                    resolution_notes_changed =
+                        (old_resolution_notes IS NOT new_resolution_notes)
+                ),
+                CHECK (
+                    postmortem_changed = (old_postmortem IS NOT new_postmortem)
+                ),
+                CHECK (
+                    actual_value_changed + effective_time_changed
+                        + resolution_notes_changed + postmortem_changed >= 1
+                ),
+                CHECK (
+                    actual_value_changed + effective_time_changed = 0
+                    OR correction_reason IS NOT NULL
+                )
+            ) STRICT
+            """,
+            """
+            CREATE INDEX numeric_quantile_resolution_corrections_by_resolution
+            ON numeric_quantile_resolution_corrections (
+                numeric_resolution_id, sequence
+            )
+            """,
+            """
+            CREATE TRIGGER binary_trajectory_corrections_require_current_snapshot
+            BEFORE INSERT ON binary_trajectory_resolution_corrections
+            WHEN NEW.old_outcome IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM binary_trajectory_resolution_corrections
+                WHERE resolution_id = NEW.resolution_id
+            ) THEN (
+                    SELECT new_outcome
+                    FROM binary_trajectory_resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT outcome FROM resolutions WHERE id = NEW.resolution_id
+                ) END
+            OR NEW.old_effective_resolution_at IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM binary_trajectory_resolution_corrections
+                WHERE resolution_id = NEW.resolution_id
+            ) THEN (
+                    SELECT new_effective_resolution_at
+                    FROM binary_trajectory_resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT effective_resolution_at
+                    FROM resolutions WHERE id = NEW.resolution_id
+                ) END
+            OR NEW.old_resolution_notes IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM binary_trajectory_resolution_corrections
+                WHERE resolution_id = NEW.resolution_id
+            ) THEN (
+                    SELECT new_resolution_notes
+                    FROM binary_trajectory_resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT resolution_notes FROM resolutions
+                    WHERE id = NEW.resolution_id
+                ) END
+            OR NEW.old_postmortem IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM binary_trajectory_resolution_corrections
+                WHERE resolution_id = NEW.resolution_id
+            ) THEN (
+                    SELECT new_postmortem
+                    FROM binary_trajectory_resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT postmortem FROM resolutions
+                    WHERE id = NEW.resolution_id
+                ) END
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'trajectory correction must continue the current snapshot'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_quantile_corrections_require_current_snapshot
+            BEFORE INSERT ON numeric_quantile_resolution_corrections
+            WHEN NEW.old_actual_scaled IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM numeric_quantile_resolution_corrections
+                WHERE numeric_resolution_id = NEW.numeric_resolution_id
+            ) THEN (
+                    SELECT new_actual_scaled
+                    FROM numeric_quantile_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT actual_scaled FROM numeric_resolutions
+                    WHERE id = NEW.numeric_resolution_id
+                ) END
+            OR NEW.old_effective_resolution_at IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM numeric_quantile_resolution_corrections
+                WHERE numeric_resolution_id = NEW.numeric_resolution_id
+            ) THEN (
+                    SELECT new_effective_resolution_at
+                    FROM numeric_quantile_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT effective_resolution_at FROM numeric_resolutions
+                    WHERE id = NEW.numeric_resolution_id
+                ) END
+            OR NEW.old_resolution_notes IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM numeric_quantile_resolution_corrections
+                WHERE numeric_resolution_id = NEW.numeric_resolution_id
+            ) THEN (
+                    SELECT new_resolution_notes
+                    FROM numeric_quantile_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT resolution_notes FROM numeric_resolutions
+                    WHERE id = NEW.numeric_resolution_id
+                ) END
+            OR NEW.old_postmortem IS NOT CASE WHEN EXISTS (
+                SELECT 1 FROM numeric_quantile_resolution_corrections
+                WHERE numeric_resolution_id = NEW.numeric_resolution_id
+            ) THEN (
+                    SELECT new_postmortem
+                    FROM numeric_quantile_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                    ORDER BY sequence DESC LIMIT 1
+                ) ELSE (
+                    SELECT postmortem FROM numeric_resolutions
+                    WHERE id = NEW.numeric_resolution_id
+                ) END
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'quantile correction must continue the current snapshot'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER binary_trajectory_corrections_require_contract
+            BEFORE INSERT ON binary_trajectory_resolution_corrections
+            WHEN (
+                SELECT forecast_model FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) IS NOT 'binary-trajectory-v1'
+            OR NEW.new_effective_resolution_at > (
+                SELECT resolved_at FROM resolutions WHERE id = NEW.resolution_id
+            )
+            OR NEW.sequence != COALESCE(
+                (
+                    SELECT MAX(sequence)
+                    FROM binary_trajectory_resolution_corrections
+                    WHERE resolution_id = NEW.resolution_id
+                ),
+                0
+            ) + 1
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid trajectory resolution correction');
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_quantile_corrections_require_contract
+            BEFORE INSERT ON numeric_quantile_resolution_corrections
+            WHEN (
+                SELECT forecast_model FROM prediction_forecast_contracts
+                WHERE prediction_id = NEW.prediction_id
+            ) IS NOT 'numeric-quantiles-5-v2'
+            OR NEW.new_effective_resolution_at > (
+                SELECT resolved_at FROM numeric_resolutions
+                WHERE id = NEW.numeric_resolution_id
+            )
+            OR NEW.sequence != COALESCE(
+                (
+                    SELECT MAX(sequence)
+                    FROM numeric_quantile_resolution_corrections
+                    WHERE numeric_resolution_id = NEW.numeric_resolution_id
+                ),
+                0
+            ) + 1
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid quantile resolution correction');
+            END
+            """,
+            """
+            CREATE TRIGGER binary_trajectory_resolution_corrections_are_immutable
+            BEFORE UPDATE ON binary_trajectory_resolution_corrections
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved trajectory resolution corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_quantile_resolution_corrections_are_immutable
+            BEFORE UPDATE ON numeric_quantile_resolution_corrections
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved quantile resolution corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER binary_trajectory_corrections_reject_direct_delete
+            BEFORE DELETE ON binary_trajectory_resolution_corrections
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved trajectory resolution corrections are immutable'
+                );
+            END
+            """,
+            """
+            CREATE TRIGGER numeric_quantile_corrections_reject_direct_delete
+            BEFORE DELETE ON numeric_quantile_resolution_corrections
+            WHEN EXISTS (
+                SELECT 1 FROM predictions WHERE id = OLD.prediction_id
+            )
+            BEGIN
+                SELECT RAISE(
+                    ABORT,
+                    'saved quantile resolution corrections are immutable'
+                );
+            END
+            """,
+        ),
+    ),
 )
 
 

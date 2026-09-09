@@ -14,6 +14,8 @@ The completed v0.5 source release makes the archive dependable as it grows. Expl
 
 The completed v0.6 source release gives the desktop one coherent presentation system without changing the forecasting model. A responsive application shell distinguishes creation, primary destinations, Settings, and contextual Detail; palette-aware colors and local icons follow the operating system; page panels, messages, dialogs, charts, tables, and action roles now share one visual grammar. Expanded and compact navigation, safe window-state restoration, responsive Predictions and Analytics workspaces, Numeric Edit Details parity, guarded global shortcuts, and stronger keyboard/accessibility semantics remain entirely outside canonical forecast history.
 
+v0.7 implementation has begun with a compatibility-only foundation. Schema version 16 gives every existing Prediction an explicit immutable legacy model and scoring identity without changing its workflow or score, and it reserves exact forecasting-window and effective-resolution facts for the new models' later complete vertical slices. The GUI and CLI still create the released legacy Binary and Numeric models during Milestone 46.
+
 The current application can create a binary prediction from a question and any whole-number probability from 0% through 100%. A collapsed **More details** section accepts an optional initial rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags; the complete initial state and first forecast are saved atomically. Prediction Detail displays the current forecast and metadata, supports safe metadata editing, and can append probability revisions with an optional rationale without rewriting earlier forecasts.
 
 Journal entries record evidence or reasoning without changing the forecast. Forecast Reviews instead record that the user deliberately reconsidered the current forecast and retained it unchanged; an optional Review note can preserve that context. Each event keeps its exact type-appropriate forecast anchor, and revisions, Journals, and Reviews appear together in one timeline. Saved Journal text can be transparently corrected: the timeline marks it **Edited** and retains the original and every prior version in a collapsed edit history. Individual Journal entries and saved Reviews cannot be deleted.
@@ -36,12 +38,23 @@ The desktop uses a deliberately small, offline subset of Lucide icons while reta
 
 ## Documentation
 
-- [Product specification](docs/product-spec.md) — implemented v0.1 through v0.6 behavior, milestones, and acceptance criteria
+- [Forecasting Rulebook](docs/reckonsolve-forecasting-rulebook-v0.7.md) — durable guidance for deciding whether and how to commit a Reckonsolve forecast
+- [Product specification](docs/product-spec.md) — implemented behavior plus the approved staged v0.7 contract and milestones
 - [Architecture](docs/architecture.md) — current implementation state and intended technical boundaries
 - [Architecture decision records](docs/decisions/README.md) — durable reasoning for consequential technical choices
 - [Search evaluation](docs/search-evaluation.md) — privacy-safe relevance coverage and the recorded large-corpus run
 - [v0.6 visual verification](docs/v0.6-visual-verification.md) — release-candidate matrix for palettes, scaling, window sizes, data shapes, and interaction states
 - [Source release checklist](docs/release-checklist.md) — repeatable verification and GitHub release steps
+
+## Before committing a forecast
+
+Use this short check as guidance, not as a required form or stored classification:
+
+- Am I mainly observing this outcome rather than steering it after I forecast?
+- If I can materially influence it, have I stated a concrete policy for what I will and will not do?
+- Is the question resolvable from a clear source, and is the forecasting cutoff chosen for the real decision window rather than for a preferred score?
+
+The [Forecasting Rulebook](docs/reckonsolve-forecasting-rulebook-v0.7.md) explains the boundary and examples in full. Reckonsolve does not record an A/B/C label or force a checklist attestation.
 
 ## Development
 

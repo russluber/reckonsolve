@@ -30,7 +30,7 @@ import reckonsolve.app
 from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
-from reckonsolve.data.migrations import MigrationError
+from reckonsolve.data.migrations import MIGRATIONS, MigrationError
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
 from reckonsolve.domain.browser import ArchiveQuery
 from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
@@ -92,22 +92,22 @@ def test_application_runtime_reopens_same_database(qtbot, tmp_path) -> None:
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     assert first_runtime.window.isVisible()
-    assert first_runtime.database.schema_version == 15
+    assert first_runtime.database.schema_version == len(MIGRATIONS)
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     assert second_runtime.window.windowTitle() == APPLICATION_NAME
-    assert second_runtime.database.schema_version == 15
+    assert second_runtime.database.schema_version == len(MIGRATIONS)
     second_runtime.close()
 
 
-def test_v06_presentation_use_does_not_rewrite_schema_v15_data(
+def test_presentation_use_does_not_rewrite_current_schema_data(
     qtbot,
     tmp_path: Path,
 ) -> None:
-    """Treat every SQLite row as a v0.5 compatibility boundary for v0.6."""
+    """Treat every SQLite row as a compatibility boundary for presentation."""
 
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
@@ -153,7 +153,7 @@ def test_v06_presentation_use_does_not_rewrite_schema_v15_data(
     )
     operations.set_stale_threshold_days(23)
     database.check_search_index()
-    assert database.schema_version == 15
+    assert database.schema_version == len(MIGRATIONS)
     database.close()
 
     before = _sqlite_logical_snapshot(database_path)
@@ -178,7 +178,7 @@ def test_v06_presentation_use_does_not_rewrite_schema_v15_data(
     assert runtime.window.current_screen_name == "Prediction Detail"
     runtime.window.toggle_sidebar()
     assert runtime.window.sidebar_compact
-    assert runtime.database.schema_version == 15
+    assert runtime.database.schema_version == len(MIGRATIONS)
     runtime.close()
 
     assert presentation_path.is_file()

@@ -43,6 +43,7 @@ from reckonsolve.domain.predictions import (
 )
 
 from .database import Database
+from .forecast_contracts import insert_legacy_contract_if_supported
 
 
 class PredictionChangedError(RuntimeError):
@@ -176,6 +177,11 @@ class PredictionRepository:
                     timestamp,
                     new_prediction.rationale,
                 ),
+            )
+            insert_legacy_contract_if_supported(
+                connection,
+                prediction_id,
+                PredictionType.BINARY,
             )
             row = _select_prediction_detail(connection, prediction_id)
             if row is None:

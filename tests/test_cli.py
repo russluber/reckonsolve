@@ -14,6 +14,7 @@ from reckonsolve.app import create_runtime as create_gui_runtime
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli import create_runtime, run
 from reckonsolve.data.database import Database
+from reckonsolve.data.migrations import MIGRATIONS
 from reckonsolve.data.settings import SettingsRepository
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
 from reckonsolve.domain.browser import ArchiveQuery, ArchiveSort, ArchiveTagMatchMode
@@ -66,14 +67,14 @@ def test_cli_runtime_selects_paired_stable_and_development_paths(
 
     stable = create_runtime(identity=STABLE_APPLICATION)
     assert stable.database.path == tmp_path / "Reckonsolve" / "reckonsolve.sqlite3"
-    assert stable.database.schema_version == 15
+    assert stable.database.schema_version == len(MIGRATIONS)
     stable.close()
 
     development = create_runtime(identity=DEVELOPMENT_APPLICATION)
     assert development.database.path == (
         tmp_path / "Reckonsolve Dev" / "reckonsolve.sqlite3"
     )
-    assert development.database.schema_version == 15
+    assert development.database.schema_version == len(MIGRATIONS)
     development.close()
 
     assert stable.database.path != development.database.path

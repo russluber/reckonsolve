@@ -11,7 +11,7 @@ def test_v15_upgrade_adds_saved_views_without_changing_v14_data(tmp_path) -> Non
     v14 = Database.open(path, migrations=MIGRATIONS[:14])
     v14.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:15])
 
     assert upgraded.schema_version == 15
     with upgraded.transaction() as connection:

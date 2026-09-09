@@ -72,3 +72,5 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0011: Keep CLI mutations line-oriented and route them through application operations](0011-line-oriented-cli-mutations.md) — Accepted 2026-08-25
 - [0012: Preserve terminal corrections as append-only snapshot chains](0012-append-only-terminal-correction-chains.md) — Accepted 2026-08-26
 - [0013: Use a rebuildable SQLite FTS5 search projection](0013-rebuildable-sqlite-fts5-search-index.md) — Accepted 2026-08-27
+- [0014: Store immutable forecast-model and scoring-contract identities](0014-store-immutable-forecast-contract-identities.md) — Accepted 2026-09-09
+- [0015: Store prospective forecasting and resolution instants without backfilling legacy history](0015-store-prospective-exact-forecast-times.md) — Accepted 2026-09-09

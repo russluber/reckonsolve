@@ -23,10 +23,12 @@ from reckonsolve.domain.predictions import (
     NumericResolution,
     NumericTimelineEvent,
     PredictionStatus,
+    PredictionType,
     display_status,
 )
 
 from .database import Database
+from .forecast_contracts import insert_legacy_contract_if_supported
 from .predictions import (
     ForecastContextChangedError,
     ForecastReviewContextChangedError,
@@ -124,6 +126,11 @@ class NumericPredictionRepository:
             )
             if revision_cursor.lastrowid is None:
                 raise sqlite3.DatabaseError("SQLite did not return a revision ID.")
+            insert_legacy_contract_if_supported(
+                connection,
+                prediction_id,
+                PredictionType.NUMERIC,
+            )
 
             row = _select_numeric_prediction(connection, prediction_id)
             if row is None:
