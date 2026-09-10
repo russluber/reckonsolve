@@ -48,12 +48,12 @@ def _tag_id(operations: PredictionOperations, name: str) -> int:
 def test_global_tag_rename_retains_identity_relationships_and_history(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations.create_prediction(
+    prediction = operations._create_legacy_prediction(
         "Will the first task finish?",
         55,
         tags=("Work",),
     )
-    operations.create_prediction(
+    operations._create_legacy_prediction(
         "Will the personal task finish?", 45, tags=("Personal",)
     )
     saved = operations.create_saved_view(
@@ -108,7 +108,7 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(), UTC)
-    first = operations.create_prediction(
+    first = operations._create_legacy_prediction(
         "Will alpha finish?", 50, tags=("Source A", "Target")
     )
     second = operations.create_numeric_prediction(
@@ -121,7 +121,7 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
         80,
         tags=("Source B",),
     )
-    target_only = operations.create_prediction(
+    target_only = operations._create_legacy_prediction(
         "Will gamma finish?", 50, tags=("Target",)
     )
     operations.create_saved_view(
@@ -196,7 +196,7 @@ def test_tag_delete_removes_current_relationships_and_rejects_stale_metadata(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations.create_prediction(
+    prediction = operations._create_legacy_prediction(
         "Will this task finish?",
         60,
         tags=("Delete Me", "Keep"),
@@ -238,7 +238,7 @@ def test_tag_management_context_and_transaction_failure_leave_state_unchanged(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations.create_prediction(
+    prediction = operations._create_legacy_prediction(
         "Will rollback preserve this?",
         50,
         tags=("Source", "Target"),
@@ -284,7 +284,7 @@ def test_tag_management_context_and_transaction_failure_leave_state_unchanged(
 def test_tag_library_filter_includes_retained_unassociated_tags(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations.create_prediction(
+    prediction = operations._create_legacy_prediction(
         "Will this temporary label be retained?", 50, tags=("Temporary",)
     )
     operations.update_metadata(

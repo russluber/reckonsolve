@@ -38,7 +38,9 @@ class CountingClock:
 
 
 def _create(database: Database, **kwargs):
-    return PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+    return PredictionOperations(
+        database, FixedClock(CREATED)
+    )._create_legacy_prediction(
         "Will the lifecycle work?",
         60,
         **kwargs,
@@ -441,7 +443,9 @@ def test_confirmed_untouched_open_delete_cascades_and_returns_previous_latest(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     first = _create(database, tags=("keep",))
-    second = PredictionOperations(database, FixedClock(TERMINATED)).create_prediction(
+    second = PredictionOperations(
+        database, FixedClock(TERMINATED)
+    )._create_legacy_prediction(
         "Delete this duplicate",
         25,
         rationale="Accidental duplicate",

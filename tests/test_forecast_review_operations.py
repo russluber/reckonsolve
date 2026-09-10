@@ -28,10 +28,67 @@ class FixedClock:
 NOW = datetime(2026, 8, 20, 18, 0, tzinfo=UTC)
 
 
+@pytest.mark.parametrize("cohort", ["trajectory", "legacy", "numeric"])
+@pytest.mark.parametrize(
+    "step", [timedelta(minutes=1), timedelta(microseconds=1), timedelta(0)]
+)
+def test_reviews_and_journals_interleave_by_exact_time(tmp_path, cohort, step):
+    path = tmp_path / "interleaved.sqlite3"
+    database = Database.open(path)
+    operations = PredictionOperations(database, FixedClock(NOW), UTC)
+    if cohort == "numeric":
+        prediction = operations.create_numeric_prediction(
+            "How many?", "days", 0, 1, 2, 3, 80
+        )
+        revision_id = prediction.current_revision.revision_id
+    else:
+        if cohort == "trajectory":
+            prediction = operations.create_prediction(
+                "Will it happen?", 60, forecast_deadline=NOW + timedelta(days=1)
+            )
+        else:
+            prediction = operations._create_legacy_prediction("Will it happen?", 60)
+        revision_id = prediction.current_revision_id
+    events = []
+    for index, kind in enumerate(("review", "journal", "review", "journal"), 1):
+        operation = PredictionOperations(database, FixedClock(NOW + index * step), UTC)
+        context = {
+            "expected_revision_id": revision_id,
+            "expected_metadata_version": prediction.metadata_version,
+        }
+        if kind == "review":
+            add = (
+                operation.add_numeric_forecast_review
+                if cohort == "numeric"
+                else operation.add_forecast_review
+            )
+            event = add(prediction.prediction_id, note="Still confident", **context)
+        else:
+            add = (
+                operation.add_numeric_journal_entry
+                if cohort == "numeric"
+                else operation.add_journal_entry
+            )
+            event = add(prediction.prediction_id, f"Evidence {index}", **context)
+        events.append(event)
+    database.close()
+
+    reopened = Database.open(path)
+    operation = PredictionOperations(reopened, FixedClock(NOW), UTC)
+    read = (
+        operation.list_numeric_timeline
+        if cohort == "numeric"
+        else operation.list_timeline
+    )
+    expected = events if step else [events[1], events[3], events[0], events[2]]
+    assert read(prediction.prediction_id)[1:] == tuple(expected)
+    reopened.close()
+
+
 def test_binary_review_retains_forecast_and_appears_in_timeline(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations.create_prediction("Will the review be useful?", 60)
+    prediction = operations._create_legacy_prediction("Will the review be useful?", 60)
 
     review = operations.add_forecast_review(
         prediction.prediction_id,
@@ -83,7 +140,7 @@ def test_binary_review_resets_attention(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     created_at = NOW - timedelta(days=20)
     created_ops = PredictionOperations(database, FixedClock(created_at), UTC)
-    prediction = created_ops.create_prediction("Still current?", 55)
+    prediction = created_ops._create_legacy_prediction("Still current?", 55)
     now_ops = PredictionOperations(database, FixedClock(NOW), UTC)
     assert now_ops.get_dashboard().needs_attention_predictions
 
@@ -138,7 +195,7 @@ def test_review_is_rejected_after_deadline_for_both_types(tmp_path, numeric) -> 
         )
         revision_id = prediction.current_revision.revision_id
     else:
-        prediction = create_ops.create_prediction(
+        prediction = create_ops._create_legacy_prediction(
             "Will it happen?", 60, forecast_deadline=date(2026, 8, 20)
         )
         revision_id = prediction.current_revision_id
@@ -174,7 +231,7 @@ def test_review_rechecks_revision_across_independent_connections(
     second_database = Database.open(path)
     first = PredictionOperations(first_database, FixedClock(NOW), UTC)
     second = PredictionOperations(second_database, FixedClock(NOW), UTC)
-    prediction = first.create_prediction("Will context stay current?", 40)
+    prediction = first._create_legacy_prediction("Will context stay current?", 40)
     original_add = first._repository.add_forecast_review
 
     def race_after_application_precheck(*args, **kwargs):
@@ -209,7 +266,7 @@ def test_review_rechecks_revision_across_independent_connections(
 def test_terminal_predictions_reject_reviews_for_both_types(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    binary = operations.create_prediction("Will it resolve?", 60)
+    binary = operations._create_legacy_prediction("Will it resolve?", 60)
     operations.resolve_prediction(
         binary.prediction_id,
         outcome=BinaryOutcome.YES,

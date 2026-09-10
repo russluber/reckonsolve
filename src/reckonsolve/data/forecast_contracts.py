@@ -180,3 +180,44 @@ def _contract_table_exists(connection: sqlite3.Connection) -> bool:
         ).fetchone()
         is not None
     )
+
+
+def select_supported_contract(
+    connection: sqlite3.Connection, prediction_id: int
+) -> ForecastContract | None:
+    """Only historical schema fixtures may lack a contract table."""
+    if not _contract_table_exists(connection):
+        return None
+    return select_forecast_contract(connection, prediction_id)
+
+
+def binary_contract_columns(connection: sqlite3.Connection) -> str:
+    """Project the durable identity alongside the legacy-compatible detail query."""
+    if not _contract_table_exists(connection):
+        return ""
+    return """
+        , (SELECT forecast_model FROM prediction_forecast_contracts
+           WHERE prediction_id = prediction.id) AS forecast_model
+        , (SELECT scoring_contract FROM prediction_forecast_contracts
+           WHERE prediction_id = prediction.id) AS scoring_contract
+        , (SELECT forecast_deadline_at FROM prediction_forecast_contracts
+           WHERE prediction_id = prediction.id) AS forecast_deadline_at
+    """
+
+
+def map_binary_contract(row: sqlite3.Row) -> ForecastContract | None:
+    if "forecast_model" not in row.keys():  # noqa: SIM118 -- Row membership tests values.
+        return None
+    try:
+        return ForecastContract(
+            PredictionType.BINARY,
+            ForecastModel(row["forecast_model"]),
+            ScoringContract(row["scoring_contract"]),
+            None
+            if row["forecast_deadline_at"] is None
+            else ForecastDeadline(parse_utc(row["forecast_deadline_at"])),
+        )
+    except ValueError as error:
+        raise ForecastContractIntegrityError(
+            "Invalid Binary forecast contract."
+        ) from error

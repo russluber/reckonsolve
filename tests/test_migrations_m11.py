@@ -24,7 +24,7 @@ def test_v11_upgrade_preserves_v10_binary_terminal_and_numeric_history(
     path = tmp_path / "reckonsolve.sqlite3"
     old = Database.open(path, migrations=MIGRATIONS[:10])
     operations = PredictionOperations(old, FixedClock(), UTC)
-    binary = operations.create_prediction("Will Binary history survive?", 65)
+    binary = operations._create_legacy_prediction("Will Binary history survive?", 65)
     operations.resolve_prediction(
         binary.prediction_id,
         BinaryOutcome.YES,

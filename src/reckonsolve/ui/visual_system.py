@@ -339,6 +339,7 @@ QTextEdit,
 QSpinBox,
 QDoubleSpinBox,
 QDateEdit,
+QDateTimeEdit,
 QComboBox {{
     background-color: {color.input};
     color: {color.text};
@@ -354,6 +355,7 @@ QTextEdit:hover,
 QSpinBox:hover,
 QDoubleSpinBox:hover,
 QDateEdit:hover,
+QDateTimeEdit:hover,
 QComboBox:hover {{
     border-color: {color.secondary_text};
 }}
@@ -363,6 +365,7 @@ QTextEdit:focus,
 QSpinBox:focus,
 QDoubleSpinBox:focus,
 QDateEdit:focus,
+QDateTimeEdit:focus,
 QComboBox:focus {{
     border: 2px solid {color.focus};
 }}
@@ -372,6 +375,7 @@ QTextEdit:disabled,
 QSpinBox:disabled,
 QDoubleSpinBox:disabled,
 QDateEdit:disabled,
+QDateTimeEdit:disabled,
 QComboBox:disabled {{
     background-color: {color.disabled_surface};
     color: {color.disabled_text};

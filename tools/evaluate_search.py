@@ -46,7 +46,7 @@ def main() -> int:
             started = perf_counter()
             prediction_ids = []
             for index in range(arguments.size):
-                created = operations.create_prediction(
+                created = operations._create_legacy_prediction(
                     (
                         f"Will synthetic archive item {index:05d} reach marker "
                         f"memory{index:05d}?"

@@ -27,7 +27,7 @@ def test_real_v01_database_migrates_through_v02_and_recovers_every_type(
     backup_path = tmp_path / "v02-recovery.sqlite3"
     v01_database = Database.open(source_path, migrations=MIGRATIONS[:8])
     v01_operations = PredictionOperations(v01_database, FixedClock())
-    v01_prediction = v01_operations.create_prediction(
+    v01_prediction = v01_operations._create_legacy_prediction(
         "Will the original Binary record reach v0.2?",
         40,
         rationale="Created by the completed v0.1 application.",

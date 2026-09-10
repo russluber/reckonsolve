@@ -4,6 +4,21 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
+### Added
+
+- M46 schema-version-16 immutable forecast-model/scoring identities and exact-time foundations, preserving every existing legacy cohort without fabricated times or scores.
+- M47 Binary trajectory creation in the desktop and CLI with a required exact, permanent Forecast Deadline; explicit UTC-offset entry and optional Rulebook guidance.
+- Exact pre-Deadline revision/Review checks, transaction-time clock validation, strictly ordered immutable revisions, and contract-aware Detail, timeline, Dashboard, archive/search, metadata, and deletion behavior.
+
+### Fixed
+
+- Timeline reads now interleave anchored Journals and Forecast Reviews by original time for both forecast types, preserving causal order and clock-regression safeguards. Desktop timestamps and Deadline entry display through minutes without reducing stored event precision.
+
+### Development limitations
+
+- New trajectory Binary resolution/scoring is reserved for M48. Legacy resolution and Numeric interval workflows remain available.
+- CSV format 3 refuses databases containing prospective-model records until the M55 format upgrade. Complete SQLite backup remains available.
+
 ## 0.6.0 - 2026-09-05
 
 ### Added

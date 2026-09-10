@@ -184,7 +184,7 @@ def test_cli_list_distinguishes_empty_database_from_no_matching_filters(
     database = Database.open(database_path)
     PredictionOperations(
         database, FixedClock(NOW), local_timezone=UTC
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will one Open Prediction exist?",
         60,
     )
@@ -209,7 +209,7 @@ def test_cli_list_combines_filters_and_formats_type_aware_attention(
     database = Database.open(database_path)
     old = NOW - timedelta(days=30)
     operations = PredictionOperations(database, FixedClock(old), local_timezone=UTC)
-    operations.create_prediction(
+    operations._create_legacy_prediction(
         "Will the unrelated Binary item remain hidden?",
         35,
         tags=("Other",),
@@ -259,7 +259,7 @@ def test_cli_search_uses_shared_explainable_query_and_rich_filters(tmp_path) -> 
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    target = operations.create_prediction(
+    target = operations._create_legacy_prediction(
         "Will the calibrated report arrive?",
         65,
         background="A tracked research deliverable.",
@@ -293,7 +293,9 @@ def test_cli_search_uses_shared_explainable_query_and_rich_filters(tmp_path) -> 
         80,
         tags=("Work",),
     )
-    operations.create_prediction("Will the mission launch?", 50, tags=("Other",))
+    operations._create_legacy_prediction(
+        "Will the mission launch?", 50, tags=("Other",)
+    )
     database.close()
 
     output = StringIO()
@@ -402,7 +404,7 @@ def test_cli_saved_views_list_and_execute_current_dynamic_queries(tmp_path) -> N
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    binary = operations.create_prediction(
+    binary = operations._create_legacy_prediction(
         "Will saved-view evidence arrive?",
         55,
         tags=("Work", "Evidence"),
@@ -525,7 +527,7 @@ def test_cli_show_binary_includes_terminal_detail_and_complete_history(
         database,
         FixedClock(NOW),
         local_timezone=UTC,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will the first wording hold?",
         40,
         rationale="Initial <reason>\x1b[31m",
@@ -768,7 +770,7 @@ def test_cli_read_commands_do_not_create_or_change_product_history(tmp_path) -> 
         FixedClock(NOW),
         local_timezone=UTC,
     )
-    created = operations.create_prediction(
+    created = operations._create_legacy_prediction(
         "Will read-only CLI commands leave history untouched?",
         52,
         rationale="One immutable forecast.",
@@ -832,7 +834,9 @@ def test_cli_creates_minimal_binary_with_gui_default_and_stable_id(tmp_path) -> 
     result = run(
         ["create", "binary"],
         database_path=database_path,
-        stdin=StringIO("Will the CLI default this Binary forecast correctly?\n\n\n"),
+        stdin=StringIO(
+            "Will the CLI default this Binary forecast correctly?\n\n2099-12-30T18:00:00Z\n\n"
+        ),
         stdout=output,
         stderr=errors,
     )
@@ -866,11 +870,11 @@ def test_cli_creates_binary_with_all_optional_details_and_endpoint_note(
         stdin=StringIO(
             "Will the complete Binary creation persist?\n"
             "0\n"
+            "2099-12-30T18:00:00Z\n"
             "yes\n"
             "Initial reasons\n"
             "Background context\n"
             "Use the official result\n"
-            "2099-12-30\n"
             "2099-12-31\n"
             "Work, Personal, work\n"
         ),
@@ -889,7 +893,10 @@ def test_cli_creates_binary_with_all_optional_details_and_endpoint_note(
     assert created.current_rationale == "Initial reasons"
     assert created.background == "Background context"
     assert created.resolution_criteria == "Use the official result"
-    assert created.forecast_deadline == date(2099, 12, 30)
+    assert created.forecast_deadline is None
+    assert created.forecast_contract.forecast_deadline.instant == datetime(
+        2099, 12, 30, 18, tzinfo=UTC
+    )
     assert created.expected_resolution == date(2099, 12, 31)
     assert set(created.tags) == {"Work", "Personal"}
     assert len(timeline) == 1
@@ -1005,14 +1012,16 @@ def test_cli_creation_domain_failure_is_atomic(tmp_path) -> None:
         ["create", "binary"],
         database_path=database_path,
         stdin=StringIO(
-            "Will a past deadline prevent this creation?\n60\ny\n\n\n\n2000-01-01\n\n\n"
+            "Will a past deadline prevent this creation?\n60\n2000-01-01T12:00:00Z\n\n"
         ),
         stdout=StringIO(),
         stderr=errors,
     )
 
     assert result == 1
-    assert "Forecast Deadline cannot be earlier than today" in errors.getvalue()
+    assert (
+        "Forecast Deadline must be later than the initial forecast" in errors.getvalue()
+    )
     database = Database.open(database_path)
     assert PredictionOperations(database).browse_predictions().predictions == ()
     database.close()
@@ -1027,7 +1036,9 @@ def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
         run(
             ["create", "binary"],
             database_path=database_path,
-            stdin=StringIO("Will the GUI display this CLI Binary?\n70\n\n"),
+            stdin=StringIO(
+                "Will the GUI display this CLI Binary?\n70\n2099-12-30T18:00:00Z\n\n"
+            ),
             stdout=StringIO(),
         )
         == 0
@@ -1073,7 +1084,7 @@ def test_cli_revises_binary_with_validation_retry_and_immutable_history(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will the Binary CLI revision be retained?\x1b[31m",
         40,
     )
@@ -1179,7 +1190,9 @@ def test_cli_journal_and_review_preserve_forecast_history_and_cross_interface_ti
     database = Database.open(database_path)
     operations = PredictionOperations(database)
     if prediction_type == "binary":
-        created = operations.create_prediction("Will active records stay distinct?", 65)
+        created = operations._create_legacy_prediction(
+            "Will active records stay distinct?", 65
+        )
     else:
         created = operations.create_numeric_prediction(
             "How many active records will stay distinct?",
@@ -1260,7 +1273,7 @@ def test_cli_journal_does_not_refresh_attention_but_review_does(
         database,
         FixedClock(old),
         local_timezone=UTC,
-    ).create_prediction("Will Review refresh this stale forecast?", 55)
+    )._create_legacy_prediction("Will Review refresh this stale forecast?", 55)
     database.close()
     monkeypatch.setattr(
         reckonsolve.cli,
@@ -1322,7 +1335,7 @@ def test_cli_mutation_eof_cancels_without_history(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will cancelled active commands leave history alone?",
         45,
     )
@@ -1350,7 +1363,7 @@ def test_cli_rejects_stale_revision_context_without_overwriting_other_change(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will concurrent CLI revision context be rejected?",
         30,
     )
@@ -1416,7 +1429,7 @@ def test_cli_journal_and_review_reject_stale_metadata_context(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will stale prose context be rejected?",
         35,
     )
@@ -1476,7 +1489,7 @@ def test_cli_active_commands_respect_derived_lock_boundaries(
         database,
         FixedClock(created_at),
         local_timezone=UTC,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will this forecast be Locked at the command boundary?",
         60,
         forecast_deadline=(created_at + timedelta(days=1)).date(),
@@ -1536,7 +1549,9 @@ def test_cli_resolves_binary_with_confirmation_and_final_scoring_revision(
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    created = operations.create_prediction("Will the CLI resolution be Yes?", 60)
+    created = operations._create_legacy_prediction(
+        "Will the CLI resolution be Yes?", 60
+    )
     revised = operations.revise_forecast(
         created.prediction_id,
         35,
@@ -1634,7 +1649,7 @@ def test_cli_invalidation_preserves_both_forecast_types_outside_scoring(
     database = Database.open(database_path)
     operations = PredictionOperations(database)
     if prediction_type == "binary":
-        created = operations.create_prediction("Will this become Invalid?", 45)
+        created = operations._create_legacy_prediction("Will this become Invalid?", 45)
     else:
         created = operations.create_numeric_prediction(
             "How many invalid quantities will remain?",
@@ -1681,9 +1696,11 @@ def test_cli_permanently_deletes_only_confirmed_untouched_open_predictions(
     database_path = tmp_path / f"{prediction_type}.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    operations.create_prediction("Will a survivor remain?", 50)
+    operations._create_legacy_prediction("Will a survivor remain?", 50)
     if prediction_type == "binary":
-        target = operations.create_prediction("Will this disposable row go?", 50)
+        target = operations._create_legacy_prediction(
+            "Will this disposable row go?", 50
+        )
     else:
         target = operations.create_numeric_prediction(
             "How many disposable rows will go?",
@@ -1734,7 +1751,7 @@ def test_cli_declined_terminal_confirmation_cancels_without_changes(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will declining confirmation preserve this row?",
         52,
     )
@@ -1767,7 +1784,9 @@ def test_cli_delete_directs_meaningful_history_to_invalid(
     database = Database.open(database_path)
     operations = PredictionOperations(database)
     if prediction_type == "binary":
-        created = operations.create_prediction("Will revised history survive?", 40)
+        created = operations._create_legacy_prediction(
+            "Will revised history survive?", 40
+        )
         operations.revise_forecast(
             created.prediction_id,
             60,
@@ -1835,7 +1854,7 @@ def test_cli_locked_predictions_allow_both_terminal_decisions(
     )
     deadline = (created_at + timedelta(days=1)).date()
     if prediction_type == "binary":
-        created = operations.create_prediction(
+        created = operations._create_legacy_prediction(
             "Will this Locked Binary terminate?",
             65,
             forecast_deadline=deadline,
@@ -1895,7 +1914,7 @@ def test_cli_rejects_every_terminal_action_after_resolution(
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    created = operations.create_prediction(
+    created = operations._create_legacy_prediction(
         "Will terminal CLI decisions remain one-way?",
         70,
     )
@@ -1940,7 +1959,7 @@ def test_cli_terminal_commands_reject_stale_reviewed_forecast(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will a concurrent forecast block termination?",
         25,
     )
@@ -1987,7 +2006,7 @@ def test_cli_delete_rechecks_untouched_history_after_confirmation_prompt(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will concurrent history block deletion?",
         50,
     )
@@ -2033,7 +2052,7 @@ def test_cli_terminal_write_lock_failure_is_clear_and_preserves_state(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will lock contention leave this prediction Open?",
         50,
     )
@@ -2129,7 +2148,7 @@ def test_cli_export_prompt_creates_complete_format_three_bundle(tmp_path) -> Non
     database_path = tmp_path / "reckonsolve.sqlite3"
     export_path = tmp_path / "cli-export.zip"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will the CLI export retain this Binary history?",
         65,
         rationale="Retain this rationale.",
@@ -2166,7 +2185,7 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         FixedClock(NOW),
         local_timezone=UTC,
     )
-    binary = binary_operations.create_prediction(
+    binary = binary_operations._create_legacy_prediction(
         "Will CLI show every Binary terminal fact?",
         70,
     )
@@ -2237,7 +2256,7 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         FixedClock(NOW + timedelta(minutes=5)),
         local_timezone=UTC,
     )
-    invalid = invalid_operations.create_prediction(
+    invalid = invalid_operations._create_legacy_prediction(
         "Will CLI show Invalid reason history?",
         20,
     )
@@ -2347,7 +2366,7 @@ def test_cli_blank_transfer_prompt_accepts_timestamped_suggestion(
 ) -> None:
     database_path = tmp_path / "data" / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    PredictionOperations(database).create_prediction(
+    PredictionOperations(database)._create_legacy_prediction(
         "Will the suggested export destination work?",
         50,
     )
@@ -2382,7 +2401,7 @@ def test_cli_transfer_prompt_eof_cancels_without_artifact_or_setting_change(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    PredictionOperations(database).create_prediction(
+    PredictionOperations(database)._create_legacy_prediction(
         "Will transfer cancellation leave canonical data alone?",
         50,
     )
@@ -2414,7 +2433,7 @@ def test_cli_transfer_rejects_canonical_database_destination_without_mutation(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_prediction(
+    created = PredictionOperations(database)._create_legacy_prediction(
         "Will a rejected transfer preserve this forecast?",
         45,
     )
@@ -2456,7 +2475,7 @@ def test_cli_transfer_failure_preserves_existing_destination(
     original = b"existing safe artifact"
     destination.write_bytes(original)
     database = Database.open(database_path)
-    PredictionOperations(database).create_prediction(
+    PredictionOperations(database)._create_legacy_prediction(
         "Will an existing artifact survive CLI failure?",
         55,
     )
@@ -2490,7 +2509,7 @@ def test_cli_and_desktop_connections_share_reads_and_sequential_writes(
     database_path = tmp_path / "reckonsolve.sqlite3"
     desktop_database = Database.open(database_path)
     desktop_operations = PredictionOperations(desktop_database)
-    created = desktop_operations.create_prediction(
+    created = desktop_operations._create_legacy_prediction(
         "Will independent connections preserve one canonical history?",
         30,
     )

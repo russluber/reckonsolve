@@ -1,10 +1,10 @@
 """Purpose-specific SQLite access for binary predictions."""
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
-from reckonsolve.clock import format_utc, parse_utc
+from reckonsolve.clock import Clock, as_utc, format_utc, parse_utc
 from reckonsolve.domain.attention import (
     DashboardPrediction,
     NeedsPostmortemPrediction,
@@ -12,6 +12,11 @@ from reckonsolve.domain.attention import (
 from reckonsolve.domain.browser import (
     PredictionBrowserItem,
     PredictionBrowserSnapshot,
+)
+from reckonsolve.domain.forecast_contracts import (
+    ForecastContract,
+    ForecastingWindow,
+    contract_status,
 )
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
@@ -38,12 +43,18 @@ from reckonsolve.domain.predictions import (
     Resolution,
     TimelineEvent,
     changed_definition_fields,
-    display_status,
     metadata_would_change,
 )
+from reckonsolve.domain.timeline import order_timeline
 
 from .database import Database
-from .forecast_contracts import insert_legacy_contract_if_supported
+from .forecast_contracts import (
+    binary_contract_columns,
+    insert_legacy_contract_if_supported,
+    insert_prospective_contract,
+    map_binary_contract,
+    select_supported_contract,
+)
 
 
 class PredictionChangedError(RuntimeError):
@@ -124,11 +135,17 @@ class PredictionRepository:
         self,
         new_prediction: NewPrediction,
         created_at: datetime,
+        *,
+        contract: ForecastContract | None = None,
+        clock: Clock | None = None,
     ) -> PredictionDetail:
         """Insert a prediction and sequence-one revision in one transaction."""
 
         timestamp = format_utc(created_at)
         with self._database.transaction() as connection:
+            if contract is not None and clock is not None:
+                created_at = as_utc(clock.now())
+                timestamp = format_utc(created_at)
             prediction_cursor = connection.execute(
                 """
                 INSERT INTO predictions (
@@ -178,11 +195,16 @@ class PredictionRepository:
                     new_prediction.rationale,
                 ),
             )
-            insert_legacy_contract_if_supported(
-                connection,
-                prediction_id,
-                PredictionType.BINARY,
-            )
+            if contract is None:
+                insert_legacy_contract_if_supported(
+                    connection,
+                    prediction_id,
+                    PredictionType.BINARY,
+                )
+            else:
+                assert contract.forecast_deadline is not None
+                ForecastingWindow(created_at, contract.forecast_deadline)
+                insert_prospective_contract(connection, prediction_id, contract)
             row = _select_prediction_detail(connection, prediction_id)
             if row is None:
                 raise sqlite3.DatabaseError(
@@ -204,6 +226,7 @@ class PredictionRepository:
         expected_metadata_version: int,
         created_at: datetime,
         current_date: date,
+        clock: Clock | None = None,
     ) -> PredictionDetail | None:
         """Recheck reviewed state and append exactly one immutable revision."""
 
@@ -217,20 +240,39 @@ class PredictionRepository:
                 select_tags(connection, prediction_id),
             )
             if (
+                current.forecast_contract
+                and not current.forecast_contract.is_legacy
+                and clock is not None
+            ):
+                created_at = as_utc(clock.now())
+                timestamp = format_utc(created_at)
+            if (
                 current.current_revision_id != expected_revision_id
                 or current.metadata_version != expected_metadata_version
             ):
                 raise ForecastContextChangedError
 
-            effective_status = display_status(
+            effective_status = contract_status(
                 current.status,
                 current.forecast_deadline,
                 current_date,
+                current.forecast_contract,
+                created_at,
             )
             if effective_status is not PredictionStatus.OPEN:
                 raise ForecastRevisionDisallowedError(effective_status)
             if current.probability_percent == new_revision.probability_percent:
                 raise ForecastRevisionUnchangedError
+
+            if current.forecast_contract and not current.forecast_contract.is_legacy:
+                assert current.forecast_contract.forecast_deadline is not None
+                assert current.latest_revision_at is not None
+                ForecastingWindow(
+                    current.created_at, current.forecast_contract.forecast_deadline
+                ).validate_revision(
+                    previous_revision_at=current.latest_revision_at,
+                    proposed_revision_at=created_at,
+                )
 
             revision_cursor = connection.execute(
                 """
@@ -359,6 +401,7 @@ class PredictionRepository:
         expected_metadata_version: int,
         created_at: datetime,
         current_date: date,
+        clock: Clock | None = None,
     ) -> ForecastReviewTimelineEvent | None:
         """Record reconsideration of the transaction-current Binary forecast."""
 
@@ -368,14 +411,22 @@ class PredictionRepository:
                 return None
             current = _map_prediction_detail(row)
             if (
+                current.forecast_contract
+                and not current.forecast_contract.is_legacy
+                and clock is not None
+            ):
+                created_at = as_utc(clock.now())
+            if (
                 current.current_revision_id != expected_revision_id
                 or current.metadata_version != expected_metadata_version
             ):
                 raise ForecastReviewContextChangedError
-            effective_status = display_status(
+            effective_status = contract_status(
                 current.status,
                 current.forecast_deadline,
                 current_date,
+                current.forecast_contract,
+                created_at,
             )
             if effective_status is not PredictionStatus.OPEN:
                 raise ForecastReviewDisallowedError(effective_status)
@@ -594,6 +645,8 @@ class PredictionRepository:
         expected_revision_id: int,
         expected_metadata_version: int,
         current_date: date,
+        now: datetime | None = None,
+        clock: Clock | None = None,
     ) -> bool:
         """Delete only a transaction-current untouched Open prediction."""
 
@@ -607,10 +660,12 @@ class PredictionRepository:
                 or current.metadata_version != expected_metadata_version
             ):
                 raise LifecycleContextChangedError
-            effective_status = display_status(
+            effective_status = contract_status(
                 current.status,
                 current.forecast_deadline,
                 current_date,
+                current.forecast_contract,
+                as_utc(clock.now()) if clock is not None else now,
             )
             if effective_status is not PredictionStatus.OPEN:
                 raise PredictionDeletionDisallowedError(effective_status.value)
@@ -750,7 +805,7 @@ class PredictionRepository:
                 )
             )
 
-        return tuple(sorted(events, key=_timeline_sort_key))
+        return order_timeline(events, key=_timeline_sort_key)
 
     def get_latest_prediction(self) -> PredictionDetail | None:
         """Load the newest prediction and derive its current revision."""
@@ -843,7 +898,15 @@ class PredictionRepository:
                 """
             ).fetchall()
 
-        return tuple(_map_dashboard_prediction(row) for row in rows)
+            return tuple(
+                replace(
+                    _map_dashboard_prediction(row),
+                    forecast_contract=select_supported_contract(
+                        connection, int(row["prediction_id"])
+                    ),
+                )
+                for row in rows
+            )
 
     def list_needs_postmortem_predictions(
         self,
@@ -1111,6 +1174,13 @@ class PredictionRepository:
                 """
             ).fetchall()
 
+            contracts = {
+                int(row["prediction_id"]): select_supported_contract(
+                    connection, int(row["prediction_id"])
+                )
+                for row in rows
+            }
+
         tags_by_prediction: dict[int, list[str]] = {}
         available_tags: list[str] = []
         seen_tag_names: set[str] = set()
@@ -1125,9 +1195,12 @@ class PredictionRepository:
 
         return PredictionBrowserSnapshot(
             predictions=tuple(
-                _map_browser_prediction(
-                    row,
-                    tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
+                replace(
+                    _map_browser_prediction(
+                        row,
+                        tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
+                    ),
+                    forecast_contract=contracts[int(row["prediction_id"])],
                 )
                 for row in rows
             ),
@@ -1177,6 +1250,14 @@ class PredictionRepository:
                 raise PredictionChangedError
             if not metadata_would_change(current, update):
                 return False
+
+            contract = select_supported_contract(connection, prediction_id)
+            if (
+                contract
+                and not contract.is_legacy
+                and update.forecast_deadline is not None
+            ):
+                raise ValueError("Forecast Deadline is immutable.")
 
             definition_fields = changed_definition_fields(current, update)
             connection.execute(
@@ -1286,6 +1367,7 @@ SELECT
     current_revision.probability_percent,
     current_revision.sequence AS current_revision_sequence,
     current_revision.rationale AS current_rationale,
+    current_revision.created_at AS latest_revision_at,
     resolution.id AS resolution_id,
     resolution.outcome AS resolution_outcome,
     resolution.resolved_at,
@@ -1353,7 +1435,12 @@ def _prediction_detail_select(connection: sqlite3.Connection) -> str:
         if has_reviews
         else ""
     )
-    return _PREDICTION_DETAIL_SELECT.replace("/* REVIEW_DELETION_GUARD */", guard)
+    return _PREDICTION_DETAIL_SELECT.replace(
+        "/* REVIEW_DELETION_GUARD */", guard
+    ).replace(
+        "FROM predictions AS prediction",
+        binary_contract_columns(connection) + " FROM predictions AS prediction",
+    )
 
 
 def _has_forecast_reviews(connection: sqlite3.Connection) -> bool:
@@ -1397,6 +1484,8 @@ def _map_prediction_detail(
         )
     )
     return PredictionDetail(
+        forecast_contract=map_binary_contract(row),
+        latest_revision_at=parse_utc(str(row["latest_revision_at"])),
         prediction_id=int(row["prediction_id"]),
         question=str(row["question"]),
         probability_percent=int(row["probability_percent"]),
@@ -1627,7 +1716,7 @@ def _map_journal_event(
     )
 
 
-def _timeline_sort_key(event: TimelineEvent) -> tuple[object, ...]:
+def _timeline_sort_key(event: TimelineEvent) -> tuple[int, int, int]:
     if isinstance(event, ForecastTimelineEvent):
         return (event.sequence, 0, event.revision_id)
     if isinstance(event, ForecastReviewTimelineEvent):

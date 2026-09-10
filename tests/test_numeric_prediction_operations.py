@@ -204,7 +204,7 @@ def test_numeric_creation_rolls_back_metadata_and_tags_with_a_failed_initial_rev
 def test_numeric_read_does_not_treat_a_binary_prediction_as_numeric(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    binary = operations.create_prediction("Will this stay binary?", 60)
+    binary = operations._create_legacy_prediction("Will this stay binary?", 60)
 
     with pytest.raises(PredictionNotFoundError):
         operations.get_numeric_prediction(binary.prediction_id)

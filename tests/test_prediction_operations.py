@@ -38,7 +38,7 @@ def test_create_prediction_persists_initial_revision_and_returns_detail(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW))
 
-    detail = operations.create_prediction("  Will the test pass?  ", 37)
+    detail = operations._create_legacy_prediction("  Will the test pass?  ", 37)
 
     assert detail.prediction_id > 0
     assert detail.question == "Will the test pass?"
@@ -84,7 +84,7 @@ def test_creation_reads_clock_once_for_all_initial_timestamps(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     clock = CountingClock(NOW)
 
-    PredictionOperations(database, clock).create_prediction("One instant?", 50)
+    PredictionOperations(database, clock)._create_legacy_prediction("One instant?", 50)
 
     assert clock.calls == 1
     database.close()
@@ -97,7 +97,7 @@ def test_nonzero_microseconds_persist_and_reopen(tmp_path) -> None:
 
     created = PredictionOperations(
         first_database, FixedClock(instant)
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Are precise instants reopenable?",
         50,
     )
@@ -121,7 +121,7 @@ def test_create_prediction_persists_absolute_probability_endpoints(
     operations = PredictionOperations(database, FixedClock(NOW))
 
     assert (
-        operations.create_prediction(
+        operations._create_legacy_prediction(
             "Endpoint forecast?", probability
         ).probability_percent
         == probability
@@ -136,7 +136,7 @@ def test_validation_errors_are_expected_application_errors_and_write_nothing(
     operations = PredictionOperations(database, FixedClock(NOW))
 
     with pytest.raises(ApplicationError) as error_info:
-        operations.create_prediction("   ", 50)
+        operations._create_legacy_prediction("   ", 50)
 
     assert isinstance(error_info.value, ValidationError)
     assert error_info.value.field == "question"
@@ -156,7 +156,7 @@ def test_nul_question_is_an_expected_application_error(tmp_path) -> None:
     operations = PredictionOperations(database, FixedClock(NOW))
 
     with pytest.raises(ValidationError) as error_info:
-        operations.create_prediction("Will this\x00 persist?", 50)
+        operations._create_legacy_prediction("Will this\x00 persist?", 50)
 
     assert error_info.value.field == "question"
     database.close()
@@ -177,7 +177,7 @@ def test_initial_revision_failure_rolls_back_prediction(tmp_path) -> None:
     operations = PredictionOperations(database, FixedClock(NOW))
 
     with pytest.raises(sqlite3.IntegrityError, match="forced test failure"):
-        operations.create_prediction("Will roll back?", 60)
+        operations._create_legacy_prediction("Will roll back?", 60)
 
     with database.transaction() as connection:
         counts = connection.execute(
@@ -203,7 +203,9 @@ def test_latest_prediction_is_none_for_an_empty_database(tmp_path) -> None:
 def test_prediction_and_current_revision_survive_reopen(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     first_database = Database.open(database_path)
-    created = PredictionOperations(first_database, FixedClock(NOW)).create_prediction(
+    created = PredictionOperations(
+        first_database, FixedClock(NOW)
+    )._create_legacy_prediction(
         "Will it survive restart?",
         60,
     )
@@ -224,8 +226,8 @@ def test_creating_another_prediction_preserves_both_histories(tmp_path) -> None:
     first = PredictionOperations(
         database,
         FixedClock(first_instant),
-    ).create_prediction("Will the first prediction remain?", 25)
-    second = PredictionOperations(database, FixedClock(NOW)).create_prediction(
+    )._create_legacy_prediction("Will the first prediction remain?", 25)
+    second = PredictionOperations(database, FixedClock(NOW))._create_legacy_prediction(
         "Will the newest prediction be displayed?",
         75,
     )
@@ -258,7 +260,7 @@ def test_creating_another_prediction_preserves_both_histories(tmp_path) -> None:
 def test_current_probability_is_derived_from_latest_revision_sequence(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW))
-    created = operations.create_prediction("Will belief change?", 40)
+    created = operations._create_legacy_prediction("Will belief change?", 40)
     deliberately_earlier = NOW - timedelta(days=1)
     with database.transaction() as connection:
         connection.execute(

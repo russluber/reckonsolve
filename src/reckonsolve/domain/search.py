@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from enum import StrEnum
 
+from .forecast_contracts import ForecastContract
 from .predictions import (
     BinaryOutcome,
     FixedPrecisionValue,
@@ -140,6 +141,7 @@ class SearchPrediction:
     numeric_unit: str | None = None
     binary_outcome: BinaryOutcome | None = None
     numeric_actual_value: FixedPrecisionValue | None = None
+    forecast_contract: ForecastContract | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QDate, QPoint, QPointF, QRect, Qt, QTimer
+from PySide6.QtCore import QDate, QPoint, QPointF, QRect, Qt, QTime, QTimer
 from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap, QShortcut, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -103,6 +103,7 @@ from reckonsolve.ui.analytics_charts import (
     ContainmentCalibrationChart,
 )
 from reckonsolve.ui.components import ContentPanel
+from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.notifications import NotificationHost
 from reckonsolve.ui.presentation_settings import (
     MemoryPresentationSettings,
@@ -4702,7 +4703,7 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
     assert supporting.property(TEXT_ROLE_PROPERTY) == TextRole.SECONDARY.value
     assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
     assert panel.supporting_label.text() == (
-        "Binary forecasts need only a Question and Probability."
+        "Binary forecasts need a Question, Probability, and permanent exact Deadline."
     )
     assert create.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
     assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
@@ -4753,7 +4754,7 @@ def test_m42_binary_detail_separates_identity_common_and_lifecycle_actions(
     assert (
         question.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
     )
-    assert forecast_type.text() == "BINARY"
+    assert forecast_type.text() == "BINARY · LEGACY"
     assert status.property(BADGE_TONE_PROPERTY) == StatusTone.ACCENT.value
     assert summary.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
     assert action_panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
@@ -4798,7 +4799,10 @@ def test_m42_binary_detail_separates_identity_common_and_lifecycle_actions(
         delete,
     )
     assert all(button.width() <= 210 for button in action_buttons)
-    assert len({button.width() for button in action_buttons}) == 1
+    # Equal-stretch columns share leftover pixels when the width is not
+    # divisible by three; a one-pixel remainder is not unequal button sizing.
+    widths = [button.width() for button in action_buttons]
+    assert max(widths) - min(widths) <= 1
 
 
 def test_m42_dialogs_share_heading_context_error_and_action_roles(
@@ -4889,6 +4893,7 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
     )
     _required_child(window, QLineEdit, "initialTagsInput").setText("offer, timing")
 
+    _set_exact_deadline(window)
     qtbot.mouseClick(
         _required_child(window, QPushButton, "createPredictionButton"),
         Qt.MouseButton.LeftButton,
@@ -5124,6 +5129,7 @@ def test_numeric_creation_failure_keeps_the_form_values_for_correction(
     _required_child(window, QLineEdit, "numericMedianEstimateInput").setText("3")
     _required_child(window, QLineEdit, "numericUpperBoundInput").setText("10")
 
+    _set_exact_deadline(window)
     qtbot.mouseClick(
         _required_child(window, QPushButton, "createPredictionButton"),
         Qt.MouseButton.LeftButton,
@@ -5172,6 +5178,7 @@ def test_more_details_date_controls_are_visually_unset_until_enabled(
 ) -> None:
     window.show()
     window.navigate_to("New Prediction")
+    _required_child(window, QComboBox, "predictionTypeInput").setCurrentIndex(1)
     _required_child(
         window,
         QGroupBox,
@@ -5242,6 +5249,7 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
     )
     _required_child(window, QLineEdit, "initialTagsInput").setText(" release, desktop ")
 
+    _set_exact_deadline(window)
     qtbot.mouseClick(
         _required_child(window, QPushButton, "createPredictionButton"),
         Qt.MouseButton.LeftButton,
@@ -5254,7 +5262,7 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
             rationale="Initial evidence",
             background="Relevant background",
             resolution_criteria="A published result counts.",
-            forecast_deadline=date(2026, 9, 1),
+            forecast_deadline=datetime(2099, 12, 30, 18, tzinfo=UTC),
             expected_resolution=date(2026, 9, 15),
             tags=("release", "desktop"),
         )
@@ -5307,6 +5315,7 @@ def test_collapsing_more_details_preserves_entered_values_for_creation(
     )
     more_details.setChecked(False)
 
+    _set_exact_deadline(window)
     qtbot.mouseClick(
         _required_child(window, QPushButton, "createPredictionButton"),
         Qt.MouseButton.LeftButton,
@@ -5346,6 +5355,7 @@ def test_creation_failure_keeps_optional_details_for_correction(
         QDate(2020, 1, 1)
     )
 
+    _set_exact_deadline(window)
     qtbot.mouseClick(
         _required_child(window, QPushButton, "createPredictionButton"),
         Qt.MouseButton.LeftButton,
@@ -5405,6 +5415,7 @@ def test_missing_question_is_shown_inline_without_calling_operation(
     create_button = _required_child(window, QPushButton, "createPredictionButton")
     error = _required_child(window, QLabel, "predictionFormError")
 
+    _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     assert not error.isHidden()
@@ -5425,6 +5436,7 @@ def test_expected_application_failure_is_shown_inline(
     error = _required_child(window, QLabel, "predictionFormError")
     question.setText("Will this remain on the form?")
 
+    _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     assert error.text() == "That prediction could not be saved."
@@ -5447,6 +5459,7 @@ def test_successful_creation_accepts_probability_bounds_and_opens_detail(
     question.setText("  Will the UI preserve history?  ")
     probability.setValue(probability_percent)
 
+    _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     assert operations.create_calls == [
@@ -5456,7 +5469,7 @@ def test_successful_creation_accepts_probability_bounds_and_opens_detail(
             rationale="",
             background="",
             resolution_criteria="",
-            forecast_deadline=None,
+            forecast_deadline=datetime(2099, 12, 30, 18, tzinfo=UTC),
             expected_resolution=None,
             tags=(),
         )
@@ -5483,6 +5496,8 @@ def test_enter_submits_new_prediction(
     question = _required_child(window, QLineEdit, "questionInput")
     question.setText("Will Enter submit this prediction?")
 
+    _set_exact_deadline(window)
+
     qtbot.keyPress(question, Qt.Key.Key_Return)
 
     assert operations.create_calls == [
@@ -5492,7 +5507,7 @@ def test_enter_submits_new_prediction(
             rationale="",
             background="",
             resolution_criteria="",
-            forecast_deadline=None,
+            forecast_deadline=datetime(2099, 12, 30, 18, tzinfo=UTC),
             expected_resolution=None,
             tags=(),
         )
@@ -6313,7 +6328,7 @@ def test_unified_timeline_renders_forecasts_and_journals_as_plain_text(
     assert timestamp.text() == (
         datetime(2026, 8, 13, 19, 30, tzinfo=UTC)
         .astimezone()
-        .strftime("%b %d, %Y at %H:%M %Z")
+        .strftime("%b %d, %Y at %H:%M")
         .strip()
     )
 
@@ -7230,9 +7245,7 @@ def test_definition_history_is_collapsed_and_shows_snapshot_in_local_time(
     assert content.isHidden()
     history.setChecked(True)
     assert not content.isHidden()
-    expected_timestamp = (
-        changed_at.astimezone().strftime("%b %d, %Y at %H:%M %Z").strip()
-    )
+    expected_timestamp = changed_at.astimezone().strftime("%b %d, %Y at %H:%M").strip()
     assert (
         _required_child(
             history,
@@ -7775,3 +7788,11 @@ def _click_correction_button(
     )
     assert dialog is not None
     return dialog
+
+
+def _set_exact_deadline(window):
+    deadline = window.findChild(ExactDeadlineInput)
+    deadline.toggle.setChecked(True)
+    deadline.editor.setDate(QDate(2099, 12, 30))
+    deadline.editor.setTime(QTime(18, 0))
+    deadline.offset.setText("+00:00")

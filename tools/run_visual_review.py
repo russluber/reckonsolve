@@ -47,7 +47,7 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
             if long_text
             else ""
         )
-        open_binary = operations.create_prediction(
+        open_binary = operations._create_legacy_prediction(
             f"Will the representative Binary forecast remain readable?{repeated}",
             65,
             rationale=f"Initial evidence remains visible.{repeated}",
@@ -79,7 +79,7 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
             tags=("Visual review", "Numeric"),
         )
 
-        resolved_binary = operations.create_prediction(
+        resolved_binary = operations._create_legacy_prediction(
             f"Will a resolved Binary scorecard remain legible?{repeated}",
             75,
             tags=("Visual review", "Resolved"),
@@ -112,7 +112,7 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
             expected_metadata_version=resolved_numeric.metadata_version,
         )
 
-        invalid = operations.create_prediction(
+        invalid = operations._create_legacy_prediction(
             f"Will an Invalid lifecycle state remain explicit?{repeated}",
             40,
             tags=("Visual review", "Invalid"),

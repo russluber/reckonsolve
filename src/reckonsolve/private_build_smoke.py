@@ -60,7 +60,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
     previous_database = Database.open(database_path, migrations=MIGRATIONS[:13])
     try:
         previous_operations = PredictionOperations(previous_database)
-        previous_prediction = previous_operations.create_prediction(
+        previous_prediction = previous_operations._create_legacy_prediction(
             "M38 v0.4 prediction survives the frozen migration?",
             55,
         )
@@ -110,7 +110,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         ):
             raise RuntimeError("The frozen migration did not preserve v0.4 history.")
         runtime.database.check_search_index()
-        binary_prediction = operations.create_prediction(
+        binary_prediction = operations._create_legacy_prediction(
             "M38 private frozen-build Binary prediction?",
             60,
             rationale="Initial Binary smoke forecast.",
@@ -207,7 +207,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             correction_reason="Frozen smoke corrects the exact observed value.",
             expected_correction_id=None,
         )
-        needs_postmortem = operations.create_prediction(
+        needs_postmortem = operations._create_legacy_prediction(
             "M38 frozen Needs Postmortem prediction?",
             50,
             tags=("private-smoke",),

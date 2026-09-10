@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from .forecast_contracts import ForecastContract
 from .predictions import (
     BinaryOutcome,
     FixedPrecisionValue,
@@ -39,6 +40,7 @@ class DashboardPrediction:
     numeric_confidence_percent: int | None = None
     numeric_unit: str | None = None
     latest_review_at: datetime | None = None
+    forecast_contract: ForecastContract | None = None
 
     @property
     def attention_reference_at(self) -> datetime:

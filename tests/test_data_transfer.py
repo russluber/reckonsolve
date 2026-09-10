@@ -109,7 +109,9 @@ def test_failed_backup_preserves_existing_destination_and_success_time(
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    operations.create_prediction("Will the old backup survive replacement failure?", 50)
+    operations._create_legacy_prediction(
+        "Will the old backup survive replacement failure?", 50
+    )
     destination = tmp_path / "existing.sqlite3"
     original = b"previous usable backup"
     destination.write_bytes(original)
@@ -132,7 +134,7 @@ def test_backup_rejects_the_live_database_without_mutation(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock())
-    created = operations.create_prediction("Will self-backup be rejected?", 50)
+    created = operations._create_legacy_prediction("Will self-backup be rejected?", 50)
 
     with pytest.raises(BackupError, match="cannot be its own backup"):
         operations.create_backup(path)
@@ -148,7 +150,9 @@ def test_backup_remains_usable_if_recording_its_success_time_fails(
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    created = operations.create_prediction("Will this backup remain usable?", 65)
+    created = operations._create_legacy_prediction(
+        "Will this backup remain usable?", 65
+    )
     destination = tmp_path / "usable.sqlite3"
 
     def fail_to_record(_value) -> None:
@@ -358,7 +362,9 @@ def test_failed_csv_export_preserves_existing_destination_and_source(
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    created = operations.create_prediction("Will export failure preserve data?", 35)
+    created = operations._create_legacy_prediction(
+        "Will export failure preserve data?", 35
+    )
     destination = tmp_path / "existing.zip"
     original = b"previous export"
     destination.write_bytes(original)
@@ -381,7 +387,9 @@ def test_csv_export_rejects_the_live_database_without_mutation(tmp_path) -> None
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock())
-    created = operations.create_prediction("Will live data remain canonical?", 55)
+    created = operations._create_legacy_prediction(
+        "Will live data remain canonical?", 55
+    )
 
     with pytest.raises(CsvExportError, match="cannot be an export file"):
         operations.export_csv_bundle(path)
@@ -396,7 +404,7 @@ def test_format_three_export_preserves_terminal_corrections_and_completion(
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
 
-    binary = operations.create_prediction("Will Binary correction export?", 65)
+    binary = operations._create_legacy_prediction("Will Binary correction export?", 65)
     operations.resolve_prediction(
         binary.prediction_id,
         BinaryOutcome.YES,
@@ -442,7 +450,9 @@ def test_format_three_export_preserves_terminal_corrections_and_completion(
         expected_correction_id=None,
     )
 
-    invalid = operations.create_prediction("Will Invalid correction export?", 15)
+    invalid = operations._create_legacy_prediction(
+        "Will Invalid correction export?", 15
+    )
     operations.invalidate_prediction(
         invalid.prediction_id,
         reason="Original Invalid reason",
@@ -507,7 +517,7 @@ def test_format_three_export_preserves_terminal_corrections_and_completion(
 
 
 def _create_complete_history(operations: PredictionOperations):
-    created = operations.create_prediction(
+    created = operations._create_legacy_prediction(
         "Will the full, quoted history survive?",
         40,
         rationale="Initial rationale",
@@ -561,7 +571,7 @@ def _create_complete_history(operations: PredictionOperations):
         expected_revision_id=edited.current_revision_id,
         expected_metadata_version=edited.metadata_version,
     )
-    invalid = operations.create_prediction(
+    invalid = operations._create_legacy_prediction(
         "Will an invalid record remain exported?",
         10,
         tags=("Test",),

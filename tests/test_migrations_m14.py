@@ -24,7 +24,7 @@ class FixedClock:
 def test_v14_upgrade_preserves_v13_data_and_builds_search_projection(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     old = Database.open(path, migrations=MIGRATIONS[:13])
-    created = PredictionOperations(old, FixedClock(), UTC).create_prediction(
+    created = PredictionOperations(old, FixedClock(), UTC)._create_legacy_prediction(
         "Will the migration preserve this launch forecast?",
         65,
         rationale="The launch permit was approved.",

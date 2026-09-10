@@ -26,6 +26,7 @@ from reckonsolve.domain.search import (
 )
 
 from .database import Database
+from .forecast_contracts import select_supported_contract
 from .search_index import (
     SEARCH_PROJECTION_VERSION,
     SearchIndexBusyError,
@@ -484,6 +485,7 @@ def _select_predictions(
             None if row["numeric_precision"] is None else int(row["numeric_precision"])
         )
         predictions[prediction_id] = SearchPrediction(
+            forecast_contract=select_supported_contract(connection, prediction_id),
             prediction_id=prediction_id,
             question=str(row["question"]),
             prediction_type=prediction_type,

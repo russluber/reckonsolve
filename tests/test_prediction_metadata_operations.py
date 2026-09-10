@@ -40,7 +40,9 @@ CHANGED = datetime(2026, 8, 13, 20, 45, 12, 3456, tzinfo=UTC)
 
 def _create_operations(tmp_path) -> tuple[Database, PredictionOperations, int]:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+    created = PredictionOperations(
+        database, FixedClock(CREATED)
+    )._create_legacy_prediction(
         "Will it happen?",
         60,
     )
@@ -100,7 +102,9 @@ def test_meaning_change_requires_confirmation_before_any_write(tmp_path) -> None
 
 def test_confirmation_required_does_not_acquire_a_change_timestamp(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+    created = PredictionOperations(
+        database, FixedClock(CREATED)
+    )._create_legacy_prediction(
         "Will it happen?",
         60,
     )
@@ -389,7 +393,9 @@ def test_stale_unprotected_edit_cannot_erase_newer_metadata(tmp_path) -> None:
     first_database = Database.open(database_path)
     second_database = Database.open(database_path)
     first_operations = PredictionOperations(first_database, FixedClock(CREATED))
-    prediction_id = first_operations.create_prediction("Concurrent?", 50).prediction_id
+    prediction_id = first_operations._create_legacy_prediction(
+        "Concurrent?", 50
+    ).prediction_id
     original = first_operations.get_prediction(prediction_id)
     second_operations = PredictionOperations(second_database, FixedClock(CHANGED))
     newer = second_operations.update_metadata(
@@ -429,7 +435,9 @@ def test_change_during_confirmation_pause_rejects_confirmed_retry(tmp_path) -> N
     first_database = Database.open(database_path)
     second_database = Database.open(database_path)
     first_operations = PredictionOperations(first_database, FixedClock(CREATED))
-    prediction_id = first_operations.create_prediction("Original?", 50).prediction_id
+    prediction_id = first_operations._create_legacy_prediction(
+        "Original?", 50
+    ).prediction_id
     original = first_operations.get_prediction(prediction_id)
 
     with pytest.raises(MeaningChangeConfirmationRequired):
@@ -477,7 +485,7 @@ def test_change_during_confirmation_pause_rejects_confirmed_retry(tmp_path) -> N
 def test_tags_reuse_first_display_spelling_case_insensitively(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     first_operations = PredictionOperations(database, FixedClock(CREATED))
-    first_id = first_operations.create_prediction("First?", 50).prediction_id
+    first_id = first_operations._create_legacy_prediction("First?", 50).prediction_id
     first_operations.update_metadata(
         first_id,
         question="First?",
@@ -498,7 +506,7 @@ def test_tags_reuse_first_display_spelling_case_insensitively(tmp_path) -> None:
         tags=(),
         expected_metadata_version=2,
     )
-    second_id = first_operations.create_prediction("Second?", 50).prediction_id
+    second_id = first_operations._create_legacy_prediction("Second?", 50).prediction_id
 
     second = first_operations.update_metadata(
         second_id,
@@ -522,7 +530,9 @@ def test_metadata_tags_and_definition_history_survive_reopen(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     first_database = Database.open(database_path)
     first_operations = PredictionOperations(first_database, FixedClock(CREATED))
-    prediction_id = first_operations.create_prediction("Original?", 45).prediction_id
+    prediction_id = first_operations._create_legacy_prediction(
+        "Original?", 45
+    ).prediction_id
     expected = PredictionOperations(
         first_database,
         FixedClock(CHANGED),
@@ -555,7 +565,9 @@ def test_metadata_tags_and_definition_history_survive_reopen(tmp_path) -> None:
 
 def test_past_deadline_displays_locked_but_deadline_day_is_open(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+    created = PredictionOperations(
+        database, FixedClock(CREATED)
+    )._create_legacy_prediction(
         "Deadline?",
         50,
     )
@@ -596,7 +608,7 @@ def test_deadline_uses_injected_local_calendar_date_across_utc_midnight(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     pacific = timezone(-timedelta(hours=7))
     operations = PredictionOperations(database, FixedClock(CREATED), pacific)
-    created = operations.create_prediction("Local date?", 50)
+    created = operations._create_legacy_prediction("Local date?", 50)
     operations.update_metadata(
         created.prediction_id,
         question="Local date?",

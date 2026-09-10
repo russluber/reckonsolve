@@ -41,7 +41,7 @@ class CountingClock:
 def _resolved_binary(database: Database, *, postmortem: str | None = None):
     created = PredictionOperations(
         database, FixedClock(CREATED), UTC
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will the recorded outcome be corrected?",
         70,
     )
@@ -280,7 +280,7 @@ def test_numeric_correction_round_trips_exactly_and_updates_one_observation(
 def test_invalidation_reason_correction_is_append_only_for_both_types(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(CREATED), UTC)
-    binary = operations.create_prediction("Will this remain meaningful?", 50)
+    binary = operations._create_legacy_prediction("Will this remain meaningful?", 50)
     numeric = operations.create_numeric_prediction(
         "How many meaningful units?",
         "units",
@@ -328,8 +328,10 @@ def test_invalidation_reason_correction_is_append_only_for_both_types(tmp_path) 
 def test_unresolved_and_invalid_predictions_have_no_scorecard(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(CREATED), UTC)
-    open_prediction = operations.create_prediction("Will this remain open?", 50)
-    invalid_candidate = operations.create_prediction("Will this be invalid?", 50)
+    open_prediction = operations._create_legacy_prediction("Will this remain open?", 50)
+    invalid_candidate = operations._create_legacy_prediction(
+        "Will this be invalid?", 50
+    )
     invalid = operations.invalidate_prediction(
         invalid_candidate.prediction_id,
         reason="The premise was withdrawn.",

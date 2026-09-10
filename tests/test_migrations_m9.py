@@ -44,7 +44,7 @@ def test_v9_upgrade_preserves_existing_binary_data_and_behavior(tmp_path) -> Non
     path = tmp_path / "reckonsolve.sqlite3"
     old_database = Database.open(path, migrations=MIGRATIONS[:8])
     old_operations = PredictionOperations(old_database, FixedClock())
-    created = old_operations.create_prediction(
+    created = old_operations._create_legacy_prediction(
         "Will the v8 binary prediction survive?",
         64,
         rationale="Original binary rationale",
@@ -109,7 +109,7 @@ def test_v9_enforces_type_specific_definitions_and_revision_ownership(tmp_path) 
         new_numeric_prediction(),
         FixedClock().now(),
     )
-    binary = PredictionOperations(database, FixedClock()).create_prediction(
+    binary = PredictionOperations(database, FixedClock())._create_legacy_prediction(
         "Will this stay binary?",
         60,
     )

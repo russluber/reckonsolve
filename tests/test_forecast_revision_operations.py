@@ -40,7 +40,9 @@ REVISED = datetime(2026, 8, 13, 20, 45, 12, 3456, tzinfo=UTC)
 
 
 def _create(database: Database, probability: int = 60):
-    return PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+    return PredictionOperations(
+        database, FixedClock(CREATED)
+    )._create_legacy_prediction(
         "Will it happen?",
         probability,
     )
@@ -67,7 +69,7 @@ def test_complete_creation_persists_every_optional_value_without_history(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(CREATED))
 
-    created = operations.create_prediction(
+    created = operations._create_legacy_prediction(
         "  Will it happen?  ",
         37,
         rationale="  Initial reasons  ",
@@ -102,7 +104,7 @@ def test_complete_creation_uses_one_instant_for_all_system_timestamps(tmp_path) 
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     clock = CountingClock(CREATED)
 
-    detail = PredictionOperations(database, clock).create_prediction(
+    detail = PredictionOperations(database, clock)._create_legacy_prediction(
         "One instant?",
         50,
         rationale="Because",
@@ -129,13 +131,13 @@ def test_past_initial_deadline_is_rejected_but_today_is_valid_in_local_time(
     instant = datetime(2026, 8, 13, 2, tzinfo=UTC)  # Aug 12 locally
     operations = PredictionOperations(database, FixedClock(instant), pacific)
 
-    today = operations.create_prediction(
+    today = operations._create_legacy_prediction(
         "Deadline is inclusive?",
         50,
         forecast_deadline=date(2026, 8, 12),
     )
     with pytest.raises(ValidationError) as error_info:
-        operations.create_prediction(
+        operations._create_legacy_prediction(
             "Already locked?",
             50,
             forecast_deadline=date(2026, 8, 11),
@@ -171,7 +173,7 @@ def test_creation_rolls_back_prediction_revision_tags_and_history_on_tag_failure
         )
 
     with pytest.raises(sqlite3.IntegrityError, match="forced tag failure"):
-        PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+        PredictionOperations(database, FixedClock(CREATED))._create_legacy_prediction(
             "Roll back all initial state?",
             60,
             rationale="Reasons",
@@ -211,7 +213,7 @@ def test_creation_rolls_back_initial_tags_when_revision_insert_fails(tmp_path) -
         )
 
     with pytest.raises(sqlite3.IntegrityError, match="forced revision failure"):
-        PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+        PredictionOperations(database, FixedClock(CREATED))._create_legacy_prediction(
             "Roll back tags too?",
             60,
             rationale="Reasons",
@@ -368,7 +370,7 @@ def test_deadline_day_accepts_revision_and_next_local_day_rejects(tmp_path) -> N
         database,
         FixedClock(datetime(2026, 8, 13, 2, tzinfo=UTC)),
         pacific,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Inclusive deadline?",
         60,
         forecast_deadline=date(2026, 8, 12),

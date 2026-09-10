@@ -32,7 +32,7 @@ def test_needs_postmortem_queue_uses_effective_terminal_facts_and_skip_is_stable
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     created = PredictionOperations(database, FixedClock(CREATED), UTC)
-    binary = created.create_prediction("Will this need reflection?", 70)
+    binary = created._create_legacy_prediction("Will this need reflection?", 70)
     numeric = created.create_numeric_prediction(
         "How many units need reflection?",
         "units",
@@ -42,8 +42,8 @@ def test_needs_postmortem_queue_uses_effective_terminal_facts_and_skip_is_stable
         "3.0",
         80,
     )
-    with_postmortem = created.create_prediction("Already reflected", 50)
-    invalid = created.create_prediction("Invalid is excluded", 50)
+    with_postmortem = created._create_legacy_prediction("Already reflected", 50)
+    invalid = created._create_legacy_prediction("Invalid is excluded", 50)
     terminal = PredictionOperations(database, FixedClock(RESOLVED), UTC)
     terminal.resolve_prediction(
         binary.prediction_id,
@@ -231,7 +231,7 @@ def test_cleared_postmortem_enters_queue_and_stale_skip_appends_nothing(
         database,
         FixedClock(CREATED),
         UTC,
-    ).create_prediction("Will a cleared reflection need attention?", 60)
+    )._create_legacy_prediction("Will a cleared reflection need attention?", 60)
     resolved = PredictionOperations(database, FixedClock(RESOLVED), UTC)
     resolved.resolve_prediction(
         created.prediction_id,

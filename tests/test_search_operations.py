@@ -39,7 +39,7 @@ def test_binary_search_projects_every_source_and_hides_superseded_text_by_defaul
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    created = operations.create_prediction(
+    created = operations._create_legacy_prediction(
         "Will the café orbital launch succeed?",
         60,
         rationale="Astronaut testimony supports the forecast.",
@@ -234,7 +234,7 @@ def test_numeric_sources_and_actual_value_correction_reason_are_searchable(
 def test_invalidation_reason_corrections_obey_history_scope(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    created = operations.create_prediction("Will this source remain valid?", 50)
+    created = operations._create_legacy_prediction("Will this source remain valid?", 50)
     operations.invalidate_prediction(
         created.prediction_id,
         reason="Originalinvalidreason was ambiguous.",
@@ -263,7 +263,7 @@ def test_invalidation_reason_corrections_obey_history_scope(tmp_path) -> None:
 def test_words_phrases_prefixes_literals_all_any_and_suggestions(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    split = operations.create_prediction(
+    split = operations._create_legacy_prediction(
         "Will the café permit arrive---before the mission?",
         55,
     )
@@ -273,7 +273,7 @@ def test_words_phrases_prefixes_literals_all_any_and_suggestions(tmp_path) -> No
         expected_revision_id=split.current_revision_id,
         expected_metadata_version=split.metadata_version,
     )
-    phrase = operations.create_prediction(
+    phrase = operations._create_legacy_prediction(
         "Will the permit approved jointly remain effective?",
         65,
     )
@@ -311,8 +311,8 @@ def test_exact_current_question_ranks_first_and_results_group_by_prediction(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    exact = operations.create_prediction("Will launch happen", 50)
-    repeated = operations.create_prediction(
+    exact = operations._create_legacy_prediction("Will launch happen", 50)
+    repeated = operations._create_legacy_prediction(
         "A different proposition",
         50,
         background="Will launch happen according to the background?",
@@ -337,7 +337,7 @@ def test_search_applies_existing_archive_filters_before_grouped_ranking(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    binary = operations.create_prediction(
+    binary = operations._create_legacy_prediction(
         "Will sharedneedle remain Binary?",
         45,
         tags=("Included",),
@@ -381,7 +381,7 @@ def test_search_applies_existing_archive_filters_before_grouped_ranking(
 def test_search_applies_rich_archive_tags_and_dates_before_ranking(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    binary = operations.create_prediction(
+    binary = operations._create_legacy_prediction(
         "Will archivehail Binary evidence remain useful?",
         45,
         expected_resolution=date(2026, 8, 25),
@@ -426,7 +426,7 @@ def test_index_updates_survive_restart_and_sequential_independent_connections(
     path = tmp_path / "reckonsolve.sqlite3"
     first = Database.open(path)
     second = Database.open(path)
-    created = _operations(first).create_prediction(
+    created = _operations(first)._create_legacy_prediction(
         "Will independent search connections agree?", 50
     )
 
@@ -449,7 +449,7 @@ def test_independent_write_lock_produces_a_bounded_retryable_search_error(
     path = tmp_path / "reckonsolve.sqlite3"
     first = Database.open(path)
     second = Database.open(path)
-    _operations(first).create_prediction("Will the busy search retry?", 50)
+    _operations(first)._create_legacy_prediction("Will the busy search retry?", 50)
     with second.transaction() as connection:
         connection.execute("PRAGMA busy_timeout = 1")
 
@@ -467,7 +467,7 @@ def test_deleting_an_untouched_prediction_removes_its_search_documents(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    created = operations.create_prediction("Disposable searchable forecast", 50)
+    created = operations._create_legacy_prediction("Disposable searchable forecast", 50)
     assert _matching_ids(operations.search_predictions("disposable")) == [
         created.prediction_id
     ]
@@ -499,7 +499,7 @@ def test_index_refresh_failure_rolls_back_the_canonical_write(
             fail_refresh,
         )
         with pytest.raises(SearchIndexRepairRequiredError):
-            operations.create_prediction("This write must roll back", 50)
+            operations._create_legacy_prediction("This write must roll back", 50)
 
     assert operations.browse_predictions().predictions == ()
     database.check_search_index()
@@ -511,7 +511,7 @@ def test_corrupt_projection_reports_repair_and_rebuild_restores_search(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    created = operations.create_prediction("Will repair restore the index?", 50)
+    created = operations._create_legacy_prediction("Will repair restore the index?", 50)
     with database.transaction() as connection:
         connection.execute("DELETE FROM prediction_search")
 
@@ -533,7 +533,7 @@ def test_missing_search_documents_are_rebuilt_from_canonical_data_on_restart(
 ) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
-    created = _operations(database).create_prediction(
+    created = _operations(database)._create_legacy_prediction(
         "Will startup rebuild missing search documents?", 50
     )
     with database.transaction() as connection:
@@ -551,7 +551,7 @@ def test_missing_search_documents_are_rebuilt_from_canonical_data_on_restart(
 def test_equal_sized_incorrect_projection_is_rebuilt_on_restart(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
-    created = _operations(database).create_prediction(
+    created = _operations(database)._create_legacy_prediction(
         "Will canonical history repair an equal-sized projection?", 50
     )
     with database.transaction() as connection:
@@ -583,10 +583,10 @@ def test_stale_projection_state_is_rebuilt_on_restart_and_databases_are_isolated
     development_path = tmp_path / "development.sqlite3"
     stable = Database.open(stable_path)
     development = Database.open(development_path)
-    stable_created = _operations(stable).create_prediction(
+    stable_created = _operations(stable)._create_legacy_prediction(
         "Stable-only searchable forecast", 50
     )
-    _operations(development).create_prediction(
+    _operations(development)._create_legacy_prediction(
         "Development-only searchable forecast", 50
     )
     with stable.transaction() as connection:

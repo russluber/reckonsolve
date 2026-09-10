@@ -18,7 +18,7 @@ def test_v10_upgrade_preserves_binary_journal_and_correction_history(tmp_path) -
     path = tmp_path / "reckonsolve.sqlite3"
     old_database = Database.open(path, migrations=MIGRATIONS[:9])
     old_operations = PredictionOperations(old_database, FixedClock(), UTC)
-    created = old_operations.create_prediction("Will the journal migrate?", 60)
+    created = old_operations._create_legacy_prediction("Will the journal migrate?", 60)
     entry = old_operations.add_journal_entry(
         created.prediction_id,
         "Original observation.",

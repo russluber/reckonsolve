@@ -1,5 +1,5 @@
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 
 import pytest
@@ -11,8 +11,8 @@ from reckonsolve.data.forecast_contracts import (
     select_forecast_contract,
 )
 from reckonsolve.data.migrations import MIGRATIONS, Migration
-from reckonsolve.domain.forecast_contracts import ForecastCohort
-from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.domain.forecast_contracts import ForecastCohort, legacy_contract
+from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
 
 STAMP = datetime(2026, 9, 9, 18, tzinfo=UTC)
 
@@ -31,7 +31,7 @@ def test_v16_upgrade_preserves_v15_behavior_and_marks_every_record_legacy(
     path = tmp_path / "reckonsolve.sqlite3"
     v15 = Database.open(path, migrations=MIGRATIONS[:15])
     operations = PredictionOperations(v15, FixedClock(), UTC)
-    binary = operations.create_prediction(
+    binary = operations._create_legacy_prediction(
         "Will the legacy Binary forecast survive?",
         65,
         forecast_deadline=date(2026, 9, 12),
@@ -70,7 +70,10 @@ def test_v16_upgrade_preserves_v15_behavior_and_marks_every_record_legacy(
     recovered = PredictionOperations(upgraded, FixedClock(), UTC)
 
     assert upgraded.schema_version == 16
-    assert recovered.get_prediction(binary.prediction_id) == before_binary
+    assert recovered.get_prediction(binary.prediction_id) == replace(
+        before_binary,
+        forecast_contract=legacy_contract(PredictionType.BINARY),
+    )
     assert recovered.get_numeric_prediction(numeric.prediction_id) == before_numeric
     assert recovered.get_forecast_analytics() == before_analytics
     with upgraded.transaction() as connection:
@@ -108,7 +111,9 @@ def test_current_creation_stays_legacy_until_complete_vertical_flows_exist(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    binary = operations.create_prediction("Will creation remain legacy for M46?", 50)
+    binary = operations._create_legacy_prediction(
+        "Will creation remain legacy for M46?", 50
+    )
     numeric = operations.create_numeric_prediction(
         "How many legacy units remain?", "units", 0, "1", "2", "3", 80
     )
@@ -130,7 +135,9 @@ def test_v16_contract_constraints_reject_rewrite_mismatch_and_fake_deadline(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    created = operations.create_prediction("Will contract constraints hold?", 55)
+    created = operations._create_legacy_prediction(
+        "Will contract constraints hold?", 55
+    )
 
     with database.transaction() as connection:
         with pytest.raises(sqlite3.IntegrityError, match="immutable"):

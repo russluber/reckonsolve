@@ -27,7 +27,7 @@ def test_v13_upgrade_preserves_v12_terminal_data_and_adds_empty_histories(
     path = tmp_path / "reckonsolve.sqlite3"
     old = Database.open(path, migrations=MIGRATIONS[:12])
     operations = PredictionOperations(old, FixedClock(), UTC)
-    binary = operations.create_prediction("Will Binary Resolution survive?", 65)
+    binary = operations._create_legacy_prediction("Will Binary Resolution survive?", 65)
     resolved_binary = operations.resolve_prediction(
         binary.prediction_id,
         BinaryOutcome.YES,
@@ -50,7 +50,7 @@ def test_v13_upgrade_preserves_v12_terminal_data_and_adds_empty_histories(
         expected_revision_id=numeric.current_revision.revision_id,
         expected_metadata_version=numeric.metadata_version,
     )
-    invalid = operations.create_prediction("Will Invalidation survive?", 40)
+    invalid = operations._create_legacy_prediction("Will Invalidation survive?", 40)
     invalidated = operations.invalidate_prediction(
         invalid.prediction_id,
         reason="Preserve this reason",
@@ -125,7 +125,7 @@ def test_binary_correction_table_rejects_rewrite_gaps_and_stale_snapshots(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    created = operations.create_prediction("Will constraints hold?", 60)
+    created = operations._create_legacy_prediction("Will constraints hold?", 60)
     resolved = operations.resolve_prediction(
         created.prediction_id,
         BinaryOutcome.NO,

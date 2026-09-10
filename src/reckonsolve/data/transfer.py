@@ -486,6 +486,21 @@ class DataTransferRepository:
 
     def _read_csv_contents(self) -> tuple[_CsvContents, ...]:
         with self._database.transaction() as connection:
+            if (
+                connection.execute(
+                    "SELECT 1 FROM sqlite_schema WHERE type = 'table' "
+                    "AND name = 'prediction_forecast_contracts'"
+                ).fetchone()
+                and connection.execute(
+                    "SELECT 1 FROM prediction_forecast_contracts WHERE forecast_model "
+                    "NOT IN ('binary-final-v1', 'numeric-interval-v1') LIMIT 1"
+                ).fetchone()
+            ):
+                raise ValueError(
+                    "This database contains v0.7 forecasting contracts that CSV "
+                    "format 3 cannot represent. Use a SQLite backup for complete "
+                    "recovery; the v0.7 CSV upgrade is planned for M55."
+                )
             return tuple(
                 _CsvContents(
                     table=table,

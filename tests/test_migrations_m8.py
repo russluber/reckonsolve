@@ -17,7 +17,9 @@ class FixedClock:
 def test_v8_upgrade_preserves_data_and_starts_without_a_backup_time(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     old_database = Database.open(path, migrations=MIGRATIONS[:7])
-    created = PredictionOperations(old_database, FixedClock()).create_prediction(
+    created = PredictionOperations(
+        old_database, FixedClock()
+    )._create_legacy_prediction(
         "Will this v7 prediction survive the backup-setting migration?",
         64,
     )

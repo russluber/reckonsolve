@@ -50,7 +50,7 @@ def test_binary_correction_and_later_postmortem_survive_restart(
 ) -> None:
     created = PredictionOperations(
         database, FixedClock(CREATED), UTC
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will the launch succeed?",
         80,
     )
@@ -388,7 +388,7 @@ def test_stale_resolution_dialog_keeps_competing_history_and_appends_nothing(
 ) -> None:
     created = PredictionOperations(
         database, FixedClock(CREATED), UTC
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will the source be corrected?",
         60,
     )

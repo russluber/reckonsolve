@@ -26,18 +26,18 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
     database = Database.open(tmp_path / "relevance.sqlite3")
     operations = PredictionOperations(database)
 
-    exact = operations.create_prediction(
+    exact = operations._create_legacy_prediction(
         "Will the Orion permit arrive by Friday?",
         65,
         rationale="The clerk confirmed the ordinary processing window.",
         tags=("Spaceflight", "Work"),
     )
-    operations.create_prediction(
+    operations._create_legacy_prediction(
         "Will the routine permit review finish?",
         55,
         background="The Orion filing might arrive by Friday after review.",
     )
-    split = operations.create_prediction(
+    split = operations._create_legacy_prediction(
         "Will the Vega launch happen?",
         60,
     )
@@ -47,11 +47,11 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
         expected_revision_id=split.current_revision_id,
         expected_metadata_version=split.metadata_version,
     )
-    phrase = operations.create_prediction(
+    phrase = operations._create_legacy_prediction(
         "Will the lunar launch permit be approved?",
         50,
     )
-    phrase_split = operations.create_prediction(
+    phrase_split = operations._create_legacy_prediction(
         "Will the lunar mission launch on schedule?",
         50,
     )
@@ -61,15 +61,15 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
         expected_revision_id=phrase_split.current_revision_id,
         expected_metadata_version=phrase_split.metadata_version,
     )
-    unicode_prediction = operations.create_prediction(
+    unicode_prediction = operations._create_legacy_prediction(
         "Will the café résumé arrive tomorrow?",
         70,
     )
-    punctuation = operations.create_prediction(
+    punctuation = operations._create_legacy_prediction(
         "Will O'Brien's 50%-funded follow-up succeed?",
         45,
     )
-    duplicated = operations.create_prediction(
+    duplicated = operations._create_legacy_prediction(
         "Will duplicated memory remain searchable?",
         40,
         background="Duplicated memory appears in more than one fragment.",
@@ -84,7 +84,7 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
         80,
         rationale="A spectrometer estimate supplies the interval.",
     )
-    corrected = operations.create_prediction(
+    corrected = operations._create_legacy_prediction(
         "Will the corrected field report remain useful?",
         50,
     )

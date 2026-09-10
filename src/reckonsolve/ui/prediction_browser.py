@@ -1713,6 +1713,10 @@ def _status_tone(status: PredictionStatus) -> StatusTone:
 
 def _date_context(prediction: PredictionBrowserItem | SearchPrediction) -> str:
     parts = [f"Created {_format_local_timestamp(prediction.created_at)}"]
+    if prediction.prediction_type is PredictionType.BINARY:
+        from reckonsolve.forecast_display import binary_contract_summary
+
+        parts.append(binary_contract_summary(prediction.forecast_contract))
     if prediction.latest_revision_at is not None:
         parts.append(
             "Forecast considered "

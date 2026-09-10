@@ -23,7 +23,7 @@ The governing product rule is:
 
 The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15.
 
-The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestone 46 is implemented; Milestones 47 through 55 are planned but not implemented. Work on only the milestone or coherent slice the user explicitly authorizes; do not treat the approved plan as authorization to implement the whole release at once.
+The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 and 47 are implemented; Milestones 48 through 55 are planned but not implemented. Work on only the milestone or coherent slice the user explicitly authorizes; do not treat the approved plan as authorization to implement the whole release at once.
 
 The v0.1 baseline includes:
 
@@ -94,6 +94,8 @@ v0.7 Milestone 46 adds schema version 16 and a presentation-independent prospect
 v0.7 prospectively changes new forecasting commitments while preserving every legacy cohort. Every new Binary or Numeric Prediction receives a durable model/scoring identity, a mandatory exact immutable Forecast Deadline, and separate effective-resolution and recorded-at instants. New Binary Predictions use duration-weighted Trajectory Brier with Binary-only neutral truncation after early resolution. New Numeric Predictions use the fixed q05/q25/q50/q75/q95 model, exact WIS, calibration-first feedback, and continuous-style or whole-number semantics. Every pre-v0.7 Binary and Numeric Prediction keeps its legacy editor, lifecycle, and scoring contract for life; never infer exact times, quantiles, trajectories, or new scores for it.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
+
+v0.7 Milestone 47 switches public GUI/application/CLI Binary creation to the trajectory contract with an explicit immutable exact Deadline; Numeric creation remains legacy interval-v1. New Binary revision and Review commits recheck the clock after obtaining transaction access, and the exact Deadline governs Detail, Dashboard, archive/search status, and deletion. Deadline display is read-only in metadata editing; local calendar archive filters use its local date without changing the committed instant. Keep the private legacy fixture seed out of all normal creation entry points. New Binary resolution is explicitly unavailable until M48; CSV format 3 rejects new-model databases until M55 rather than silently omitting contract facts. Complete SQLite backup remains available. Preserve these staging guards until their replacement slices are implemented.
 
 ## Technology Direction
 

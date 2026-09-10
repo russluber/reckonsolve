@@ -7,11 +7,11 @@ from enum import StrEnum
 from typing import Protocol
 
 from .attention import needs_attention, ready_to_resolve
+from .forecast_contracts import ForecastContract, contract_status
 from .predictions import (
     FixedPrecisionValue,
     PredictionStatus,
     PredictionType,
-    display_status,
 )
 
 
@@ -82,6 +82,7 @@ class _ArchiveItem(Protocol):
     created_at: datetime
     latest_revision_at: datetime
     forecast_deadline: date | None
+    forecast_contract: ForecastContract | None
     expected_resolution: date | None
     latest_review_at: datetime | None
     terminal_decision_at: datetime | None
@@ -111,6 +112,7 @@ class PredictionBrowserItem:
     numeric_upper_bound: FixedPrecisionValue | None = None
     numeric_confidence_percent: int | None = None
     numeric_unit: str | None = None
+    forecast_contract: ForecastContract | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,12 +181,19 @@ def classify_archive_items[TArchiveItem: _ArchiveItem](
     items: Iterable[TArchiveItem],
     *,
     current_date: date,
+    now: datetime | None = None,
 ) -> tuple[TArchiveItem, ...]:
     """Derive one consistent date-dependent lifecycle status for the archive."""
 
     classified: list[TArchiveItem] = []
     for item in items:
-        status = display_status(item.status, item.forecast_deadline, current_date)
+        status = contract_status(
+            item.status,
+            item.forecast_deadline,
+            current_date,
+            item.forecast_contract,
+            now,
+        )
         classified.append(
             replace(
                 item,
@@ -314,6 +323,10 @@ def archive_date(
     if meaning is ArchiveDateMeaning.CREATED:
         return item.created_at.astimezone(local_timezone).date()
     if meaning is ArchiveDateMeaning.FORECAST_DEADLINE:
+        if item.forecast_contract and item.forecast_contract.forecast_deadline:
+            return item.forecast_contract.forecast_deadline.instant.astimezone(
+                local_timezone
+            ).date()
         return item.forecast_deadline
     if meaning is ArchiveDateMeaning.EXPECTED_RESOLUTION:
         return item.expected_resolution

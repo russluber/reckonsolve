@@ -986,7 +986,9 @@ def _forecast_summary(prediction: DashboardPrediction) -> str:
     if prediction.prediction_type is PredictionType.BINARY:
         if prediction.probability_percent is None:
             raise ValueError("A Binary Dashboard row requires a probability.")
-        return f"BINARY  {prediction.probability_percent}%"
+        from reckonsolve.forecast_display import binary_contract_summary
+
+        return f"BINARY  {prediction.probability_percent}% · {binary_contract_summary(prediction.forecast_contract)}"
     if (
         prediction.numeric_lower_bound is None
         or prediction.numeric_median_estimate is None

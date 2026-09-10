@@ -16,7 +16,9 @@ class FixedClock:
 def test_v7_upgrade_preserves_predictions_and_adds_default_setting(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     old_database = Database.open(path, migrations=MIGRATIONS[:6])
-    created = PredictionOperations(old_database, FixedClock()).create_prediction(
+    created = PredictionOperations(
+        old_database, FixedClock()
+    )._create_legacy_prediction(
         "Will this v6 prediction survive the settings migration?",
         64,
     )

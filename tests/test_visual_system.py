@@ -67,6 +67,17 @@ def test_visual_tokens_form_small_shared_scales() -> None:
     assert MotionDuration.QUICK < MotionDuration.DISCLOSURE <= 200
 
 
+def test_exact_datetime_edit_uses_the_shared_input_states() -> None:
+    stylesheet = build_stylesheet(QPalette())
+    for selector in (
+        "QDateTimeEdit,",
+        "QDateTimeEdit:hover,",
+        "QDateTimeEdit:focus,",
+        "QDateTimeEdit:disabled,",
+    ):
+        assert selector in stylesheet
+
+
 @pytest.mark.parametrize(
     ("palette", "expected_dark"),
     [

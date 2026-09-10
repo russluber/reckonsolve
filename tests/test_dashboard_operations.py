@@ -27,7 +27,7 @@ def _create(database: Database, question: str, age_days: int, **details):
         database,
         FixedClock(NOW - timedelta(days=age_days)),
         UTC,
-    ).create_prediction(question, 60, **details)
+    )._create_legacy_prediction(question, 60, **details)
 
 
 def test_dashboard_derives_overlapping_buckets_and_excludes_terminal(tmp_path) -> None:
@@ -124,7 +124,7 @@ def test_ready_to_resolve_uses_computer_local_date_boundary(tmp_path) -> None:
         database,
         FixedClock(datetime(2026, 8, 19, 18, 30, tzinfo=UTC)),
         pacific,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Ready after the Pacific expected date",
         60,
         expected_resolution=date(2026, 8, 19),

@@ -1027,7 +1027,9 @@ def _search_prediction_summary(prediction: SearchPrediction) -> str:
     if prediction.prediction_type is PredictionType.BINARY:
         if prediction.probability_percent is None:
             raise ValueError("A Binary search result requires a probability.")
-        return f"{prediction.probability_percent}% Yes"
+        from reckonsolve.forecast_display import binary_contract_summary
+
+        return f"{prediction.probability_percent}% Yes | {binary_contract_summary(prediction.forecast_contract)}"
     return _numeric_forecast_summary(
         prediction.numeric_lower_bound,
         prediction.numeric_median_estimate,
@@ -1143,7 +1145,9 @@ def _format_prediction_list(
 
 def _browser_forecast_summary(prediction: PredictionBrowserItem) -> str:
     if prediction.prediction_type is PredictionType.BINARY:
-        return f"{prediction.probability_percent}% Yes"
+        from reckonsolve.forecast_display import binary_contract_summary
+
+        return f"{prediction.probability_percent}% Yes | {binary_contract_summary(prediction.forecast_contract)}"
     return _numeric_forecast_summary(
         prediction.numeric_lower_bound,
         prediction.numeric_median_estimate,
@@ -1162,6 +1166,16 @@ def _format_binary_detail(
     invalidation_history: InvalidationHistory | None,
 ) -> str:
     lines = [f"Prediction #{prediction.prediction_id}", "Type: Binary"]
+    contract = prediction.forecast_contract
+    if contract is not None:
+        lines.append(f"Model: {contract.forecast_model.value}")
+        lines.append(f"Scoring contract: {contract.scoring_contract.value}")
+        if contract.forecast_deadline is not None:
+            lines.append(
+                "Forecast Deadline (permanent): "
+                + contract.forecast_deadline.instant.astimezone().isoformat(sep=" ")
+            )
+            lines.append("Trajectory Binary resolution and scoring arrive in M48.")
     _append_common_detail(lines, prediction, indicators)
     _append_field(lines, "Current forecast", f"{prediction.probability_percent}% Yes")
     if prediction.current_rationale is not None:

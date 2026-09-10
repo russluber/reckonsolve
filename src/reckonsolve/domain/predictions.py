@@ -5,7 +5,10 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from .forecast_contracts import ForecastContract
 
 
 class PredictionValidationError(ValueError):
@@ -885,6 +888,8 @@ class PredictionDetail:
     background: str | None = None
     resolution_criteria: str | None = None
     forecast_deadline: date | None = None
+    forecast_contract: "ForecastContract | None" = None
+    latest_revision_at: datetime | None = None
     expected_resolution: date | None = None
     tags: tuple[str, ...] = ()
     updated_at: datetime | None = None

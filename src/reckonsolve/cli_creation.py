@@ -1,10 +1,11 @@
 """Interactive Binary and Numeric creation prompts for the CLI."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import TextIO
 
 from reckonsolve.application.predictions import PredictionOperations
+from reckonsolve.domain.forecast_contracts import ForecastDeadline
 from reckonsolve.domain.predictions import (
     MAX_METADATA_DATE,
     MAX_NUMERIC_DECIMAL_PLACES,
@@ -17,6 +18,7 @@ from reckonsolve.domain.predictions import (
     PredictionType,
     PredictionValidationError,
 )
+from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
 
 
 class CliInputCancelled(Exception):
@@ -84,14 +86,19 @@ def _create_binary(
             f"Note: {probability}% expresses absolute certainty.",
             file=session.output,
         )
-    details = _ask_creation_details(session)
+    print(
+        "Forecast Deadline is required and permanent; Expected Resolution is separate.",
+        file=session.output,
+    )
+    deadline = _ask_exact_deadline(session)
+    details = _ask_creation_details(session, legacy_deadline=False)
     return operations.create_prediction(
         question,
         probability,
         rationale=details.rationale,
         background=details.background,
         resolution_criteria=details.resolution_criteria,
-        forecast_deadline=details.forecast_deadline,
+        forecast_deadline=deadline,
         expected_resolution=details.expected_resolution,
         tags=details.tags,
     )
@@ -186,7 +193,27 @@ def _ask_numeric_forecast(
         return lower_bound, median_estimate, upper_bound, confidence
 
 
-def _ask_creation_details(session: PromptSession) -> CreationDetails:
+def _ask_exact_deadline(session: PromptSession) -> datetime:
+    while True:
+        text = session.ask(
+            "Forecast Deadline (e.g. 2026-10-01T18:00:00-07:00; ? for guidance): "
+        ).strip()
+        if text == "?":
+            print(FORECAST_GUIDANCE, file=session.output)
+            continue
+        try:
+            return ForecastDeadline(datetime.fromisoformat(text)).instant
+        except ValueError:
+            session.explain_error(
+                "Enter an exact date/time with an explicit UTC offset or Z."
+            )
+
+
+def _ask_creation_details(
+    session: PromptSession,
+    *,
+    legacy_deadline: bool = True,
+) -> CreationDetails:
     if not _ask_yes_no(session, "Add optional details? [y/N]: ", default=False):
         return CreationDetails()
 
@@ -195,9 +222,13 @@ def _ask_creation_details(session: PromptSession) -> CreationDetails:
     resolution_criteria = _optional_line(
         session.ask("Resolution Criteria (optional, one line): ")
     )
-    forecast_deadline = _ask_optional_date(
-        session,
-        "Forecast Deadline (YYYY-MM-DD, optional): ",
+    forecast_deadline = (
+        _ask_optional_date(
+            session,
+            "Forecast Deadline (YYYY-MM-DD, optional): ",
+        )
+        if legacy_deadline
+        else None
     )
     expected_resolution = _ask_optional_date(
         session,

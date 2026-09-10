@@ -74,3 +74,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0013: Use a rebuildable SQLite FTS5 search projection](0013-rebuildable-sqlite-fts5-search-index.md) — Accepted 2026-08-27
 - [0014: Store immutable forecast-model and scoring-contract identities](0014-store-immutable-forecast-contract-identities.md) — Accepted 2026-09-09
 - [0015: Store prospective forecasting and resolution instants without backfilling legacy history](0015-store-prospective-exact-forecast-times.md) — Accepted 2026-09-09
+- [0016: Validate active commit times under transaction](0016-validate-active-commit-times-under-transaction.md) — Accepted 2026-09-10

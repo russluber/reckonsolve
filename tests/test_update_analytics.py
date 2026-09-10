@@ -133,7 +133,9 @@ def test_repository_uses_revision_one_captured_final_and_corrected_outcome(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(database, FixedClock(NOW), UTC).create_prediction(
+    created = PredictionOperations(
+        database, FixedClock(NOW), UTC
+    )._create_legacy_prediction(
         "Will the final forecast improve?",
         20,
         tags=("Learning",),
@@ -178,7 +180,7 @@ def test_repository_uses_revision_one_captured_final_and_corrected_outcome(
         correction_reason="The initially published outcome was reversed.",
         expected_correction_id=None,
     )
-    unrevised = corrections.create_prediction(
+    unrevised = corrections._create_legacy_prediction(
         "Will this stay unrevised?",
         40,
         tags=("Learning",),
@@ -189,7 +191,7 @@ def test_repository_uses_revision_one_captured_final_and_corrected_outcome(
         expected_revision_id=unrevised.current_revision_id,
         expected_metadata_version=unrevised.metadata_version,
     )
-    corrections.create_prediction("Will this stay open?", 90)
+    corrections._create_legacy_prediction("Will this stay open?", 90)
 
     snapshot = corrections.get_forecast_analytics(
         prediction_type=PredictionType.BINARY,

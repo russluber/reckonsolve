@@ -26,6 +26,7 @@ from reckonsolve.domain.predictions import (
     PredictionType,
     display_status,
 )
+from reckonsolve.domain.timeline import order_timeline
 
 from .database import Database
 from .forecast_contracts import insert_legacy_contract_if_supported
@@ -617,7 +618,7 @@ class NumericPredictionRepository:
                     note=None if row["note"] is None else str(row["note"]),
                 )
             )
-        return tuple(sorted(events, key=_numeric_timeline_sort_key))
+        return order_timeline(events, key=_numeric_timeline_sort_key)
 
     def resolve_prediction(
         self,
@@ -1037,7 +1038,7 @@ def _map_numeric_journal_event(
     )
 
 
-def _numeric_timeline_sort_key(event: NumericTimelineEvent) -> tuple[object, ...]:
+def _numeric_timeline_sort_key(event: NumericTimelineEvent) -> tuple[int, int, int]:
     if isinstance(event, NumericForecastTimelineEvent):
         return event.sequence, 0, event.revision_id
     if isinstance(event, NumericForecastReviewTimelineEvent):

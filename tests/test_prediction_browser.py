@@ -48,7 +48,7 @@ def test_browser_lists_every_lifecycle_with_current_forecast_and_tags(
         database,
         FixedClock(NOW),
         local_timezone=UTC,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will the first remain Open?",
         20,
         tags=("Economy", "Long term"),
@@ -57,7 +57,7 @@ def test_browser_lists_every_lifecycle_with_current_forecast_and_tags(
         database,
         FixedClock(NOW + timedelta(minutes=1)),
         local_timezone=UTC,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will this lock tomorrow?",
         40,
         forecast_deadline=NOW.date(),
@@ -68,7 +68,7 @@ def test_browser_lists_every_lifecycle_with_current_forecast_and_tags(
         FixedClock(NOW + timedelta(minutes=2)),
         local_timezone=UTC,
     )
-    resolved = resolved_operations.create_prediction("Will this resolve?", 60)
+    resolved = resolved_operations._create_legacy_prediction("Will this resolve?", 60)
     resolved_operations.resolve_prediction(
         resolved.prediction_id,
         BinaryOutcome.YES,
@@ -80,7 +80,7 @@ def test_browser_lists_every_lifecycle_with_current_forecast_and_tags(
         FixedClock(NOW + timedelta(minutes=3)),
         local_timezone=UTC,
     )
-    invalid = invalid_operations.create_prediction(
+    invalid = invalid_operations._create_legacy_prediction(
         "Will this become Invalid?",
         80,
         tags=("Archive",),
@@ -123,12 +123,12 @@ def test_browser_lists_every_lifecycle_with_current_forecast_and_tags(
 def test_browser_search_is_unicode_case_insensitive_and_question_only(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    matching = operations.create_prediction(
+    matching = operations._create_legacy_prediction(
         "Will Straße construction finish?",
         55,
         background="This background says unrelated needle.",
     )
-    operations.create_prediction("Will another project finish?", 45)
+    operations._create_legacy_prediction("Will another project finish?", 45)
 
     by_question = operations.browse_predictions("  STRASSE  ")
     by_background = operations.browse_predictions("needle")
@@ -143,12 +143,12 @@ def test_browser_search_is_unicode_case_insensitive_and_question_only(tmp_path) 
 def test_browser_combines_status_and_unicode_tag_filters_with_search(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    expected = operations.create_prediction(
+    expected = operations._create_legacy_prediction(
         "Will policy pass this year?",
         35,
         tags=("Économie",),
     )
-    operations.create_prediction(
+    operations._create_legacy_prediction(
         "Will policy pass next year?",
         65,
         tags=("Other",),
@@ -181,7 +181,7 @@ def test_browser_uses_latest_revision_and_refreshes_after_restart(tmp_path) -> N
         FixedClock(NOW),
         local_timezone=UTC,
     )
-    created = first_operations.create_prediction(
+    created = first_operations._create_legacy_prediction(
         "Will the browser survive restart?",
         30,
         tags=("Durability",),
@@ -216,7 +216,9 @@ def test_browser_uses_latest_revision_and_refreshes_after_restart(tmp_path) -> N
 def test_browser_excludes_retained_orphan_tags_from_filter_choices(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    created = operations.create_prediction("Delete this test?", 50, tags=("Orphan",))
+    created = operations._create_legacy_prediction(
+        "Delete this test?", 50, tags=("Orphan",)
+    )
 
     operations.delete_prediction(
         created.prediction_id,
@@ -242,7 +244,7 @@ def test_browser_derives_lock_on_the_day_after_the_inclusive_deadline(
         database,
         FixedClock(NOW),
         local_timezone=UTC,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will the status filter follow the deadline?",
         50,
         forecast_deadline=NOW.date(),
@@ -296,7 +298,7 @@ def test_browser_mixes_types_and_filters_numeric_without_losing_type_or_unit(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    binary = operations.create_prediction(
+    binary = operations._create_legacy_prediction(
         "Will Binary remain visible?", 35, tags=("Mixed",)
     )
     numeric = operations.create_numeric_prediction(
@@ -365,7 +367,7 @@ def test_rich_archive_filters_and_sorts_use_one_derived_current_view(tmp_path) -
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     older_clock = FixedClock(datetime(2026, 8, 1, 12, tzinfo=UTC))
     older = PredictionOperations(database, older_clock, local_timezone=UTC)
-    binary = older.create_prediction(
+    binary = older._create_legacy_prediction(
         "Will common archive evidence remain Binary?",
         40,
         expected_resolution=date(2026, 8, 10),
@@ -375,7 +377,7 @@ def test_rich_archive_filters_and_sorts_use_one_derived_current_view(tmp_path) -
         database,
         FixedClock(datetime(2026, 8, 2, 12, tzinfo=UTC)),
         local_timezone=UTC,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will common archive evidence resolve?",
         60,
         tags=("Red",),
@@ -421,7 +423,7 @@ def test_rich_archive_filters_and_sorts_use_one_derived_current_view(tmp_path) -
         database,
         FixedClock(datetime(2026, 8, 4, 12, tzinfo=UTC)),
         local_timezone=UTC,
-    ).create_prediction(
+    )._create_legacy_prediction(
         "Will common archive evidence become Invalid?",
         50,
     )

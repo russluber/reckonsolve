@@ -158,7 +158,7 @@ def test_repository_scores_captured_revision_once_and_excludes_other_states(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(database, FixedClock(NOW)).create_prediction(
+    created = PredictionOperations(database, FixedClock(NOW))._create_legacy_prediction(
         "Will the scored prediction occur?",
         30,
         tags=("Scored",),
@@ -198,13 +198,13 @@ def test_repository_scores_captured_revision_once_and_excludes_other_states(
                 format_utc(NOW + timedelta(hours=3)),
             ),
         )
-    PredictionOperations(database, FixedClock(NOW)).create_prediction(
+    PredictionOperations(database, FixedClock(NOW))._create_legacy_prediction(
         "Will this unresolved prediction be excluded?",
         100,
         tags=("Unresolved only",),
     )
     invalid_operations = PredictionOperations(database, FixedClock(NOW))
-    invalid = invalid_operations.create_prediction(
+    invalid = invalid_operations._create_legacy_prediction(
         "Will this Invalid prediction be excluded?",
         0,
         tags=("Invalid only",),
@@ -234,7 +234,7 @@ def test_analytics_survive_restart_and_unknown_tag_is_an_honest_empty_subset(
     path = tmp_path / "reckonsolve.sqlite3"
     first_database = Database.open(path)
     first_operations = PredictionOperations(first_database, FixedClock(NOW))
-    created = first_operations.create_prediction(
+    created = first_operations._create_legacy_prediction(
         "Will analytics survive restart?",
         25,
         tags=("Durability",),

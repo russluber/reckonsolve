@@ -6,6 +6,7 @@ from reckonsolve.application.errors import (
     JournalEntryNotAllowedError,
     LifecycleTransitionNotAllowedError,
     PredictionDeletionNotAllowedError,
+    ValidationError,
 )
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli_creation import CliInputCancelled, PromptSession
@@ -153,6 +154,14 @@ def resolve_interactively(
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise LifecycleTransitionNotAllowedError("resolved", prediction.status)
+    if (
+        isinstance(prediction, PredictionDetail)
+        and prediction.forecast_contract
+        and not prediction.forecast_contract.is_legacy
+    ):
+        raise ValidationError(
+            "Trajectory Binary resolution arrives in M48.", field="prediction_id"
+        )
 
     print(
         "Resolution records a terminal outcome and captures this forecast for "
@@ -301,6 +310,15 @@ def _print_reviewed_context(
     print(f"Question: {terminal_text(prediction.question)}", file=session.output)
     print(f"Status: {prediction.status.value.capitalize()}", file=session.output)
     print(f"Current forecast: {_forecast_summary(prediction)}", file=session.output)
+    if isinstance(prediction, PredictionDetail) and prediction.forecast_contract:
+        contract = prediction.forecast_contract
+        print(f"Model: {contract.forecast_model.value}", file=session.output)
+        if contract.forecast_deadline:
+            print(
+                "Forecast Deadline (permanent): "
+                + contract.forecast_deadline.instant.astimezone().isoformat(sep=" "),
+                file=session.output,
+            )
     print(file=session.output)
 
 

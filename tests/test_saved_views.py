@@ -54,7 +54,9 @@ def test_saved_views_retain_dynamic_configuration_and_stable_tag_references(
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(), UTC)
-    operations.create_prediction("Will evidence remain searchable?", 50, tags=("Work",))
+    operations._create_legacy_prediction(
+        "Will evidence remain searchable?", 50, tags=("Work",)
+    )
 
     created = operations.create_saved_view("  Work evidence  ", _configuration())
 
@@ -87,7 +89,7 @@ def test_saved_view_configuration_reruns_against_current_prediction_membership(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    first = operations.create_prediction(
+    first = operations._create_legacy_prediction(
         "Will the first task finish?", 50, tags=("Work",)
     )
     saved = operations.create_saved_view(
@@ -116,7 +118,7 @@ def test_saved_view_configuration_reruns_against_current_prediction_membership(
         )
 
     assert matching_ids() == (first.prediction_id,)
-    second = operations.create_prediction(
+    second = operations._create_legacy_prediction(
         "Will the second task finish?", 50, tags=("Work",)
     )
     assert set(matching_ids()) == {first.prediction_id, second.prediction_id}

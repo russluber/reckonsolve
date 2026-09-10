@@ -62,12 +62,15 @@ from reckonsolve.domain.predictions import (
     ResolutionCorrection,
 )
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
+from reckonsolve.forecast_display import format_local_deadline
+from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
 from reckonsolve.ui.components import (
     ContentPanel,
     EmptyStateLabel,
     PageHeader,
     StatusBadge,
 )
+from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
@@ -313,7 +316,7 @@ class PredictionOperations(Protocol):
         rationale: str | None = None,
         background: str | None = None,
         resolution_criteria: str | None = None,
-        forecast_deadline: date | None = None,
+        forecast_deadline: datetime | None = None,
         expected_resolution: date | None = None,
         tags: tuple[str, ...] = (),
     ) -> PredictionSnapshot:
@@ -726,6 +729,18 @@ class NewPredictionScreen(QWidget):
         binary_fields_layout.addWidget(self.probability_input)
         binary_fields_layout.addWidget(shortcuts)
         binary_fields_layout.addWidget(self.endpoint_note)
+        self.exact_deadline = ExactDeadlineInput(self.binary_forecast_fields)
+        binary_fields_layout.addWidget(self.exact_deadline)
+        self.forecast_guidance = QGroupBox("Choosing a forecasting commitment", self)
+        self.forecast_guidance.setCheckable(True)
+        self.forecast_guidance.setChecked(False)
+        guidance_text = QLabel(FORECAST_GUIDANCE, self.forecast_guidance)
+        guidance_text.setWordWrap(True)
+        guidance_layout = QVBoxLayout(self.forecast_guidance)
+        guidance_layout.addWidget(guidance_text)
+        guidance_text.hide()
+        self.forecast_guidance.toggled.connect(guidance_text.setVisible)
+        binary_fields_layout.addWidget(self.forecast_guidance)
 
         self.numeric_forecast_fields = QWidget(self)
         self.numeric_forecast_fields.setObjectName("numericForecastFields")
@@ -908,12 +923,11 @@ class NewPredictionScreen(QWidget):
         more_details_layout.addWidget(self.background_input)
         more_details_layout.addWidget(criteria_label)
         more_details_layout.addWidget(self.resolution_criteria_input)
-        more_details_layout.addWidget(
-            _date_input_row(
-                self.forecast_deadline_toggle,
-                self.forecast_deadline_input,
-            )
+        self.legacy_deadline_row = _date_input_row(
+            self.forecast_deadline_toggle,
+            self.forecast_deadline_input,
         )
+        more_details_layout.addWidget(self.legacy_deadline_row)
         more_details_layout.addWidget(
             _date_input_row(
                 self.expected_resolution_toggle,
@@ -1087,6 +1101,7 @@ class NewPredictionScreen(QWidget):
                     **details,
                 )
             else:
+                details["forecast_deadline"] = self.exact_deadline.value()
                 prediction = self._operations.create_prediction(
                     question=question,
                     probability_percent=self.probability_input.value(),
@@ -1103,6 +1118,8 @@ class NewPredictionScreen(QWidget):
         self.question_input.clear()
         self.prediction_type_input.setCurrentIndex(0)
         self.probability_input.setValue(50)
+        self.exact_deadline.reset()
+        self.forecast_guidance.setChecked(False)
         self.numeric_unit_input.clear()
         self.numeric_precision_input.setValue(0)
         self.numeric_lower_bound_input.clear()
@@ -1133,11 +1150,12 @@ class NewPredictionScreen(QWidget):
         is_numeric = self._is_numeric_type()
         self.binary_forecast_fields.setHidden(is_numeric)
         self.numeric_forecast_fields.setHidden(not is_numeric)
+        self.legacy_deadline_row.setVisible(is_numeric)
         self.forecast_panel.supporting_label.setText(
             "Numeric forecasts need a Question, unit, precision, interval, median, "
             "and confidence."
             if is_numeric
-            else "Binary forecasts need only a Question and Probability."
+            else "Binary forecasts need a Question, Probability, and permanent exact Deadline."
         )
         self._update_endpoint_note(self.probability_input.value())
 
@@ -2620,6 +2638,21 @@ class EditPredictionDetailsDialog(_StyledDialog):
             self.forecast_deadline_toggle,
             self.forecast_deadline_input,
         )
+        contract = getattr(prediction, "forecast_contract", None)
+        self.exact_deadline_context = QLabel(self)
+        self.exact_deadline_context.setWordWrap(True)
+        self.exact_deadline_context.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        if contract is not None and not contract.is_legacy:
+            forecast_deadline_row.hide()
+            self.forecast_deadline_toggle.setChecked(False)
+            self.exact_deadline_context.setText(
+                "Forecast Deadline (permanent): "
+                + format_local_deadline(contract.forecast_deadline.instant)
+            )
+        else:
+            self.exact_deadline_context.hide()
         expected_resolution_row = _date_input_row(
             self.expected_resolution_toggle,
             self.expected_resolution_input,
@@ -2636,6 +2669,7 @@ class EditPredictionDetailsDialog(_StyledDialog):
         layout.addWidget(criteria_label)
         layout.addWidget(self.resolution_criteria_input)
         layout.addWidget(forecast_deadline_row)
+        layout.addWidget(self.exact_deadline_context)
         layout.addWidget(expected_resolution_row)
         layout.addWidget(tags_label)
         layout.addWidget(self.tags_input)
@@ -2870,6 +2904,17 @@ class ReviseForecastDialog(_StyledDialog):
         layout.addWidget(title)
         layout.addWidget(current_heading)
         layout.addWidget(self.current_probability)
+        contract = getattr(prediction, "forecast_contract", None)
+        if contract is not None and not contract.is_legacy:
+            deadline_note = QLabel(
+                "Permanent Deadline: "
+                + format_local_deadline(contract.forecast_deadline.instant),
+                self,
+            )
+            deadline_note.setWordWrap(True)
+            deadline_note.setObjectName("revisionExactDeadline")
+            apply_text_role(deadline_note, TextRole.SECONDARY)
+            layout.addWidget(deadline_note)
         layout.addSpacing(8)
         layout.addWidget(probability_label)
         layout.addWidget(self.probability_input)
@@ -3877,6 +3922,11 @@ class ForecastReviewDialog(_StyledDialog):
             self._expected_revision_id = binary.current_revision_id
             action_text = f"Still at {binary.probability_percent}%"
             context_text = f"{binary.probability_percent}%"
+            contract = getattr(binary, "forecast_contract", None)
+            if contract is not None and not contract.is_legacy:
+                context_text += "\nPermanent Deadline: " + format_local_deadline(
+                    contract.forecast_deadline.instant
+                )
         self.setWindowTitle(action_text)
 
         title = QLabel(action_text, self)
@@ -4936,6 +4986,13 @@ class PredictionDetailScreen(QWidget):
         apply_text_role(chart_label, TextRole.SECTION_TITLE)
         chart_panel_layout.addWidget(chart_label)
         chart_panel_layout.addWidget(self.probability_history_chart)
+        self.contract_context = QLabel(self.detail_content)
+        self.contract_context.setObjectName("binaryContractContext")
+        self.contract_context.setWordWrap(True)
+        self.contract_context.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        chart_panel_layout.addWidget(self.contract_context)
         chart_panel_layout.addWidget(self.chart_placeholder)
 
         detail_layout.setContentsMargins(
@@ -5465,8 +5522,32 @@ class PredictionDetailScreen(QWidget):
         self.show_prediction(self._prediction)
 
     def _show_optional_metadata(self, prediction: PredictionSnapshot) -> None:
-        self.forecast_deadline.setText(_format_date(prediction.forecast_deadline))
-        self.forecast_deadline_row.setHidden(prediction.forecast_deadline is None)
+        contract = getattr(prediction, "forecast_contract", None)
+        prospective = contract is not None and not contract.is_legacy
+        self.forecast_type.setText(
+            "BINARY · TRAJECTORY" if prospective else "BINARY · LEGACY"
+        )
+        self.contract_context.setText(
+            "Trajectory Binary: each standing probability belongs to the initial-to-Deadline "
+            "commitment. Resolution and Trajectory Brier scoring arrive in M48. "
+            "This is probability history, not a score plot."
+            if prospective
+            else "Legacy Binary: final captured probability Brier scoring. "
+            "This is probability history, not a score plot."
+        )
+        if prospective:
+            self.resolve_button.setEnabled(False)
+            self.resolve_button.setToolTip(
+                "Trajectory Binary resolution arrives in M48."
+            )
+        self.forecast_deadline.setText(
+            format_local_deadline(contract.forecast_deadline.instant) + " (permanent)"
+            if prospective
+            else _format_date(prediction.forecast_deadline)
+        )
+        self.forecast_deadline_row.setHidden(
+            not prospective and prediction.forecast_deadline is None
+        )
         self.expected_resolution.setText(_format_date(prediction.expected_resolution))
         self.expected_resolution_row.setHidden(prediction.expected_resolution is None)
         self.background.setText(prediction.background or "")
@@ -5474,7 +5555,8 @@ class PredictionDetailScreen(QWidget):
         self.resolution_criteria.setText(prediction.resolution_criteria or "")
         self.resolution_criteria_section.setHidden(not prediction.resolution_criteria)
         self.metadata_panel.setHidden(
-            prediction.forecast_deadline is None
+            not prospective
+            and prediction.forecast_deadline is None
             and prediction.expected_resolution is None
             and not prediction.background
             and not prediction.resolution_criteria
@@ -6319,6 +6401,9 @@ def _forecast_timeline_widget(
     layout = QVBoxLayout(frame)
 
     timestamp = QLabel(_format_local_timestamp(revision.created_at), frame)
+    timestamp.setToolTip(revision.created_at.astimezone().isoformat(sep=" "))
+    timestamp.setWordWrap(True)
+    _make_selectable(timestamp)
     timestamp.setObjectName(f"forecastRevisionTimestamp{revision.revision_id}")
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
     apply_text_role(timestamp, TextRole.SECONDARY)
@@ -6360,6 +6445,9 @@ def _journal_entry_widget(
     layout = QVBoxLayout(frame)
 
     timestamp = QLabel(_format_local_timestamp(entry.created_at), frame)
+    timestamp.setToolTip(entry.created_at.astimezone().isoformat(sep=" "))
+    timestamp.setWordWrap(True)
+    _make_selectable(timestamp)
     timestamp.setObjectName(f"journalEntryTimestamp{entry.entry_id}")
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
     apply_text_role(timestamp, TextRole.SECONDARY)
@@ -6429,6 +6517,9 @@ def _forecast_review_widget(
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
     timestamp = QLabel(_format_local_timestamp(review.created_at), frame)
+    timestamp.setToolTip(review.created_at.astimezone().isoformat(sep=" "))
+    timestamp.setWordWrap(True)
+    _make_selectable(timestamp)
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
     apply_text_role(timestamp, TextRole.SECONDARY)
     heading = QLabel(
@@ -6544,7 +6635,7 @@ def _clear_widget_layout(layout: QVBoxLayout) -> None:
 
 def _format_local_timestamp(value: datetime) -> str:
     local_value = value.astimezone()
-    return local_value.strftime("%b %d, %Y at %H:%M %Z").strip()
+    return local_value.strftime("%b %d, %Y at %H:%M")
 
 
 def _format_date(value: date | None) -> str:

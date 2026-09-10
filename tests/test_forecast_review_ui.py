@@ -35,7 +35,7 @@ NOW = datetime(2026, 8, 20, 18, 0, tzinfo=UTC)
 def test_binary_review_dialog_cancel_save_timeline_and_chart(qtbot, tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations.create_prediction("Will this forecast hold?", 60)
+    prediction = operations._create_legacy_prediction("Will this forecast hold?", 60)
     window = MainWindow(operations)
     qtbot.addWidget(window)
     window.show()

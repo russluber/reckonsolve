@@ -1,10 +1,10 @@
 """Prospective forecast-model identities and exact-time rules."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 
-from .predictions import PredictionType
+from .predictions import PredictionStatus, PredictionType, display_status
 
 
 class ForecastContractValidationError(ValueError):
@@ -300,8 +300,35 @@ def dispatch_forecast_contract[T](
     return choices[contract.cohort]
 
 
+def contract_status(
+    status: PredictionStatus,
+    legacy_deadline: date | None,
+    current_date: date,
+    contract: ForecastContract | None,
+    now: datetime | None,
+) -> PredictionStatus:
+    """Apply the stored cohort's cutoff to a nonterminal Prediction."""
+    if contract is None or contract.is_legacy:
+        return display_status(status, legacy_deadline, current_date)
+    if now is None:
+        raise ForecastContractValidationError(
+            "An exact current time is required.", field="created_at"
+        )
+    assert contract.forecast_deadline is not None
+    if (
+        status is PredictionStatus.OPEN
+        and _exact_utc(now, field="created_at") >= contract.forecast_deadline.instant
+    ):
+        return PredictionStatus.LOCKED
+    return status
+
+
 def _exact_utc(value: datetime, *, field: str) -> datetime:
-    if not isinstance(value, datetime) or value.tzinfo is None:
+    if (
+        not isinstance(value, datetime)
+        or value.tzinfo is None
+        or value.utcoffset() is None
+    ):
         raise ForecastContractValidationError(
             "Exact forecast times must include a time zone.", field=field
         )

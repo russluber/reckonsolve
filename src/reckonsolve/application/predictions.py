@@ -94,6 +94,13 @@ from reckonsolve.domain.browser import (
     sort_archive_items,
     validate_archive_query,
 )
+from reckonsolve.domain.forecast_contracts import (
+    ForecastContractValidationError,
+    ForecastDeadline,
+    ForecastingWindow,
+    contract_status,
+    prospective_contract,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     BinaryResolutionHistory,
@@ -225,6 +232,43 @@ class PredictionOperations:
         question: str,
         probability_percent: int,
         *,
+        forecast_deadline: datetime | None = None,
+        rationale: str | None = None,
+        background: str | None = None,
+        resolution_criteria: str | None = None,
+        expected_resolution: date | None = None,
+        tags: tuple[str, ...] = (),
+    ) -> PredictionDetail:
+        """Commit a new Binary trajectory and its exact immutable window."""
+        try:
+            deadline = ForecastDeadline(forecast_deadline)
+            initial = NewPrediction(
+                question,
+                probability_percent,
+                rationale=rationale,
+                background=background,
+                resolution_criteria=resolution_criteria,
+                expected_resolution=expected_resolution,
+                tags=tags,
+            )
+            created_at = as_utc(self._clock.now())
+            ForecastingWindow(created_at, deadline)
+            contract = prospective_contract(PredictionType.BINARY, deadline)
+            detail = self._repository.create_prediction(
+                initial,
+                created_at,
+                contract=contract,
+                clock=self._clock,
+            )
+        except (PredictionValidationError, ForecastContractValidationError) as error:
+            raise ValidationError(str(error), field=error.field) from error
+        return self._with_derived_status(detail, created_at)
+
+    def _create_legacy_prediction(
+        self,
+        question: str,
+        probability_percent: int,
+        *,
         rationale: str | None = None,
         background: str | None = None,
         resolution_criteria: str | None = None,
@@ -232,7 +276,12 @@ class PredictionOperations:
         expected_resolution: date | None = None,
         tags: tuple[str, ...] = (),
     ) -> PredictionDetail:
-        """Create complete initial state and sequence-one forecast atomically."""
+        """Seed legacy compatibility fixtures; never a GUI or CLI creation path.
+
+        Migration/recovery tests and disposable visual/build fixtures need to
+        construct creation-era histories explicitly. Normal callers must use
+        create_prediction, which cannot choose or fall back to this contract.
+        """
 
         try:
             new_prediction = NewPrediction(
@@ -367,10 +416,12 @@ class PredictionOperations:
 
         revised_at = as_utc(self._clock.now())
         current_date = revised_at.astimezone(self._local_timezone).date()
-        effective_status = display_status(
+        effective_status = contract_status(
             current.status,
             current.forecast_deadline,
             current_date,
+            current.forecast_contract,
+            revised_at,
         )
         if effective_status is not PredictionStatus.OPEN:
             raise ForecastRevisionNotAllowedError(effective_status)
@@ -383,7 +434,10 @@ class PredictionOperations:
                 expected_metadata_version=expected_metadata_version,
                 created_at=revised_at,
                 current_date=current_date,
+                clock=self._clock,
             )
+        except ForecastContractValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
         except ForecastContextChangedError as error:
             raise ConcurrentForecastUpdateError(prediction_id) from error
         except ForecastRevisionUnchangedError as error:
@@ -889,10 +943,12 @@ class PredictionOperations:
             raise ConcurrentForecastReviewError(prediction_id)
         now = as_utc(self._clock.now())
         current_date = now.astimezone(self._local_timezone).date()
-        effective_status = display_status(
+        effective_status = contract_status(
             current.status,
             current.forecast_deadline,
             current_date,
+            current.forecast_contract,
+            now,
         )
         if effective_status is not PredictionStatus.OPEN:
             raise ForecastReviewNotAllowedError(effective_status)
@@ -904,6 +960,7 @@ class PredictionOperations:
                 expected_metadata_version=expected_metadata_version,
                 created_at=now,
                 current_date=current_date,
+                clock=self._clock,
             )
         except ForecastReviewContextChangedError as error:
             raise ConcurrentForecastReviewError(prediction_id) from error
@@ -988,6 +1045,11 @@ class PredictionOperations:
         current = self._repository.get_prediction(prediction_id)
         if current is None:
             raise PredictionNotFoundError(prediction_id)
+        if current.forecast_contract and not current.forecast_contract.is_legacy:
+            raise ValidationError(
+                "Resolution for trajectory Binary predictions arrives in M48.",
+                field="prediction_id",
+            )
         if (
             current.current_revision_id != expected_revision_id
             or current.metadata_version != expected_metadata_version
@@ -1341,6 +1403,8 @@ class PredictionOperations:
                 expected_revision_id=expected_revision_id,
                 expected_metadata_version=expected_metadata_version,
                 current_date=now.astimezone(self._local_timezone).date(),
+                now=now,
+                clock=self._clock,
             )
         except LifecycleContextChangedError as error:
             raise ConcurrentLifecycleUpdateError(prediction_id) from error
@@ -1501,6 +1565,7 @@ class PredictionOperations:
         predictions = classify_archive_items(
             snapshot.predictions,
             current_date=current_date,
+            now=now,
         )
         return replace(
             snapshot,
@@ -1581,6 +1646,7 @@ class PredictionOperations:
             classified_predictions = classify_archive_items(
                 predictions.values(),
                 current_date=current_date,
+                now=now,
             )
             effective_predictions = {
                 prediction.prediction_id: prediction
@@ -2130,6 +2196,16 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         if current.metadata_version != expected_metadata_version:
             raise ConcurrentPredictionUpdateError(prediction_id)
+        if (
+            isinstance(current, PredictionDetail)
+            and current.forecast_contract
+            and not current.forecast_contract.is_legacy
+            and update.forecast_deadline is not None
+        ):
+            raise ValidationError(
+                "Forecast Deadline is permanent and cannot be edited.",
+                field="forecast_deadline",
+            )
         if not metadata_would_change(current, update):
             now = as_utc(self._clock.now())
             if isinstance(current, NumericPrediction):
@@ -2180,10 +2256,12 @@ class PredictionOperations:
         now: datetime,
     ) -> PredictionDetail:
         local_date = now.astimezone(self._local_timezone).date()
-        status = display_status(
+        status = contract_status(
             detail.status,
             detail.forecast_deadline,
             local_date,
+            detail.forecast_contract,
+            now,
         )
         return replace(
             detail,
@@ -2219,10 +2297,12 @@ class PredictionOperations:
         current_date: date,
         stale_threshold_days: int,
     ) -> DashboardPrediction:
-        status = display_status(
+        status = contract_status(
             prediction.status,
             prediction.forecast_deadline,
             current_date,
+            prediction.forecast_contract,
+            now,
         )
         return replace(
             prediction,

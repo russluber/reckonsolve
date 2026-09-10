@@ -42,6 +42,7 @@ from reckonsolve.ui.analytics_charts import (
     CalibrationChart,
     ContainmentCalibrationChart,
 )
+from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.tag_filter_picker import TagFilterPicker
 
@@ -112,7 +113,7 @@ def test_presentation_use_does_not_rewrite_current_schema_data(
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    binary = operations.create_prediction(
+    binary = operations._create_legacy_prediction(
         "Will the v0.5 Binary record remain byte-for-byte logical history?",
         60,
         rationale="Preserve the original rationale.",
@@ -236,7 +237,7 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
     runtime = create_runtime(database_path=source_path)
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    created = operations.create_prediction(
+    created = operations._create_legacy_prediction(
         "Will Settings create complete data artifacts?",
         65,
         rationale="The export should retain this.",
@@ -308,6 +309,7 @@ def test_dashboard_and_attention_setting_survive_restart(qtbot, tmp_path) -> Non
     assert question is not None
     assert create is not None
     question.setText("Will the M8 Dashboard survive restart?")
+    _set_exact_deadline(create.window())
     qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
 
     first.window.navigate_to("Settings")
@@ -344,12 +346,12 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
     first = create_runtime(database_path=path)
     qtbot.addWidget(first.window)
     operations = PredictionOperations(first.database)
-    operations.create_prediction(
+    operations._create_legacy_prediction(
         "Will the open archive item survive?",
         35,
         tags=("Durability",),
     )
-    invalid = operations.create_prediction(
+    invalid = operations._create_legacy_prediction(
         "Will the Invalid archive item survive?",
         65,
         tags=("Durability", "Review"),
@@ -418,7 +420,7 @@ def test_analytics_score_resolved_predictions_and_filters_after_restart(
     first = create_runtime(database_path=path)
     qtbot.addWidget(first.window)
     operations = PredictionOperations(first.database)
-    work = operations.create_prediction(
+    work = operations._create_legacy_prediction(
         "Will the scored Work event occur?",
         70,
         tags=("Work",),
@@ -429,7 +431,7 @@ def test_analytics_score_resolved_predictions_and_filters_after_restart(
         expected_revision_id=work.current_revision_id,
         expected_metadata_version=work.metadata_version,
     )
-    personal = operations.create_prediction(
+    personal = operations._create_legacy_prediction(
         "Will the scored Personal event occur?",
         20,
         tags=("Personal",),
@@ -440,7 +442,7 @@ def test_analytics_score_resolved_predictions_and_filters_after_restart(
         expected_revision_id=personal.current_revision_id,
         expected_metadata_version=personal.metadata_version,
     )
-    invalid = operations.create_prediction("Exclude this Invalid event?", 100)
+    invalid = operations._create_legacy_prediction("Exclude this Invalid event?", 100)
     operations.invalidate_prediction(
         invalid.prediction_id,
         expected_revision_id=invalid.current_revision_id,
@@ -597,7 +599,10 @@ def test_resolve_through_ui_survives_restart_with_scoring_context(
     assert create is not None
     question.setText("Will the M7 resolution survive restart?")
     probability.setValue(42)
-    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+    PredictionOperations(first.database)._create_legacy_prediction(
+        question.text(), probability.value()
+    )
+    first.window.navigate_to("Prediction Detail")
 
     resolve = first.window.findChild(QPushButton, "resolvePredictionButton")
     assert resolve is not None
@@ -656,6 +661,7 @@ def test_mark_invalid_through_ui_survives_restart(qtbot, tmp_path) -> None:
     assert question is not None
     assert create is not None
     question.setText("Will this cancelled event happen?")
+    _set_exact_deadline(create.window())
     qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
 
     mark_invalid = first.window.findChild(QPushButton, "markInvalidButton")
@@ -700,6 +706,7 @@ def test_confirmed_untouched_delete_through_ui_remains_deleted_after_restart(
     assert question is not None
     assert create is not None
     question.setText("Accidental duplicate")
+    _set_exact_deadline(create.window())
     qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
     monkeypatch.setattr(
         QMessageBox,
@@ -741,6 +748,7 @@ def test_create_close_reopen_displays_persisted_prediction(qtbot, tmp_path) -> N
     assert create_button is not None
     question_input.setText("Will this prediction survive restart?")
     probability_input.setValue(60)
+    _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     assert first_runtime.window.current_screen_name == "Prediction Detail"
@@ -794,6 +802,7 @@ def test_numeric_create_close_reopen_displays_the_complete_interval(
     median.setText("180")
     upper.setText("240")
     confidence.setValue(80)
+    _set_exact_deadline(create.window())
     qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
 
     assert first_runtime.window.current_screen_name == "Prediction Detail"
@@ -931,7 +940,7 @@ def test_dashboard_and_browser_open_type_aware_numeric_predictions(
     runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    operations.create_prediction("Will the Binary row remain clear?", 60)
+    operations._create_legacy_prediction("Will the Binary row remain clear?", 60)
     numeric = operations.create_numeric_prediction(
         "How many Numeric days?",
         "days",
@@ -1145,7 +1154,10 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert question_input is not None
     assert create_button is not None
     question_input.setText("Will the M3 workflow persist?")
-    qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
+    PredictionOperations(first_runtime.database)._create_legacy_prediction(
+        question_input.text(), 50
+    )
+    first_runtime.window.navigate_to("Prediction Detail")
 
     edit_button = first_runtime.window.findChild(
         QPushButton,
@@ -1332,6 +1344,7 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     expected_toggle.setChecked(True)
     expected.setDate(QDate(2099, 12, 31))
     tags.setText("m4, persistence")
+    _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     assert first_runtime.window.current_screen_name == "Prediction Detail"
@@ -1481,6 +1494,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     assert create_button is not None
     question.setText("Will the M5 Journal remain historically honest?")
     probability.setValue(60)
+    _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     add_journal = first_runtime.window.findChild(
@@ -1732,3 +1746,10 @@ def test_run_reports_expected_database_startup_failure(monkeypatch, qtbot) -> No
             ),
         )
     ]
+
+
+def _set_exact_deadline(window):
+    deadline = window.findChild(ExactDeadlineInput)
+    deadline.toggle.setChecked(True)
+    deadline.editor.setDate(QDate(2099, 12, 30))
+    deadline.offset.setText("+00:00")

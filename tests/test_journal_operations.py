@@ -46,7 +46,9 @@ CORRECTED = datetime(2026, 8, 14, 21, 15, tzinfo=UTC)
 
 
 def _create(database: Database, **kwargs):
-    return PredictionOperations(database, FixedClock(CREATED)).create_prediction(
+    return PredictionOperations(
+        database, FixedClock(CREATED)
+    )._create_legacy_prediction(
         "Will it happen?",
         60,
         **kwargs,
