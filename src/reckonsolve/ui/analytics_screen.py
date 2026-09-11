@@ -287,9 +287,10 @@ class AnalyticsScreen(QWidget):
 
         header = PageHeader(
             "Analytics",
-            "Each resolved prediction contributes exactly one captured final "
-            "forecast. Binary and Numeric scores remain separate; Invalid and "
-            "unresolved predictions are excluded.",
+            "Legacy Binary and Numeric interval analytics use one captured final "
+            "forecast per resolved Prediction; Invalid and unresolved predictions "
+            "are excluded. Trajectory Binary scores are currently in Prediction Detail "
+            "and CLI show; their aggregate analytics arrive in M49.",
             title_object_name="analyticsScreenTitle",
             supporting_object_name="analyticsIntroduction",
             parent=self,

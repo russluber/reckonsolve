@@ -13,6 +13,7 @@ from typing import TextIO
 
 from PySide6.QtCore import QCoreApplication
 
+from reckonsolve.analytics.trajectory import TrajectoryScorecard
 from reckonsolve.application.errors import ApplicationError, SavedViewNotFoundError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli_creation import (
@@ -69,6 +70,7 @@ from reckonsolve.domain.search import (
     build_search_snippet,
     search_source_label,
 )
+from reckonsolve.forecast_display import trajectory_diagnostics
 from reckonsolve.identity import (
     DEVELOPMENT_APPLICATION,
     STABLE_APPLICATION,
@@ -1086,6 +1088,11 @@ def _run_show(
             indicators,
             resolution_history,
             invalidation_history,
+            operations.get_prediction_scorecard(prediction_id)
+            if prediction.resolution is not None
+            and prediction.forecast_contract is not None
+            and not prediction.forecast_contract.is_legacy
+            else None,
         )
     print(rendered, file=output)
     return 0
@@ -1164,6 +1171,7 @@ def _format_binary_detail(
     indicators: AttentionIndicators,
     resolution_history: BinaryResolutionHistory | None,
     invalidation_history: InvalidationHistory | None,
+    scorecard: TrajectoryScorecard | None = None,
 ) -> str:
     lines = [f"Prediction #{prediction.prediction_id}", "Type: Binary"]
     contract = prediction.forecast_contract
@@ -1175,7 +1183,6 @@ def _format_binary_detail(
                 "Forecast Deadline (permanent): "
                 + contract.forecast_deadline.instant.astimezone().isoformat(sep=" ")
             )
-            lines.append("Trajectory Binary resolution and scoring arrive in M48.")
     _append_common_detail(lines, prediction, indicators)
     _append_field(lines, "Current forecast", f"{prediction.probability_percent}% Yes")
     if prediction.current_rationale is not None:
@@ -1186,11 +1193,46 @@ def _format_binary_detail(
         resolution_history,
         invalidation_history,
     )
+    if scorecard is not None:
+        lines.extend(("", "Trajectory scorecard"))
+        _append_field(
+            lines,
+            "Trajectory Brier",
+            "Unscored"
+            if scorecard.trajectory_brier is None
+            else f"{float(scorecard.trajectory_brier):.4f}",
+        )
+        lines.extend(trajectory_diagnostics(scorecard))
+        if scorecard.segments:
+            final = scorecard.segments[-1]
+            _append_field(
+                lines,
+                "Final eligible forecast",
+                f"{final.probability_percent}% Yes (revision ID {final.revision_id})",
+            )
+        if scorecard.excluded_revision_ids:
+            _append_field(
+                lines,
+                "Revisions at/after cutoff (history only)",
+                ", ".join(map(str, scorecard.excluded_revision_ids)),
+            )
+        if scorecard.scoring_facts_corrected:
+            lines.append(
+                "Scores use corrected outcome/effective-time facts; original facts remain in terminal history."
+            )
     _append_definition_history(lines, definition_changes)
     lines.extend(("", "Timeline"))
     for event in timeline:
         lines.append("")
         _append_binary_timeline_event(lines, event)
+        if (
+            scorecard is not None
+            and isinstance(event, ForecastTimelineEvent)
+            and event.revision_id in scorecard.excluded_revision_ids
+        ):
+            lines.append(
+                "  At or after scoring cutoff: preserved in history, not scored."
+            )
     return "\n".join(lines)
 
 
@@ -1288,15 +1330,27 @@ def _append_binary_terminal(
             resolution.outcome.value.capitalize(),
         )
         _append_field(
-            lines, "Resolved", _format_local_timestamp(resolution.resolved_at)
+            lines,
+            "Recorded at"
+            if resolution.effective_resolution_at is not None
+            else "Resolved",
+            _format_local_timestamp(resolution.resolved_at),
         )
         _append_field(
             lines,
-            "Scoring forecast",
+            "Forecast at recording (audit only)"
+            if resolution.effective_resolution_at is not None
+            else "Scoring forecast",
             f"{resolution.scoring_probability_percent}% Yes "
             f"(revision {resolution.scoring_revision_sequence}, "
             f"ID {resolution.scoring_revision_id})",
         )
+        if resolution.effective_resolution_at is not None:
+            _append_field(
+                lines,
+                "Effective resolution time",
+                _format_local_timestamp(resolution.effective_resolution_at),
+            )
         if resolution.resolution_notes is not None:
             _append_field(
                 lines,
@@ -1450,6 +1504,13 @@ def _append_binary_resolution_history(
         f"Original Resolution | {_format_local_timestamp(original.resolved_at)}"
     )
     _append_field(lines, "Outcome", original.outcome.value.capitalize(), indent="  ")
+    if original.effective_resolution_at is not None:
+        _append_field(
+            lines,
+            "Effective resolution time",
+            _format_local_timestamp(original.effective_resolution_at),
+            indent="  ",
+        )
     _append_field(
         lines,
         "Resolution notes",
@@ -1482,6 +1543,13 @@ def _append_binary_resolution_history(
             correction.old_outcome.value.capitalize(),
             correction.new_outcome.value.capitalize(),
         )
+        if correction.old_effective_resolution_at is not None:
+            _append_change(
+                lines,
+                "Effective resolution time",
+                _format_local_timestamp(correction.old_effective_resolution_at),
+                _format_local_timestamp(correction.new_effective_resolution_at),
+            )
         _append_change(
             lines,
             "Resolution notes",
@@ -1618,6 +1686,7 @@ def _append_postmortem_completion(
 
 def _terminal_field_label(field: str) -> str:
     return {
+        "effective_resolution_at": "Effective resolution time",
         "outcome": "Outcome",
         "actual_value": "Actual value",
         "resolution_notes": "Resolution notes",

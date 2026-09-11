@@ -290,6 +290,7 @@ class NewResolution:
     outcome: BinaryOutcome
     resolution_notes: str | None = None
     postmortem: str | None = None
+    effective_resolution_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.outcome, BinaryOutcome):
@@ -353,6 +354,7 @@ class NewResolutionCorrection:
     resolution_notes: str | None = None
     postmortem: str | None = None
     correction_reason: str | None = None
+    effective_resolution_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.outcome, BinaryOutcome):
@@ -618,6 +620,7 @@ class Resolution:
     scoring_probability_percent: int
     resolution_notes: str | None = None
     postmortem: str | None = None
+    effective_resolution_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -661,6 +664,8 @@ class ResolutionCorrection:
     new_postmortem: str | None
     changed_fields: tuple[str, ...]
     correction_reason: str | None = None
+    old_effective_resolution_at: datetime | None = None
+    new_effective_resolution_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -762,6 +767,7 @@ RESOLUTION_CORRECTION_FIELDS = (
     "outcome",
     "resolution_notes",
     "postmortem",
+    "effective_resolution_at",
 )
 NUMERIC_RESOLUTION_CORRECTION_FIELDS = (
     "actual_value",
@@ -811,6 +817,7 @@ def derive_effective_resolution(
             or correction.old_outcome is not current.outcome
             or correction.old_resolution_notes != current.resolution_notes
             or correction.old_postmortem != current.postmortem
+            or correction.old_effective_resolution_at != current.effective_resolution_at
         ):
             raise TerminalHistoryIntegrityError(
                 "Binary Resolution correction history is inconsistent."
@@ -820,6 +827,7 @@ def derive_effective_resolution(
             outcome=correction.new_outcome,
             resolution_notes=correction.new_resolution_notes,
             postmortem=correction.new_postmortem,
+            effective_resolution_at=correction.new_effective_resolution_at,
         )
     return current
 

@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 46
-Last reviewed: 2026-09-09
+Status: v0.6 source release complete; v0.7 implemented through Milestone 48
+Last reviewed: 2026-09-10
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7 at schema version 16 without exposing a partial new-model workflow. It backfills one immutable forecast-model/scoring-contract row for every existing Prediction, marking Binary as final-Brier legacy and Numeric as interval-v1 legacy while leaving every released forecast, editor, lifecycle, score, search result, and export unchanged. Pure `domain/forecast_contracts.py` values establish timezone-aware exact Deadlines and effective Resolution times, strict future-window and monotonic revision rules, cutoff derivation, and closed model dispatch. The schema reserves exact new-model Resolution facts and type-specific append-only effective-time correction chains, but the GUI and CLI continue creating only legacy models until Milestones 47 and 51 provide their complete vertical flows.
+Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7 with immutable model/scoring identities and exact-time domain values, backfilling all existing records as legacy without invented times or forecasts. M47 switches new Binary creation to its exact-Deadline trajectory contract. M48 enables its Resolution, effective-time correction chain, and pure individual trajectory scorecard, with schema version 17 integrating corrected text into search and Postmortem completion. Numeric creation remains interval-v1; separate aggregate trajectory analytics and the five-quantile Numeric workflow remain later authorized milestones.
 
 | Area | Current state |
 |---|---|
@@ -20,9 +20,9 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7
 | UI | The six existing screen routes remain functional over one centralized palette-aware visual foundation, while the M40 shell distinguishes one creation action, three permanent primary destinations, one bottom utility, and contextual Prediction Detail; the sidebar has complete expanded and icon-only compact modes, and Detail return preserves the originating primary context without refreshing the Predictions query; M41 gives Dashboard and Settings the shared page/panel/message grammar and routes only disposable success acknowledgments through one non-reflowing shell overlay; M42 gives creation, both Detail variants, their timelines, and focused dialogs the same hierarchy while preserving every workflow; M42A gives Numeric Detail the shared Edit Details dialog with immutable unit and precision shown as context; M43 gives Predictions stable grouped controls, readable detailed filters, type-aware structured rows, direct row activation, and consistently styled tag management; M44 gives Analytics the same page/panel/message hierarchy, keeps its filter frame stable above responsive scrollable results, and adds guarded global navigation shortcuts plus visible shortcut reference, logical focus order, and stronger accessible descriptions; selected navigation and action icons remain local, palette-aware Lucide SVGs rendered through QtSvg while visible or accessible names remain authoritative |
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; each identity keeps `presentation.ini` beside its database; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
-| Schema | Version 16 adds immutable forecast/scoring identities, prospective exact Deadline and effective Resolution storage, and prospective type-specific correction chains while backfilling all version-15 records as legacy without invented facts; versions 14 and 15 retain the rebuildable FTS5 projection and dynamic Saved Views |
-| Domain and application operations | Complete v0.6 behavior plus presentation-independent forecast-contract identity, exact-time normalization, strict new-window/revision validation, scoring-cutoff derivation, and closed cohort dispatch; public creation deliberately remains legacy until a complete type-specific v0.7 vertical slice exists |
-| Analytics | Exactly-once type-aware scoring selection now carries both revision-one and captured-final context; ordinary scoring, scorecards, and retrospective paired feedback all reuse the latest effective outcome and original resolution time while preserving Binary/Numeric and exact-unit boundaries; M44 changes only their responsive Qt presentation and retains tables and accessible chart summaries as nonvisual equivalents |
+| Schema | Version 17 adds shared read-only Binary correction text, trajectory dirty-search tracking, and corrected Postmortem guards; version 16 retains immutable model/scoring identities, exact Deadline/Resolution storage, and type-specific correction chains, with every pre-v0.7 record explicitly legacy; versions 14 and 15 retain FTS5 and dynamic Saved Views |
+| Domain and application operations | Complete legacy behavior plus stored-cohort dispatch, exact-Deadline Binary creation/revision/Review, immutable recorded-at with explicit effective Resolution time, and audited outcome/text/time corrections; Numeric public creation remains interval-v1 |
+| Analytics | Legacy aggregates retain captured-final, correction-aware scoring and paired feedback; new Binary individual scorecards derive exact standing segments and Fraction-valued Trajectory Brier from the immutable revision path and effective cutoff. No new-cohort record enters legacy aggregate analytics. Qt and CLI only render these derived results |
 | Automated tests | Complete v0.1-v0.6 coverage plus M46 pure contract/time boundary tests, schema-15 migration and forced-rollback coverage, unchanged legacy read/analytics comparisons, creation-era identity assignment, database identity guards, and prospective append-only correction-chain constraints |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and relocated-smoke validated across local styles/icons, safe shell defaults, expanded/compact navigation, primary screens, both Detail types, keyboard navigation, responsive sizes, the v0.5 data boundary, search, backup, and GUI restart; original icon artwork, installer, signing, installer-created shortcuts, uninstall, updates, and public distribution remain deferred |
 
@@ -660,4 +660,31 @@ Contract-bearing Binary Detail and mixed Dashboard/archive/search read models ex
 
 The desktop exact-deadline editor uses a native date/time control with a separate explicit UTC offset. A UTC Qt time-zone carrier avoids implicit DST normalization of wall-clock input; only the user's offset determines the stored UTC instant. The editor displays hours and minutes and commits zero seconds, so no invisible seconds affect the chosen cutoff. Empty/unset deadlines remain explicit, the initial wall-clock suggestion is not a fabricated future deadline, and optional guidance lives outside canonical data. The CLI accepts an offset-bearing ISO date/time and offers the same guidance through `?`. Desktop Deadline context displays through minutes with the UTC offset; timeline labels use local dates and minutes, with exact Binary event instants available in tooltips. Canonical storage, ordering, enforcement, and CLI audit timestamps retain full precision. Legacy editable date metadata stays separate.
 
-M47 does not expose a partial terminal/scoring implementation. New trajectory Resolution is explicitly rejected until M48; legacy Resolution continues to work. CSV format 3 cannot represent new-contract facts, so its existing export boundary refuses new-model databases before producing an artifact. Online SQLite backup remains complete. M55 replaces that guard with format-version-four portability; later milestones add new-model resolution, separate analytics, and the complete five-quantile Numeric workflow in specification order.
+M47 initially staged trajectory Resolution until M48; M48 now supplies that complete individual terminal/scoring slice. CSV format 3 still cannot represent new-contract facts, so its existing export boundary refuses new-model databases before producing an artifact. Online SQLite backup remains complete. M55 replaces that guard with format-version-four portability; separate analytics and the five-quantile Numeric workflow proceed in specification order.
+
+### M48: trajectory terminal facts and individual scoring
+
+The application and Binary repository extend the existing Resolution transaction
+with explicit effective time and an under-transaction recorded-at sample. The
+desktop native time control uses the same explicit-offset wall-clock convention
+as Deadline entry; CLI `resolve` accepts `now` or an offset-bearing ISO instant.
+The optional seconds display does not truncate an unchanged saved time during
+a text-only correction. New time-aware dialogs reserve their wrapped form's
+width-dependent minimum height so explanatory text cannot compress inputs.
+
+`AnalyticsRepository.get_trajectory_source` takes one consistent contract,
+revision, and terminal-history snapshot. `analytics/trajectory.py` alone builds
+the standing segments, exact microsecond weights, neutral remainder, and
+Fraction-valued score/diagnostics. Detail progressively discloses diagnostics;
+CLI `show` retains explicit timestamps and terminal history. Both label excluded
+revisions, while the ordinary probability-history chart still contains every
+real revision. Unscored records retain their Resolution and history.
+
+Correction writes select the type-specific canonical chain, recheck optimistic
+context under transaction, and never change original recorded-at. The shared
+schema-17 union is only for terminal-text reads, search projection, and
+Postmortem completion. Search refresh stays inside the canonical transaction.
+Tests cover prior-version migration/rollback, exact-duration and offset cases,
+correction reselection, no-score transitions, stale context, projection failure,
+GUI/CLI parity, unchanged hidden precision, and backup/restart. See
+[ADR 0017](decisions/0017-derive-trajectory-scores-from-terminal-facts.md).

@@ -138,8 +138,7 @@ def test_cancel_edit_or_revision_does_not_write_history(qtbot, operations):
     screen.show()
     assert "TRAJECTORY" in screen.forecast_type.text()
     assert "permanent" in screen.forecast_deadline.text()
-    assert not screen.resolve_button.isEnabled()
-    assert "M48" in screen.resolve_button.toolTip()
+    assert screen.resolve_button.isEnabled()
     screen.open_revise_forecast()
     dialog = screen._revision_dialog
     assert dialog is not None

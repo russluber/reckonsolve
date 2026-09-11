@@ -66,7 +66,7 @@ def test_v16_upgrade_preserves_v15_behavior_and_marks_every_record_legacy(
     before_analytics = operations.get_forecast_analytics()
     v15.close()
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:16])
     recovered = PredictionOperations(upgraded, FixedClock(), UTC)
 
     assert upgraded.schema_version == 16

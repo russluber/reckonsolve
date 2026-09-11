@@ -229,10 +229,10 @@ def test_contract_insert_failure_rolls_back_initial_revision_and_tags(active):
         assert connection.execute("SELECT count(*) FROM tags").fetchone()[0] == 0
 
 
-def test_new_resolution_is_explicitly_staged_while_legacy_resolution_works(active):
+def test_new_resolution_requires_effective_time_while_legacy_resolution_works(active):
     _, _, operations = active
     new = operations.create_prediction("New cohort?", 60, forecast_deadline=DEADLINE)
-    with pytest.raises(ValidationError, match="M48"):
+    with pytest.raises(ValidationError, match="[Ee]ffective"):
         operations.resolve_prediction(
             new.prediction_id, BinaryOutcome.YES, **context(new)
         )

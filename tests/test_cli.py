@@ -1574,7 +1574,7 @@ def test_cli_resolves_binary_with_confirmation_and_final_scoring_revision(
 
     assert result == 0
     assert "Current forecast: 35% Yes" in output.getvalue()
-    assert "cannot be reopened or changed" in output.getvalue()
+    assert "cannot be reopened" in output.getvalue()
     assert "Resolved Prediction #" in output.getvalue()
     assert "Outcome: Yes" in output.getvalue()
     assert "Enter yes or no." in errors.getvalue()

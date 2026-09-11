@@ -26,7 +26,7 @@ from reckonsolve.domain.search import (
 )
 
 from .database import Database
-from .forecast_contracts import select_supported_contract
+from .forecast_contracts import binary_corrections_relation, select_supported_contract
 from .search_index import (
     SEARCH_PROJECTION_VERSION,
     SearchIndexBusyError,
@@ -307,7 +307,7 @@ def _select_predictions(
         return {}
     wanted_ids = set(prediction_ids)
     rows = connection.execute(
-        """
+        f"""
         SELECT
             prediction.id AS prediction_id,
             prediction.question,
@@ -345,7 +345,7 @@ def _select_predictions(
                         SELECT COALESCE(
                             (
                                 SELECT correction.new_postmortem
-                                FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                                 WHERE correction.resolution_id = resolution.id
                                 ORDER BY correction.sequence DESC
                                 LIMIT 1
@@ -361,7 +361,7 @@ def _select_predictions(
                 SELECT COALESCE(
                     (
                         SELECT correction.new_outcome
-                        FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                         WHERE correction.resolution_id = resolution.id
                         ORDER BY correction.sequence DESC
                         LIMIT 1

@@ -17,6 +17,7 @@ from reckonsolve.analytics import (
     summarize_analytics,
     summarize_forecast_analytics,
 )
+from reckonsolve.analytics.trajectory import trajectory_scorecard
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
@@ -95,9 +96,11 @@ from reckonsolve.domain.browser import (
     validate_archive_query,
 )
 from reckonsolve.domain.forecast_contracts import (
+    EffectiveResolutionTime,
     ForecastContractValidationError,
     ForecastDeadline,
     ForecastingWindow,
+    ResolutionTiming,
     contract_status,
     prospective_contract,
 )
@@ -1023,16 +1026,19 @@ class PredictionOperations:
         *,
         resolution_notes: str | None = None,
         postmortem: str | None = None,
+        effective_resolution_at: datetime | None = None,
+        use_recorded_time: bool = False,
         expected_revision_id: int,
         expected_metadata_version: int,
     ) -> PredictionDetail:
-        """Persist one immutable outcome and its exact scoring revision."""
+        """Persist terminal facts under the stored legacy or prospective contract."""
 
         try:
             resolution = NewResolution(
                 outcome=outcome,
                 resolution_notes=resolution_notes,
                 postmortem=postmortem,
+                effective_resolution_at=effective_resolution_at,
             )
         except PredictionValidationError as error:
             raise ValidationError(str(error), field=error.field) from error
@@ -1045,10 +1051,26 @@ class PredictionOperations:
         current = self._repository.get_prediction(prediction_id)
         if current is None:
             raise PredictionNotFoundError(prediction_id)
-        if current.forecast_contract and not current.forecast_contract.is_legacy:
+        prospective = (
+            current.forecast_contract is not None
+            and not current.forecast_contract.is_legacy
+        )
+        if prospective and effective_resolution_at is None and not use_recorded_time:
             raise ValidationError(
-                "Resolution for trajectory Binary predictions arrives in M48.",
-                field="prediction_id",
+                "Choose an effective resolution time or use recording time.",
+                field="effective_resolution_at",
+            )
+        if use_recorded_time and (
+            not prospective or effective_resolution_at is not None
+        ):
+            raise ValidationError(
+                "Choose either recording time or an explicit effective time.",
+                field="effective_resolution_at",
+            )
+        if not prospective and effective_resolution_at is not None:
+            raise ValidationError(
+                "Legacy Resolutions do not use an effective resolution time.",
+                field="effective_resolution_at",
             )
         if (
             current.current_revision_id != expected_revision_id
@@ -1060,13 +1082,27 @@ class PredictionOperations:
 
         resolved_at = as_utc(self._clock.now())
         try:
+            if prospective:
+                timing = ResolutionTiming(
+                    EffectiveResolutionTime(
+                        resolved_at if use_recorded_time else effective_resolution_at
+                    ),
+                    resolved_at,
+                )
+                resolution = replace(
+                    resolution, effective_resolution_at=timing.effective.instant
+                )
             updated = self._repository.resolve_prediction(
                 prediction_id,
                 resolution,
                 expected_revision_id=expected_revision_id,
                 expected_metadata_version=expected_metadata_version,
                 resolved_at=resolved_at,
+                clock=self._clock if prospective else None,
+                use_recorded_time=use_recorded_time,
             )
+        except ForecastContractValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
         except LifecycleContextChangedError as error:
             raise ConcurrentLifecycleUpdateError(prediction_id) from error
         except LifecycleTransitionDisallowedError as error:
@@ -1176,24 +1212,47 @@ class PredictionOperations:
         resolution_notes: str | None,
         postmortem: str | None,
         correction_reason: str | None = None,
+        effective_resolution_at: datetime | None = None,
         expected_correction_id: int | None,
     ) -> BinaryResolutionHistory:
         """Append one complete Binary Resolution correction snapshot."""
 
+        history = self.get_binary_resolution_history(prediction_id)
+        prediction = self._repository.get_prediction(prediction_id)
+        if prediction is None:
+            raise PredictionNotFoundError(prediction_id)
+        prospective = (
+            prediction.forecast_contract is not None
+            and not prediction.forecast_contract.is_legacy
+        )
+        if effective_resolution_at is not None and not prospective:
+            raise ValidationError(
+                "Legacy Resolutions do not use an effective resolution time.",
+                field="effective_resolution_at",
+            )
         try:
+            if prospective:
+                effective_resolution_at = ResolutionTiming(
+                    EffectiveResolutionTime(
+                        effective_resolution_at
+                        if effective_resolution_at is not None
+                        else history.effective.effective_resolution_at
+                    ),
+                    history.original.resolved_at,
+                ).effective.instant
             proposed = NewResolutionCorrection(
                 outcome=outcome,
                 resolution_notes=resolution_notes,
                 postmortem=postmortem,
                 correction_reason=correction_reason,
+                effective_resolution_at=effective_resolution_at,
             )
-        except PredictionValidationError as error:
+        except (PredictionValidationError, ForecastContractValidationError) as error:
             raise ValidationError(str(error), field=error.field) from error
         self._validate_optional_positive_token(
             expected_correction_id,
             "expected_correction_id",
         )
-        history = self.get_binary_resolution_history(prediction_id)
         self._validate_terminal_correction_proposal(
             prediction_id,
             history.current_correction_id,
@@ -1210,8 +1269,11 @@ class PredictionOperations:
                     proposed,
                     expected_correction_id=expected_correction_id,
                     corrected_at=corrected_at,
+                    clock=self._clock if prospective else None,
                 )
             )
+        except ForecastContractValidationError as error:
+            raise ValidationError(str(error), field=error.field) from error
         except TerminalCorrectionContextChangedError as error:
             raise ConcurrentTerminalCorrectionError(prediction_id) from error
         except RepositoryTerminalCorrectionUnchangedError as error:
@@ -1970,6 +2032,11 @@ class PredictionOperations:
         """
 
         self._validate_positive_token(prediction_id, "prediction_id")
+        trajectory_source = self._analytics_repository.get_trajectory_source(
+            prediction_id
+        )
+        if trajectory_source is not None:
+            return trajectory_scorecard(*trajectory_source)
         binary_source, numeric_source = self._analytics_repository.get_sources()
         binary_observation = next(
             (
@@ -2366,7 +2433,15 @@ class PredictionOperations:
             raise ConcurrentTerminalCorrectionError(prediction_id)
         if not changed_fields:
             raise TerminalCorrectionUnchangedError
-        if outcome_field in changed_fields and correction_reason is None:
+        if (
+            outcome_field in changed_fields
+            or "effective_resolution_at" in changed_fields
+        ) and correction_reason is None:
+            if "effective_resolution_at" in changed_fields:
+                raise ValidationError(
+                    "Explain why the effective resolution time is being corrected.",
+                    field="correction_reason",
+                )
             label = "outcome" if outcome_field == "outcome" else "actual value"
             raise ValidationError(
                 f"Explain why the recorded {label} is being corrected.",

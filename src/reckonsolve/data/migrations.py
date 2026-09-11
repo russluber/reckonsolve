@@ -4,6 +4,8 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from .m48_migration import M48_STATEMENTS
+
 
 class MigrationError(RuntimeError):
     """Base class for migration failures detected by Reckonsolve."""
@@ -3342,6 +3344,15 @@ MIGRATIONS = (
             END
             """,
         ),
+    ),
+)
+
+
+MIGRATIONS += (
+    Migration(
+        version=17,
+        name="integrate trajectory terminal history",
+        statements=M48_STATEMENTS,
     ),
 )
 

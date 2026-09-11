@@ -12,6 +12,8 @@ from reckonsolve.domain.search import (
     normalize_search_literal,
 )
 
+from .forecast_contracts import binary_corrections_relation
+
 SEARCH_PROJECTION_VERSION = 1
 
 
@@ -459,6 +461,10 @@ def _append_resolution_documents(connection, prediction_id: int, add) -> None:
             if correction_table == "resolution_corrections"
             else "numeric_resolution_id"
         )
+        if resolution_table == "resolutions":
+            correction_table = binary_corrections_relation(connection)
+            if correction_table != "resolution_corrections":
+                actual_flag = "(outcome_changed OR effective_time_changed)"
         corrections = connection.execute(
             f"""
             SELECT

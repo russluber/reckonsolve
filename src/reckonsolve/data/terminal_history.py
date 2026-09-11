@@ -3,7 +3,11 @@
 import sqlite3
 from datetime import datetime
 
-from reckonsolve.clock import format_utc, parse_utc
+from reckonsolve.clock import Clock, as_utc, format_utc, parse_utc
+from reckonsolve.domain.forecast_contracts import (
+    EffectiveResolutionTime,
+    ResolutionTiming,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     BinaryResolutionHistory,
@@ -27,6 +31,7 @@ from reckonsolve.domain.predictions import (
 )
 
 from .database import Database
+from .forecast_contracts import select_supported_contract
 
 
 class TerminalCorrectionContextChangedError(RuntimeError):
@@ -83,6 +88,7 @@ class TerminalHistoryRepository:
         *,
         expected_correction_id: int | None,
         corrected_at: datetime,
+        clock: Clock | None = None,
     ) -> BinaryResolutionHistory | None:
         with self._database.transaction() as connection:
             history = _select_binary_resolution_history(connection, prediction_id)
@@ -92,22 +98,52 @@ class TerminalHistoryRepository:
                 history.current_correction_id, expected_correction_id
             )
             current = history.effective
+            contract = select_supported_contract(connection, prediction_id)
+            prospective = contract is not None and not contract.is_legacy
+            if prospective:
+                ResolutionTiming(
+                    EffectiveResolutionTime(proposed.effective_resolution_at),
+                    current.resolved_at,
+                )
+                if clock is not None:
+                    corrected_at = as_utc(clock.now())
             changed_fields = changed_resolution_fields(current, proposed)
             if not changed_fields:
                 raise TerminalCorrectionUnchangedError
-            if "outcome" in changed_fields and proposed.correction_reason is None:
+            if {"outcome", "effective_resolution_at"}.intersection(
+                changed_fields
+            ) and proposed.correction_reason is None:
                 raise OutcomeCorrectionReasonRequiredError
 
+            table = (
+                "binary_trajectory_resolution_corrections"
+                if prospective
+                else "resolution_corrections"
+            )
+            extra_columns = (
+                ", old_effective_resolution_at, new_effective_resolution_at, effective_time_changed"
+                if prospective
+                else ""
+            )
+            extra_values = (
+                (
+                    format_utc(current.effective_resolution_at),
+                    format_utc(proposed.effective_resolution_at),
+                    int("effective_resolution_at" in changed_fields),
+                )
+                if prospective
+                else ()
+            )
             cursor = connection.execute(
-                """
-                INSERT INTO resolution_corrections (
+                f"""
+                INSERT INTO {table} (
                     prediction_id, resolution_id, sequence,
                     old_outcome, new_outcome,
                     old_resolution_notes, new_resolution_notes,
                     old_postmortem, new_postmortem,
                     outcome_changed, resolution_notes_changed,
-                    postmortem_changed, correction_reason, corrected_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    postmortem_changed, correction_reason, corrected_at {extra_columns}
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? {", ?, ?, ?" if prospective else ""})
                 """,
                 (
                     prediction_id,
@@ -124,6 +160,7 @@ class TerminalHistoryRepository:
                     int("postmortem" in changed_fields),
                     proposed.correction_reason,
                     format_utc(corrected_at),
+                    *extra_values,
                 ),
             )
             if cursor.lastrowid is None:
@@ -312,9 +349,22 @@ def _select_binary_resolution_history(
     connection: sqlite3.Connection,
     prediction_id: int,
 ) -> BinaryResolutionHistory | None:
+    if (
+        connection.execute(
+            "SELECT 1 FROM predictions WHERE id = ?", (prediction_id,)
+        ).fetchone()
+        is None
+    ):
+        return None
+    contract = select_supported_contract(connection, prediction_id)
+    prospective = contract is not None and not contract.is_legacy
+    exact_time_column = (
+        "resolution.effective_resolution_at" if contract is not None else "NULL"
+    )
     original_row = connection.execute(
-        """
+        f"""
         SELECT
+            {exact_time_column} AS effective_resolution_at,
             resolution.id AS resolution_id,
             resolution.prediction_id,
             resolution.outcome,
@@ -348,11 +398,21 @@ def _select_binary_resolution_history(
         scoring_probability_percent=int(original_row["scoring_probability_percent"]),
         resolution_notes=_optional_string(original_row["resolution_notes"]),
         postmortem=_optional_string(original_row["postmortem"]),
+        effective_resolution_at=(
+            None
+            if original_row["effective_resolution_at"] is None
+            else parse_utc(original_row["effective_resolution_at"])
+        ),
+    )
+    table = (
+        "binary_trajectory_resolution_corrections"
+        if prospective
+        else "resolution_corrections"
     )
     rows = connection.execute(
-        """
+        f"""
         SELECT *
-        FROM resolution_corrections
+        FROM {table}
         WHERE resolution_id = ?
         ORDER BY sequence
         """,
@@ -484,6 +544,9 @@ def _map_binary_correction(row: sqlite3.Row) -> ResolutionCorrection:
         )
         if bool(row[column])
     )
+    prospective = "effective_time_changed" in row.keys()  # noqa: SIM118 -- sqlite Row membership tests values.
+    if prospective and row["effective_time_changed"]:
+        changed_fields += ("effective_resolution_at",)
     return ResolutionCorrection(
         correction_id=int(row["id"]),
         prediction_id=int(row["prediction_id"]),
@@ -498,6 +561,12 @@ def _map_binary_correction(row: sqlite3.Row) -> ResolutionCorrection:
         new_postmortem=_optional_string(row["new_postmortem"]),
         changed_fields=changed_fields,
         correction_reason=_optional_string(row["correction_reason"]),
+        old_effective_resolution_at=parse_utc(row["old_effective_resolution_at"])
+        if prospective
+        else None,
+        new_effective_resolution_at=parse_utc(row["new_effective_resolution_at"])
+        if prospective
+        else None,
     )
 
 

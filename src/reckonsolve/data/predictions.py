@@ -14,8 +14,10 @@ from reckonsolve.domain.browser import (
     PredictionBrowserSnapshot,
 )
 from reckonsolve.domain.forecast_contracts import (
+    EffectiveResolutionTime,
     ForecastContract,
     ForecastingWindow,
+    ResolutionTiming,
     contract_status,
 )
 from reckonsolve.domain.predictions import (
@@ -50,6 +52,7 @@ from reckonsolve.domain.timeline import order_timeline
 from .database import Database
 from .forecast_contracts import (
     binary_contract_columns,
+    binary_corrections_relation,
     insert_legacy_contract_if_supported,
     insert_prospective_contract,
     map_binary_contract,
@@ -528,6 +531,8 @@ class PredictionRepository:
         expected_revision_id: int,
         expected_metadata_version: int,
         resolved_at: datetime,
+        clock: Clock | None = None,
+        use_recorded_time: bool = False,
     ) -> PredictionDetail | None:
         """Capture the current scoring revision and terminal outcome atomically."""
 
@@ -547,17 +552,36 @@ class PredictionRepository:
             if current.status is not PredictionStatus.OPEN:
                 raise LifecycleTransitionDisallowedError(current.status)
 
+            contract = select_supported_contract(connection, prediction_id)
+            prospective = contract is not None and not contract.is_legacy
+            extra_columns = ""
+            extra_values: tuple[str, ...] = ()
+            if prospective:
+                if clock is not None:
+                    resolved_at = as_utc(clock.now())
+                timing = ResolutionTiming(
+                    EffectiveResolutionTime(
+                        resolved_at
+                        if use_recorded_time
+                        else resolution.effective_resolution_at
+                    ),
+                    resolved_at,
+                )
+                extra_columns = ", effective_resolution_at"
+                extra_values = (format_utc(timing.effective.instant),)
+            elif resolution.effective_resolution_at is not None:
+                raise ValueError("Legacy Resolution cannot have an effective time.")
             cursor = connection.execute(
-                """
+                f"""
                 INSERT INTO resolutions (
                     prediction_id,
                     outcome,
                     resolved_at,
                     scoring_revision_id,
                     resolution_notes,
-                    postmortem
+                    postmortem {extra_columns}
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ? {", ?" if prospective else ""})
                 """,
                 (
                     prediction_id,
@@ -566,6 +590,7 @@ class PredictionRepository:
                     current.current_revision_id,
                     resolution.resolution_notes,
                     resolution.postmortem,
+                    *extra_values,
                 ),
             )
             if cursor.lastrowid is None:
@@ -915,7 +940,7 @@ class PredictionRepository:
 
         with self._database.transaction() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT
                     prediction.id AS prediction_id,
                     prediction.question,
@@ -924,12 +949,12 @@ class PredictionRepository:
                     CASE
                         WHEN EXISTS (
                             SELECT 1
-                            FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                             WHERE correction.resolution_id = resolution.id
                         )
                         THEN (
                             SELECT correction.new_outcome
-                            FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                             WHERE correction.resolution_id = resolution.id
                             ORDER BY correction.sequence DESC
                             LIMIT 1
@@ -941,7 +966,7 @@ class PredictionRepository:
                     NULL AS numeric_precision,
                     (
                         SELECT correction.id
-                        FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                         WHERE correction.resolution_id = resolution.id
                         ORDER BY correction.sequence DESC
                         LIMIT 1
@@ -960,12 +985,12 @@ class PredictionRepository:
                         CASE
                             WHEN EXISTS (
                                 SELECT 1
-                                FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                                 WHERE correction.resolution_id = resolution.id
                             )
                             THEN (
                                 SELECT correction.new_postmortem
-                                FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                                 WHERE correction.resolution_id = resolution.id
                                 ORDER BY correction.sequence DESC
                                 LIMIT 1
@@ -1041,7 +1066,7 @@ class PredictionRepository:
 
         with self._database.transaction() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT
                     prediction.id AS prediction_id,
                     prediction.question,
@@ -1079,7 +1104,7 @@ class PredictionRepository:
                                 SELECT COALESCE(
                                     (
                                         SELECT correction.new_postmortem
-                                        FROM resolution_corrections AS correction
+                            FROM {binary_corrections_relation(connection)} AS correction
                                         WHERE correction.resolution_id = resolution.id
                                         ORDER BY correction.sequence DESC
                                         LIMIT 1
@@ -1435,11 +1460,15 @@ def _prediction_detail_select(connection: sqlite3.Connection) -> str:
         if has_reviews
         else ""
     )
+    contract_columns = binary_contract_columns(connection)
+    exact_time_column = (
+        ", resolution.effective_resolution_at" if contract_columns else ""
+    )
     return _PREDICTION_DETAIL_SELECT.replace(
         "/* REVIEW_DELETION_GUARD */", guard
     ).replace(
         "FROM predictions AS prediction",
-        binary_contract_columns(connection) + " FROM predictions AS prediction",
+        contract_columns + exact_time_column + " FROM predictions AS prediction",
     )
 
 
@@ -1471,6 +1500,12 @@ def _map_prediction_detail(
             scoring_probability_percent=int(row["scoring_probability_percent"]),
             resolution_notes=_optional_string(row["resolution_notes"]),
             postmortem=_optional_string(row["postmortem"]),
+            effective_resolution_at=(
+                parse_utc(row["effective_resolution_at"])
+                if "effective_resolution_at" in row.keys()  # noqa: SIM118 -- sqlite Row membership tests values.
+                and row["effective_resolution_at"] is not None
+                else None
+            ),
         )
     )
     invalidation = (

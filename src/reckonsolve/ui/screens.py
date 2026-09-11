@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from PySide6.QtCore import QDate, QEvent, QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QKeyEvent, QShowEvent
+from PySide6.QtGui import QFont, QKeyEvent, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -39,6 +39,7 @@ from reckonsolve.analytics import (
     NumericScorecard,
     PredictionScorecard,
 )
+from reckonsolve.analytics.trajectory import TrajectoryScorecard
 from reckonsolve.application.errors import (
     ApplicationError,
     MeaningChangeConfirmationRequired,
@@ -62,7 +63,7 @@ from reckonsolve.domain.predictions import (
     ResolutionCorrection,
 )
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
-from reckonsolve.forecast_display import format_local_deadline
+from reckonsolve.forecast_display import format_local_deadline, trajectory_diagnostics
 from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
 from reckonsolve.ui.components import (
     ContentPanel,
@@ -70,6 +71,7 @@ from reckonsolve.ui.components import (
     PageHeader,
     StatusBadge,
 )
+from reckonsolve.ui.effective_time_input import EffectiveTimeInput
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
@@ -226,6 +228,7 @@ class ResolutionSnapshot(Protocol):
     prediction_id: int
     outcome: BinaryOutcome
     resolved_at: datetime
+    effective_resolution_at: datetime | None
     scoring_revision_id: int
     scoring_revision_sequence: int
     scoring_probability_percent: int
@@ -395,6 +398,8 @@ class PredictionOperations(Protocol):
         *,
         resolution_notes: str | None = None,
         postmortem: str | None = None,
+        effective_resolution_at: datetime | None = None,
+        use_recorded_time: bool = False,
         expected_revision_id: int,
         expected_metadata_version: int,
     ) -> PredictionSnapshot:
@@ -433,6 +438,7 @@ class PredictionOperations(Protocol):
         resolution_notes: str | None,
         postmortem: str | None,
         correction_reason: str | None = None,
+        effective_resolution_at: datetime | None = None,
         expected_correction_id: int | None,
     ) -> BinaryResolutionHistory:
         """Append one audited Binary Resolution correction."""
@@ -2517,6 +2523,31 @@ class _StyledDialog(QDialog):
         super().showEvent(event)
 
 
+class _EffectiveTimeDialog(_StyledDialog):
+    """Reserve wrapped form text's actual minimum height in the new time flows."""
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._fit_time_form()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_time_form()
+
+    def _fit_time_form(self) -> None:
+        if getattr(self, "effective_time", None) is None or self.layout() is None:
+            return
+        layout = self.layout()
+        layout.invalidate()
+        # minimumSize ignores wrapping. Unlike heightForWidth, this excludes
+        # the text editors' preferred tall size while protecting legible inputs.
+        height = max(
+            layout.minimumSize().height(), layout.minimumHeightForWidth(self.width())
+        )
+        if self.minimumHeight() != height:
+            self.setMinimumHeight(height)
+
+
 class EditPredictionDetailsDialog(_StyledDialog):
     """Edit stable prediction metadata through one complete application operation."""
 
@@ -3388,7 +3419,7 @@ class MarkNumericPredictionInvalidDialog(_StyledDialog):
         self.accept()
 
 
-class CorrectBinaryResolutionDialog(_StyledDialog):
+class CorrectBinaryResolutionDialog(_EffectiveTimeDialog):
     """Append one confirmed Binary Resolution correction snapshot."""
 
     correction_saved = Signal(object)
@@ -3409,6 +3440,11 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
         self._prediction_id = history.original.prediction_id
         self._expected_correction_id = history.current_correction_id
         self._current = history.effective
+        self.effective_time = (
+            EffectiveTimeInput(self, self._current.effective_resolution_at)
+            if self._current.effective_resolution_at is not None
+            else None
+        )
 
         title = QLabel("Correct Resolution", self)
         explanation = QLabel(
@@ -3420,6 +3456,10 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
         explanation.setObjectName("binaryResolutionCorrectionExplanation")
         explanation.setTextFormat(Qt.TextFormat.PlainText)
         explanation.setWordWrap(True)
+        if self.effective_time is not None:
+            explanation.setText(
+                "Append a correction without changing recorded-at or any earlier history. Correcting effective time may change which forecasts are scored."
+            )
 
         outcome_label = QLabel("Effective outcome", self)
         self.outcome_yes = QRadioButton("Yes", self)
@@ -3445,6 +3485,10 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
         self.score_change_notice.setObjectName("binaryResolutionScoreChangeNotice")
         self.score_change_notice.setTextFormat(Qt.TextFormat.PlainText)
         self.score_change_notice.setWordWrap(True)
+        if self.effective_time is not None:
+            self.score_change_notice.setText(
+                "Changing the outcome or effective time recomputes trajectory scoring and final forecast selection. An explanation is required."
+            )
 
         notes_label = QLabel("Resolution notes (optional)", self)
         self.notes_input = QPlainTextEdit(self)
@@ -3468,6 +3512,10 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
         self.reason_input.setPlaceholderText(
             "Required only when changing Yes to No or No to Yes"
         )
+        if self.effective_time is not None:
+            self.reason_input.setPlaceholderText(
+                "Required when changing outcome or effective time"
+            )
         reason_label.setBuddy(self.reason_input)
 
         self.form_error = _dialog_error_label(
@@ -3486,6 +3534,8 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
         layout.addSpacing(8)
         layout.addWidget(outcome_label)
         layout.addWidget(outcome_row)
+        if self.effective_time is not None:
+            layout.addWidget(self.effective_time)
         layout.addWidget(self.score_change_notice)
         layout.addWidget(notes_label)
         layout.addWidget(self.notes_input)
@@ -3498,6 +3548,13 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
 
         self.outcome_yes.toggled.connect(self._update_score_change_notice)
         self.outcome_no.toggled.connect(self._update_score_change_notice)
+        if self.effective_time is not None:
+            self.effective_time.editor.dateTimeChanged.connect(
+                self._update_score_change_notice
+            )
+            self.effective_time.offset.textChanged.connect(
+                self._update_score_change_notice
+            )
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
         self._update_score_change_notice()
@@ -3511,20 +3568,35 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
         postmortem = _normalized_optional_text(self.postmortem_input.toPlainText())
         correction_reason = _normalized_optional_text(self.reason_input.text())
         outcome_changed = outcome is not self._current.outcome
+        try:
+            effective_at = (
+                None if self.effective_time is None else self.effective_time.value()
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        time_changed = effective_at != self._current.effective_resolution_at
         if (
             outcome is self._current.outcome
             and notes == self._current.resolution_notes
             and postmortem == self._current.postmortem
+            and not time_changed
         ):
             self._show_error(
-                "Change the outcome, Resolution notes, or Postmortem before saving."
+                "Change the outcome, notes, Postmortem, or effective time before saving."
+                if self.effective_time is not None
+                else "Change the outcome, notes, or Postmortem before saving."
             )
             return
-        if outcome_changed and correction_reason is None:
-            self._show_error("Explain why the recorded outcome is being corrected.")
+        if (outcome_changed or time_changed) and correction_reason is None:
+            self._show_error(
+                "Explain why the outcome or effective time is being corrected."
+            )
             self.reason_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
             return
-        if not _confirm_terminal_correction(self, score_affecting=outcome_changed):
+        if not _confirm_terminal_correction(
+            self, score_affecting=outcome_changed or time_changed
+        ):
             return
         try:
             history = self._operations.correct_binary_resolution(
@@ -3534,6 +3606,11 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
                 postmortem=postmortem,
                 correction_reason=correction_reason,
                 expected_correction_id=self._expected_correction_id,
+                **(
+                    {"effective_resolution_at": effective_at}
+                    if self.effective_time is not None
+                    else {}
+                ),
             )
         except ApplicationError as error:
             self._show_error(str(error))
@@ -3545,7 +3622,16 @@ class CorrectBinaryResolutionDialog(_StyledDialog):
         selected = (
             BinaryOutcome.YES if self.outcome_yes.isChecked() else BinaryOutcome.NO
         )
-        self.score_change_notice.setHidden(selected is self._current.outcome)
+        try:
+            time_changed = (
+                self.effective_time is not None
+                and self.effective_time.value() != self._current.effective_resolution_at
+            )
+        except ApplicationError:
+            time_changed = True
+        self.score_change_notice.setHidden(
+            selected is self._current.outcome and not time_changed
+        )
 
     def _show_error(self, message: str) -> None:
         self.form_error.setText(message)
@@ -4271,7 +4357,7 @@ class CorrectJournalEntryDialog(_StyledDialog):
         self.form_error.setHidden(True)
 
 
-class ResolvePredictionDialog(_StyledDialog):
+class ResolvePredictionDialog(_EffectiveTimeDialog):
     """Record one deliberate Yes/No terminal outcome."""
 
     prediction_resolved = Signal(object)
@@ -4312,6 +4398,18 @@ class ResolvePredictionDialog(_StyledDialog):
         )
         reviewed.setObjectName("resolveScoringForecast")
         reviewed.setTextFormat(Qt.TextFormat.PlainText)
+
+        contract = getattr(prediction, "forecast_contract", None)
+        self.effective_time = None
+        if contract is not None and not contract.is_legacy:
+            self.effective_time = EffectiveTimeInput(self)
+            explanation.setText(
+                "Record Yes/No and when the outcome became fixed and knowable. Scoring uses that effective time; recorded-at is automatic. Resolution is final, with audited factual corrections available later."
+            )
+            reviewed.setText(
+                f"Current forecast: {prediction.probability_percent}% (revision {prediction.current_revision_sequence}). Trajectory scoring excludes revisions at or after the effective cutoff."
+            )
+            reviewed.setWordWrap(True)
 
         outcome_label = QLabel("Outcome", self)
         self.outcome_yes = QRadioButton("Yes", self)
@@ -4370,6 +4468,8 @@ class ResolvePredictionDialog(_StyledDialog):
         layout.addWidget(title)
         layout.addWidget(explanation)
         layout.addWidget(reviewed)
+        if self.effective_time is not None:
+            layout.addWidget(self.effective_time)
         layout.addSpacing(8)
         layout.addWidget(outcome_label)
         layout.addWidget(outcome_row)
@@ -4413,6 +4513,14 @@ class ResolvePredictionDialog(_StyledDialog):
             self._show_error("Choose Yes or No before resolving this prediction.")
             return
         try:
+            timing = (
+                {}
+                if self.effective_time is None
+                else {
+                    "effective_resolution_at": self.effective_time.value(),
+                    "use_recorded_time": self.effective_time.use_now.isChecked(),
+                }
+            )
             prediction = self._operations.resolve_prediction(
                 self._prediction_id,
                 outcome,
@@ -4420,6 +4528,7 @@ class ResolvePredictionDialog(_StyledDialog):
                 postmortem=self.postmortem_input.toPlainText(),
                 expected_revision_id=self._expected_revision_id,
                 expected_metadata_version=self._expected_metadata_version,
+                **timing,
             )
         except ApplicationError as error:
             self._show_error(str(error))
@@ -4771,6 +4880,12 @@ class PredictionDetailScreen(QWidget):
         scorecard_layout.addWidget(self.scorecard_brier)
         scorecard_layout.addWidget(self.scorecard_guidance)
         scorecard_layout.addWidget(self.scorecard_correction_notice)
+        self.trajectory_diagnostics = _collapsible_history_group(
+            "Score details", "trajectoryDiagnostics", self.scorecard_section
+        )
+        self.trajectory_diagnostics.setTitle("Score details")
+        self.trajectory_diagnostics.setHidden(True)
+        scorecard_layout.addWidget(self.trajectory_diagnostics)
         self.resolution_notes_heading = QLabel(
             "RESOLUTION NOTES",
             self.resolution_section,
@@ -5529,17 +5644,12 @@ class PredictionDetailScreen(QWidget):
         )
         self.contract_context.setText(
             "Trajectory Binary: each standing probability belongs to the initial-to-Deadline "
-            "commitment. Resolution and Trajectory Brier scoring arrive in M48. "
+            "commitment. Scoring uses when the outcome became knowable. "
             "This is probability history, not a score plot."
             if prospective
             else "Legacy Binary: final captured probability Brier scoring. "
             "This is probability history, not a score plot."
         )
-        if prospective:
-            self.resolve_button.setEnabled(False)
-            self.resolve_button.setToolTip(
-                "Trajectory Binary resolution arrives in M48."
-            )
         self.forecast_deadline.setText(
             format_local_deadline(contract.forecast_deadline.instant) + " (permanent)"
             if prospective
@@ -5565,6 +5675,7 @@ class PredictionDetailScreen(QWidget):
     def _show_terminal_information(self, prediction: PredictionSnapshot) -> None:
         """Render latest effective facts plus inspectable append-only history."""
 
+        self._excluded_scoring_revision_ids: frozenset[int] = frozenset()
         resolution = prediction.resolution
         self.resolution_section.setHidden(resolution is None)
         if resolution is not None:
@@ -5593,10 +5704,15 @@ class PredictionDetailScreen(QWidget):
             )
             self.resolution_resolved_at.setText(
                 f"Resolved: {_format_local_timestamp(resolution.resolved_at)}"
+                if effective.effective_resolution_at is None
+                else f"Outcome became knowable: {format_local_deadline(effective.effective_resolution_at)}\nRecorded at: {format_local_deadline(resolution.resolved_at)}"
             )
             self.resolution_scoring_forecast.setText(
                 f"Scoring forecast: {resolution.scoring_probability_percent}% "
                 f"(revision {resolution.scoring_revision_sequence})"
+            )
+            self.resolution_scoring_forecast.setHidden(
+                effective.effective_resolution_at is not None
             )
             self.resolution_notes.setText(effective.resolution_notes or "")
             has_notes = effective.resolution_notes is not None
@@ -5662,12 +5778,64 @@ class PredictionDetailScreen(QWidget):
             self.scorecard_section.setHidden(True)
             self._show_error(f"Scorecard is unavailable. {error}")
             return
+        self.trajectory_diagnostics.setHidden(True)
+        self.scorecard_forecast.setWordWrap(True)
+        self.scorecard_guidance.setWordWrap(True)
+        self.scorecard_brier.setWordWrap(True)
+        if isinstance(scorecard, TrajectoryScorecard):
+            self._excluded_scoring_revision_ids = frozenset(
+                scorecard.excluded_revision_ids
+            )
+            self.scorecard_section.setHidden(False)
+            self.scorecard_outcome.setText(
+                f"Effective outcome: {scorecard.outcome.value.capitalize()}"
+            )
+            self.scorecard_brier.setText(
+                "Not scored"
+                if scorecard.trajectory_brier is None
+                else f"Trajectory Brier: {float(scorecard.trajectory_brier):.4f}"
+            )
+            apply_text_role(self.scorecard_brier, TextRole.FORECAST)
+            self.scorecard_forecast.setText(
+                ""
+                if not scorecard.segments
+                else f"Final eligible forecast: {scorecard.segments[-1].probability_percent}% (revision ID {scorecard.segments[-1].revision_id})"
+            )
+            self.scorecard_guidance.setText(
+                scorecard.unscored_reason
+                or "Lower is better. Standing durations are weighted within the original, fixed forecasting window."
+            )
+            notices = []
+            if scorecard.scoring_facts_corrected:
+                notices.append(
+                    "Scoring uses corrected facts; original values remain in history."
+                )
+            if scorecard.excluded_revision_ids:
+                notices.append(
+                    "Revisions excluded by the effective cutoff remain in history: "
+                    + ", ".join(map(str, scorecard.excluded_revision_ids))
+                )
+            self.scorecard_correction_notice.setText("\n".join(notices))
+            self.scorecard_correction_notice.setHidden(not notices)
+            if not scorecard.unscored_reason:
+                content, layout = _history_content(self.trajectory_diagnostics)
+                _clear_widget_layout(layout)
+                for text in trajectory_diagnostics(scorecard):
+                    label = QLabel(text, content)
+                    label.setWordWrap(True)
+                    _make_selectable(label)
+                    layout.addWidget(label)
+                self.trajectory_diagnostics.setChecked(False)
+                content.setHidden(True)
+                self.trajectory_diagnostics.setHidden(False)
+            return
         if not isinstance(scorecard, BinaryScorecard):
             self.scorecard_section.setHidden(True)
             return
         self.scorecard_forecast.setText(
             f"Scored Yes probability: {scorecard.probability_percent}%"
         )
+        self.scorecard_guidance.setText("Brier score: lower is better.")
         self.scorecard_outcome.setText(
             f"Effective outcome: {scorecard.outcome.value.capitalize()}"
         )
@@ -5728,7 +5896,12 @@ class PredictionDetailScreen(QWidget):
                 )
             else:
                 self.forecast_timeline_layout.addWidget(
-                    _forecast_timeline_widget(event, self.forecast_timeline)
+                    _forecast_timeline_widget(
+                        event,
+                        self.forecast_timeline,
+                        scoring_excluded=event.revision_id
+                        in self._excluded_scoring_revision_ids,
+                    )
                 )
         self.forecast_timeline.setHidden(not events)
         self.timeline_placeholder.setText("No timeline entries are available.")
@@ -5995,6 +6168,18 @@ def _show_binary_resolution_correction_history(
                 ("Outcome", history.original.outcome.value.capitalize()),
                 ("Resolution notes", history.original.resolution_notes),
                 ("Postmortem", history.original.postmortem),
+                *(
+                    (
+                        (
+                            "Effective resolution time",
+                            format_local_deadline(
+                                history.original.effective_resolution_at
+                            ),
+                        ),
+                    )
+                    if history.original.effective_resolution_at is not None
+                    else ()
+                ),
             ),
             "binaryResolutionOriginal",
             content,
@@ -6099,6 +6284,14 @@ def _binary_resolution_correction_frame(
     parent: QWidget,
 ) -> QFrame:
     values = {
+        "effective_resolution_at": (
+            None
+            if correction.old_effective_resolution_at is None
+            else format_local_deadline(correction.old_effective_resolution_at),
+            None
+            if correction.new_effective_resolution_at is None
+            else format_local_deadline(correction.new_effective_resolution_at),
+        ),
         "outcome": (
             correction.old_outcome.value.capitalize(),
             correction.new_outcome.value.capitalize(),
@@ -6309,9 +6502,9 @@ def _confirm_terminal_correction(
     if score_affecting:
         title = "Confirm score-affecting correction"
         message = (
-            "This correction changes the recorded outcome and recomputes scoring "
-            "and calibration from that effective value. The original outcome and "
-            "scoring ForecastRevision remain in history. Save this correction?"
+            "This correction changes an outcome or effective time and recomputes scoring "
+            "from the corrected facts. Original terminal facts and every forecast "
+            "remain in history. Save this correction?"
         )
     else:
         title = "Confirm terminal correction"
@@ -6340,6 +6533,7 @@ def _terminal_history_value(value: object | None) -> str:
 
 def _terminal_field_label(field_name: str) -> str:
     return {
+        "effective_resolution_at": "Effective resolution time",
         "outcome": "Outcome",
         "actual_value": "Actual value",
         "resolution_notes": "Resolution notes",
@@ -6393,6 +6587,8 @@ def _definition_change_widget(
 def _forecast_timeline_widget(
     revision: ForecastTimelineSnapshot,
     parent: QWidget,
+    *,
+    scoring_excluded: bool = False,
 ) -> QWidget:
     frame = QFrame(parent)
     frame.setObjectName(f"forecastRevision{revision.revision_id}")
@@ -6422,6 +6618,16 @@ def _forecast_timeline_widget(
     apply_text_role(probability, TextRole.LABEL)
     _make_selectable(probability)
     layout.addWidget(probability)
+
+    if scoring_excluded:
+        notice = QLabel(
+            "At or after scoring cutoff — preserved in history, not scored.", frame
+        )
+        notice.setObjectName(f"forecastRevisionScoringExclusion{revision.revision_id}")
+        notice.setWordWrap(True)
+        apply_text_role(notice, TextRole.SECONDARY)
+        _make_selectable(notice)
+        layout.addWidget(notice)
 
     if revision.rationale:
         rationale = QLabel(revision.rationale, frame)

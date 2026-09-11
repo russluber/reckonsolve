@@ -11,6 +11,7 @@ from reckonsolve.domain.predictions import BinaryOutcome, FixedPrecisionValue
 
 from .numeric import score_numeric_observation
 from .scoring import brier_score
+from .trajectory import TrajectoryScorecard
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +47,7 @@ class NumericScorecard:
     actual_value_corrected: bool
 
 
-PredictionScorecard = BinaryScorecard | NumericScorecard
+PredictionScorecard = BinaryScorecard | NumericScorecard | TrajectoryScorecard
 
 
 def binary_scorecard(observation: ScoringObservation) -> BinaryScorecard:

@@ -9,9 +9,17 @@ from reckonsolve.domain.analytics import (
     NumericScoringObservation,
     ScoringObservation,
 )
-from reckonsolve.domain.predictions import BinaryOutcome, FixedPrecisionValue
+from reckonsolve.domain.forecast_contracts import ForecastContract
+from reckonsolve.domain.predictions import (
+    BinaryOutcome,
+    BinaryResolutionHistory,
+    FixedPrecisionValue,
+    ForecastRevision,
+)
 
 from .database import Database
+from .forecast_contracts import select_supported_contract
+from .terminal_history import _select_binary_resolution_history
 
 
 class AnalyticsRepository:
@@ -25,6 +33,43 @@ class AnalyticsRepository:
 
         with self._database.transaction() as connection:
             return _load_binary_source(connection)
+
+    def get_trajectory_source(
+        self, prediction_id: int
+    ) -> (
+        tuple[ForecastContract, tuple[ForecastRevision, ...], BinaryResolutionHistory]
+        | None
+    ):
+        """One consistent snapshot of a resolved prospective Binary and all revisions."""
+        with self._database.transaction() as connection:
+            if (
+                connection.execute(
+                    "SELECT 1 FROM predictions WHERE id = ? AND prediction_type = 'binary' AND status = 'resolved'",
+                    (prediction_id,),
+                ).fetchone()
+                is None
+            ):
+                return None
+            contract = select_supported_contract(connection, prediction_id)
+            if contract is None or contract.is_legacy:
+                return None
+            history = _select_binary_resolution_history(connection, prediction_id)
+            assert history is not None
+            revisions = tuple(
+                ForecastRevision(
+                    int(row["id"]),
+                    prediction_id,
+                    int(row["probability_percent"]),
+                    int(row["sequence"]),
+                    parse_utc(row["created_at"]),
+                    row["rationale"],
+                )
+                for row in connection.execute(
+                    "SELECT * FROM forecast_revisions WHERE prediction_id = ? ORDER BY sequence",
+                    (prediction_id,),
+                )
+            )
+            return contract, revisions, history
 
     def get_numeric_source(self) -> NumericAnalyticsSource:
         """Return one captured scoring interval for every Numeric Resolution."""
@@ -99,7 +144,19 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
         ORDER BY tag.normalized_name, tag.id, resolution.prediction_id
         """
     ).fetchall()
-    tags_by_prediction, available_tags = _group_tags(tag_rows)
+    legacy_rows = tuple(
+        row
+        for row in rows
+        if (
+            contract := select_supported_contract(connection, int(row["prediction_id"]))
+        )
+        is None
+        or contract.is_legacy
+    )
+    legacy_ids = {int(row["prediction_id"]) for row in legacy_rows}
+    tags_by_prediction, available_tags = _group_tags(
+        [row for row in tag_rows if int(row["prediction_id"]) in legacy_ids]
+    )
     return AnalyticsSource(
         observations=tuple(
             ScoringObservation(
@@ -115,7 +172,7 @@ def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
                 initial_revision_id=int(row["initial_revision_id"]),
                 initial_probability_percent=int(row["initial_probability_percent"]),
             )
-            for row in rows
+            for row in legacy_rows
         ),
         available_tags=available_tags,
     )

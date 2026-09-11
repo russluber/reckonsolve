@@ -1,16 +1,18 @@
 """Interactive active-forecast mutation workflows for the CLI."""
 
+from datetime import datetime
+
 from reckonsolve.application.errors import (
     ForecastReviewNotAllowedError,
     ForecastRevisionNotAllowedError,
     JournalEntryNotAllowedError,
     LifecycleTransitionNotAllowedError,
     PredictionDeletionNotAllowedError,
-    ValidationError,
 )
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli_creation import CliInputCancelled, PromptSession
 from reckonsolve.cli_text import terminal_text
+from reckonsolve.domain.forecast_contracts import EffectiveResolutionTime
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     FixedPrecisionValue,
@@ -154,24 +156,51 @@ def resolve_interactively(
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise LifecycleTransitionNotAllowedError("resolved", prediction.status)
-    if (
+    prospective = (
         isinstance(prediction, PredictionDetail)
         and prediction.forecast_contract
         and not prediction.forecast_contract.is_legacy
-    ):
-        raise ValidationError(
-            "Trajectory Binary resolution arrives in M48.", field="prediction_id"
-        )
+    )
 
     print(
-        "Resolution records a terminal outcome and captures this forecast for "
-        "scoring. It cannot be reopened or changed.",
+        "Resolution records a terminal outcome. It cannot be reopened; factual "
+        "corrections remain available through the desktop with an audit record.",
         file=session.output,
     )
+    timing: dict[str, datetime | bool] = {}
+    if prospective:
+        print(
+            "Trajectory Brier uses when the outcome first became fixed and "
+            "ascertainable, not when you happened to record it. Forecasts at "
+            "or after that cutoff stay in history but do not score.",
+            file=session.output,
+        )
     if isinstance(prediction, NumericPrediction):
         actual_value = _ask_exact_actual_value(prediction, session)
     else:
         outcome = _ask_binary_outcome(session)
+        if prospective:
+            while True:
+                raw = session.ask(
+                    "When did the outcome become knowable? [now] or exact ISO "
+                    "time with UTC offset: "
+                ).strip()
+                if not raw or raw.casefold() == "now":
+                    timing = {"use_recorded_time": True}
+                    break
+                try:
+                    timing = {
+                        "effective_resolution_at": EffectiveResolutionTime(
+                            datetime.fromisoformat(raw)
+                        ).instant
+                    }
+                    break
+                except ValueError:
+                    print(
+                        "Enter now or an exact time with an offset, such as "
+                        "2026-09-10T14:30:00-07:00.",
+                        file=session.errors,
+                    )
     resolution_notes = _optional_line(
         session.ask("Resolution notes (optional, one line): ")
     )
@@ -200,6 +229,7 @@ def resolve_interactively(
             postmortem=postmortem,
             expected_revision_id=prediction.current_revision_id,
             expected_metadata_version=prediction.metadata_version,
+            **timing,
         )
         outcome_summary = outcome.value.capitalize()
 

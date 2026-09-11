@@ -182,6 +182,15 @@ def _contract_table_exists(connection: sqlite3.Connection) -> bool:
     )
 
 
+def binary_corrections_relation(connection: sqlite3.Connection) -> str:
+    """Shared terminal text/history only; scoring still dispatches by cohort."""
+    if connection.execute(
+        "SELECT 1 FROM sqlite_schema WHERE type = 'view' AND name = 'binary_resolution_history_rows'"
+    ).fetchone():
+        return "binary_resolution_history_rows"
+    return "resolution_corrections"
+
+
 def select_supported_contract(
     connection: sqlite3.Connection, prediction_id: int
 ) -> ForecastContract | None:
