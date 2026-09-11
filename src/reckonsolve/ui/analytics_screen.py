@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from fractions import Fraction
 from typing import Protocol
 
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt
@@ -33,6 +34,7 @@ from reckonsolve.analytics import (
     NumericUnitSummary,
     NumericUnitUpdateSummary,
     NumericUpdateAnalyticsSnapshot,
+    TrajectoryAnalyticsSnapshot,
 )
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.predictions import PredictionType
@@ -287,10 +289,9 @@ class AnalyticsScreen(QWidget):
 
         header = PageHeader(
             "Analytics",
-            "Legacy Binary and Numeric interval analytics use one captured final "
-            "forecast per resolved Prediction; Invalid and unresolved predictions "
-            "are excluded. Trajectory Binary scores are currently in Prediction Detail "
-            "and CLI show; their aggregate analytics arrive in M49.",
+            "Trajectory Binary, legacy Binary, and Numeric interval scores remain "
+            "separate. Every eligible resolved Prediction contributes once; Invalid "
+            "and unresolved Predictions are excluded.",
             title_object_name="analyticsScreenTitle",
             supporting_object_name="analyticsIntroduction",
             parent=self,
@@ -419,10 +420,14 @@ class AnalyticsScreen(QWidget):
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(int(Spacing.SECTION))
+        self.trajectory_summary = self._create_trajectory_summary(content)
+        self.trajectory_content = self._create_trajectory_content(content)
         self.binary_content = self._create_binary_content(content)
         self.numeric_content = self._create_numeric_content(content)
         self.binary_update_content = self._create_binary_update_content(content)
         self.numeric_update_content = self._create_numeric_update_content(content)
+        content_layout.addWidget(self.trajectory_summary)
+        content_layout.addWidget(self.trajectory_content)
         content_layout.addWidget(self.summary_row)
         content_layout.addWidget(self.binary_content)
         content_layout.addWidget(self.numeric_content)
@@ -461,8 +466,8 @@ class AnalyticsScreen(QWidget):
 
     def _create_binary_summary(self) -> ContentPanel:
         summary = ContentPanel(
-            "Binary forecasts — Brier score",
-            "One final captured probability per resolved Binary Prediction.",
+            "Legacy Binary forecasts — final Brier",
+            "One captured final probability per resolved legacy Binary Prediction.",
             parent=self,
         )
         summary.setObjectName("analyticsBrierSummary")
@@ -497,6 +502,118 @@ class AnalyticsScreen(QWidget):
         summary_layout.addStretch()
         summary.setHidden(True)
         return summary
+
+    def _create_trajectory_summary(self, parent: QWidget) -> ContentPanel:
+        summary = ContentPanel(
+            "Trajectory Binary forecasts",
+            "Time is weighted inside each fixed forecasting window; every eligible "
+            "Prediction still receives one equal vote in this aggregate.",
+            parent=parent,
+        )
+        summary.setObjectName("trajectoryAnalyticsSummary")
+        count_card, self.trajectory_scored_count = _new_update_metric(
+            "Eligible resolved Predictions",
+            value_object_name="trajectoryAnalyticsScoredCount",
+            parent=summary.body,
+        )
+        mean_card, self.mean_trajectory_brier = _new_update_metric(
+            "Mean Trajectory Brier",
+            value_object_name="analyticsMeanTrajectoryBrier",
+            parent=summary.body,
+        )
+        headline = _ResponsiveMetricRow(
+            (count_card, mean_card),
+            stack_below=440,
+            object_name="trajectoryHeadlineMetrics",
+            parent=summary.body,
+        )
+        early_card, self.trajectory_early_count = _new_update_metric(
+            "Resolved before deadline",
+            value_object_name="trajectoryEarlyResolutionCount",
+            parent=summary.body,
+        )
+        deadline_card, self.trajectory_deadline_count = _new_update_metric(
+            "Reached deadline",
+            value_object_name="trajectoryReachedDeadlineCount",
+            parent=summary.body,
+        )
+        active_card, self.trajectory_active_fraction = _new_update_metric(
+            "Mean active forecasting",
+            value_object_name="trajectoryMeanActiveFraction",
+            parent=summary.body,
+        )
+        timing = _ResponsiveMetricRow(
+            (early_card, deadline_card, active_card),
+            stack_below=720,
+            object_name="trajectoryTimingMetrics",
+            parent=summary.body,
+        )
+        initial_card, self.trajectory_initial_brier = _new_update_metric(
+            "Mean initial Brier",
+            value_object_name="trajectoryMeanInitialBrier",
+            parent=summary.body,
+        )
+        final_card, self.trajectory_final_brier = _new_update_metric(
+            "Mean final Brier",
+            value_object_name="trajectoryMeanFinalBrier",
+            parent=summary.body,
+        )
+        hold_card, self.trajectory_hold_brier = _new_update_metric(
+            "Mean hold-initial trajectory",
+            value_object_name="trajectoryMeanHoldInitialBrier",
+            parent=summary.body,
+        )
+        gain_card, self.trajectory_updating_gain = _new_update_metric(
+            "Mean Updating Gain",
+            value_object_name="trajectoryMeanUpdatingGain",
+            parent=summary.body,
+        )
+        diagnostics = _ResponsiveMetricRow(
+            (initial_card, final_card, hold_card, gain_card),
+            stack_below=980,
+            object_name="trajectoryDiagnosticMetrics",
+            parent=summary.body,
+        )
+        self.trajectory_guidance = QLabel(summary.body)
+        self.trajectory_guidance.setObjectName("trajectoryAnalyticsGuidance")
+        self.trajectory_guidance.setTextFormat(Qt.TextFormat.PlainText)
+        self.trajectory_guidance.setWordWrap(True)
+        apply_text_role(self.trajectory_guidance, TextRole.SECONDARY)
+        summary.body_layout.addWidget(headline)
+        summary.body_layout.addWidget(timing)
+        summary.body_layout.addWidget(diagnostics)
+        summary.body_layout.addWidget(self.trajectory_guidance)
+        return summary
+
+    def _create_trajectory_content(self, parent: QWidget) -> ContentPanel:
+        section = ContentPanel(
+            "Trajectory Binary final-probability calibration",
+            "This diagnostic uses one final standing probability strictly before "
+            "resolution or deadline. It is not trajectory calibration, and neutral "
+            "truncation never creates a 50% observation.",
+            parent=parent,
+        )
+        section.setObjectName("trajectoryCalibrationSection")
+        self.trajectory_calibration_chart = CalibrationChart(section.body)
+        self.trajectory_calibration_chart.setObjectName(
+            "trajectoryFinalCalibrationChart"
+        )
+        self.trajectory_calibration_table = _new_bin_table(
+            section.body,
+            object_name="trajectoryFinalCalibrationBinTable",
+            accessible_name=(
+                "Trajectory Binary final probability bins, counts, forecasts, and outcomes"
+            ),
+            headers=("Probability bin", "Count", "Mean forecast", "Observed Yes"),
+        )
+        comparison = _ResponsiveChartTable(
+            self.trajectory_calibration_chart,
+            self.trajectory_calibration_table,
+            object_name="trajectoryFinalCalibrationComparison",
+            parent=section.body,
+        )
+        section.body_layout.addWidget(comparison)
+        return section
 
     def _create_numeric_summary(self) -> ContentPanel:
         summary = ContentPanel(
@@ -572,8 +689,8 @@ class AnalyticsScreen(QWidget):
         section_layout.setSpacing(int(Spacing.SECTION))
 
         calibration_group = ContentPanel(
-            "Calibration / reliability",
-            "Calibration compares forecast probability with the observed Yes rate; "
+            "Legacy Binary calibration / reliability",
+            "Final-revision calibration compares forecast probability with the observed Yes rate; "
             "the diagonal is perfect, and the table repeats the chart values.",
             parent=section,
         )
@@ -595,7 +712,7 @@ class AnalyticsScreen(QWidget):
         calibration_layout.addWidget(calibration_comparison)
 
         trend_group = ContentPanel(
-            "Cumulative mean Brier by resolution time",
+            "Legacy cumulative mean final Brier by resolution time",
             "A descriptive running average, not proof that forecasting skill changed.",
             parent=section,
         )
@@ -654,7 +771,7 @@ class AnalyticsScreen(QWidget):
 
     def _create_binary_update_content(self, parent: QWidget) -> ContentPanel:
         section = ContentPanel(
-            "Binary retrospective update feedback",
+            "Legacy Binary retrospective update feedback",
             "One initial/final pair per revised-and-resolved Binary Prediction.",
             parent=parent,
         )
@@ -873,6 +990,8 @@ class AnalyticsScreen(QWidget):
         except ApplicationError as error:
             if self._loaded_snapshot is None:
                 message = f"Analytics unavailable. {error}"
+                self.trajectory_summary.setHidden(True)
+                self.trajectory_content.setHidden(True)
                 self.summary.setHidden(True)
                 self.numeric_summary.setHidden(True)
                 self.summary_row.setHidden(True)
@@ -904,6 +1023,13 @@ class AnalyticsScreen(QWidget):
     def _render(self, snapshot: ForecastAnalyticsSnapshot) -> None:
         show_binary = snapshot.selected_type in (None, PredictionType.BINARY)
         show_numeric = snapshot.selected_type in (None, PredictionType.NUMERIC)
+        show_trajectory = (
+            show_binary and snapshot.trajectory_binary.resolved_candidate_count > 0
+        )
+        self.trajectory_summary.setHidden(not show_trajectory)
+        self.trajectory_content.setHidden(
+            not show_binary or snapshot.trajectory_binary.scored_prediction_count == 0
+        )
         self.summary.setHidden(not show_binary)
         self.numeric_summary.setHidden(not show_numeric)
         self.binary_content.setHidden(not show_binary)
@@ -911,26 +1037,107 @@ class AnalyticsScreen(QWidget):
         self.binary_update_content.setHidden(not show_binary)
         self.numeric_update_content.setHidden(not show_numeric)
         if show_binary:
+            self._render_trajectory(snapshot.trajectory_binary)
             self._render_binary(snapshot.binary)
             self._render_binary_updates(snapshot.binary_updates)
         if show_numeric:
             self._render_numeric(snapshot.numeric)
             self._render_numeric_updates(snapshot.numeric_updates)
 
-        count = (snapshot.binary.scored_prediction_count if show_binary else 0) + (
-            snapshot.numeric.scored_prediction_count if show_numeric else 0
+        legacy_count = (
+            snapshot.binary.scored_prediction_count if show_binary else 0
+        ) + (snapshot.numeric.scored_prediction_count if show_numeric else 0)
+        trajectory_count = (
+            snapshot.trajectory_binary.resolved_candidate_count if show_binary else 0
         )
-        if count == 0:
+        if legacy_count == 0 and trajectory_count == 0:
             self.summary_row.setHidden(True)
             self.scroll_area.setHidden(True)
             self.empty_label.setText(self._empty_message(snapshot.selected_type))
             self.empty_label.setHidden(False)
             self.empty_region.setHidden(False)
         else:
-            self.summary_row.setHidden(False)
+            self.summary_row.setHidden(legacy_count == 0)
             self.empty_label.setHidden(True)
             self.empty_region.setHidden(True)
             self.scroll_area.setHidden(False)
+
+    def _render_trajectory(self, snapshot: TrajectoryAnalyticsSnapshot) -> None:
+        count = snapshot.scored_prediction_count
+        self.trajectory_scored_count.setText(str(count))
+        self.mean_trajectory_brier.setText(
+            _optional_fraction(snapshot.mean_trajectory_brier)
+        )
+        self.trajectory_early_count.setText(str(snapshot.early_resolution_count))
+        self.trajectory_deadline_count.setText(str(snapshot.reached_deadline_count))
+        self.trajectory_active_fraction.setText(
+            _optional_fraction_percent(snapshot.mean_active_forecast_fraction)
+        )
+        self.trajectory_initial_brier.setText(
+            _optional_fraction(snapshot.mean_initial_brier)
+        )
+        self.trajectory_final_brier.setText(
+            _optional_fraction(snapshot.mean_final_brier)
+        )
+        self.trajectory_hold_brier.setText(
+            _optional_fraction(snapshot.mean_hold_initial_brier)
+        )
+        self.trajectory_updating_gain.setText(
+            _optional_signed_fraction(snapshot.mean_updating_gain)
+        )
+        for label, accessible_name in (
+            (self.trajectory_scored_count, "Eligible trajectory Binary Predictions"),
+            (self.mean_trajectory_brier, "Mean Trajectory Brier"),
+            (self.trajectory_early_count, "Resolved before forecast deadline"),
+            (self.trajectory_deadline_count, "Reached forecast deadline"),
+            (self.trajectory_active_fraction, "Mean active forecasting fraction"),
+            (self.trajectory_initial_brier, "Mean initial Brier"),
+            (self.trajectory_final_brier, "Mean final Brier"),
+            (self.trajectory_hold_brier, "Mean hold-initial trajectory Brier"),
+            (self.trajectory_updating_gain, "Mean Updating Gain"),
+        ):
+            label.setAccessibleName(f"{accessible_name}: {label.text()}")
+        sparse = (
+            "No eligible scores are available."
+            if count == 0
+            else (
+                "One Prediction is an anecdote, not a stable performance estimate."
+                if count == 1
+                else (
+                    "This is still a small sample; read the aggregate cautiously."
+                    if count < 5
+                    else "Read calibration bins cautiously when their counts are small."
+                )
+            )
+        )
+        unscored = (
+            " "
+            f"{snapshot.unscored_prediction_count} resolved Prediction(s) are unscored "
+            "because the outcome was fixed at or before the initial forecast."
+            if snapshot.unscored_prediction_count
+            else ""
+        )
+        self.trajectory_guidance.setText(
+            "Lower Trajectory Brier is better. Updating Gain compares the recorded "
+            "path with holding the initial probability: "
+            f"{snapshot.positive_updating_gain_count} helped, "
+            f"{snapshot.equal_updating_gain_count} tied, and "
+            f"{snapshot.negative_updating_gain_count} hurt mechanically. "
+            "This hindsight comparison does not prove that updating caused skill. "
+            f"{sparse}{unscored}"
+        )
+        self.trajectory_calibration_chart.set_bins(snapshot.final_calibration_bins)
+        for row, calibration_bin in enumerate(snapshot.final_calibration_bins):
+            _set_table_row(
+                self.trajectory_calibration_table,
+                row,
+                (
+                    calibration_bin.label,
+                    str(calibration_bin.count),
+                    _optional_percent(calibration_bin.mean_forecast_percent),
+                    _optional_percent(calibration_bin.observed_yes_percent),
+                ),
+            )
 
     def _render_binary(self, snapshot: AnalyticsSnapshot) -> None:
         self.scored_count.setText(str(snapshot.scored_prediction_count))
@@ -1298,6 +1505,18 @@ def _optional_brier(value: float | None) -> str:
 
 def _optional_signed_float(value: float | None) -> str:
     return "Not available" if value is None else f"{value:+.3f}"
+
+
+def _optional_fraction(value: Fraction | None) -> str:
+    return "Not available" if value is None else f"{float(value):.3f}"
+
+
+def _optional_signed_fraction(value: Fraction | None) -> str:
+    return "Not available" if value is None else f"{float(value):+.3f}"
+
+
+def _optional_fraction_percent(value: Fraction | None) -> str:
+    return "Not available" if value is None else _format_percent(float(value) * 100)
 
 
 def _format_signed_decimal(value: Decimal) -> str:

@@ -2,11 +2,19 @@
 
 from dataclasses import dataclass
 
-from reckonsolve.domain.analytics import AnalyticsSource, NumericAnalyticsSource
+from reckonsolve.domain.analytics import (
+    AnalyticsSource,
+    NumericAnalyticsSource,
+    TrajectoryAnalyticsSource,
+)
 from reckonsolve.domain.predictions import PredictionType
 
 from .numeric import NumericAnalyticsSnapshot, summarize_numeric_analytics
 from .scoring import AnalyticsSnapshot, summarize_analytics
+from .trajectory_aggregate import (
+    TrajectoryAnalyticsSnapshot,
+    summarize_trajectory_analytics,
+)
 from .updates import (
     BinaryUpdateAnalyticsSnapshot,
     NumericUpdateAnalyticsSnapshot,
@@ -21,6 +29,7 @@ class ForecastAnalyticsSnapshot:
 
     binary: AnalyticsSnapshot
     numeric: NumericAnalyticsSnapshot
+    trajectory_binary: TrajectoryAnalyticsSnapshot
     binary_updates: BinaryUpdateAnalyticsSnapshot
     numeric_updates: NumericUpdateAnalyticsSnapshot
     available_tags: tuple[str, ...]
@@ -34,6 +43,7 @@ def summarize_forecast_analytics(
     binary_source: AnalyticsSource,
     numeric_source: NumericAnalyticsSource,
     *,
+    trajectory_source: TrajectoryAnalyticsSource | None = None,
     prediction_type: PredictionType | None = None,
     tag: str | None = None,
     unit: str | None = None,
@@ -47,6 +57,14 @@ def summarize_forecast_analytics(
 
     include_binary = prediction_type in (None, PredictionType.BINARY)
     include_numeric = prediction_type in (None, PredictionType.NUMERIC)
+    trajectory = summarize_trajectory_analytics(
+        (
+            trajectory_source
+            if include_binary and trajectory_source is not None
+            else TrajectoryAnalyticsSource(records=())
+        ),
+        tag=tag,
+    )
     binary = summarize_analytics(
         binary_source
         if include_binary
@@ -81,12 +99,15 @@ def summarize_forecast_analytics(
         tag=tag,
         unit=unit,
     )
-    tag_sources = (binary_source.available_tags if include_binary else ()) + (
-        numeric_source.available_tags if include_numeric else ()
+    tag_sources = (
+        (binary_source.available_tags if include_binary else ())
+        + (numeric_source.available_tags if include_numeric else ())
+        + trajectory.available_tags
     )
     return ForecastAnalyticsSnapshot(
         binary=binary,
         numeric=numeric,
+        trajectory_binary=trajectory,
         binary_updates=binary_updates,
         numeric_updates=numeric_updates,
         available_tags=_unique_labels(tag_sources),

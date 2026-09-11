@@ -8,6 +8,8 @@ from reckonsolve.domain.analytics import (
     NumericAnalyticsSource,
     NumericScoringObservation,
     ScoringObservation,
+    TrajectoryAnalyticsSource,
+    TrajectoryScoringRecord,
 )
 from reckonsolve.domain.forecast_contracts import ForecastContract
 from reckonsolve.domain.predictions import (
@@ -82,6 +84,18 @@ class AnalyticsRepository:
 
         with self._database.transaction() as connection:
             return _load_binary_source(connection), _load_numeric_source(connection)
+
+    def get_forecast_sources(
+        self,
+    ) -> tuple[AnalyticsSource, NumericAnalyticsSource, TrajectoryAnalyticsSource]:
+        """Read every aggregate cohort from one consistent SQLite snapshot."""
+
+        with self._database.transaction() as connection:
+            return (
+                _load_binary_source(connection),
+                _load_numeric_source(connection),
+                _load_trajectory_source(connection),
+            )
 
 
 def _load_binary_source(connection: sqlite3.Connection) -> AnalyticsSource:
@@ -264,6 +278,88 @@ def _load_numeric_source(connection: sqlite3.Connection) -> NumericAnalyticsSour
         available_tags=available_tags,
         available_units=units,
     )
+
+
+def _load_trajectory_source(
+    connection: sqlite3.Connection,
+) -> TrajectoryAnalyticsSource:
+    if (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'prediction_forecast_contracts'"
+        ).fetchone()
+        is None
+    ):
+        return TrajectoryAnalyticsSource(records=())
+    rows = connection.execute(
+        """
+        SELECT prediction.id AS prediction_id, prediction.question
+        FROM predictions AS prediction
+        JOIN prediction_forecast_contracts AS contract
+            ON contract.prediction_id = prediction.id
+            AND contract.forecast_model = 'binary-trajectory-v1'
+            AND contract.scoring_contract = 'binary-trajectory-brier-v1'
+        JOIN resolutions AS resolution
+            ON resolution.prediction_id = prediction.id
+        WHERE prediction.prediction_type = 'binary'
+            AND prediction.status = 'resolved'
+        ORDER BY resolution.resolved_at, resolution.id
+        """
+    ).fetchall()
+    prediction_ids = tuple(int(row["prediction_id"]) for row in rows)
+    if not prediction_ids:
+        return TrajectoryAnalyticsSource(records=())
+    placeholders = ", ".join("?" for _ in prediction_ids)
+    revision_rows = connection.execute(
+        f"""
+        SELECT *
+        FROM forecast_revisions
+        WHERE prediction_id IN ({placeholders})
+        ORDER BY prediction_id, sequence
+        """,
+        prediction_ids,
+    ).fetchall()
+    tag_rows = connection.execute(
+        f"""
+        SELECT prediction_tag.prediction_id, tag.display_name,
+               tag.normalized_name, tag.id AS tag_id
+        FROM prediction_tags AS prediction_tag
+        JOIN tags AS tag ON tag.id = prediction_tag.tag_id
+        WHERE prediction_tag.prediction_id IN ({placeholders})
+        ORDER BY tag.normalized_name, tag.id, prediction_tag.prediction_id
+        """,
+        prediction_ids,
+    ).fetchall()
+    revisions_by_prediction: dict[int, list[ForecastRevision]] = {}
+    for row in revision_rows:
+        prediction_id = int(row["prediction_id"])
+        revisions_by_prediction.setdefault(prediction_id, []).append(
+            ForecastRevision(
+                int(row["id"]),
+                prediction_id,
+                int(row["probability_percent"]),
+                int(row["sequence"]),
+                parse_utc(str(row["created_at"])),
+                row["rationale"],
+            )
+        )
+    tags_by_prediction, _available_tags = _group_tags(list(tag_rows))
+    records: list[TrajectoryScoringRecord] = []
+    for row in rows:
+        prediction_id = int(row["prediction_id"])
+        contract = select_supported_contract(connection, prediction_id)
+        history = _select_binary_resolution_history(connection, prediction_id)
+        assert contract is not None and not contract.is_legacy and history is not None
+        records.append(
+            TrajectoryScoringRecord(
+                question=str(row["question"]),
+                contract=contract,
+                revisions=tuple(revisions_by_prediction[prediction_id]),
+                resolution_history=history,
+                tags=tuple(tags_by_prediction.get(prediction_id, ())),
+            )
+        )
+    return TrajectoryAnalyticsSource(records=tuple(records))
 
 
 def _group_tags(

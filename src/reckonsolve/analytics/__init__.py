@@ -5,6 +5,8 @@ from reckonsolve.domain.analytics import (
     NumericAnalyticsSource,
     NumericScoringObservation,
     ScoringObservation,
+    TrajectoryAnalyticsSource,
+    TrajectoryScoringRecord,
 )
 
 from .numeric import (
@@ -30,6 +32,11 @@ from .scoring import (
     ScoredPrediction,
     brier_score,
     summarize_analytics,
+)
+from .trajectory_aggregate import (
+    TrajectoryAnalyticsSnapshot,
+    TrajectoryScoredPrediction,
+    summarize_trajectory_analytics,
 )
 from .updates import (
     BinaryUpdateAnalyticsSnapshot,
@@ -63,6 +70,10 @@ __all__ = [
     "PredictionScorecard",
     "ScoredPrediction",
     "ScoringObservation",
+    "TrajectoryAnalyticsSnapshot",
+    "TrajectoryAnalyticsSource",
+    "TrajectoryScoredPrediction",
+    "TrajectoryScoringRecord",
     "binary_scorecard",
     "brier_score",
     "numeric_scorecard",
@@ -72,4 +83,5 @@ __all__ = [
     "summarize_forecast_analytics",
     "summarize_numeric_analytics",
     "summarize_numeric_updates",
+    "summarize_trajectory_analytics",
 ]

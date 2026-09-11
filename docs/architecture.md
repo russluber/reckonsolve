@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 48
-Last reviewed: 2026-09-10
+Status: v0.6 source release complete; v0.7 implemented through Milestone 49
+Last reviewed: 2026-09-11
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7 with immutable model/scoring identities and exact-time domain values, backfilling all existing records as legacy without invented times or forecasts. M47 switches new Binary creation to its exact-Deadline trajectory contract. M48 enables its Resolution, effective-time correction chain, and pure individual trajectory scorecard, with schema version 17 integrating corrected text into search and Postmortem completion. Numeric creation remains interval-v1; separate aggregate trajectory analytics and the five-quantile Numeric workflow remain later authorized milestones.
+Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7 with immutable model/scoring identities and exact-time domain values, backfilling all existing records as legacy without invented times or forecasts. M47 switches new Binary creation to its exact-Deadline trajectory contract. M48 enables its Resolution, effective-time correction chain, and pure individual trajectory scorecard, with schema version 17 integrating corrected text into search and Postmortem completion. M49 adds separate, equal-Prediction trajectory aggregates and final-probability calibration without changing schema 17. Numeric creation remains interval-v1; the five-quantile Numeric workflow remains a later authorized milestone.
 
 | Area | Current state |
 |---|---|
@@ -22,7 +22,7 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
 | Schema | Version 17 adds shared read-only Binary correction text, trajectory dirty-search tracking, and corrected Postmortem guards; version 16 retains immutable model/scoring identities, exact Deadline/Resolution storage, and type-specific correction chains, with every pre-v0.7 record explicitly legacy; versions 14 and 15 retain FTS5 and dynamic Saved Views |
 | Domain and application operations | Complete legacy behavior plus stored-cohort dispatch, exact-Deadline Binary creation/revision/Review, immutable recorded-at with explicit effective Resolution time, and audited outcome/text/time corrections; Numeric public creation remains interval-v1 |
-| Analytics | Legacy aggregates retain captured-final, correction-aware scoring and paired feedback; new Binary individual scorecards derive exact standing segments and Fraction-valued Trajectory Brier from the immutable revision path and effective cutoff. No new-cohort record enters legacy aggregate analytics. Qt and CLI only render these derived results |
+| Analytics | Legacy aggregates retain captured-final, correction-aware scoring and paired feedback. Trajectory Binary individual and aggregate scorecards derive exact standing segments and Fraction-valued metrics from immutable revision paths and effective cutoffs; every eligible Prediction receives one aggregate vote regardless of duration. Final-probability calibration is a separate diagnostic, and no new-cohort record enters legacy analytics. Qt and CLI only render these derived results |
 | Automated tests | Complete v0.1-v0.6 coverage plus M46 pure contract/time boundary tests, schema-15 migration and forced-rollback coverage, unchanged legacy read/analytics comparisons, creation-era identity assignment, database identity guards, and prospective append-only correction-chain constraints |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and relocated-smoke validated across local styles/icons, safe shell defaults, expanded/compact navigation, primary screens, both Detail types, keyboard navigation, responsive sizes, the v0.5 data boundary, search, backup, and GUI restart; original icon artwork, installer, signing, installer-created shortcuts, uninstall, updates, and public distribution remain deferred |
 
@@ -145,6 +145,17 @@ The analytics boundary contains:
 - inclusive Numeric interval containment and fixed confidence-bin aggregation;
 - Numeric median absolute error, interval width, and proper interval score; and
 - an exact-unit guard that prevents raw quantities from being averaged across unlike units.
+
+Trajectory Binary aggregation receives complete contract, revision, tag, and
+effective terminal-history records from one read transaction. It reuses the pure
+individual trajectory scorer, excludes no-score records from every score and
+calibration observation, and averages the resulting Prediction-level Fractions
+with one equal contribution per eligible Prediction. Resolution-before-Deadline
+counts, mean Active Forecast Fraction, Initial/Final/Hold-initial means, and
+Updating Gain direction counts remain diagnostics. A separate ten-bin reliability
+view uses each Prediction's final standing probability strictly before its
+effective cutoff; it is never called trajectory calibration and contains no
+synthetic neutral-truncation observation.
 
 Analytics chart code consumes analytics results; it does not decide which forecasts count. The Prediction Detail probability-history chart is separate: it consumes every immutable revision for one Prediction through the existing application query and performs presentation-only projection.
 
@@ -688,3 +699,24 @@ Tests cover prior-version migration/rollback, exact-duration and offset cases,
 correction reselection, no-score transitions, stale context, projection failure,
 GUI/CLI parity, unchanged hidden precision, and backup/restart. See
 [ADR 0017](decisions/0017-derive-trajectory-scores-from-terminal-facts.md).
+
+### M49: separate trajectory Binary aggregate analytics
+
+`AnalyticsRepository.get_forecast_sources` reads legacy Binary, legacy Numeric,
+and resolved trajectory Binary inputs under one SQLite snapshot. The trajectory
+source carries complete immutable revisions and the latest effective terminal
+history rather than a preselected final revision. `analytics/trajectory_aggregate.py`
+calls the existing pure individual scorer once per resolved candidate and derives
+exact equal-Prediction means, early-versus-Deadline counts, mean active-window
+share, updating direction counts, and one final-probability reliability
+observation per eligible Prediction. Records whose effective outcome predates or
+equals their first forecast remain visible as unscored candidates but contribute
+to no mean or calibration bin. Invalid records never enter the source.
+
+The Analytics screen gives the trajectory cohort its own primary panel and
+final-probability plot/table, labels every former Binary aggregate as legacy, and
+uses the existing Forecast type and tag controls across both cohorts. Sparse-data
+guidance avoids stable-skill claims, Updating Gain is explicitly mechanical
+hindsight rather than a causal effect, and neutral truncation is never displayed
+as a forecast. This slice changes no schema, stored score, dependency, Numeric
+behavior, or legacy observation selection.

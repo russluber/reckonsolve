@@ -3,7 +3,13 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from .predictions import BinaryOutcome, FixedPrecisionValue
+from .forecast_contracts import ForecastContract
+from .predictions import (
+    BinaryOutcome,
+    BinaryResolutionHistory,
+    FixedPrecisionValue,
+    ForecastRevision,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +35,24 @@ class AnalyticsSource:
 
     observations: tuple[ScoringObservation, ...]
     available_tags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TrajectoryScoringRecord:
+    """One resolved trajectory Binary Prediction and its complete score source."""
+
+    question: str
+    contract: ForecastContract
+    revisions: tuple[ForecastRevision, ...]
+    resolution_history: BinaryResolutionHistory
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TrajectoryAnalyticsSource:
+    """Resolved trajectory Binary histories supplied to pure analytics."""
+
+    records: tuple[TrajectoryScoringRecord, ...]
 
 
 @dataclass(frozen=True, slots=True)
