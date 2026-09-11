@@ -100,6 +100,11 @@ class NumericPredictionRepository:
             if prediction_id is None:
                 raise sqlite3.DatabaseError("SQLite did not return a prediction ID.")
             replace_tags(connection, prediction_id, new_prediction.tags)
+            insert_legacy_contract_if_supported(
+                connection,
+                prediction_id,
+                PredictionType.NUMERIC,
+            )
 
             revision_cursor = connection.execute(
                 """
@@ -127,12 +132,6 @@ class NumericPredictionRepository:
             )
             if revision_cursor.lastrowid is None:
                 raise sqlite3.DatabaseError("SQLite did not return a revision ID.")
-            insert_legacy_contract_if_supported(
-                connection,
-                prediction_id,
-                PredictionType.NUMERIC,
-            )
-
             row = _select_numeric_prediction(connection, prediction_id)
             if row is None:
                 raise sqlite3.DatabaseError(

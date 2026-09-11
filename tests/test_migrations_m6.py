@@ -3,7 +3,9 @@ import sqlite3
 import pytest
 
 from reckonsolve.data.database import Database
+from reckonsolve.data.forecast_contracts import insert_legacy_contract_if_supported
 from reckonsolve.data.migrations import MIGRATIONS, Migration
+from reckonsolve.domain.predictions import PredictionType
 
 TIMESTAMP = "2026-08-20T18:45:12.003456Z"
 
@@ -19,6 +21,9 @@ def _insert_v5_prediction(database: Database) -> tuple[int, int]:
             (TIMESTAMP, TIMESTAMP),
         ).lastrowid
         assert prediction_id is not None
+        insert_legacy_contract_if_supported(
+            connection, prediction_id, PredictionType.BINARY
+        )
         revision_id = connection.execute(
             """
             INSERT INTO forecast_revisions (

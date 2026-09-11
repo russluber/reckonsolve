@@ -514,7 +514,7 @@ def test_schema17_integrates_existing_trajectory_corrections_without_rewriting_h
     database = Database.open(path)
     try:
         recovered = PredictionOperations(database, clock, UTC)
-        assert database.schema_version == 17
+        assert database.schema_version == MIGRATIONS[-1].version
         assert (
             recovered.get_binary_resolution_history(prediction.prediction_id) == before
         )

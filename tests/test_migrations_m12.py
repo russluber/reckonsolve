@@ -3,7 +3,9 @@ import sqlite3
 import pytest
 
 from reckonsolve.data.database import Database
+from reckonsolve.data.forecast_contracts import insert_legacy_contract_if_supported
 from reckonsolve.data.migrations import MIGRATIONS, Migration
+from reckonsolve.domain.predictions import PredictionType
 
 
 def test_v12_upgrade_preserves_v11_data_and_adds_review_table(tmp_path) -> None:
@@ -91,6 +93,9 @@ def test_review_history_is_immutable_and_parent_cascade_remains_available(
             ) VALUES (?, 60, 1, ?)
             """,
             (prediction_id, "2026-08-20T18:00:00.000000Z"),
+        )
+        insert_legacy_contract_if_supported(
+            connection, prediction_id, PredictionType.BINARY
         )
         review_id = int(
             connection.execute(

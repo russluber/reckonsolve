@@ -21,8 +21,26 @@ class ForecastContractIntegrityError(RuntimeError):
 def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
     """Reject a schema-16 database whose Prediction contracts are incomplete."""
 
-    row = connection.execute(
+    quantiles_available = quantile_tables_exist(connection)
+    quantile_join = (
         """
+        LEFT JOIN numeric_quantile_revisions AS quantile_initial
+            ON quantile_initial.prediction_id = prediction.id AND quantile_initial.sequence = 1
+        LEFT JOIN numeric_quantile_definitions AS quantile_definition
+            ON quantile_definition.prediction_id = prediction.id
+    """
+        if quantiles_available
+        else ""
+    )
+    quantile_invalid = (
+        """quantile_initial.id IS NULL OR quantile_definition.prediction_id IS NULL
+        OR contract.forecast_deadline_at <= quantile_initial.created_at
+        OR numeric_initial.id IS NOT NULL"""
+        if quantiles_available
+        else "1"
+    )
+    row = connection.execute(
+        f"""
         SELECT prediction.id
         FROM predictions AS prediction
         LEFT JOIN prediction_forecast_contracts AS contract
@@ -33,6 +51,7 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
         LEFT JOIN numeric_forecast_revisions AS numeric_initial
             ON numeric_initial.prediction_id = prediction.id
             AND numeric_initial.sequence = 1
+        {quantile_join}
         WHERE contract.prediction_id IS NULL
             OR (
                 prediction.prediction_type = 'binary'
@@ -56,8 +75,7 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
             OR (
                 contract.forecast_model = 'numeric-quantiles-5-v2'
                 AND (
-                    numeric_initial.id IS NULL
-                    OR contract.forecast_deadline_at <= numeric_initial.created_at
+                    {quantile_invalid}
                 )
             )
         LIMIT 1
@@ -189,6 +207,15 @@ def binary_corrections_relation(connection: sqlite3.Connection) -> str:
     ).fetchone():
         return "binary_resolution_history_rows"
     return "resolution_corrections"
+
+
+def quantile_tables_exist(connection: sqlite3.Connection) -> bool:
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'numeric_quantile_revisions'"
+        ).fetchone()
+        is not None
+    )
 
 
 def select_supported_contract(

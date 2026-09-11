@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .m48_migration import M48_STATEMENTS
+from .m50_migration import build_m50_statements
 
 
 class MigrationError(RuntimeError):
@@ -3353,6 +3354,21 @@ MIGRATIONS += (
         version=17,
         name="integrate trajectory terminal history",
         statements=M48_STATEMENTS,
+    ),
+)
+
+
+MIGRATIONS += (
+    Migration(
+        version=18,
+        name="add five-quantile Numeric foundation",
+        statements=build_m50_statements(
+            tuple(
+                statement
+                for migration in MIGRATIONS
+                for statement in migration.statements
+            )
+        ),
     ),
 )
 

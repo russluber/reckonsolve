@@ -12,7 +12,7 @@ from reckonsolve.domain.search import (
     normalize_search_literal,
 )
 
-from .forecast_contracts import binary_corrections_relation
+from .forecast_contracts import binary_corrections_relation, quantile_tables_exist
 
 SEARCH_PROJECTION_VERSION = 1
 
@@ -294,7 +294,10 @@ def project_prediction_documents(
     ).fetchall():
         add(SearchSourceKind.TAG, int(row["id"]), row["display_name"])
 
-    for table in ("forecast_revisions", "numeric_forecast_revisions"):
+    revision_tables = ("forecast_revisions", "numeric_forecast_revisions")
+    if quantile_tables_exist(connection):
+        revision_tables += ("numeric_quantile_revisions",)
+    for table in revision_tables:
         for row in connection.execute(
             f"""
             SELECT id, sequence, created_at, rationale
@@ -312,11 +315,12 @@ def project_prediction_documents(
                 occurred_at=parse_utc(str(row["created_at"])),
             )
 
+    quantile_join, quantile_sequence = _quantile_anchor_sql(connection, "review")
     for row in connection.execute(
-        """
+        f"""
         SELECT
             review.id, review.created_at, review.note,
-            COALESCE(binary_revision.sequence, numeric_revision.sequence) AS sequence
+            COALESCE(binary_revision.sequence, numeric_revision.sequence{quantile_sequence}) AS sequence
         FROM forecast_reviews AS review
         LEFT JOIN forecast_revisions AS binary_revision
             ON binary_revision.id = review.forecast_revision_id
@@ -324,6 +328,7 @@ def project_prediction_documents(
         LEFT JOIN numeric_forecast_revisions AS numeric_revision
             ON numeric_revision.id = review.numeric_forecast_revision_id
             AND numeric_revision.prediction_id = review.prediction_id
+        {quantile_join}
         WHERE review.prediction_id = ? AND review.note IS NOT NULL
         ORDER BY review.id
         """,
@@ -346,11 +351,12 @@ def project_prediction_documents(
 
 
 def _append_journal_documents(connection, prediction_id: int, add) -> None:
+    quantile_join, quantile_sequence = _quantile_anchor_sql(connection, "entry")
     rows = connection.execute(
-        """
+        f"""
         SELECT
             entry.id, entry.body, entry.created_at,
-            COALESCE(binary_revision.sequence, numeric_revision.sequence) AS sequence
+            COALESCE(binary_revision.sequence, numeric_revision.sequence{quantile_sequence}) AS sequence
         FROM journal_entries AS entry
         LEFT JOIN forecast_revisions AS binary_revision
             ON binary_revision.id = entry.forecast_revision_id
@@ -358,6 +364,7 @@ def _append_journal_documents(connection, prediction_id: int, add) -> None:
         LEFT JOIN numeric_forecast_revisions AS numeric_revision
             ON numeric_revision.id = entry.numeric_forecast_revision_id
             AND numeric_revision.prediction_id = entry.prediction_id
+        {quantile_join}
         WHERE entry.prediction_id = ?
         ORDER BY entry.id
         """,
@@ -395,6 +402,15 @@ def _append_journal_documents(connection, prediction_id: int, add) -> None:
             source_sequence=int(row["sequence"]),
             occurred_at=created_at,
         )
+
+
+def _quantile_anchor_sql(connection, alias: str) -> tuple[str, str]:
+    if not quantile_tables_exist(connection):
+        return "", ""
+    return (
+        f"LEFT JOIN numeric_quantile_revisions AS quantile_revision ON quantile_revision.id = {alias}.quantile_revision_id AND quantile_revision.prediction_id = {alias}.prediction_id",
+        ", quantile_revision.sequence",
+    )
 
 
 def _append_definition_history_documents(
@@ -465,6 +481,15 @@ def _append_resolution_documents(connection, prediction_id: int, add) -> None:
             correction_table = binary_corrections_relation(connection)
             if correction_table != "resolution_corrections":
                 actual_flag = "(outcome_changed OR effective_time_changed)"
+        elif (
+            quantile_tables_exist(connection)
+            and connection.execute(
+                "SELECT 1 FROM prediction_forecast_contracts WHERE prediction_id = ? AND forecast_model = 'numeric-quantiles-5-v2'",
+                (prediction_id,),
+            ).fetchone()
+        ):
+            correction_table = "numeric_quantile_resolution_corrections"
+            actual_flag = "(actual_value_changed OR effective_time_changed)"
         corrections = connection.execute(
             f"""
             SELECT

@@ -5,9 +5,10 @@ from collections.abc import Callable, Iterable
 from itertools import groupby
 
 from .predictions import NumericTimelineEvent, TimelineEvent
+from .quantiles import QuantileTimelineEvent
 
 
-def order_timeline[T: TimelineEvent | NumericTimelineEvent](
+def order_timeline[T: TimelineEvent | NumericTimelineEvent | QuantileTimelineEvent](
     events: Iterable[T], *, key: Callable[[T], tuple[int, int, int]]
 ) -> tuple[T, ...]:
     """Preserve revision anchors and per-kind save order, merging by exact time.

@@ -1,6 +1,6 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 49
+Status: v0.6 source release complete; v0.7 implemented through Milestone 50
 Last reviewed: 2026-09-11
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
@@ -20,7 +20,7 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7
 | UI | The six existing screen routes remain functional over one centralized palette-aware visual foundation, while the M40 shell distinguishes one creation action, three permanent primary destinations, one bottom utility, and contextual Prediction Detail; the sidebar has complete expanded and icon-only compact modes, and Detail return preserves the originating primary context without refreshing the Predictions query; M41 gives Dashboard and Settings the shared page/panel/message grammar and routes only disposable success acknowledgments through one non-reflowing shell overlay; M42 gives creation, both Detail variants, their timelines, and focused dialogs the same hierarchy while preserving every workflow; M42A gives Numeric Detail the shared Edit Details dialog with immutable unit and precision shown as context; M43 gives Predictions stable grouped controls, readable detailed filters, type-aware structured rows, direct row activation, and consistently styled tag management; M44 gives Analytics the same page/panel/message hierarchy, keeps its filter frame stable above responsive scrollable results, and adds guarded global navigation shortcuts plus visible shortcut reference, logical focus order, and stronger accessible descriptions; selected navigation and action icons remain local, palette-aware Lucide SVGs rendered through QtSvg while visible or accessible names remain authoritative |
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; each identity keeps `presentation.ini` beside its database; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
-| Schema | Version 17 adds shared read-only Binary correction text, trajectory dirty-search tracking, and corrected Postmortem guards; version 16 retains immutable model/scoring identities, exact Deadline/Resolution storage, and type-specific correction chains, with every pre-v0.7 record explicitly legacy; versions 14 and 15 retain FTS5 and dynamic Saved Views |
+| Schema | Version 18 adds fixed five-quantile revisions, immutable value constraints, and explicit quantile anchors in shared history, preserving all legacy rows; versions 16–17 retain immutable contracts, exact times, correction chains, and trajectory search/Postmortem support; versions 14–15 retain FTS5 and Saved Views |
 | Domain and application operations | Complete legacy behavior plus stored-cohort dispatch, exact-Deadline Binary creation/revision/Review, immutable recorded-at with explicit effective Resolution time, and audited outcome/text/time corrections; Numeric public creation remains interval-v1 |
 | Analytics | Legacy aggregates retain captured-final, correction-aware scoring and paired feedback. Trajectory Binary individual and aggregate scorecards derive exact standing segments and Fraction-valued metrics from immutable revision paths and effective cutoffs; every eligible Prediction receives one aggregate vote regardless of duration. Final-probability calibration is a separate diagnostic, and no new-cohort record enters legacy analytics. Qt and CLI only render these derived results |
 | Automated tests | Complete v0.1-v0.6 coverage plus M46 pure contract/time boundary tests, schema-15 migration and forced-rollback coverage, unchanged legacy read/analytics comparisons, creation-era identity assignment, database identity guards, and prospective append-only correction-chain constraints |
@@ -720,3 +720,44 @@ guidance avoids stable-skill claims, Updating Gain is explicitly mechanical
 hindsight rather than a causal effect, and neutral truncation is never displayed
 as a forecast. This slice changes no schema, stored score, dependency, Numeric
 behavior, or legacy observation selection.
+
+### M50: five-quantile Numeric foundation (not public creation)
+
+Schema 18 introduces `numeric_quantile_definitions` and
+`numeric_quantile_revisions`. The immutable definition adds the value constraint;
+unit and precision stay on the immutable parent. Each revision stores exactly five
+scaled integers in named columns, so completeness and ordering are enforced in a
+single insert. Whole-number values must be integral at the retained precision;
+whole-number is not inferred from zero decimal places.
+
+Journals, Reviews, and Numeric Resolutions gain a nullable `quantile_revision_id`
+with composite ownership references and an exactly-one-anchor constraint.
+Insert guards dispatch from the stored contract and require the current owned
+revision. For v2 Resolution this ID records input context, not scoring authority.
+The anchor tables and referencing correction tables are rebuilt transactionally,
+copying every old column unchanged and restoring their guards and indexes.
+`numeric_forecast_revisions` is never rebuilt or populated with invented quantiles.
+Foreign keys stay enabled, failed migrations roll back the copies and DDL, and
+startup integrity checks require a complete v2 definition and initial revision.
+
+`domain/quantiles.py` supplies immutable validated values; `data/quantiles.py`
+provides internal atomic creation/replacement and exact history reads for the next
+slice. It samples the injected clock only under transaction, rejects stale
+revision/metadata context, and never exposes a public model selector. The shared
+causal timeline merge orders v2 Journal/Review events by their real anchors and
+timestamps, including original and corrected Journal text. Derived search adds
+quantile rationale and anchored history, including effective terminal corrections,
+but indexes neither quantiles nor scores as prose. Shared Postmortem guards see
+the model-appropriate correction chain.
+
+`analytics/quantiles.py` has no Qt or SQLite dependency. It computes exact
+Fraction-valued interval loss, WIS and its contributions/decomposition, validates
+one complete ordered history, selects strictly before `min(R, T)`, and derives
+Initial/Final/Delta WIS. Outcome-at-or-before-initial records are explicitly
+unscored. No trajectory, neutral truncation, or cross-question raw aggregate is
+implemented for Numeric v2. Existing legacy calculators are unchanged.
+
+GUI/application/CLI Numeric creation remains interval-v1 until M51; v2 terminal
+workflows and visible scorecards remain M52. Backup already preserves all schema-18
+facts, and format-3 CSV continues to reject prospective cohorts until M55. See
+[ADR 0018](decisions/0018-five-quantile-revisions-and-shared-anchors.md).
