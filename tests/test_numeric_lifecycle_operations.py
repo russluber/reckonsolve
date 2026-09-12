@@ -32,7 +32,7 @@ class FixedClock:
 def _create(database: Database, **kwargs):
     return PredictionOperations(
         database, FixedClock(CREATED), UTC
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many days will the response take?",
         "days",
         1,

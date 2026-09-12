@@ -61,6 +61,11 @@ from reckonsolve.domain.predictions import (
     PredictionType,
     TimelineEvent,
 )
+from reckonsolve.domain.quantiles import (
+    QuantileRevision,
+    QuantileTimelineEvent,
+    quantile_summary,
+)
 from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import (
     PredictionSearchHit,
@@ -1032,6 +1037,12 @@ def _search_prediction_summary(prediction: SearchPrediction) -> str:
         from reckonsolve.forecast_display import binary_contract_summary
 
         return f"{prediction.probability_percent}% Yes | {binary_contract_summary(prediction.forecast_contract)}"
+    if prediction.numeric_quantiles is not None:
+        return terminal_text(
+            quantile_summary(
+                prediction.numeric_quantiles, prediction.numeric_unit or ""
+            )
+        )
     return _numeric_forecast_summary(
         prediction.numeric_lower_bound,
         prediction.numeric_median_estimate,
@@ -1111,7 +1122,14 @@ def _run_create(
         PromptSession(input_stream, output, errors),
     )
     print(file=output)
-    if isinstance(created, NumericPrediction):
+    if isinstance(created, NumericPrediction) and isinstance(
+        created.current_revision, QuantileRevision
+    ):
+        summary = terminal_text(
+            quantile_summary(created.current_revision.quantiles, created.unit)
+        )
+        type_label = "Numeric"
+    elif isinstance(created, NumericPrediction):
         summary = _numeric_forecast_summary(
             created.current_revision.lower_bound,
             created.current_revision.median_estimate,
@@ -1151,6 +1169,12 @@ def _format_prediction_list(
 
 
 def _browser_forecast_summary(prediction: PredictionBrowserItem) -> str:
+    if prediction.numeric_quantiles is not None:
+        return terminal_text(
+            quantile_summary(
+                prediction.numeric_quantiles, prediction.numeric_unit or ""
+            )
+        )
     if prediction.prediction_type is PredictionType.BINARY:
         from reckonsolve.forecast_display import binary_contract_summary
 
@@ -1254,7 +1278,9 @@ def _format_numeric_detail(
     _append_field(
         lines,
         "Current forecast",
-        _numeric_forecast_summary(
+        quantile_summary(prediction.current_revision.quantiles, prediction.unit)
+        if isinstance(prediction.current_revision, QuantileRevision)
+        else _numeric_forecast_summary(
             prediction.current_revision.lower_bound,
             prediction.current_revision.median_estimate,
             prediction.current_revision.upper_bound,
@@ -1264,6 +1290,17 @@ def _format_numeric_detail(
     )
     _append_field(lines, "Unit", prediction.unit)
     _append_field(lines, "Decimal precision", str(prediction.decimal_places))
+    if prediction.forecast_contract is not None:
+        contract = prediction.forecast_contract
+        _append_field(lines, "Model", contract.forecast_model.value)
+        if contract.forecast_deadline is not None:
+            _append_field(
+                lines,
+                "Forecast Deadline (permanent)",
+                contract.forecast_deadline.instant.astimezone().isoformat(sep=" "),
+            )
+    if prediction.value_constraint is not None:
+        _append_field(lines, "Value constraint", prediction.value_constraint.value)
     if prediction.current_revision.rationale is not None:
         _append_field(lines, "Current rationale", prediction.current_revision.rationale)
     _append_numeric_terminal(
@@ -1797,6 +1834,29 @@ def _append_numeric_timeline_event(
     ),
     unit: str,
 ) -> None:
+    if isinstance(event, QuantileTimelineEvent):
+        lines.append(
+            f"{_format_local_timestamp(event.created_at)} | {event.kind.upper()} | ID {event.record_id}"
+        )
+        _append_field(
+            lines,
+            "Forecast" if event.kind == "forecast" else "Anchored forecast",
+            quantile_summary(event.revision.quantiles, unit)
+            + f" (revision {event.revision.sequence}, ID {event.revision.revision_id})",
+            indent="  ",
+        )
+        if event.text is not None:
+            _append_field(
+                lines,
+                "Body" if event.kind == "journal" else "Note",
+                event.text,
+                indent="  ",
+            )
+        if event.kind == "journal":
+            _append_correction_history(
+                lines, event.created_at, event.original_text or "", event.corrections
+            )
+        return
     if isinstance(event, NumericForecastTimelineEvent):
         lines.append(
             f"{_format_local_timestamp(event.created_at)} | FORECAST | "

@@ -37,7 +37,7 @@ def _create_numeric(
     forecast_deadline: date | None = None,
 ) -> tuple[PredictionOperations, NumericPrediction]:
     operations = PredictionOperations(database, FixedClock(CREATED), UTC)
-    created = operations.create_numeric_prediction(
+    created = operations._create_legacy_numeric_prediction(
         question,
         "days",
         2,

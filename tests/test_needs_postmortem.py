@@ -33,7 +33,7 @@ def test_needs_postmortem_queue_uses_effective_terminal_facts_and_skip_is_stable
     database = Database.open(path)
     created = PredictionOperations(database, FixedClock(CREATED), UTC)
     binary = created._create_legacy_prediction("Will this need reflection?", 70)
-    numeric = created.create_numeric_prediction(
+    numeric = created._create_legacy_numeric_prediction(
         "How many units need reflection?",
         "units",
         1,
@@ -150,7 +150,7 @@ def test_dashboard_skip_confirmation_and_detail_completion_display(
         database,
         FixedClock(CREATED),
         UTC,
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many days will this take?",
         "days",
         0,

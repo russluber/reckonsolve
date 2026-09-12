@@ -280,9 +280,9 @@ def test_history_anchors_reject_wrong_prediction_wrong_model_and_stale_revision(
     database, clock, repo = storage
     first = repo.create_prediction(new())
     other = repo.create_prediction(new())
-    legacy = PredictionOperations(database, clock, UTC).create_numeric_prediction(
-        "Legacy?", "mm", 2, -2, 0, 2, 80
-    )
+    legacy = PredictionOperations(
+        database, clock, UTC
+    )._create_legacy_numeric_prediction("Legacy?", "mm", 2, -2, 0, 2, 80)
     for prediction_id, anchor in (
         (first.prediction_id, other.revision_id),
         (legacy.prediction_id, first.revision_id),
@@ -431,7 +431,9 @@ def test_schema18_preserves_populated_legacy_rows_and_rolls_back_failure(
         p = (
             ops._create_legacy_prediction("Legacy binary", 70)
             if binary
-            else ops.create_numeric_prediction("Legacy numeric", "mm", 2, -2, 0, 2, 80)
+            else ops._create_legacy_numeric_prediction(
+                "Legacy numeric", "mm", 2, -2, 0, 2, 80
+            )
         )
         kwargs = {
             "expected_revision_id": p.current_revision_id

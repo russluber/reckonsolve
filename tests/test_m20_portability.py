@@ -78,7 +78,7 @@ def test_real_v01_database_migrates_through_v02_and_recovers_every_type(
     )
     assert resolved_binary.status is PredictionStatus.RESOLVED
 
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many signed days will the v0.2 migration test take?",
         "days",
         1,

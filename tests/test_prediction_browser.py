@@ -301,7 +301,7 @@ def test_browser_mixes_types_and_filters_numeric_without_losing_type_or_unit(
     binary = operations._create_legacy_prediction(
         "Will Binary remain visible?", 35, tags=("Mixed",)
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many Numeric items?",
         "items",
         0,
@@ -311,7 +311,7 @@ def test_browser_mixes_types_and_filters_numeric_without_losing_type_or_unit(
         90,
         tags=("Mixed", "Numbers"),
     )
-    resolved_numeric = operations.create_numeric_prediction(
+    resolved_numeric = operations._create_legacy_numeric_prediction(
         "How many resolved Numeric items?",
         "items",
         0,
@@ -408,7 +408,7 @@ def test_rich_archive_filters_and_sorts_use_one_derived_current_view(tmp_path) -
         database,
         FixedClock(datetime(2026, 8, 18, 12, tzinfo=UTC)),
         local_timezone=UTC,
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many common archive items?",
         "items",
         0,

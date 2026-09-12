@@ -8,9 +8,10 @@ from reckonsolve.application.errors import (
     JournalEntryNotAllowedError,
     LifecycleTransitionNotAllowedError,
     PredictionDeletionNotAllowedError,
+    ValidationError,
 )
 from reckonsolve.application.predictions import PredictionOperations
-from reckonsolve.cli_creation import CliInputCancelled, PromptSession
+from reckonsolve.cli_creation import CliInputCancelled, PromptSession, ask_quantiles
 from reckonsolve.cli_text import terminal_text
 from reckonsolve.domain.forecast_contracts import EffectiveResolutionTime
 from reckonsolve.domain.predictions import (
@@ -21,6 +22,11 @@ from reckonsolve.domain.predictions import (
     PredictionDetail,
     PredictionStatus,
     PredictionValidationError,
+)
+from reckonsolve.domain.quantiles import (
+    QuantileDefinition,
+    QuantileRevision,
+    quantile_summary,
 )
 
 
@@ -36,7 +42,25 @@ def revise_interactively(
     if prediction.status is not PredictionStatus.OPEN:
         raise ForecastRevisionNotAllowedError(prediction.status)
 
-    if isinstance(prediction, NumericPrediction):
+    if isinstance(prediction, NumericPrediction) and isinstance(
+        prediction.current_revision, QuantileRevision
+    ):
+        values = ask_quantiles(
+            session,
+            QuantileDefinition(
+                prediction.unit, prediction.decimal_places, prediction.value_constraint
+            ),
+            prediction.current_revision.quantiles,
+        )
+        rationale = _optional_line(session.ask("What changed? (optional, one line): "))
+        revised = operations.revise_quantile_forecast(
+            prediction_id,
+            values,
+            rationale=rationale,
+            expected_revision_id=prediction.current_revision.revision_id,
+            expected_metadata_version=prediction.metadata_version,
+        )
+    elif isinstance(prediction, NumericPrediction):
         values = _ask_numeric_revision(prediction, session)
         rationale = _optional_line(session.ask("What changed? (optional, one line): "))
         revised = operations.revise_numeric_forecast(
@@ -156,6 +180,13 @@ def resolve_interactively(
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise LifecycleTransitionNotAllowedError("resolved", prediction.status)
+    if isinstance(prediction, NumericPrediction) and isinstance(
+        prediction.current_revision, QuantileRevision
+    ):
+        raise ValidationError(
+            "Five-quantile Resolution is coming in M52; no outcome was saved.",
+            field="resolution",
+        )
     prospective = (
         isinstance(prediction, PredictionDetail)
         and prediction.forecast_contract
@@ -340,7 +371,7 @@ def _print_reviewed_context(
     print(f"Question: {terminal_text(prediction.question)}", file=session.output)
     print(f"Status: {prediction.status.value.capitalize()}", file=session.output)
     print(f"Current forecast: {_forecast_summary(prediction)}", file=session.output)
-    if isinstance(prediction, PredictionDetail) and prediction.forecast_contract:
+    if prediction.forecast_contract:
         contract = prediction.forecast_contract
         print(f"Model: {contract.forecast_model.value}", file=session.output)
         if contract.forecast_deadline:
@@ -356,6 +387,8 @@ def _forecast_summary(prediction: PredictionDetail | NumericPrediction) -> str:
     if not isinstance(prediction, NumericPrediction):
         return f"{prediction.probability_percent}% Yes"
     revision = prediction.current_revision
+    if isinstance(revision, QuantileRevision):
+        return terminal_text(quantile_summary(revision.quantiles, prediction.unit))
     return (
         f"{revision.confidence_percent}% interval "
         f"{revision.lower_bound} to {revision.upper_bound} "

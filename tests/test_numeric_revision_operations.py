@@ -38,7 +38,7 @@ def _create(operations: PredictionOperations, **kwargs):
         "confidence_percent": 80,
     }
     values.update(kwargs)
-    return operations.create_numeric_prediction(**values)
+    return operations._create_legacy_numeric_prediction(**values)
 
 
 def test_numeric_revision_appends_changed_interval_and_causal_journal_timeline(

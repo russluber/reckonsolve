@@ -35,7 +35,7 @@ def test_v13_upgrade_preserves_v12_terminal_data_and_adds_empty_histories(
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "What Numeric value will survive?",
         "units",
         2,

@@ -95,7 +95,7 @@ def test_numeric_review_uses_interval_context_and_locked_disables_action(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     created_operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = created_operations.create_numeric_prediction(
+    prediction = created_operations._create_legacy_numeric_prediction(
         "How many days?",
         "days",
         0,
@@ -132,7 +132,7 @@ def test_numeric_review_saves_without_note_and_does_not_add_chart_point(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations.create_numeric_prediction(
+    prediction = operations._create_legacy_numeric_prediction(
         "How many days?", "days", 0, 2, 4, 8, 80
     )
     window = MainWindow(operations)

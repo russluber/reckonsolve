@@ -37,7 +37,7 @@ def test_reviews_and_journals_interleave_by_exact_time(tmp_path, cohort, step):
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
     if cohort == "numeric":
-        prediction = operations.create_numeric_prediction(
+        prediction = operations._create_legacy_numeric_prediction(
             "How many?", "days", 0, 1, 2, 3, 80
         )
         revision_id = prediction.current_revision.revision_id
@@ -110,7 +110,7 @@ def test_numeric_review_retains_exact_interval_and_survives_restart(tmp_path) ->
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations.create_numeric_prediction(
+    prediction = operations._create_legacy_numeric_prediction(
         "How many days?", "days", 1, "2.0", "4.0", "8.0", 80
     )
 
@@ -163,7 +163,7 @@ def test_numeric_review_resets_type_aware_attention_reference(tmp_path) -> None:
         database,
         FixedClock(NOW - timedelta(days=20)),
         UTC,
-    ).create_numeric_prediction("How many days?", "days", 0, 2, 4, 8, 80)
+    )._create_legacy_numeric_prediction("How many days?", "days", 0, 2, 4, 8, 80)
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
     assert operations.get_dashboard().needs_attention_predictions
 
@@ -183,7 +183,7 @@ def test_review_is_rejected_after_deadline_for_both_types(tmp_path, numeric) -> 
     database = Database.open(tmp_path / f"{numeric}.sqlite3")
     create_ops = PredictionOperations(database, FixedClock(NOW), UTC)
     if numeric:
-        prediction = create_ops.create_numeric_prediction(
+        prediction = create_ops._create_legacy_numeric_prediction(
             "How many?",
             "days",
             0,
@@ -273,7 +273,7 @@ def test_terminal_predictions_reject_reviews_for_both_types(tmp_path) -> None:
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many days?", "days", 0, 2, 4, 8, 80
     )
     operations.invalidate_numeric_prediction(

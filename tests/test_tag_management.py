@@ -111,7 +111,7 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
     first = operations._create_legacy_prediction(
         "Will alpha finish?", 50, tags=("Source A", "Target")
     )
-    second = operations.create_numeric_prediction(
+    second = operations._create_legacy_numeric_prediction(
         "How many items will beta finish?",
         "items",
         0,

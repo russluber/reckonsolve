@@ -199,3 +199,32 @@ class QuantileTimelineEvent:
     text: str | None = None
     original_text: str | None = None
     corrections: tuple[JournalCorrection, ...] = ()
+
+    @property
+    def body(self) -> str:
+        return self.text or ""
+
+    @property
+    def original_body(self) -> str:
+        return self.original_text or ""
+
+    @property
+    def entry_id(self) -> int:
+        return self.record_id
+
+    @property
+    def prediction_id(self) -> int:
+        return self.revision.prediction_id
+
+    @property
+    def current_correction_id(self) -> int | None:
+        return self.corrections[-1].correction_id if self.corrections else None
+
+
+def quantile_summary(quantiles: FiveQuantiles, unit: str) -> str:
+    """Exact plain-text forecast shared by all read surfaces."""
+    return (
+        f"90% interval: {quantiles.q05} to {quantiles.q95} {unit}; "
+        f"median: {quantiles.q50} {unit}; "
+        f"50% interval: {quantiles.q25} to {quantiles.q75} {unit}"
+    )

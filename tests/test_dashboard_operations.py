@@ -254,7 +254,7 @@ def test_dashboard_includes_type_aware_numeric_rows_and_attention_buckets(
         database,
         FixedClock(NOW - timedelta(days=20)),
         UTC,
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many Numeric days remain?",
         "days",
         1,
@@ -268,7 +268,7 @@ def test_dashboard_includes_type_aware_numeric_rows_and_attention_buckets(
     binary = _create(database, "Fresh Binary companion", 1)
     resolved_numeric = PredictionOperations(
         database, FixedClock(NOW), UTC
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many terminal Numeric days?",
         "days",
         0,

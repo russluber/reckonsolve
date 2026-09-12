@@ -13,6 +13,7 @@ from .predictions import (
     PredictionStatus,
     PredictionType,
 )
+from .quantiles import FiveQuantiles
 
 
 class ArchiveQueryValidationError(ValueError):
@@ -113,6 +114,7 @@ class PredictionBrowserItem:
     numeric_confidence_percent: int | None = None
     numeric_unit: str | None = None
     forecast_contract: ForecastContract | None = None
+    numeric_quantiles: FiveQuantiles | None = None
 
 
 @dataclass(frozen=True, slots=True)

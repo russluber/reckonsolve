@@ -35,6 +35,7 @@ from reckonsolve.domain.attention import (
     NeedsPostmortemPrediction,
 )
 from reckonsolve.domain.predictions import PostmortemCompletion, PredictionType
+from reckonsolve.domain.quantiles import quantile_summary
 from reckonsolve.domain.transfer import (
     BackupResult,
     CsvExportResult,
@@ -989,6 +990,10 @@ def _forecast_summary(prediction: DashboardPrediction) -> str:
         from reckonsolve.forecast_display import binary_contract_summary
 
         return f"BINARY  {prediction.probability_percent}% · {binary_contract_summary(prediction.forecast_contract)}"
+    if prediction.numeric_quantiles is not None:
+        return "Five-quantile forecast: " + quantile_summary(
+            prediction.numeric_quantiles, prediction.numeric_unit or ""
+        )
     if (
         prediction.numeric_lower_bound is None
         or prediction.numeric_median_estimate is None

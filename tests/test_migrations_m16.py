@@ -44,7 +44,7 @@ def test_v16_upgrade_preserves_v15_behavior_and_marks_every_record_legacy(
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "What legacy Numeric value will survive?",
         "days",
         1,
@@ -74,7 +74,9 @@ def test_v16_upgrade_preserves_v15_behavior_and_marks_every_record_legacy(
         before_binary,
         forecast_contract=legacy_contract(PredictionType.BINARY),
     )
-    assert recovered.get_numeric_prediction(numeric.prediction_id) == before_numeric
+    assert recovered.get_numeric_prediction(numeric.prediction_id) == replace(
+        before_numeric, forecast_contract=legacy_contract(PredictionType.NUMERIC)
+    )
     assert recovered.get_forecast_analytics() == before_analytics
     with upgraded.transaction() as connection:
         binary_contract = select_forecast_contract(connection, binary.prediction_id)
@@ -114,7 +116,7 @@ def test_current_creation_stays_legacy_until_complete_vertical_flows_exist(
     binary = operations._create_legacy_prediction(
         "Will creation remain legacy for M46?", 50
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many legacy units remain?", "units", 0, "1", "2", "3", 80
     )
 

@@ -27,6 +27,7 @@ from reckonsolve.domain.search import (
 
 from .database import Database
 from .forecast_contracts import binary_corrections_relation, select_supported_contract
+from .quantile_archive import read_archive as read_quantile_archive
 from .search_index import (
     SEARCH_PROJECTION_VERSION,
     SearchIndexBusyError,
@@ -561,6 +562,24 @@ def _select_predictions(
                 )
             ),
         )
+    for item in read_quantile_archive(connection):
+        if item.prediction_id in wanted_ids:
+            predictions[item.prediction_id] = SearchPrediction(
+                prediction_id=item.prediction_id,
+                question=item.question,
+                prediction_type=item.prediction_type,
+                status=item.status,
+                created_at=item.created_at,
+                forecast_deadline=None,
+                tags=item.tags,
+                latest_revision_at=item.latest_revision_at,
+                expected_resolution=item.expected_resolution,
+                latest_review_at=item.latest_review_at,
+                terminal_decision_at=item.terminal_decision_at,
+                numeric_unit=item.numeric_unit,
+                forecast_contract=item.forecast_contract,
+                numeric_quantiles=item.numeric_quantiles,
+            )
     return predictions
 
 

@@ -58,6 +58,7 @@ from .forecast_contracts import (
     map_binary_contract,
     select_supported_contract,
 )
+from .quantile_archive import read_archive as read_quantile_archive
 
 
 class PredictionChangedError(RuntimeError):
@@ -931,6 +932,22 @@ class PredictionRepository:
                     ),
                 )
                 for row in rows
+            ) + tuple(
+                DashboardPrediction(
+                    prediction_id=item.prediction_id,
+                    question=item.question,
+                    probability_percent=None,
+                    status=item.status,
+                    latest_revision_at=item.latest_revision_at,
+                    latest_review_at=item.latest_review_at,
+                    expected_resolution=item.expected_resolution,
+                    prediction_type=item.prediction_type,
+                    numeric_unit=item.numeric_unit,
+                    forecast_contract=item.forecast_contract,
+                    numeric_quantiles=item.numeric_quantiles,
+                )
+                for item in read_quantile_archive(connection)
+                if item.status is PredictionStatus.OPEN
             )
 
     def list_needs_postmortem_predictions(
@@ -1205,6 +1222,7 @@ class PredictionRepository:
                 )
                 for row in rows
             }
+            quantile_items = read_quantile_archive(connection)
 
         tags_by_prediction: dict[int, list[str]] = {}
         available_tags: list[str] = []
@@ -1228,7 +1246,8 @@ class PredictionRepository:
                     forecast_contract=contracts[int(row["prediction_id"])],
                 )
                 for row in rows
-            ),
+            )
+            + quantile_items,
             available_tags=tuple(available_tags),
         )
 

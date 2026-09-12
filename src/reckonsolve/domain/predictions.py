@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from .forecast_contracts import ForecastContract
+    from .quantiles import NumericValueConstraint, QuantileRevision
 
 
 class PredictionValidationError(ValueError):
@@ -478,7 +479,7 @@ class NumericPrediction:
     status: PredictionStatus
     created_at: datetime
     updated_at: datetime
-    current_revision: NumericForecastRevision
+    current_revision: "NumericForecastRevision | QuantileRevision"
     background: str | None = None
     resolution_criteria: str | None = None
     forecast_deadline: date | None = None
@@ -488,6 +489,8 @@ class NumericPrediction:
     resolution: "NumericResolution | None" = None
     invalidation: "Invalidation | None" = None
     deletion_allowed: bool = False
+    forecast_contract: "ForecastContract | None" = None
+    value_constraint: "NumericValueConstraint | None" = None
 
 
 @dataclass(frozen=True, slots=True)

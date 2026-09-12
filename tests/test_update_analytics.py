@@ -218,7 +218,7 @@ def test_numeric_update_feedback_renders_with_existing_filters(qtbot, tmp_path) 
         database,
         FixedClock(NOW),
         UTC,
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many days will this take?",
         "days",
         0,
@@ -316,7 +316,7 @@ def test_numeric_update_metrics_recompute_from_corrected_actual_value(
         database,
         FixedClock(NOW),
         UTC,
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many units will be observed?",
         "units",
         0,

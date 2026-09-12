@@ -132,7 +132,7 @@ def test_presentation_use_does_not_rewrite_current_schema_data(
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many days will the v0.5 Numeric record retain?",
         "days",
         1,
@@ -490,7 +490,7 @@ def test_numeric_analytics_filter_type_tag_and_unit_after_restart(
     first = create_runtime(database_path=path)
     qtbot.addWidget(first.window)
     operations = PredictionOperations(first.database)
-    days = operations.create_numeric_prediction(
+    days = operations._create_legacy_numeric_prediction(
         "How many days will this take?",
         "days",
         0,
@@ -506,7 +506,7 @@ def test_numeric_analytics_filter_type_tag_and_unit_after_restart(
         expected_revision_id=days.current_revision.revision_id,
         expected_metadata_version=days.metadata_version,
     )
-    dollars = operations.create_numeric_prediction(
+    dollars = operations._create_legacy_numeric_prediction(
         "How many USD will this cost?",
         "USD",
         0,
@@ -767,73 +767,49 @@ def test_create_close_reopen_displays_persisted_prediction(qtbot, tmp_path) -> N
     second_runtime.close()
 
 
-def test_numeric_create_close_reopen_displays_the_complete_interval(
-    qtbot, tmp_path
-) -> None:
+def test_numeric_create_close_reopen_displays_the_complete_interval(qtbot, tmp_path):
+    from reckonsolve.ui.screens import NewPredictionScreen
+
     database_path = tmp_path / "reckonsolve.sqlite3"
     first_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(first_runtime.window)
     first_runtime.window.show()
     first_runtime.window.navigate_to("New Prediction")
-
-    prediction_type = first_runtime.window.findChild(QComboBox, "predictionTypeInput")
-    question = first_runtime.window.findChild(QLineEdit, "questionInput")
-    unit = first_runtime.window.findChild(QLineEdit, "numericUnitInput")
-    precision = first_runtime.window.findChild(QSpinBox, "numericPrecisionInput")
-    lower = first_runtime.window.findChild(QLineEdit, "numericLowerBoundInput")
-    median = first_runtime.window.findChild(QLineEdit, "numericMedianEstimateInput")
-    upper = first_runtime.window.findChild(QLineEdit, "numericUpperBoundInput")
-    confidence = first_runtime.window.findChild(QSpinBox, "numericConfidenceInput")
-    create = first_runtime.window.findChild(QPushButton, "createPredictionButton")
-    assert prediction_type is not None
-    assert question is not None
-    assert unit is not None
-    assert precision is not None
-    assert lower is not None
-    assert median is not None
-    assert upper is not None
-    assert confidence is not None
-    assert create is not None
-    prediction_type.setCurrentIndex(prediction_type.findData("numeric"))
-    question.setText("How many pages will the manuscript contain?")
-    unit.setText("pages")
-    precision.setValue(0)
-    lower.setText("120")
-    median.setText("180")
-    upper.setText("240")
-    confidence.setValue(80)
-    _set_exact_deadline(create.window())
-    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
-
+    screen = first_runtime.window.findChild(NewPredictionScreen)
+    screen.prediction_type_input.setCurrentIndex(
+        screen.prediction_type_input.findData("numeric")
+    )
+    screen.question_input.setText("How many pages will the manuscript contain?")
+    screen.numeric_unit_input.setText("pages")
+    screen.numeric_constraint_input.setCurrentIndex(2)
+    for level, value in {5: "120", 25: "150", 50: "180", 75: "210", 95: "240"}.items():
+        screen.quantile_input.inputs[level].setText(value)
+    screen.numeric_exact_deadline.toggle.setChecked(True)
+    screen.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
+    screen.numeric_exact_deadline.offset.setText("+00:00")
+    screen.submit()
     assert first_runtime.window.current_screen_name == "Prediction Detail"
     assert (
         first_runtime.window.findChild(QLabel, "numericCurrentInterval").text()
-        == "80% interval: 120 to 240 pages"
+        == "90% interval: 120 to 240 pages"
     )
     first_runtime.close()
-
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
     second_runtime.window.navigate_to("Prediction Detail")
-    reopened_question = second_runtime.window.findChild(
-        QLabel,
-        "numericPredictionQuestion",
+    assert (
+        second_runtime.window.findChild(QLabel, "numericPredictionQuestion").text()
+        == "How many pages will the manuscript contain?"
     )
-    reopened_interval = second_runtime.window.findChild(
-        QLabel,
-        "numericCurrentInterval",
+    assert (
+        second_runtime.window.findChild(QLabel, "numericCurrentInterval").text()
+        == "90% interval: 120 to 240 pages"
     )
-    reopened_median = second_runtime.window.findChild(
-        QLabel,
-        "numericCurrentMedian",
+    assert (
+        "Median: 180 pages"
+        in second_runtime.window.findChild(QLabel, "numericCurrentMedian").text()
     )
-    assert reopened_question is not None
-    assert reopened_interval is not None
-    assert reopened_median is not None
-    assert reopened_question.text() == "How many pages will the manuscript contain?"
-    assert reopened_interval.text() == "80% interval: 120 to 240 pages"
-    assert reopened_median.text() == "Median estimate: 180 pages"
     second_runtime.close()
 
 
@@ -846,7 +822,7 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    created = operations.create_numeric_prediction(
+    created = operations._create_legacy_numeric_prediction(
         "How many pages will the second draft contain?",
         "pages",
         0,
@@ -941,7 +917,7 @@ def test_dashboard_and_browser_open_type_aware_numeric_predictions(
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
     operations._create_legacy_prediction("Will the Binary row remain clear?", 60)
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many Numeric days?",
         "days",
         1,
@@ -993,7 +969,7 @@ def test_numeric_resolution_ui_persists_exact_terminal_information(
     runtime = create_runtime(database_path=path)
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    created = operations.create_numeric_prediction(
+    created = operations._create_legacy_numeric_prediction(
         "What will the signed quantity be?",
         "units",
         1,
@@ -1073,7 +1049,7 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
     runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    invalid_candidate = operations.create_numeric_prediction(
+    invalid_candidate = operations._create_legacy_numeric_prediction(
         "How many invalid units?", "units", 0, 1, 2, 3, 80
     )
     runtime.window.show()
@@ -1101,7 +1077,7 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
         "INVALID"
     )
 
-    disposable = operations.create_numeric_prediction(
+    disposable = operations._create_legacy_numeric_prediction(
         "Delete this Numeric test record", "items", 0, 1, 2, 3, 80
     )
     runtime.window._prediction_detail_host.show_numeric_prediction(disposable)

@@ -11,12 +11,15 @@ from reckonsolve.domain.predictions import (
     MAX_NUMERIC_DECIMAL_PLACES,
     MIN_METADATA_DATE,
     MIN_NUMERIC_DECIMAL_PLACES,
-    FixedPrecisionValue,
-    NewNumericForecastRevision,
     NumericPrediction,
     PredictionDetail,
     PredictionType,
     PredictionValidationError,
+)
+from reckonsolve.domain.quantiles import (
+    FiveQuantiles,
+    NumericValueConstraint,
+    QuantileDefinition,
 )
 from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
 
@@ -118,79 +121,74 @@ def _create_numeric(
         default=0,
         label="Decimal places",
     )
-    lower_bound, median_estimate, upper_bound, confidence = _ask_numeric_forecast(
-        session,
-        decimal_places,
+    while True:
+        choice = (
+            session.ask(
+                "Value constraint: decimal/continuous-style or whole-number [d/w]: "
+            )
+            .strip()
+            .casefold()
+        )
+        if choice in ("d", "decimal", "continuous"):
+            constraint = NumericValueConstraint.CONTINUOUS
+            break
+        if choice in ("w", "whole", "whole-number"):
+            constraint = NumericValueConstraint.WHOLE_NUMBER
+            break
+        session.explain_error("Choose d or w; this definition is permanent.")
+    values = ask_quantiles(
+        session, QuantileDefinition(unit, decimal_places, constraint)
     )
-    details = _ask_creation_details(session)
+    deadline = _ask_exact_deadline(session)
+    details = _ask_creation_details(session, legacy_deadline=False)
     return operations.create_numeric_prediction(
         question,
         unit,
         decimal_places,
-        lower_bound,
-        median_estimate,
-        upper_bound,
-        confidence,
+        values,
+        value_constraint=constraint,
         rationale=details.rationale,
         background=details.background,
         resolution_criteria=details.resolution_criteria,
-        forecast_deadline=details.forecast_deadline,
+        forecast_deadline=deadline,
         expected_resolution=details.expected_resolution,
         tags=details.tags,
     )
 
 
-def _ask_numeric_forecast(
+def ask_quantiles(
     session: PromptSession,
-    decimal_places: int,
-) -> tuple[str, str, str, int]:
+    definition: QuantileDefinition,
+    current: FiveQuantiles | None = None,
+) -> dict[int, str]:
+    values = (
+        {}
+        if current is None
+        else {
+            level: str(value)
+            for level, value in zip((5, 25, 50, 75, 95), current.values, strict=True)
+        }
+    )
     while True:
-        lower_bound = _ask_required_text(
-            session,
-            "Lower bound: ",
-            "Lower bound is required.",
-        )
-        median_estimate = _ask_required_text(
-            session,
-            "Median estimate: ",
-            "Median estimate is required.",
-        )
-        upper_bound = _ask_required_text(
-            session,
-            "Upper bound: ",
-            "Upper bound is required.",
-        )
-        confidence = _ask_whole_number(
-            session,
-            "Confidence [80]: ",
-            minimum=1,
-            maximum=99,
-            default=80,
-            label="Confidence",
-        )
+        for level, label in (
+            (5, "90% interval lower (q05)"),
+            (95, "90% interval upper (q95)"),
+            (50, "Median (q50)"),
+            (25, "50% interval lower (q25)"),
+            (75, "50% interval upper (q75)"),
+        ):
+            default = f" [{values[level]}]" if level in values else ""
+            raw = session.ask(f"{label}{default}: ").strip()
+            values[level] = raw or values.get(level, "")
         try:
-            NewNumericForecastRevision(
-                lower_bound=FixedPrecisionValue.from_value(
-                    lower_bound,
-                    decimal_places,
-                    field="lower_bound",
-                ),
-                median_estimate=FixedPrecisionValue.from_value(
-                    median_estimate,
-                    decimal_places,
-                    field="median_estimate",
-                ),
-                upper_bound=FixedPrecisionValue.from_value(
-                    upper_bound,
-                    decimal_places,
-                    field="upper_bound",
-                ),
-                confidence_percent=confidence,
-            )
+            quantiles = FiveQuantiles.from_values(values, definition.decimal_places)
+            definition.validate_quantiles(quantiles)
+            if current is not None:
+                definition.validate_replacement(current, quantiles)
         except PredictionValidationError as error:
-            session.explain_error(f"Invalid numeric forecast: {error}")
+            session.explain_error(str(error))
             continue
-        return lower_bound, median_estimate, upper_bound, confidence
+        return values
 
 
 def _ask_exact_deadline(session: PromptSession) -> datetime:

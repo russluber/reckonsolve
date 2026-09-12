@@ -214,7 +214,7 @@ def test_cli_list_combines_filters_and_formats_type_aware_attention(
         35,
         tags=("Other",),
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many caf\u00e9 orders will arrive?",
         "orders",
         2,
@@ -283,7 +283,7 @@ def test_cli_search_uses_shared_explainable_query_and_rich_filters(tmp_path) -> 
         expected_metadata_version=target.metadata_version,
         confirm_meaning_change=True,
     )
-    operations.create_numeric_prediction(
+    operations._create_legacy_numeric_prediction(
         "How many unrelated deliveries will arrive?",
         "items",
         0,
@@ -415,7 +415,7 @@ def test_cli_saved_views_list_and_execute_current_dynamic_queries(tmp_path) -> N
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many work items will finish?",
         "items",
         0,
@@ -658,7 +658,7 @@ def test_cli_show_numeric_preserves_exact_values_reviews_and_resolution(
         database,
         FixedClock(NOW),
         local_timezone=UTC,
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "What exact temperature will be measured?",
         "\u00b0C",
         3,
@@ -903,67 +903,38 @@ def test_cli_creates_binary_with_all_optional_details_and_endpoint_note(
     database.close()
 
 
-def test_cli_numeric_creation_retries_invalid_fields_and_round_trips_exactly(
-    tmp_path,
-) -> None:
+def test_cli_numeric_creation_retries_invalid_fields_and_round_trips_exactly(tmp_path):
     database_path = tmp_path / "reckonsolve.sqlite3"
-    output = StringIO()
-    errors = StringIO()
-
+    output, errors = StringIO(), StringIO()
     result = run(
         ["create", "numeric"],
         database_path=database_path,
         stdin=StringIO(
-            "What exact temperature will be recorded?\n"
-            "\u00b0C\n"
-            "7\n"
-            "3\n"
-            "3.00\n"
-            "2.00\n"
-            "1.00\n"
-            "80\n"
-            "-1.25\n"
-            "2.00\n"
-            "9.50\n"
-            "100\n"
-            "85\n"
-            "y\n"
-            "Exact initial interval\n"
-            "Instrument background\n"
-            "Use the calibrated display\n"
-            "2099-01-01\n"
-            "2099-01-02\n"
-            "Numeric, Weather\n"
+            "What exact temperature will be recorded?\n°C\n7\n3\nx\nd\n"
+            "3\n1\n2\n1\n3\n"
+            "-1.25\n9.50\n2.00\n0\n4\n"
+            "2099-01-01T18:00:00Z\ny\nExact initial quantiles\n"
+            "Instrument background\nUse the calibrated display\n2099-01-02\nNumeric, Weather\n"
         ),
         stdout=output,
         stderr=errors,
     )
-
     assert result == 0
     assert "Decimal places must be a whole number from 0 to 6." in errors.getvalue()
-    assert (
-        "Invalid numeric forecast: Numeric forecasts require lower bound <= median "
-        "<= upper bound." in errors.getvalue()
-    )
-    assert "Confidence must be a whole number from 1 to 99." in errors.getvalue()
+    assert "Choose d or w" in errors.getvalue()
+    assert "q05 <= q25 <= q50 <= q75 <= q95" in errors.getvalue()
     assert "Created Numeric Prediction #1." in output.getvalue()
-    assert (
-        "Current forecast: 85% interval -1.250 to 9.500 \u00b0C; median 2.000 \u00b0C"
-        in output.getvalue()
-    )
-
+    assert "90% interval: -1.250 to 9.500 °C" in output.getvalue()
     database = Database.open(database_path)
     created = PredictionOperations(database).get_numeric_prediction(1)
-    assert created.decimal_places == 3
-    assert created.unit == "\u00b0C"
-    assert str(created.current_revision.lower_bound) == "-1.250"
-    assert str(created.current_revision.median_estimate) == "2.000"
-    assert str(created.current_revision.upper_bound) == "9.500"
-    assert created.current_revision.confidence_percent == 85
-    assert created.current_revision.rationale == "Exact initial interval"
+    q = created.current_revision.quantiles
+    assert [str(v) for v in q.values] == ["-1.250", "0.000", "2.000", "4.000", "9.500"]
+    assert created.current_revision.rationale == "Exact initial quantiles"
     assert created.background == "Instrument background"
     assert created.resolution_criteria == "Use the calibrated display"
-    assert created.forecast_deadline == date(2099, 1, 1)
+    assert created.forecast_contract.forecast_deadline.instant == datetime(
+        2099, 1, 1, 18, tzinfo=UTC
+    )
     assert created.expected_resolution == date(2099, 1, 2)
     assert set(created.tags) == {"Numeric", "Weather"}
     assert len(PredictionOperations(database).list_numeric_timeline(1)) == 1
@@ -1048,7 +1019,7 @@ def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
             ["create", "numeric"],
             database_path=database_path,
             stdin=StringIO(
-                "How many CLI items will the GUI display?\nitems\n\n2\n5\n9\n\n\n"
+                "How many CLI items will the GUI display?\nitems\n\nw\n2\n9\n5\n3\n7\n2099-12-30T18:00:00Z\n\n"
             ),
             stdout=StringIO(),
         )
@@ -1074,7 +1045,7 @@ def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
     assert "Will the GUI display this CLI Binary?" in rendered_rows
     assert "70%" in rendered_rows
     assert "How many CLI items will the GUI display?" in rendered_rows
-    assert "80% interval: 2–9 items" in rendered_rows
+    assert "90% interval: 2 to 9 items" in rendered_rows
     assert "median: 5 items" in rendered_rows
     runtime.close()
 
@@ -1130,7 +1101,7 @@ def test_cli_revises_numeric_with_exact_defaults_and_validation_retry(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_numeric_prediction(
+    created = PredictionOperations(database)._create_legacy_numeric_prediction(
         "What exact value will the Numeric CLI revise?",
         "units",
         3,
@@ -1194,7 +1165,7 @@ def test_cli_journal_and_review_preserve_forecast_history_and_cross_interface_ti
             "Will active records stay distinct?", 65
         )
     else:
-        created = operations.create_numeric_prediction(
+        created = operations._create_legacy_numeric_prediction(
             "How many active records will stay distinct?",
             "records",
             0,
@@ -1598,7 +1569,7 @@ def test_cli_resolves_numeric_with_exact_validation_and_optional_text(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_numeric_prediction(
+    created = PredictionOperations(database)._create_legacy_numeric_prediction(
         "What exact quantity will resolve?",
         "widgets",
         2,
@@ -1651,7 +1622,7 @@ def test_cli_invalidation_preserves_both_forecast_types_outside_scoring(
     if prediction_type == "binary":
         created = operations._create_legacy_prediction("Will this become Invalid?", 45)
     else:
-        created = operations.create_numeric_prediction(
+        created = operations._create_legacy_numeric_prediction(
             "How many invalid quantities will remain?",
             "items",
             0,
@@ -1702,7 +1673,7 @@ def test_cli_permanently_deletes_only_confirmed_untouched_open_predictions(
             "Will this disposable row go?", 50
         )
     else:
-        target = operations.create_numeric_prediction(
+        target = operations._create_legacy_numeric_prediction(
             "How many disposable rows will go?",
             "rows",
             0,
@@ -1794,7 +1765,7 @@ def test_cli_delete_directs_meaningful_history_to_invalid(
             expected_metadata_version=created.metadata_version,
         )
     else:
-        created = operations.create_numeric_prediction(
+        created = operations._create_legacy_numeric_prediction(
             "How many journaled records survive?",
             "records",
             0,
@@ -1860,7 +1831,7 @@ def test_cli_locked_predictions_allow_both_terminal_decisions(
             forecast_deadline=deadline,
         )
     else:
-        created = operations.create_numeric_prediction(
+        created = operations._create_legacy_numeric_prediction(
             "How many Locked Numeric values terminate?",
             "values",
             0,
@@ -2096,7 +2067,7 @@ def test_cli_backup_is_recoverable_and_records_success_across_restart(
     database_path = tmp_path / "reckonsolve.sqlite3"
     backup_path = tmp_path / "cli-backup.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database).create_numeric_prediction(
+    created = PredictionOperations(database)._create_legacy_numeric_prediction(
         "How many records will the CLI backup recover?",
         "records",
         2,
@@ -2222,7 +2193,7 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         FixedClock(NOW + timedelta(minutes=3)),
         local_timezone=UTC,
     )
-    numeric = numeric_operations.create_numeric_prediction(
+    numeric = numeric_operations._create_legacy_numeric_prediction(
         "What exact value will CLI show?",
         "points",
         2,

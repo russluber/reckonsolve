@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 50
-Last reviewed: 2026-09-11
+Status: v0.6 source release complete; v0.7 implemented through Milestone 51
+Last reviewed: 2026-09-12
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7 with immutable model/scoring identities and exact-time domain values, backfilling all existing records as legacy without invented times or forecasts. M47 switches new Binary creation to its exact-Deadline trajectory contract. M48 enables its Resolution, effective-time correction chain, and pure individual trajectory scorecard, with schema version 17 integrating corrected text into search and Postmortem completion. M49 adds separate, equal-Prediction trajectory aggregates and final-probability calibration without changing schema 17. Numeric creation remains interval-v1; the five-quantile Numeric workflow remains a later authorized milestone.
+Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutable model/scoring identities without inventing facts for legacy records. M47–M49 implement prospective Binary creation, exact-Deadline history, effective-time Resolution and corrections, individual Trajectory Brier, and separate aggregate feedback. M50 adds schema-18 five-quantile Numeric storage and pure exact WIS. M51 switches public Numeric creation and active GUI/CLI workflows to that model while preserving legacy interval editors. Numeric v2 Resolution and visible scoring remain M52; no new migration is needed for M51.
 
 | Area | Current state |
 |---|---|
@@ -21,7 +21,7 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. Milestone 46 begins v0.7
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; each identity keeps `presentation.ini` beside its database; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
 | Schema | Version 18 adds fixed five-quantile revisions, immutable value constraints, and explicit quantile anchors in shared history, preserving all legacy rows; versions 16–17 retain immutable contracts, exact times, correction chains, and trajectory search/Postmortem support; versions 14–15 retain FTS5 and Saved Views |
-| Domain and application operations | Complete legacy behavior plus stored-cohort dispatch, exact-Deadline Binary creation/revision/Review, immutable recorded-at with explicit effective Resolution time, and audited outcome/text/time corrections; Numeric public creation remains interval-v1 |
+| Domain and application operations | Complete legacy behavior plus stored-cohort dispatch, exact-Deadline prospective Binary and five-quantile Numeric creation/revision/Review; Binary effective-time Resolution and corrections; Numeric v2 terminal workflows remain M52 |
 | Analytics | Legacy aggregates retain captured-final, correction-aware scoring and paired feedback. Trajectory Binary individual and aggregate scorecards derive exact standing segments and Fraction-valued metrics from immutable revision paths and effective cutoffs; every eligible Prediction receives one aggregate vote regardless of duration. Final-probability calibration is a separate diagnostic, and no new-cohort record enters legacy analytics. Qt and CLI only render these derived results |
 | Automated tests | Complete v0.1-v0.6 coverage plus M46 pure contract/time boundary tests, schema-15 migration and forced-rollback coverage, unchanged legacy read/analytics comparisons, creation-era identity assignment, database identity guards, and prospective append-only correction-chain constraints |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and relocated-smoke validated across local styles/icons, safe shell defaults, expanded/compact navigation, primary screens, both Detail types, keyboard navigation, responsive sizes, the v0.5 data boundary, search, backup, and GUI restart; original icon artwork, installer, signing, installer-created shortcuts, uninstall, updates, and public distribution remain deferred |
@@ -761,3 +761,37 @@ GUI/application/CLI Numeric creation remains interval-v1 until M51; v2 terminal
 workflows and visible scorecards remain M52. Backup already preserves all schema-18
 facts, and format-3 CSV continues to reject prospective cohorts until M55. See
 [ADR 0018](decisions/0018-five-quantile-revisions-and-shared-anchors.md).
+
+### M51: public five-quantile active workflows
+
+The public Numeric creation operation now accepts exactly five values, the
+immutable unit/precision/value constraint, and an exact Deadline. There is no
+legacy creation selector. A private legacy seed remains solely for compatibility,
+migration, visual-review, and private-build fixtures.
+
+`application/quantiles.py` composes the model-specific operations behind the
+existing application facade. `data/quantiles.py` samples time under transaction,
+checks reviewed revision/metadata tokens, and returns creation/revision snapshots
+from that same transaction. Reviews and Journals use explicit quantile anchors;
+transparent Journal corrections retain original text. Deadline checks also govern
+guarded deletion. Shared metadata transactions preserve the immutable definition
+and Deadline while updating tags, Definition history, and derived search atomically.
+
+`data/quantile_archive.py` projects current five-quantile summaries using stored
+cohort identity in the caller's existing snapshot. Dashboard, archive, and search
+carry the complete five values without populating legacy interval/confidence
+fields. The existing attention and local-date query rules reuse the exact contract.
+
+`ui/quantile_input.py` provides one editable complete set and a native QPainter
+central CDF, with elicited markers, dashed inner interpolation, vertical jumps at
+ties, exact text alternatives, and no outer extrapolation. Invalid/incomplete sets
+have no preview and are never sorted automatically. Desktop Detail and focused
+dialogs dispatch by the loaded model, as do CLI prompts and full-history output.
+Qt and CLI share validation/persistence operations, not SQL or scoring rules.
+
+New-model Resolution is explicitly unavailable until M52 rather than falling into
+the legacy interval scorer. Legacy editors, interval history, and terminal paths
+remain intact. Schema 18, complete SQLite backup, and the CSV format-3 guard are
+unchanged. Tests exercise public creation/revision, stale and deadline boundaries,
+anchored notes/corrections, metadata/search, deletion, restart, both interfaces,
+and retained legacy behavior on disposable databases.

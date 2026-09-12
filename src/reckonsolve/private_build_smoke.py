@@ -165,7 +165,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             correction_reason="Frozen smoke corrects the certified outcome.",
             expected_correction_id=None,
         )
-        numeric_prediction = operations.create_numeric_prediction(
+        numeric_prediction = operations._create_legacy_numeric_prediction(
             "M31 private frozen-build Numeric prediction?",
             "days",
             1,

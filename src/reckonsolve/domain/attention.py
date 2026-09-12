@@ -10,6 +10,7 @@ from .predictions import (
     PredictionStatus,
     PredictionType,
 )
+from .quantiles import FiveQuantiles
 
 DEFAULT_STALE_THRESHOLD_DAYS = 14
 MIN_STALE_THRESHOLD_DAYS = 1
@@ -41,6 +42,7 @@ class DashboardPrediction:
     numeric_unit: str | None = None
     latest_review_at: datetime | None = None
     forecast_contract: ForecastContract | None = None
+    numeric_quantiles: FiveQuantiles | None = None
 
     @property
     def attention_reference_at(self) -> datetime:

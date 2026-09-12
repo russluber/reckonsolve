@@ -226,7 +226,9 @@ def test_repository_uses_captured_numeric_revision_once_and_excludes_other_state
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(database, FixedClock(NOW)).create_numeric_prediction(
+    created = PredictionOperations(
+        database, FixedClock(NOW)
+    )._create_legacy_numeric_prediction(
         "How many days will the task take?",
         "days",
         0,
@@ -267,7 +269,7 @@ def test_repository_uses_captured_numeric_revision_once_and_excludes_other_state
             """,
             (created.prediction_id, format_utc(NOW + timedelta(hours=3))),
         )
-    PredictionOperations(database, FixedClock(NOW)).create_numeric_prediction(
+    PredictionOperations(database, FixedClock(NOW))._create_legacy_numeric_prediction(
         "How many unresolved items?",
         "items",
         0,
@@ -278,7 +280,7 @@ def test_repository_uses_captured_numeric_revision_once_and_excludes_other_state
         tags=("Unresolved",),
     )
     invalid_operations = PredictionOperations(database, FixedClock(NOW))
-    invalid = invalid_operations.create_numeric_prediction(
+    invalid = invalid_operations._create_legacy_numeric_prediction(
         "How many invalid items?",
         "items",
         0,

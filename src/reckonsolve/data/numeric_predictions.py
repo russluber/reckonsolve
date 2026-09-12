@@ -1,9 +1,11 @@
 """Purpose-specific SQLite access for the M13 numeric foundation."""
 
 import sqlite3
+from dataclasses import replace
 from datetime import date, datetime
 
 from reckonsolve.clock import format_utc, parse_utc
+from reckonsolve.domain.forecast_contracts import ForecastCohort
 from reckonsolve.domain.predictions import (
     FixedPrecisionValue,
     Invalidation,
@@ -29,7 +31,10 @@ from reckonsolve.domain.predictions import (
 from reckonsolve.domain.timeline import order_timeline
 
 from .database import Database
-from .forecast_contracts import insert_legacy_contract_if_supported
+from .forecast_contracts import (
+    insert_legacy_contract_if_supported,
+    select_supported_contract,
+)
 from .predictions import (
     ForecastContextChangedError,
     ForecastReviewContextChangedError,
@@ -44,6 +49,7 @@ from .predictions import (
     replace_tags,
     select_tags,
 )
+from .quantiles import read_prediction as read_quantile_prediction
 
 
 class NumericForecastRevisionUnchangedError(RuntimeError):
@@ -141,6 +147,10 @@ class NumericPredictionRepository:
                 row,
                 select_tags(connection, prediction_id),
             )
+            created = replace(
+                created,
+                forecast_contract=select_supported_contract(connection, prediction_id),
+            )
 
         return created
 
@@ -148,9 +158,22 @@ class NumericPredictionRepository:
         """Load one numeric Prediction and its current revision."""
 
         with self._database.transaction() as connection:
+            exists = connection.execute(
+                "SELECT 1 FROM predictions WHERE id = ? AND prediction_type = 'numeric'",
+                (prediction_id,),
+            ).fetchone()
+            if exists is None:
+                return None
+            contract = select_supported_contract(connection, prediction_id)
+            if contract and contract.cohort is ForecastCohort.QUANTILE_NUMERIC:
+                return read_quantile_prediction(connection, prediction_id)
             row = _select_numeric_prediction(connection, prediction_id)
             tags = () if row is None else select_tags(connection, prediction_id)
-        return None if row is None else _map_numeric_prediction(row, tags)
+        return (
+            None
+            if row is None
+            else replace(_map_numeric_prediction(row, tags), forecast_contract=contract)
+        )
 
     def get_latest_prediction(self) -> NumericPrediction | None:
         """Load the newest numeric Prediction and its current revision."""
@@ -165,6 +188,14 @@ class NumericPredictionRepository:
                 LIMIT 1
                 """
             ).fetchone()
+            if prediction_row is not None:
+                contract = select_supported_contract(
+                    connection, int(prediction_row["id"])
+                )
+                if contract and contract.cohort is ForecastCohort.QUANTILE_NUMERIC:
+                    return read_quantile_prediction(
+                        connection, int(prediction_row["id"])
+                    )
             row = (
                 None
                 if prediction_row is None
@@ -175,7 +206,11 @@ class NumericPredictionRepository:
                 if row is None
                 else select_tags(connection, int(row["prediction_id"]))
             )
-        return None if row is None else _map_numeric_prediction(row, tags)
+        return (
+            None
+            if row is None
+            else replace(_map_numeric_prediction(row, tags), forecast_contract=contract)
+        )
 
     def list_forecast_revisions(
         self,
@@ -279,6 +314,10 @@ class NumericPredictionRepository:
             updated = _map_numeric_prediction(
                 updated_row,
                 select_tags(connection, prediction_id),
+            )
+            updated = replace(
+                updated,
+                forecast_contract=select_supported_contract(connection, prediction_id),
             )
         return updated
 
@@ -674,6 +713,10 @@ class NumericPredictionRepository:
                 updated_row,
                 select_tags(connection, prediction_id),
             )
+            updated = replace(
+                updated,
+                forecast_contract=select_supported_contract(connection, prediction_id),
+            )
         return updated
 
     def invalidate_prediction(
@@ -724,6 +767,10 @@ class NumericPredictionRepository:
             updated = _map_numeric_prediction(
                 updated_row,
                 select_tags(connection, prediction_id),
+            )
+            updated = replace(
+                updated,
+                forecast_contract=select_supported_contract(connection, prediction_id),
             )
         return updated
 

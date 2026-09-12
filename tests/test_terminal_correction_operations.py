@@ -60,7 +60,7 @@ def _resolved_numeric(database: Database):
         database,
         FixedClock(CREATED),
         UTC,
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "What exact value will be observed?",
         "units",
         2,
@@ -281,7 +281,7 @@ def test_invalidation_reason_correction_is_append_only_for_both_types(tmp_path) 
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(CREATED), UTC)
     binary = operations._create_legacy_prediction("Will this remain meaningful?", 50)
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many meaningful units?",
         "units",
         0,

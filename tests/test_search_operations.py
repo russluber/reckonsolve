@@ -152,7 +152,7 @@ def test_numeric_sources_and_actual_value_correction_reason_are_searchable(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = _operations(database)
-    created = operations.create_numeric_prediction(
+    created = operations._create_legacy_numeric_prediction(
         "How many comet observations will be logged?",
         "observations",
         0,
@@ -342,7 +342,7 @@ def test_search_applies_existing_archive_filters_before_grouped_ranking(
         45,
         tags=("Included",),
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many sharedneedle items?",
         "items",
         0,
@@ -387,7 +387,7 @@ def test_search_applies_rich_archive_tags_and_dates_before_ranking(tmp_path) -> 
         expected_resolution=date(2026, 8, 25),
         tags=("Blue", "Red"),
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many archivehail observations will arrive?",
         "observations",
         0,

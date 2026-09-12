@@ -15,6 +15,7 @@ from .predictions import (
     PredictionStatus,
     PredictionType,
 )
+from .quantiles import FiveQuantiles
 
 
 class SearchValidationError(ValueError):
@@ -142,6 +143,7 @@ class SearchPrediction:
     binary_outcome: BinaryOutcome | None = None
     numeric_actual_value: FixedPrecisionValue | None = None
     forecast_contract: ForecastContract | None = None
+    numeric_quantiles: FiveQuantiles | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -67,7 +67,7 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
             expected_revision_id=open_binary.current_revision_id,
             expected_metadata_version=open_binary.metadata_version,
         )
-        operations.create_numeric_prediction(
+        operations._create_legacy_numeric_prediction(
             f"How many days will the representative Numeric forecast take?{repeated}",
             "days",
             1,
@@ -93,7 +93,7 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
             expected_metadata_version=resolved_binary.metadata_version,
         )
 
-        resolved_numeric = operations.create_numeric_prediction(
+        resolved_numeric = operations._create_legacy_numeric_prediction(
             f"How many items were in the resolved Numeric outcome?{repeated}",
             "items",
             0,

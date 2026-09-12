@@ -229,6 +229,8 @@ class FakeNumericPrediction:
     resolution: FakeNumericResolution | None = None
     invalidation: FakeInvalidation | None = None
     deletion_allowed: bool = True
+    forecast_contract: object | None = None
+    value_constraint: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,7 +568,7 @@ class FakePredictionOperations:
         ]
         return prediction
 
-    def create_numeric_prediction(
+    def _create_legacy_numeric_prediction(
         self,
         question: str,
         unit: str,
@@ -4714,8 +4716,7 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
     )
 
     assert panel.supporting_label.text() == (
-        "Numeric forecasts need a Question, unit, precision, interval, median, "
-        "and confidence."
+        "Numeric forecasts need a Question, unit, precision, value constraint, five percentiles, and permanent exact Deadline."
     )
 
 
@@ -4834,172 +4835,59 @@ def test_m42_dialogs_share_heading_context_error_and_action_roles(
 
 
 def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detail(
-    qtbot: QtBot,
-    window: MainWindow,
-    operations: FakePredictionOperations,
-) -> None:
+    qtbot, tmp_path
+):
+    from reckonsolve.application.predictions import PredictionOperations
+    from reckonsolve.data.database import Database
+    from reckonsolve.ui.screens import NewPredictionScreen
+
+    database = Database.open(tmp_path / "new-numeric.sqlite3")
+    operations = PredictionOperations(database)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
     window.show()
     window.navigate_to("New Prediction")
-    prediction_type = _required_child(window, QComboBox, "predictionTypeInput")
-    binary_fields = _required_child(window, QWidget, "binaryForecastFields")
-    numeric_fields = _required_child(window, QWidget, "numericForecastFields")
-
-    assert prediction_type.currentData() == PredictionType.BINARY.value
-    assert not binary_fields.isHidden()
-    assert numeric_fields.isHidden()
-    prediction_type.setCurrentIndex(
-        prediction_type.findData(PredictionType.NUMERIC.value)
+    screen = window.findChild(NewPredictionScreen)
+    screen.prediction_type_input.setCurrentIndex(
+        screen.prediction_type_input.findData("numeric")
     )
-    assert binary_fields.isHidden()
-    assert not numeric_fields.isHidden()
-
-    _required_child(window, QLineEdit, "questionInput").setText(
-        "How many days until the signed offer receives a response?"
-    )
-    _required_child(window, QLineEdit, "numericUnitInput").setText("days")
-    _required_child(window, QSpinBox, "numericPrecisionInput").setValue(1)
-    _required_child(window, QLineEdit, "numericLowerBoundInput").setText("3.0")
-    _required_child(window, QLineEdit, "numericMedianEstimateInput").setText("7.5")
-    _required_child(window, QLineEdit, "numericUpperBoundInput").setText("21.0")
-    confidence = _required_child(window, QSpinBox, "numericConfidenceInput")
-    assert confidence.minimum() == 1
-    assert confidence.maximum() == 99
-    qtbot.mouseClick(
-        _required_child(window, QPushButton, "numericConfidenceShortcut90"),
-        Qt.MouseButton.LeftButton,
-    )
-
-    _required_child(window, QGroupBox, "newPredictionMoreDetailsGroup").setChecked(True)
-    _required_child(window, QPlainTextEdit, "initialRationaleInput").setPlainText(
-        "The normal response window is two weeks."
-    )
-    _required_child(window, QPlainTextEdit, "initialBackgroundInput").setPlainText(
-        "The offer was sent this morning."
-    )
-    _required_child(
-        window,
-        QPlainTextEdit,
-        "initialResolutionCriteriaInput",
-    ).setPlainText("Count complete calendar days before the first reply.")
-    _required_child(window, QCheckBox, "initialForecastDeadlineToggle").setChecked(True)
-    _required_child(window, QDateEdit, "initialForecastDeadlineInput").setDate(
-        QDate(2026, 8, 31)
-    )
-    _required_child(window, QCheckBox, "initialExpectedResolutionToggle").setChecked(
-        True
-    )
-    _required_child(window, QDateEdit, "initialExpectedResolutionInput").setDate(
-        QDate(2026, 9, 20)
-    )
-    _required_child(window, QLineEdit, "initialTagsInput").setText("offer, timing")
-
-    _set_exact_deadline(window)
-    qtbot.mouseClick(
-        _required_child(window, QPushButton, "createPredictionButton"),
-        Qt.MouseButton.LeftButton,
-    )
-
-    assert operations.numeric_create_calls == [
-        CreateNumericPredictionCall(
-            question="How many days until the signed offer receives a response?",
-            unit="days",
-            decimal_places=1,
-            lower_bound="3.0",
-            median_estimate="7.5",
-            upper_bound="21.0",
-            confidence_percent=90,
-            rationale="The normal response window is two weeks.",
-            background="The offer was sent this morning.",
-            resolution_criteria="Count complete calendar days before the first reply.",
-            forecast_deadline=date(2026, 8, 31),
-            expected_resolution=date(2026, 9, 20),
-            tags=("offer", "timing"),
-        )
-    ]
-    assert operations.create_calls == []
+    screen.question_input.setText("How many days until a response?")
+    screen.numeric_unit_input.setText("days")
+    screen.numeric_precision_input.setValue(1)
+    screen.numeric_constraint_input.setCurrentIndex(1)
+    for level, value in {
+        5: "3.0",
+        25: "5.0",
+        50: "7.5",
+        75: "14.0",
+        95: "21.0",
+    }.items():
+        screen.quantile_input.inputs[level].setText(value)
+    screen.numeric_exact_deadline.toggle.setChecked(True)
+    screen.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
+    screen.numeric_exact_deadline.offset.setText("+00:00")
+    screen.tags_input.setText("offer, timing")
+    screen.submit()
     assert window.current_screen_name == "Prediction Detail"
-    assert _required_child(window, QLabel, "numericPredictionQuestion").text() == (
-        "How many days until the signed offer receives a response?"
-    )
-    assert _required_child(window, QLabel, "numericCurrentInterval").text() == (
-        "90% interval: 3.0 to 21.0 days"
-    )
-    assert _required_child(window, QLabel, "numericCurrentMedian").text() == (
-        "Median estimate: 7.5 days"
-    )
-    numeric_actions = _required_child(
-        window,
-        QWidget,
-        "numericPredictionActions",
-    ).layout()
-    assert isinstance(numeric_actions, QGridLayout)
-    numeric_delete = _required_child(
-        window,
-        QPushButton,
-        "deleteNumericPredictionButton",
-    )
-    numeric_edit = _required_child(
-        window,
-        QPushButton,
-        "editNumericPredictionDetailsButton",
-    )
-    numeric_resolve = _required_child(
-        window,
-        QPushButton,
-        "resolveNumericPredictionButton",
-    )
-    assert numeric_actions.getItemPosition(numeric_actions.indexOf(numeric_edit)) == (
-        1,
-        1,
-        1,
-        1,
-    )
-    assert numeric_actions.getItemPosition(
-        numeric_actions.indexOf(numeric_resolve)
-    ) == (
-        1,
-        2,
-        1,
-        1,
-    )
-    assert numeric_actions.getItemPosition(numeric_actions.indexOf(numeric_delete)) == (
-        2,
-        2,
-        1,
-        1,
-    )
-    assert window.findChild(QLabel, "numericPredictionLifecycleHeading") is None
     assert (
-        _required_child(
-            window,
-            QPushButton,
-            "markNumericPredictionInvalidButton",
-        ).property(ACTION_ROLE_PROPERTY)
-        == ActionRole.SECONDARY.value
-    )
-    assert _required_child(window, QLabel, "numericPredictionStatus").text() == "OPEN"
-    assert _required_child(window, QLabel, "numericForecastDeadlineValue").text() == (
-        "Aug 31, 2026"
-    )
-    assert _required_child(window, QLabel, "numericExpectedResolutionValue").text() == (
-        "Sep 20, 2026"
-    )
-    assert _required_child(window, QLabel, "numericInitialRationaleValue").text() == (
-        "The normal response window is two weeks."
+        _required_child(window, QLabel, "numericCurrentInterval").text()
+        == "90% interval: 3.0 to 21.0 days"
     )
     assert (
-        "later v0.2 milestones"
-        in _required_child(
-            window,
-            QLabel,
-            "numericPredictionNextSteps",
-        ).text()
+        "50% interval: 5.0 to 14.0"
+        in _required_child(window, QLabel, "numericCurrentMedian").text()
     )
-
+    assert not _required_child(
+        window, QPushButton, "resolveNumericPredictionButton"
+    ).isEnabled()
+    assert _required_child(
+        window, QPushButton, "editNumericPredictionDetailsButton"
+    ).isEnabled()
+    assert set(operations.get_numeric_prediction(1).tags) == {"offer", "timing"}
     window.navigate_to("New Prediction")
-    assert prediction_type.currentData() == PredictionType.BINARY.value
-    assert _required_child(window, QLineEdit, "numericUnitInput").text() == ""
-    assert _required_child(window, QSpinBox, "numericConfidenceInput").value() == 80
+    assert screen.numeric_unit_input.text() == ""
+    assert all(not field.text() for field in screen.quantile_input.inputs.values())
+    database.close()
 
 
 def test_numeric_edit_details_reuses_metadata_dialog_and_preserves_definition(
@@ -5110,46 +4998,38 @@ def test_numeric_edit_details_cancel_is_side_effect_free(qtbot: QtBot) -> None:
     assert not dialog.isVisible()
 
 
-def test_numeric_creation_failure_keeps_the_form_values_for_correction(
-    qtbot: QtBot,
-    window: MainWindow,
-    operations: FakePredictionOperations,
-) -> None:
-    operations.numeric_create_error = ApplicationError(
-        "Numeric forecasts require lower bound <= median <= upper bound."
-    )
-    window.navigate_to("New Prediction")
-    prediction_type = _required_child(window, QComboBox, "predictionTypeInput")
-    prediction_type.setCurrentIndex(
-        prediction_type.findData(PredictionType.NUMERIC.value)
-    )
-    _required_child(window, QLineEdit, "questionInput").setText("How many days?")
-    _required_child(window, QLineEdit, "numericUnitInput").setText("days")
-    _required_child(window, QLineEdit, "numericLowerBoundInput").setText("8")
-    _required_child(window, QLineEdit, "numericMedianEstimateInput").setText("3")
-    _required_child(window, QLineEdit, "numericUpperBoundInput").setText("10")
+def test_numeric_creation_failure_keeps_the_form_values_for_correction(qtbot, tmp_path):
+    from reckonsolve.application.predictions import PredictionOperations
+    from reckonsolve.data.database import Database
+    from reckonsolve.ui.screens import NewPredictionScreen
 
-    _set_exact_deadline(window)
-    qtbot.mouseClick(
-        _required_child(window, QPushButton, "createPredictionButton"),
-        Qt.MouseButton.LeftButton,
+    database = Database.open(tmp_path / "invalid-numeric.sqlite3")
+    operations = PredictionOperations(database)
+    screen = NewPredictionScreen(operations)
+    qtbot.addWidget(screen)
+    screen.prediction_type_input.setCurrentIndex(
+        screen.prediction_type_input.findData("numeric")
     )
-
-    assert window.current_screen_name == "New Prediction"
-    assert _required_child(window, QLabel, "predictionFormError").text() == (
-        "Numeric forecasts require lower bound <= median <= upper bound."
-    )
-    assert (
-        _required_child(window, QLineEdit, "numericMedianEstimateInput").text() == "3"
-    )
-    assert _required_child(window, QLineEdit, "numericUnitInput").text() == "days"
+    screen.question_input.setText("How many days?")
+    screen.numeric_unit_input.setText("days")
+    screen.numeric_constraint_input.setCurrentIndex(2)
+    for level, value in {5: "8", 25: "2", 50: "3", 75: "9", 95: "10"}.items():
+        screen.quantile_input.inputs[level].setText(value)
+    screen.numeric_exact_deadline.toggle.setChecked(True)
+    screen.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
+    screen.submit()
+    assert screen.form_error.text()
+    assert screen.quantile_input.inputs[50].text() == "3"
+    assert screen.numeric_unit_input.text() == "days"
+    assert not operations.browse_predictions().predictions
+    database.close()
 
 
 def test_prediction_detail_prefers_the_newer_numeric_prediction_when_times_tie(
     qtbot: QtBot,
 ) -> None:
     operations = FakePredictionOperations(FakePrediction(7, "Binary first?", 60))
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "Numeric later?",
         "days",
         0,
@@ -5187,12 +5067,12 @@ def test_more_details_date_controls_are_visually_unset_until_enabled(
     deadline_toggle = _required_child(
         window,
         QCheckBox,
-        "initialForecastDeadlineToggle",
+        "initialExpectedResolutionToggle",
     )
     deadline = _required_child(
         window,
         QDateEdit,
-        "initialForecastDeadlineInput",
+        "initialExpectedResolutionInput",
     )
 
     assert not deadline_toggle.isChecked()

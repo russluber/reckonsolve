@@ -2,6 +2,7 @@
 
 import csv
 import sqlite3
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import date, datetime, tzinfo
 from decimal import Decimal
@@ -18,6 +19,7 @@ from reckonsolve.analytics import (
     summarize_forecast_analytics,
 )
 from reckonsolve.analytics.trajectory import trajectory_scorecard
+from reckonsolve.application.quantiles import QuantileOperations
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
@@ -40,6 +42,7 @@ from reckonsolve.data.predictions import (
     PredictionDeletionDisallowedError,
     PredictionRepository,
 )
+from reckonsolve.data.quantiles import QuantilePredictionRepository
 from reckonsolve.data.saved_views import (
     DuplicateSavedViewNameError as RepositoryDuplicateSavedViewNameError,
 )
@@ -146,6 +149,11 @@ from reckonsolve.domain.predictions import (
     metadata_would_change,
     normalize_tag_label,
 )
+from reckonsolve.domain.quantiles import (
+    NumericValueConstraint,
+    QuantileRevision,
+    QuantileTimelineEvent,
+)
 from reckonsolve.domain.saved_views import (
     SavedView,
     SavedViewConfiguration,
@@ -228,6 +236,9 @@ class PredictionOperations:
         self._tag_repository = TagRepository(database)
         self._database = database
         self._clock = SystemClock() if clock is None else clock
+        self._quantiles = QuantileOperations(
+            QuantilePredictionRepository(database, self._clock)
+        )
         self._local_timezone = local_timezone
 
     def create_prediction(
@@ -321,6 +332,68 @@ class PredictionOperations:
         question: str,
         unit: str,
         decimal_places: int,
+        quantiles: Mapping[int, Decimal | int | str],
+        *,
+        value_constraint: NumericValueConstraint,
+        forecast_deadline: datetime,
+        rationale: str | None = None,
+        background: str | None = None,
+        resolution_criteria: str | None = None,
+        expected_resolution: date | None = None,
+        tags: tuple[str, ...] = (),
+    ) -> NumericPrediction:
+        return self._with_derived_numeric_status(
+            self._quantiles.create(
+                question,
+                unit,
+                decimal_places,
+                quantiles,
+                value_constraint=value_constraint,
+                forecast_deadline=forecast_deadline,
+                rationale=rationale,
+                background=background,
+                resolution_criteria=resolution_criteria,
+                expected_resolution=expected_resolution,
+                tags=tags,
+            ),
+            as_utc(self._clock.now()),
+        )
+
+    def revise_quantile_forecast(
+        self,
+        prediction_id: int,
+        quantiles: Mapping[int, Decimal | int | str],
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        rationale: str | None = None,
+    ) -> NumericPrediction:
+        current = self.get_numeric_prediction(prediction_id)
+        if not isinstance(current.current_revision, QuantileRevision):
+            raise ValidationError(
+                "Use the legacy interval editor for this Prediction.",
+                field="forecast_model",
+            )
+        self._validate_positive_token(expected_revision_id, "expected_revision_id")
+        self._validate_positive_token(
+            expected_metadata_version, "expected_metadata_version"
+        )
+        return self._with_derived_numeric_status(
+            self._quantiles.revise(
+                prediction_id,
+                quantiles,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                rationale=rationale,
+            ),
+            as_utc(self._clock.now()),
+        )
+
+    def _create_legacy_numeric_prediction(
+        self,
+        question: str,
+        unit: str,
+        decimal_places: int,
         lower_bound: Decimal | int | str,
         median_estimate: Decimal | int | str,
         upper_bound: Decimal | int | str,
@@ -333,7 +406,7 @@ class PredictionOperations:
         expected_resolution: date | None = None,
         tags: tuple[str, ...] = (),
     ) -> NumericPrediction:
-        """Create a complete Numeric Prediction and first interval atomically."""
+        """Private legacy fixture seed; never expose through normal creation."""
 
         try:
             revision = NewNumericForecastRevision(
@@ -473,6 +546,11 @@ class PredictionOperations:
         current = self._numeric_repository.get_prediction(prediction_id)
         if current is None:
             raise PredictionNotFoundError(prediction_id)
+        if isinstance(current.current_revision, QuantileRevision):
+            raise ValidationError(
+                "Use the five-quantile editor for this Prediction.",
+                field="forecast_model",
+            )
         try:
             new_revision = NewNumericForecastRevision(
                 FixedPrecisionValue.from_value(
@@ -536,9 +614,14 @@ class PredictionOperations:
     def list_numeric_forecast_revisions(
         self,
         prediction_id: int,
-    ) -> tuple[NumericForecastRevision, ...]:
+    ) -> tuple[NumericForecastRevision | QuantileRevision, ...]:
         """Return one Numeric Prediction's immutable revisions in sequence order."""
 
+        if isinstance(
+            self.get_numeric_prediction(prediction_id).current_revision,
+            QuantileRevision,
+        ):
+            return self._quantiles.repository.list_revisions(prediction_id)
         revisions = self._numeric_repository.list_forecast_revisions(prediction_id)
         if revisions is None:
             raise PredictionNotFoundError(prediction_id)
@@ -551,8 +634,24 @@ class PredictionOperations:
         note: str | None = None,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> NumericForecastReviewTimelineEvent:
-        """Record that the current Numeric interval was deliberately retained."""
+    ) -> NumericForecastReviewTimelineEvent | QuantileTimelineEvent:
+        """Record that the current Numeric forecast was deliberately retained."""
+
+        if isinstance(
+            self.get_numeric_prediction(prediction_id).current_revision,
+            QuantileRevision,
+        ):
+            self._validate_positive_token(expected_revision_id, "expected_revision_id")
+            self._validate_positive_token(
+                expected_metadata_version, "expected_metadata_version"
+            )
+            return self._quantiles.note(
+                prediction_id,
+                note,
+                review=True,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
 
         try:
             review = NewForecastReview(note)
@@ -604,8 +703,24 @@ class PredictionOperations:
         *,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> NumericJournalTimelineEvent:
+    ) -> NumericJournalTimelineEvent | QuantileTimelineEvent:
         """Append reasoning tied to the reviewed current Numeric interval."""
+
+        if isinstance(
+            self.get_numeric_prediction(prediction_id).current_revision,
+            QuantileRevision,
+        ):
+            self._validate_positive_token(expected_revision_id, "expected_revision_id")
+            self._validate_positive_token(
+                expected_metadata_version, "expected_metadata_version"
+            )
+            return self._quantiles.note(
+                prediction_id,
+                body,
+                review=False,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
 
         try:
             entry = NewJournalEntry(body)
@@ -656,8 +771,25 @@ class PredictionOperations:
         body: str,
         *,
         expected_correction_id: int | None,
-    ) -> NumericJournalTimelineEvent:
+    ) -> NumericJournalTimelineEvent | QuantileTimelineEvent:
         """Append a transparent correction to a Numeric Journal entry."""
+
+        self._validate_positive_token(entry_id, "entry_id")
+        if expected_correction_id is not None:
+            self._validate_positive_token(
+                expected_correction_id, "expected_correction_id"
+            )
+
+        if isinstance(
+            self.get_numeric_prediction(prediction_id).current_revision,
+            QuantileRevision,
+        ):
+            return self._quantiles.correct_journal(
+                prediction_id,
+                entry_id,
+                body,
+                expected_correction_id=expected_correction_id,
+            )
 
         try:
             correction = NewJournalCorrection(body)
@@ -692,9 +824,14 @@ class PredictionOperations:
     def list_numeric_timeline(
         self,
         prediction_id: int,
-    ) -> tuple[NumericTimelineEvent, ...]:
+    ) -> tuple[NumericTimelineEvent | QuantileTimelineEvent, ...]:
         """Return Numeric revisions and anchored Journal entries causally."""
 
+        if isinstance(
+            self.get_numeric_prediction(prediction_id).current_revision,
+            QuantileRevision,
+        ):
+            return self._quantiles.repository.list_timeline(prediction_id)
         timeline = self._numeric_repository.list_timeline(prediction_id)
         if timeline is None:
             raise PredictionNotFoundError(prediction_id)
@@ -711,6 +848,15 @@ class PredictionOperations:
         expected_metadata_version: int,
     ) -> NumericPrediction:
         """Resolve a Numeric Prediction and capture its exact scoring interval."""
+
+        if isinstance(
+            self.get_numeric_prediction(prediction_id).current_revision,
+            QuantileRevision,
+        ):
+            raise ValidationError(
+                "Five-quantile Resolution is coming in M52; no outcome was saved.",
+                field="resolution",
+            )
 
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
@@ -772,6 +918,23 @@ class PredictionOperations:
         expected_metadata_version: int,
     ) -> NumericPrediction:
         """Mark a Numeric Prediction terminal Invalid and outside scoring."""
+
+        if isinstance(
+            self.get_numeric_prediction(prediction_id).current_revision,
+            QuantileRevision,
+        ):
+            self._validate_positive_token(expected_revision_id, "expected_revision_id")
+            self._validate_positive_token(
+                expected_metadata_version, "expected_metadata_version"
+            )
+            self._quantiles.invalidate_or_delete(
+                prediction_id,
+                delete=False,
+                reason=reason,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
+            return self.get_numeric_prediction(prediction_id)
 
         try:
             invalidation = NewInvalidation(reason)
@@ -838,6 +1001,15 @@ class PredictionOperations:
         if confirm_permanent_deletion is not True:
             raise PredictionDeletionConfirmationRequired
         current = self.get_numeric_prediction(prediction_id)
+        if isinstance(current.current_revision, QuantileRevision):
+            self._quantiles.invalidate_or_delete(
+                prediction_id,
+                delete=True,
+                reason=None,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+            )
+            return self.get_latest_numeric_prediction()
         if (
             current.current_revision.revision_id != expected_revision_id
             or current.metadata_version != expected_metadata_version
@@ -2269,8 +2441,7 @@ class PredictionOperations:
         if current.metadata_version != expected_metadata_version:
             raise ConcurrentPredictionUpdateError(prediction_id)
         if (
-            isinstance(current, PredictionDetail)
-            and current.forecast_contract
+            current.forecast_contract
             and not current.forecast_contract.is_legacy
             and update.forecast_deadline is not None
         ):
@@ -2348,10 +2519,12 @@ class PredictionOperations:
         detail: NumericPrediction,
         now: datetime,
     ) -> NumericPrediction:
-        status = display_status(
+        status = contract_status(
             detail.status,
             detail.forecast_deadline,
             now.astimezone(self._local_timezone).date(),
+            detail.forecast_contract,
+            now,
         )
         return replace(
             detail,

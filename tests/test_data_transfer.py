@@ -324,7 +324,7 @@ def test_empty_csv_bundle_has_every_header_and_no_data_rows(tmp_path) -> None:
 def test_csv_export_includes_numeric_interval_data(tmp_path) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many days will the reply take?",
         "days",
         0,
@@ -425,7 +425,7 @@ def test_format_three_export_preserves_terminal_corrections_and_completion(
         expected_correction_id=None,
     )
 
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "What exact Numeric correction exports?",
         "units",
         2,
@@ -586,7 +586,7 @@ def _create_complete_history(operations: PredictionOperations):
 
 
 def _create_complete_numeric_history(operations: PredictionOperations):
-    created = operations.create_numeric_prediction(
+    created = operations._create_legacy_numeric_prediction(
         "How many days will the type-aware export take?",
         "days",
         1,

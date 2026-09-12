@@ -27,7 +27,7 @@ def test_create_numeric_prediction_persists_complete_initial_state_atomically(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
 
-    created = operations.create_numeric_prediction(
+    created = operations._create_legacy_numeric_prediction(
         "  How many days will the response take?  ",
         "  days  ",
         2,
@@ -78,7 +78,7 @@ def test_numeric_prediction_round_trips_through_restart_with_metadata_and_tags(
     first_database = Database.open(path)
     created = PredictionOperations(
         first_database, FixedClock(NOW), UTC
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How much will it cost?",
         "USD",
         2,
@@ -127,7 +127,7 @@ def test_numeric_creation_surfaces_expected_validation_errors_without_writes(
     values.update(kwargs)
 
     with pytest.raises(ValidationError) as error_info:
-        operations.create_numeric_prediction(**values)  # type: ignore[arg-type]
+        operations._create_legacy_numeric_prediction(**values)  # type: ignore[arg-type]
 
     assert error_info.value.field == field
     with database.transaction() as connection:
@@ -143,7 +143,7 @@ def test_numeric_creation_rejects_an_initial_deadline_that_has_already_passed(
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
 
     with pytest.raises(ValidationError) as error_info:
-        operations.create_numeric_prediction(
+        operations._create_legacy_numeric_prediction(
             "How many?",
             "days",
             0,
@@ -175,7 +175,7 @@ def test_numeric_creation_rolls_back_metadata_and_tags_with_a_failed_initial_rev
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
 
     with pytest.raises(sqlite3.IntegrityError, match="forced numeric creation failure"):
-        operations.create_numeric_prediction(
+        operations._create_legacy_numeric_prediction(
             "How many?",
             "days",
             0,

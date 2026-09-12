@@ -74,7 +74,7 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
         40,
         background="Duplicated memory appears in more than one fragment.",
     )
-    numeric = operations.create_numeric_prediction(
+    numeric = operations._create_legacy_numeric_prediction(
         "How many aurora samples will arrive?",
         "samples",
         0,

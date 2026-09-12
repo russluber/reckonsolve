@@ -238,7 +238,7 @@ def test_numeric_actual_correction_is_exact_and_score_affecting(
 ) -> None:
     created = PredictionOperations(
         database, FixedClock(CREATED), UTC
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many hours will this take?",
         "hours",
         2,
@@ -324,7 +324,7 @@ def test_numeric_invalid_reason_can_be_corrected_and_cleared(
 ) -> None:
     created = PredictionOperations(
         database, FixedClock(CREATED), UTC
-    ).create_numeric_prediction(
+    )._create_legacy_numeric_prediction(
         "How many units?",
         "units",
         0,
