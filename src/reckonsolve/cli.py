@@ -13,6 +13,7 @@ from typing import TextIO
 
 from PySide6.QtCore import QCoreApplication
 
+from reckonsolve.analytics.quantiles import QuantileScorecard
 from reckonsolve.analytics.trajectory import TrajectoryScorecard
 from reckonsolve.application.errors import ApplicationError, SavedViewNotFoundError
 from reckonsolve.application.predictions import PredictionOperations
@@ -82,6 +83,7 @@ from reckonsolve.identity import (
     ApplicationIdentity,
 )
 from reckonsolve.paths import ApplicationDataPathError, resolve_database_path
+from reckonsolve.quantile_display import quantile_scorecard_lines
 
 
 @dataclass(slots=True)
@@ -1079,6 +1081,10 @@ def _run_show(
             indicators,
             resolution_history,
             invalidation_history,
+            operations.get_prediction_scorecard(prediction_id)
+            if isinstance(prediction.current_revision, QuantileRevision)
+            and prediction.resolution is not None
+            else None,
         )
     else:
         timeline = operations.list_timeline(prediction_id)
@@ -1272,6 +1278,7 @@ def _format_numeric_detail(
     indicators: AttentionIndicators,
     resolution_history: NumericResolutionHistory | None,
     invalidation_history: InvalidationHistory | None,
+    scorecard: QuantileScorecard | None = None,
 ) -> str:
     lines = [f"Prediction #{prediction.prediction_id}", "Type: Numeric"]
     _append_common_detail(lines, prediction, indicators)
@@ -1311,10 +1318,27 @@ def _format_numeric_detail(
         invalidation_history,
     )
     _append_definition_history(lines, definition_changes)
+    if scorecard is not None:
+        lines.extend(
+            (
+                "",
+                "Numeric WIS scorecard",
+                *(terminal_text(line) for line in quantile_scorecard_lines(scorecard)),
+            )
+        )
     lines.extend(("", "Timeline"))
     for event in timeline:
         lines.append("")
         _append_numeric_timeline_event(lines, event, prediction.unit)
+        if (
+            scorecard is not None
+            and isinstance(event, QuantileTimelineEvent)
+            and event.kind == "forecast"
+            and event.record_id in scorecard.excluded_revision_ids
+        ):
+            lines.append(
+                "Excluded from scoring: at or after the effective cutoff; preserved history."
+            )
     return "\n".join(lines)
 
 
@@ -1455,8 +1479,18 @@ def _append_numeric_terminal(
             f"{resolution.actual_value} {terminal_text(prediction.unit)}",
         )
         _append_field(
-            lines, "Resolved", _format_local_timestamp(resolution.resolved_at)
+            lines,
+            "Recorded at"
+            if resolution.effective_resolution_at is not None
+            else "Resolved",
+            _format_local_timestamp(resolution.resolved_at),
         )
+        if resolution.effective_resolution_at is not None:
+            _append_field(
+                lines,
+                "Effective resolution time",
+                _format_local_timestamp(resolution.effective_resolution_at),
+            )
         scoring_revision = next(
             (
                 event
@@ -1483,7 +1517,9 @@ def _append_numeric_terminal(
         else:
             _append_field(
                 lines,
-                "Scoring revision",
+                "Recorded revision context (not scoring authority)"
+                if resolution.effective_resolution_at is not None
+                else "Scoring revision",
                 f"Revision {resolution.scoring_revision_sequence}, "
                 f"ID {resolution.scoring_revision_id}",
             )
@@ -1619,6 +1655,13 @@ def _append_numeric_resolution_history(
     lines.append(
         f"Original Resolution | {_format_local_timestamp(original.resolved_at)}"
     )
+    if original.effective_resolution_at is not None:
+        _append_field(
+            lines,
+            "Original effective resolution time",
+            _format_local_timestamp(original.effective_resolution_at),
+            indent="  ",
+        )
     _append_field(
         lines,
         "Actual value",
@@ -1657,6 +1700,13 @@ def _append_numeric_resolution_history(
             f"{correction.old_actual_value} {safe_unit}",
             f"{correction.new_actual_value} {safe_unit}",
         )
+        if correction.old_effective_resolution_at is not None:
+            _append_change(
+                lines,
+                "Effective resolution time",
+                _format_local_timestamp(correction.old_effective_resolution_at),
+                _format_local_timestamp(correction.new_effective_resolution_at),
+            )
         _append_change(
             lines,
             "Resolution notes",

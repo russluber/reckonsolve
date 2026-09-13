@@ -1,15 +1,16 @@
 """Exact individual WIS and cutoff selection, never cross-question raw aggregation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 
 from reckonsolve.domain.forecast_contracts import (
+    EffectiveResolutionTime,
     ForecastCohort,
     ForecastContract,
     ForecastingWindow,
     ResolutionTiming,
 )
-from reckonsolve.domain.predictions import FixedPrecisionValue
+from reckonsolve.domain.predictions import FixedPrecisionValue, NumericResolutionHistory
 from reckonsolve.domain.quantiles import (
     QUANTILE_LEVELS,
     FiveQuantiles,
@@ -165,6 +166,11 @@ class QuantileScorecard:
     final: WISScore | None
     delta_wis: Fraction | None
     unscored_reason: str | None
+    definition: QuantileDefinition | None = None
+    timing: ResolutionTiming | None = None
+    actual_value: FixedPrecisionValue | None = None
+    scoring_revision: QuantileRevision | None = None
+    scoring_facts_corrected: bool = False
 
 
 def quantile_scorecard(
@@ -199,4 +205,34 @@ def quantile_scorecard(
         final_score,
         initial_score.wis - final_score.wis,
         None,
+    )
+
+
+def resolved_quantile_scorecard(
+    contract: ForecastContract,
+    definition: QuantileDefinition,
+    revisions: tuple[QuantileRevision, ...],
+    history: NumericResolutionHistory,
+) -> QuantileScorecard:
+    """Project one canonical terminal snapshot; the recorded anchor is not authority."""
+    effective = history.effective
+    timing = ResolutionTiming(
+        EffectiveResolutionTime(effective.effective_resolution_at),
+        history.original.resolved_at,
+    )
+    card = quantile_scorecard(
+        contract, definition, revisions, timing, effective.actual_value
+    )
+    return replace(
+        card,
+        definition=definition,
+        timing=timing,
+        actual_value=effective.actual_value,
+        scoring_revision=next(
+            (r for r in revisions if r.revision_id == card.final_revision_id), None
+        ),
+        scoring_facts_corrected=any(
+            {"actual_value", "effective_resolution_at"}.intersection(c.changed_fields)
+            for c in history.corrections
+        ),
     )

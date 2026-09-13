@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 51
+Status: v0.6 source release complete; v0.7 implemented through Milestone 52
 Last reviewed: 2026-09-12
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutable model/scoring identities without inventing facts for legacy records. M47–M49 implement prospective Binary creation, exact-Deadline history, effective-time Resolution and corrections, individual Trajectory Brier, and separate aggregate feedback. M50 adds schema-18 five-quantile Numeric storage and pure exact WIS. M51 switches public Numeric creation and active GUI/CLI workflows to that model while preserving legacy interval editors. Numeric v2 Resolution and visible scoring remain M52; no new migration is needed for M51.
+Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutable model/scoring identities without inventing facts for legacy records. M47–M49 implement prospective Binary creation, exact-Deadline history, effective-time Resolution and corrections, individual Trajectory Brier, and separate aggregate feedback. M50 adds schema-18 five-quantile Numeric storage and pure exact WIS. M51 switches public Numeric creation and active GUI/CLI workflows to that model while preserving legacy interval editors. M52 completes Numeric v2 Resolution, corrections, and individual WIS scorecards without a new migration; aggregate calibration remains M53.
 
 | Area | Current state |
 |---|---|
@@ -21,7 +21,7 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutabl
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; each identity keeps `presentation.ini` beside its database; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
 | Schema | Version 18 adds fixed five-quantile revisions, immutable value constraints, and explicit quantile anchors in shared history, preserving all legacy rows; versions 16–17 retain immutable contracts, exact times, correction chains, and trajectory search/Postmortem support; versions 14–15 retain FTS5 and Saved Views |
-| Domain and application operations | Complete legacy behavior plus stored-cohort dispatch, exact-Deadline prospective Binary and five-quantile Numeric creation/revision/Review; Binary effective-time Resolution and corrections; Numeric v2 terminal workflows remain M52 |
+| Domain and application operations | Complete legacy behavior plus stored-cohort dispatch, exact-Deadline prospective Binary and five-quantile Numeric creation/revision/Review, effective-time Resolution, and append-only terminal corrections for both new cohorts |
 | Analytics | Legacy aggregates retain captured-final, correction-aware scoring and paired feedback. Trajectory Binary individual and aggregate scorecards derive exact standing segments and Fraction-valued metrics from immutable revision paths and effective cutoffs; every eligible Prediction receives one aggregate vote regardless of duration. Final-probability calibration is a separate diagnostic, and no new-cohort record enters legacy analytics. Qt and CLI only render these derived results |
 | Automated tests | Complete v0.1-v0.6 coverage plus M46 pure contract/time boundary tests, schema-15 migration and forced-rollback coverage, unchanged legacy read/analytics comparisons, creation-era identity assignment, database identity guards, and prospective append-only correction-chain constraints |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and relocated-smoke validated across local styles/icons, safe shell defaults, expanded/compact navigation, primary screens, both Detail types, keyboard navigation, responsive sizes, the v0.5 data boundary, search, backup, and GUI restart; original icon artwork, installer, signing, installer-created shortcuts, uninstall, updates, and public distribution remain deferred |
@@ -795,3 +795,41 @@ remain intact. Schema 18, complete SQLite backup, and the CSV format-3 guard are
 unchanged. Tests exercise public creation/revision, stale and deadline boundaries,
 anchored notes/corrections, metadata/search, deletion, restart, both interfaces,
 and retained legacy behavior on disposable databases.
+
+### M52: five-quantile terminal facts and individual WIS
+
+`QuantilePredictionRepository.resolve_prediction` validates current revision and
+metadata context, terminal eligibility, exact precision, and the immutable value
+constraint under the existing immediate write transaction. Its recorded-at sample
+is acquired after transaction access; the explicit use-recording-time choice uses
+that same instant as effective time. A regressing recording clock cannot precede
+the latest revision. The existing schema-18 Resolution stores the current quantile
+revision as recording context only, never as final-scoring authority.
+
+`terminal_history.py` dispatches original and correction reads from stored cohort
+identity and replays effective actual value, notes, Postmortem, and time together.
+The quantile correction table already introduced by M46/M50 records complete
+before/after snapshots, changed-field flags, reasons, and under-transaction correction
+timestamps. Original recorded-at cannot change; actual/time changes require a
+reason, while text-only corrections retain the saved exact effective instant.
+Search refresh remains atomic. A read-only correction union supplies Dashboard
+Postmortem facts across both Numeric cohorts without mixing their scoring rules.
+
+`AnalyticsRepository.get_quantile_source` returns one consistent contract,
+definition, complete revision history, and terminal-history snapshot. The pure
+individual WIS scorer selects strictly before the effective cutoff, identifies
+excluded revisions, and computes exact Fraction-valued Initial/Final/Delta WIS.
+Outcome-at-or-before-initial records remain explicitly unscored. No derived score
+or replacement scoring pointer is written; legacy aggregate queries still admit
+only legacy interval observations.
+
+The existing desktop Resolution and correction dialogs gain the shared explicit
+effective-time control only for Numeric v2. The dedicated `QuantileScorecardPanel`
+shows primary WIS and progressively discloses interval/median contributions and
+within-Prediction comparisons; exact plain-text formatting is shared with CLI
+`show` through `quantile_display.py`. Neither presentation layer selects revisions
+or computes scores. Excluded revisions stay visible in the causal timeline.
+Tests cover boundary times, exact signed/tied outcomes, whole-number rejection,
+correction reselection, no-score transitions, cancellation, stale context, rollback,
+Postmortem completion, source/backup restart, and GUI/CLI rendering. Schema 18 and
+the format-3 export guard remain unchanged; M53 owns aggregate calibration.

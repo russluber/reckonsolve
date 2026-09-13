@@ -218,6 +218,14 @@ def quantile_tables_exist(connection: sqlite3.Connection) -> bool:
     )
 
 
+def numeric_corrections_relation(connection: sqlite3.Connection) -> str:
+    """Common effective terminal projection, never scoring-revision authority."""
+    if quantile_tables_exist(connection):
+        columns = "id, prediction_id, numeric_resolution_id, sequence, new_actual_scaled, new_postmortem"
+        return f"(SELECT {columns} FROM numeric_resolution_corrections UNION ALL SELECT {columns} FROM numeric_quantile_resolution_corrections)"
+    return "numeric_resolution_corrections"
+
+
 def select_supported_contract(
     connection: sqlite3.Connection, prediction_id: int
 ) -> ForecastContract | None:

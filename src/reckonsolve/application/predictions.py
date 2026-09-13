@@ -18,6 +18,10 @@ from reckonsolve.analytics import (
     summarize_analytics,
     summarize_forecast_analytics,
 )
+from reckonsolve.analytics.quantiles import (
+    QuantileScorecard,
+    resolved_quantile_scorecard,
+)
 from reckonsolve.analytics.trajectory import trajectory_scorecard
 from reckonsolve.application.quantiles import QuantileOperations
 from reckonsolve.clock import Clock, SystemClock, as_utc
@@ -844,19 +848,12 @@ class PredictionOperations:
         *,
         resolution_notes: str | None = None,
         postmortem: str | None = None,
+        effective_resolution_at: datetime | None = None,
+        use_recorded_time: bool = False,
         expected_revision_id: int,
         expected_metadata_version: int,
     ) -> NumericPrediction:
-        """Resolve a Numeric Prediction and capture its exact scoring interval."""
-
-        if isinstance(
-            self.get_numeric_prediction(prediction_id).current_revision,
-            QuantileRevision,
-        ):
-            raise ValidationError(
-                "Five-quantile Resolution is coming in M52; no outcome was saved.",
-                field="resolution",
-            )
+        """Resolve under the stored Numeric cohort's exact outcome/time contract."""
 
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
@@ -866,6 +863,21 @@ class PredictionOperations:
         current = self._numeric_repository.get_prediction(prediction_id)
         if current is None:
             raise PredictionNotFoundError(prediction_id)
+        prospective = (
+            current.forecast_contract is not None
+            and not current.forecast_contract.is_legacy
+        )
+        if (
+            not prospective
+            and (effective_resolution_at is not None or use_recorded_time)
+        ) or (
+            prospective
+            and (bool(use_recorded_time) == (effective_resolution_at is not None))
+        ):
+            raise ValidationError(
+                "Choose either an effective resolution time or use recording time for a five-quantile Prediction; legacy Predictions use neither.",
+                field="effective_resolution_at",
+            )
         try:
             resolution = NewNumericResolution(
                 actual_value=FixedPrecisionValue.from_value(
@@ -875,6 +887,7 @@ class PredictionOperations:
                 ),
                 resolution_notes=resolution_notes,
                 postmortem=postmortem,
+                effective_resolution_at=effective_resolution_at,
             )
         except PredictionValidationError as error:
             raise ValidationError(str(error), field=error.field) from error
@@ -892,13 +905,25 @@ class PredictionOperations:
         if effective_status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
             raise LifecycleTransitionNotAllowedError("resolved", effective_status)
         try:
-            updated = self._numeric_repository.resolve_prediction(
-                prediction_id,
-                resolution,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-                resolved_at=now,
+            updated = (
+                self._quantiles.repository.resolve_prediction(
+                    prediction_id,
+                    resolution,
+                    expected_revision_id=expected_revision_id,
+                    expected_metadata_version=expected_metadata_version,
+                    use_recorded_time=use_recorded_time,
+                )
+                if prospective
+                else self._numeric_repository.resolve_prediction(
+                    prediction_id,
+                    resolution,
+                    expected_revision_id=expected_revision_id,
+                    expected_metadata_version=expected_metadata_version,
+                    resolved_at=now,
+                )
             )
+        except (PredictionValidationError, ForecastContractValidationError) as error:
+            raise ValidationError(str(error), field=error.field) from error
         except LifecycleContextChangedError as error:
             raise ConcurrentLifecycleUpdateError(prediction_id) from error
         except LifecycleTransitionDisallowedError as error:
@@ -1467,12 +1492,32 @@ class PredictionOperations:
         resolution_notes: str | None,
         postmortem: str | None,
         correction_reason: str | None = None,
+        effective_resolution_at: datetime | None = None,
         expected_correction_id: int | None,
     ) -> NumericResolutionHistory:
         """Append one complete exact Numeric Resolution correction snapshot."""
 
         history = self.get_numeric_resolution_history(prediction_id)
+        prediction = self.get_numeric_prediction(prediction_id)
+        prospective = (
+            prediction.forecast_contract is not None
+            and not prediction.forecast_contract.is_legacy
+        )
+        if not prospective and effective_resolution_at is not None:
+            raise ValidationError(
+                "Legacy Resolutions do not use an effective resolution time.",
+                field="effective_resolution_at",
+            )
         try:
+            if prospective:
+                effective_resolution_at = ResolutionTiming(
+                    EffectiveResolutionTime(
+                        effective_resolution_at
+                        if effective_resolution_at is not None
+                        else history.effective.effective_resolution_at
+                    ),
+                    history.original.resolved_at,
+                ).effective.instant
             proposed = NewNumericResolutionCorrection(
                 actual_value=FixedPrecisionValue.from_value(
                     actual_value,
@@ -1482,8 +1527,9 @@ class PredictionOperations:
                 resolution_notes=resolution_notes,
                 postmortem=postmortem,
                 correction_reason=correction_reason,
+                effective_resolution_at=effective_resolution_at,
             )
-        except PredictionValidationError as error:
+        except (PredictionValidationError, ForecastContractValidationError) as error:
             raise ValidationError(str(error), field=error.field) from error
         self._validate_optional_positive_token(
             expected_correction_id,
@@ -1505,15 +1551,18 @@ class PredictionOperations:
                     proposed,
                     expected_correction_id=expected_correction_id,
                     corrected_at=corrected_at,
+                    clock=self._clock if prospective else None,
                 )
             )
+        except (PredictionValidationError, ForecastContractValidationError) as error:
+            raise ValidationError(str(error), field=error.field) from error
         except TerminalCorrectionContextChangedError as error:
             raise ConcurrentTerminalCorrectionError(prediction_id) from error
         except RepositoryTerminalCorrectionUnchangedError as error:
             raise TerminalCorrectionUnchangedError from error
         except OutcomeCorrectionReasonRequiredError as error:
             raise ValidationError(
-                "Explain why the recorded actual value is being corrected.",
+                "Explain why the actual value or effective resolution time is being corrected.",
                 field="correction_reason",
             ) from error
         if updated is None:
@@ -2195,15 +2244,19 @@ class PredictionOperations:
     def get_prediction_scorecard(
         self,
         prediction_id: int,
-    ) -> PredictionScorecard | None:
+    ) -> PredictionScorecard | QuantileScorecard | None:
         """Return one resolved Prediction's type-aware derived scorecard.
 
-        The card is derived only from the immutable scoring ForecastRevision and
-        the effective current terminal value supplied by analytics data access.
+        Legacy cards use their captured scoring revision. Prospective cards use
+        complete immutable history and effective terminal facts from analytics
+        data access; the original recording anchor never substitutes for scoring.
         Unresolved and Invalid Predictions intentionally have no scorecard.
         """
 
         self._validate_positive_token(prediction_id, "prediction_id")
+        quantile_source = self._analytics_repository.get_quantile_source(prediction_id)
+        if quantile_source is not None:
+            return resolved_quantile_scorecard(*quantile_source)
         trajectory_source = self._analytics_repository.get_trajectory_source(
             prediction_id
         )

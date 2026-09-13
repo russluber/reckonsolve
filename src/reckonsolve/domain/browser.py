@@ -115,6 +115,7 @@ class PredictionBrowserItem:
     numeric_unit: str | None = None
     forecast_contract: ForecastContract | None = None
     numeric_quantiles: FiveQuantiles | None = None
+    numeric_actual_value: FixedPrecisionValue | None = None
 
 
 @dataclass(frozen=True, slots=True)

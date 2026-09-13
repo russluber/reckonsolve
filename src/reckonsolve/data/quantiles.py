@@ -3,10 +3,13 @@
 import sqlite3
 from datetime import date
 
-from reckonsolve.clock import Clock, format_utc, parse_utc
+from reckonsolve.clock import Clock, as_utc, format_utc, parse_utc
 from reckonsolve.domain.forecast_contracts import (
+    EffectiveResolutionTime,
     ForecastCohort,
+    ForecastContractValidationError,
     ForecastingWindow,
+    ResolutionTiming,
     contract_status,
     prospective_contract,
 )
@@ -17,6 +20,7 @@ from reckonsolve.domain.predictions import (
     NewForecastReview,
     NewJournalCorrection,
     NewJournalEntry,
+    NewNumericResolution,
     NumericPrediction,
     PredictionStatus,
     PredictionType,
@@ -53,6 +57,7 @@ from .predictions import (
     replace_tags,
     select_tags,
 )
+from .terminal_history import _select_numeric_resolution_history
 
 
 def read_prediction(
@@ -68,6 +73,7 @@ def read_prediction(
         (prediction_id,),
     ).fetchone()
     untouched = row["metadata_version"] == 1 and len(revisions) == 1
+    terminal = _select_numeric_resolution_history(connection, prediction_id)
     for table in (
         "journal_entries",
         "forecast_reviews",
@@ -108,6 +114,7 @@ def read_prediction(
         deletion_allowed=untouched and row["status"] == "open",
         forecast_contract=select_forecast_contract(connection, prediction_id),
         value_constraint=definition.value_constraint,
+        resolution=terminal.effective if terminal is not None else None,
     )
 
 
@@ -448,6 +455,55 @@ class QuantilePredictionRepository:
                     "INSERT INTO prediction_invalidations (prediction_id, invalidated_at, reason) VALUES (?, ?, ?)",
                     (prediction_id, format_utc(now), reason),
                 )
+
+    def resolve_prediction(
+        self,
+        prediction_id: int,
+        resolution: NewNumericResolution,
+        *,
+        expected_revision_id: int,
+        expected_metadata_version: int,
+        use_recorded_time: bool = False,
+    ) -> NumericPrediction:
+        with self._database.transaction() as connection:
+            current = read_prediction(connection, prediction_id)
+            if (
+                current.current_revision.revision_id != expected_revision_id
+                or current.metadata_version != expected_metadata_version
+            ):
+                raise LifecycleContextChangedError
+            if current.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
+                raise LifecycleTransitionDisallowedError(current.status)
+            definition = read_definition(connection, prediction_id)
+            definition.validate_value(resolution.actual_value)
+            now = as_utc(self._clock.now())
+            if now < current.current_revision.created_at:
+                raise ForecastContractValidationError(
+                    "Recording time cannot precede the latest forecast revision.",
+                    field="effective_resolution_at",
+                )
+            timing = ResolutionTiming(
+                EffectiveResolutionTime(
+                    now if use_recorded_time else resolution.effective_resolution_at
+                ),
+                now,
+            )
+            connection.execute(
+                """INSERT INTO numeric_resolutions
+                (prediction_id, actual_scaled, resolved_at, quantile_revision_id,
+                 effective_resolution_at, resolution_notes, postmortem)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    prediction_id,
+                    resolution.actual_value.scaled_value,
+                    format_utc(now),
+                    current.current_revision.revision_id,
+                    format_utc(timing.effective.instant),
+                    resolution.resolution_notes,
+                    resolution.postmortem,
+                ),
+            )
+            return read_prediction(connection, prediction_id)
 
     def list_timeline(self, prediction_id: int) -> tuple[QuantileTimelineEvent, ...]:
         with self._database.transaction() as connection:

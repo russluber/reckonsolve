@@ -579,6 +579,8 @@ def _select_predictions(
                 numeric_unit=item.numeric_unit,
                 forecast_contract=item.forecast_contract,
                 numeric_quantiles=item.numeric_quantiles,
+                numeric_actual_value=item.numeric_actual_value,
+                needs_postmortem=item.needs_postmortem,
             )
     return predictions
 

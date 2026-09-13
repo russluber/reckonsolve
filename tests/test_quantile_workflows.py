@@ -196,7 +196,7 @@ def test_preview_valid_only_ties_and_detail(qtbot, app_ops):
     detail.show_prediction(first)
     detail.show()
     assert not detail.quantile_cdf.isHidden()
-    assert not detail.resolve_button.isEnabled()
+    assert detail.resolve_button.isEnabled()
     detail.grab()
     dialog = ReviseQuantileForecastDialog(ops, first)
     qtbot.addWidget(dialog)

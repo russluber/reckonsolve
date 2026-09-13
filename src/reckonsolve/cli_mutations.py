@@ -8,7 +8,6 @@ from reckonsolve.application.errors import (
     JournalEntryNotAllowedError,
     LifecycleTransitionNotAllowedError,
     PredictionDeletionNotAllowedError,
-    ValidationError,
 )
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli_creation import CliInputCancelled, PromptSession, ask_quantiles
@@ -180,16 +179,8 @@ def resolve_interactively(
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise LifecycleTransitionNotAllowedError("resolved", prediction.status)
-    if isinstance(prediction, NumericPrediction) and isinstance(
-        prediction.current_revision, QuantileRevision
-    ):
-        raise ValidationError(
-            "Five-quantile Resolution is coming in M52; no outcome was saved.",
-            field="resolution",
-        )
     prospective = (
-        isinstance(prediction, PredictionDetail)
-        and prediction.forecast_contract
+        prediction.forecast_contract is not None
         and not prediction.forecast_contract.is_legacy
     )
 
@@ -201,7 +192,7 @@ def resolve_interactively(
     timing: dict[str, datetime | bool] = {}
     if prospective:
         print(
-            "Trajectory Brier uses when the outcome first became fixed and "
+            "Scoring uses when the outcome first became fixed and "
             "ascertainable, not when you happened to record it. Forecasts at "
             "or after that cutoff stay in history but do not score.",
             file=session.output,
@@ -210,28 +201,28 @@ def resolve_interactively(
         actual_value = _ask_exact_actual_value(prediction, session)
     else:
         outcome = _ask_binary_outcome(session)
-        if prospective:
-            while True:
-                raw = session.ask(
-                    "When did the outcome become knowable? [now] or exact ISO "
-                    "time with UTC offset: "
-                ).strip()
-                if not raw or raw.casefold() == "now":
-                    timing = {"use_recorded_time": True}
-                    break
-                try:
-                    timing = {
-                        "effective_resolution_at": EffectiveResolutionTime(
-                            datetime.fromisoformat(raw)
-                        ).instant
-                    }
-                    break
-                except ValueError:
-                    print(
-                        "Enter now or an exact time with an offset, such as "
-                        "2026-09-10T14:30:00-07:00.",
-                        file=session.errors,
-                    )
+    if prospective:
+        while True:
+            raw = session.ask(
+                "When did the outcome become knowable? [now] or exact ISO "
+                "time with UTC offset: "
+            ).strip()
+            if not raw or raw.casefold() == "now":
+                timing = {"use_recorded_time": True}
+                break
+            try:
+                timing = {
+                    "effective_resolution_at": EffectiveResolutionTime(
+                        datetime.fromisoformat(raw)
+                    ).instant
+                }
+                break
+            except ValueError:
+                print(
+                    "Enter now or an exact time with an offset, such as "
+                    "2026-09-10T14:30:00-07:00.",
+                    file=session.errors,
+                )
     resolution_notes = _optional_line(
         session.ask("Resolution notes (optional, one line): ")
     )
@@ -246,6 +237,7 @@ def resolve_interactively(
             postmortem=postmortem,
             expected_revision_id=prediction.current_revision.revision_id,
             expected_metadata_version=prediction.metadata_version,
+            **timing,
         )
         if resolved.resolution is None:
             raise RuntimeError("Resolved Numeric Prediction has no resolution record.")
@@ -505,11 +497,17 @@ def _ask_exact_actual_value(
             session.explain_error("Actual value is required.")
             continue
         try:
-            FixedPrecisionValue.from_value(
+            actual = FixedPrecisionValue.from_value(
                 value,
                 prediction.decimal_places,
                 field="actual_value",
             )
+            if isinstance(prediction.current_revision, QuantileRevision):
+                QuantileDefinition(
+                    prediction.unit,
+                    prediction.decimal_places,
+                    prediction.value_constraint,
+                ).validate_value(actual)
         except PredictionValidationError as error:
             session.explain_error(f"Invalid actual value: {error}")
             continue

@@ -56,6 +56,7 @@ from .forecast_contracts import (
     insert_legacy_contract_if_supported,
     insert_prospective_contract,
     map_binary_contract,
+    numeric_corrections_relation,
     select_supported_contract,
 )
 from .quantile_archive import read_archive as read_quantile_archive
@@ -1025,12 +1026,12 @@ class PredictionRepository:
                     CASE
                         WHEN EXISTS (
                             SELECT 1
-                            FROM numeric_resolution_corrections AS correction
+                            FROM {numeric_corrections_relation(connection)} AS correction
                             WHERE correction.numeric_resolution_id = resolution.id
                         )
                         THEN (
                             SELECT correction.new_actual_scaled
-                            FROM numeric_resolution_corrections AS correction
+                            FROM {numeric_corrections_relation(connection)} AS correction
                             WHERE correction.numeric_resolution_id = resolution.id
                             ORDER BY correction.sequence DESC
                             LIMIT 1
@@ -1041,7 +1042,7 @@ class PredictionRepository:
                     prediction.numeric_precision,
                     (
                         SELECT correction.id
-                        FROM numeric_resolution_corrections AS correction
+                        FROM {numeric_corrections_relation(connection)} AS correction
                         WHERE correction.numeric_resolution_id = resolution.id
                         ORDER BY correction.sequence DESC
                         LIMIT 1
@@ -1060,12 +1061,12 @@ class PredictionRepository:
                         CASE
                             WHEN EXISTS (
                                 SELECT 1
-                                FROM numeric_resolution_corrections AS correction
+                                FROM {numeric_corrections_relation(connection)} AS correction
                                 WHERE correction.numeric_resolution_id = resolution.id
                             )
                             THEN (
                                 SELECT correction.new_postmortem
-                                FROM numeric_resolution_corrections AS correction
+                                FROM {numeric_corrections_relation(connection)} AS correction
                                 WHERE correction.numeric_resolution_id = resolution.id
                                 ORDER BY correction.sequence DESC
                                 LIMIT 1

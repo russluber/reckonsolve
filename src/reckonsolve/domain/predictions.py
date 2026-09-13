@@ -318,6 +318,7 @@ class NewNumericResolution:
     actual_value: FixedPrecisionValue
     resolution_notes: str | None = None
     postmortem: str | None = None
+    effective_resolution_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.actual_value, FixedPrecisionValue):
@@ -388,6 +389,7 @@ class NewNumericResolutionCorrection:
     resolution_notes: str | None = None
     postmortem: str | None = None
     correction_reason: str | None = None
+    effective_resolution_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.actual_value, FixedPrecisionValue):
@@ -628,7 +630,11 @@ class Resolution:
 
 @dataclass(frozen=True, slots=True)
 class NumericResolution:
-    """One immutable realized quantity and captured scoring interval."""
+    """One realized quantity and captured revision context.
+
+    The anchor is scoring authority only for legacy intervals. Five-quantile
+    scoring selects from complete history using effective time and Deadline.
+    """
 
     resolution_id: int
     prediction_id: int
@@ -638,6 +644,7 @@ class NumericResolution:
     scoring_revision_sequence: int
     resolution_notes: str | None = None
     postmortem: str | None = None
+    effective_resolution_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -688,6 +695,8 @@ class NumericResolutionCorrection:
     new_postmortem: str | None
     changed_fields: tuple[str, ...]
     correction_reason: str | None = None
+    old_effective_resolution_at: datetime | None = None
+    new_effective_resolution_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -776,6 +785,7 @@ NUMERIC_RESOLUTION_CORRECTION_FIELDS = (
     "actual_value",
     "resolution_notes",
     "postmortem",
+    "effective_resolution_at",
 )
 
 
@@ -850,6 +860,7 @@ def derive_effective_numeric_resolution(
             or correction.old_actual_value != current.actual_value
             or correction.old_resolution_notes != current.resolution_notes
             or correction.old_postmortem != current.postmortem
+            or correction.old_effective_resolution_at != current.effective_resolution_at
         ):
             raise TerminalHistoryIntegrityError(
                 "Numeric Resolution correction history is inconsistent."
@@ -859,6 +870,7 @@ def derive_effective_numeric_resolution(
             actual_value=correction.new_actual_value,
             resolution_notes=correction.new_resolution_notes,
             postmortem=correction.new_postmortem,
+            effective_resolution_at=correction.new_effective_resolution_at,
         )
     return current
 

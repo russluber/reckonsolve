@@ -4877,7 +4877,7 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
         "50% interval: 5.0 to 14.0"
         in _required_child(window, QLabel, "numericCurrentMedian").text()
     )
-    assert not _required_child(
+    assert _required_child(
         window, QPushButton, "resolveNumericPredictionButton"
     ).isEnabled()
     assert _required_child(

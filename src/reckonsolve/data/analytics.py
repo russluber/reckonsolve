@@ -11,17 +11,23 @@ from reckonsolve.domain.analytics import (
     TrajectoryAnalyticsSource,
     TrajectoryScoringRecord,
 )
-from reckonsolve.domain.forecast_contracts import ForecastContract
+from reckonsolve.domain.forecast_contracts import ForecastCohort, ForecastContract
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     BinaryResolutionHistory,
     FixedPrecisionValue,
     ForecastRevision,
+    NumericResolutionHistory,
 )
+from reckonsolve.domain.quantiles import QuantileDefinition, QuantileRevision
 
 from .database import Database
 from .forecast_contracts import select_supported_contract
-from .terminal_history import _select_binary_resolution_history
+from .quantiles import read_definition, read_revisions
+from .terminal_history import (
+    _select_binary_resolution_history,
+    _select_numeric_resolution_history,
+)
 
 
 class AnalyticsRepository:
@@ -35,6 +41,38 @@ class AnalyticsRepository:
 
         with self._database.transaction() as connection:
             return _load_binary_source(connection)
+
+    def get_quantile_source(
+        self, prediction_id: int
+    ) -> (
+        tuple[
+            ForecastContract,
+            QuantileDefinition,
+            tuple[QuantileRevision, ...],
+            NumericResolutionHistory,
+        ]
+        | None
+    ):
+        with self._database.transaction() as connection:
+            row = connection.execute(
+                "SELECT status FROM predictions WHERE id = ?", (prediction_id,)
+            ).fetchone()
+            if row is None or row[0] != "resolved":
+                return None
+            contract = select_supported_contract(connection, prediction_id)
+            if (
+                contract is None
+                or contract.cohort is not ForecastCohort.QUANTILE_NUMERIC
+            ):
+                return None
+            history = _select_numeric_resolution_history(connection, prediction_id)
+            assert history is not None
+            return (
+                contract,
+                read_definition(connection, prediction_id),
+                read_revisions(connection, prediction_id),
+                history,
+            )
 
     def get_trajectory_source(
         self, prediction_id: int

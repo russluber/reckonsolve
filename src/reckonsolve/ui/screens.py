@@ -39,6 +39,7 @@ from reckonsolve.analytics import (
     NumericScorecard,
     PredictionScorecard,
 )
+from reckonsolve.analytics.quantiles import QuantileScorecard
 from reckonsolve.analytics.trajectory import TrajectoryScorecard
 from reckonsolve.application.errors import (
     ApplicationError,
@@ -84,6 +85,7 @@ from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.quantile_input import FiveQuantileInput, QuantileCDF
+from reckonsolve.ui.quantile_scorecard import QuantileScorecardPanel
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
@@ -167,6 +169,7 @@ class NumericResolutionSnapshot(Protocol):
     prediction_id: int
     actual_value: object
     resolved_at: datetime
+    effective_resolution_at: datetime | None
     scoring_revision_id: int
     scoring_revision_sequence: int
     resolution_notes: str | None
@@ -1474,6 +1477,10 @@ class NumericPredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_time)
         resolution_layout.addWidget(self.resolution_scoring)
         resolution_layout.addWidget(self.scorecard_section)
+        self.quantile_scorecard = QuantileScorecardPanel(self.resolution_section)
+        self.quantile_scorecard.hide()
+        self._quantile_score: QuantileScorecard | None = None
+        resolution_layout.addWidget(self.quantile_scorecard)
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem)
         resolution_layout.addWidget(self.postmortem_completion)
@@ -1902,9 +1909,9 @@ class NumericPredictionDetailScreen(QWidget):
             PredictionStatus.OPEN,
             PredictionStatus.LOCKED,
         )
-        self.resolve_button.setEnabled(terminal_allowed and not quantile)
+        self.resolve_button.setEnabled(terminal_allowed)
         self.resolve_button.setToolTip(
-            "Five-quantile Resolution is coming in M52."
+            "Record the actual outcome and effective resolution time."
             if quantile
             else "Resolve this prediction."
         )
@@ -1958,6 +1965,8 @@ class NumericPredictionDetailScreen(QWidget):
         self,
         prediction: NumericPredictionSnapshot,
     ) -> None:
+        self.quantile_scorecard.hide()
+        self._quantile_score = None
         resolution = prediction.resolution
         if resolution is None:
             self._resolution_history = None
@@ -1997,6 +2006,17 @@ class NumericPredictionDetailScreen(QWidget):
                 f"Scoring interval (revision {resolution.scoring_revision_sequence}): "
                 f"{_numeric_forecast_text(prediction.current_revision, prediction.unit)}"
             )
+            if isinstance(prediction.current_revision, QuantileRevision):
+                self.resolution_time.setText(
+                    f"Effective resolution: {format_local_deadline(effective.effective_resolution_at)}\n"
+                    f"Recorded at: {format_local_deadline(resolution.resolved_at)}"
+                )
+                self.resolution_time.setToolTip(
+                    f"Effective: {effective.effective_resolution_at.isoformat()}\nRecorded: {resolution.resolved_at.isoformat()}"
+                )
+                self.resolution_scoring.setText(
+                    "Scoring uses the last revision strictly before the earlier of effective resolution and the permanent Deadline."
+                )
             self.resolution_notes.setText(
                 ""
                 if not effective.resolution_notes
@@ -2061,6 +2081,12 @@ class NumericPredictionDetailScreen(QWidget):
         except ApplicationError as error:
             self.scorecard_section.setHidden(True)
             self._show_error(f"Scorecard is unavailable. {error}")
+            return
+        if isinstance(scorecard, QuantileScorecard):
+            self._quantile_score = scorecard
+            self.scorecard_section.hide()
+            self.quantile_scorecard.set_scorecard(scorecard)
+            self.quantile_scorecard.show()
             return
         if not isinstance(scorecard, NumericScorecard):
             self.scorecard_section.setHidden(True)
@@ -2181,6 +2207,19 @@ class NumericPredictionDetailScreen(QWidget):
         text.setTextFormat(Qt.TextFormat.PlainText)
         _make_selectable(text)
         layout.addWidget(text)
+        if (
+            event.kind == "forecast"
+            and self._quantile_score is not None
+            and event.record_id in self._quantile_score.excluded_revision_ids
+        ):
+            excluded = QLabel(
+                "Excluded from scoring: at or after the effective cutoff. Preserved history.",
+                frame,
+            )
+            excluded.setWordWrap(True)
+            excluded.setObjectName(f"numericForecastExcluded{event.record_id}")
+            apply_text_role(excluded, TextRole.SECONDARY)
+            layout.addWidget(excluded)
         if event.kind == "journal":
             if event.corrections:
                 edited = QLabel(
@@ -3457,6 +3496,11 @@ class ResolveNumericPredictionDialog(_StyledDialog):
         self._prediction_id = prediction.prediction_id
         self._expected_revision_id = prediction.current_revision.revision_id
         self._expected_metadata_version = prediction.metadata_version
+        self.effective_time = (
+            EffectiveTimeInput(self)
+            if isinstance(prediction.current_revision, QuantileRevision)
+            else None
+        )
 
         title = QLabel("Resolve Numeric Prediction", self)
         explanation = QLabel(
@@ -3467,6 +3511,10 @@ class ResolveNumericPredictionDialog(_StyledDialog):
             self,
         )
         explanation.setObjectName("resolveNumericPredictionExplanation")
+        if self.effective_time is not None:
+            explanation.setText(
+                "Resolution is a one-way terminal decision. WIS uses the last forecast strictly before the earlier of the effective outcome time and Deadline, not necessarily the latest displayed forecast. Earlier facts and later corrections remain in history."
+            )
         explanation.setTextFormat(Qt.TextFormat.PlainText)
         explanation.setWordWrap(True)
         reviewed = QLabel(
@@ -3475,6 +3523,10 @@ class ResolveNumericPredictionDialog(_StyledDialog):
             self,
         )
         reviewed.setObjectName("resolveNumericScoringForecast")
+        if self.effective_time is not None:
+            reviewed.setText(
+                f"Reviewed current forecast: {_numeric_forecast_text(prediction.current_revision, prediction.unit)} (revision {prediction.current_revision.sequence})\nValue constraint: {prediction.value_constraint.value}"
+            )
         reviewed.setTextFormat(Qt.TextFormat.PlainText)
         reviewed.setWordWrap(True)
         actual_label = QLabel(f"Actual value ({prediction.unit})", self)
@@ -3518,6 +3570,8 @@ class ResolveNumericPredictionDialog(_StyledDialog):
         layout.addSpacing(8)
         layout.addWidget(actual_label)
         layout.addWidget(self.actual_value_input)
+        if self.effective_time is not None:
+            layout.addWidget(self.effective_time)
         layout.addWidget(notes_label)
         layout.addWidget(self.resolution_notes_input)
         layout.addWidget(postmortem_label)
@@ -3538,6 +3592,14 @@ class ResolveNumericPredictionDialog(_StyledDialog):
                 postmortem=self.postmortem_input.toPlainText(),
                 expected_revision_id=self._expected_revision_id,
                 expected_metadata_version=self._expected_metadata_version,
+                **(
+                    {}
+                    if self.effective_time is None
+                    else {
+                        "effective_resolution_at": self.effective_time.value(),
+                        "use_recorded_time": self.effective_time.use_now.isChecked(),
+                    }
+                ),
             )
         except ApplicationError as error:
             self.form_error.setText(str(error))
@@ -3871,6 +3933,11 @@ class CorrectNumericResolutionDialog(_StyledDialog):
         self._decimal_places = prediction.decimal_places
         self._expected_correction_id = history.current_correction_id
         self._current = history.effective
+        self.effective_time = (
+            EffectiveTimeInput(self, self._current.effective_resolution_at)
+            if isinstance(prediction.current_revision, QuantileRevision)
+            else None
+        )
 
         title = QLabel("Correct Numeric Resolution", self)
         explanation = QLabel(
@@ -3880,6 +3947,10 @@ class CorrectNumericResolutionDialog(_StyledDialog):
             self,
         )
         explanation.setObjectName("numericResolutionCorrectionExplanation")
+        if self.effective_time is not None:
+            explanation.setText(
+                "This appends a transparent correction. Original actual value, effective time, recorded-at, and all forecast history remain intact. Correcting effective time can change which forecast is scored; recorded-at cannot change."
+            )
         explanation.setTextFormat(Qt.TextFormat.PlainText)
         explanation.setWordWrap(True)
 
@@ -3894,6 +3965,10 @@ class CorrectNumericResolutionDialog(_StyledDialog):
             self,
         )
         self.score_change_notice.setObjectName("numericResolutionScoreChangeNotice")
+        if self.effective_time is not None:
+            self.score_change_notice.setText(
+                "Changing actual value or effective time can change WIS, scoring selection, and eligibility. An explanation is required."
+            )
         self.score_change_notice.setTextFormat(Qt.TextFormat.PlainText)
         self.score_change_notice.setWordWrap(True)
 
@@ -3917,7 +3992,9 @@ class CorrectNumericResolutionDialog(_StyledDialog):
         self.reason_input = QLineEdit(self)
         self.reason_input.setObjectName("numericOutcomeCorrectionReasonInput")
         self.reason_input.setPlaceholderText(
-            "Required only when changing the actual value"
+            "Required when changing actual value or effective time"
+            if self.effective_time is not None
+            else "Required only when changing the actual value"
         )
         reason_label.setBuddy(self.reason_input)
 
@@ -3938,6 +4015,8 @@ class CorrectNumericResolutionDialog(_StyledDialog):
         layout.addWidget(actual_label)
         layout.addWidget(self.actual_value_input)
         layout.addWidget(self.score_change_notice)
+        if self.effective_time is not None:
+            layout.addWidget(self.effective_time)
         layout.addWidget(notes_label)
         layout.addWidget(self.notes_input)
         layout.addWidget(postmortem_label)
@@ -3948,6 +4027,13 @@ class CorrectNumericResolutionDialog(_StyledDialog):
         layout.addWidget(self.buttons)
 
         self.actual_value_input.textChanged.connect(self._update_score_change_notice)
+        if self.effective_time is not None:
+            self.effective_time.editor.dateTimeChanged.connect(
+                self._update_score_change_notice
+            )
+            self.effective_time.offset.textChanged.connect(
+                self._update_score_change_notice
+            )
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
         self._update_score_change_notice()
@@ -3967,8 +4053,17 @@ class CorrectNumericResolutionDialog(_StyledDialog):
         postmortem = _normalized_optional_text(self.postmortem_input.toPlainText())
         correction_reason = _normalized_optional_text(self.reason_input.text())
         actual_changed = actual_value != self._current.actual_value
+        try:
+            effective_time = (
+                self.effective_time.value() if self.effective_time is not None else None
+            )
+        except ApplicationError as error:
+            self._show_error(str(error))
+            return
+        time_changed = effective_time != self._current.effective_resolution_at
         if (
             not actual_changed
+            and not time_changed
             and notes == self._current.resolution_notes
             and postmortem == self._current.postmortem
         ):
@@ -3977,13 +4072,15 @@ class CorrectNumericResolutionDialog(_StyledDialog):
                 "saving."
             )
             return
-        if actual_changed and correction_reason is None:
+        if (actual_changed or time_changed) and correction_reason is None:
             self._show_error(
-                "Explain why the recorded actual value is being corrected."
+                "Explain why the actual value or effective resolution time is being corrected."
             )
             self.reason_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
             return
-        if not _confirm_terminal_correction(self, score_affecting=actual_changed):
+        if not _confirm_terminal_correction(
+            self, score_affecting=actual_changed or time_changed
+        ):
             return
         try:
             history = self._operations.correct_numeric_resolution(
@@ -3993,6 +4090,7 @@ class CorrectNumericResolutionDialog(_StyledDialog):
                 postmortem=postmortem,
                 correction_reason=correction_reason,
                 expected_correction_id=self._expected_correction_id,
+                effective_resolution_at=effective_time,
             )
         except ApplicationError as error:
             self._show_error(str(error))
@@ -4010,7 +4108,16 @@ class CorrectNumericResolutionDialog(_StyledDialog):
         except PredictionValidationError:
             self.score_change_notice.setHidden(False)
             return
-        self.score_change_notice.setHidden(proposed == self._current.actual_value)
+        try:
+            time_changed = (
+                self.effective_time is not None
+                and self.effective_time.value() != self._current.effective_resolution_at
+            )
+        except ApplicationError:
+            time_changed = True
+        self.score_change_notice.setHidden(
+            proposed == self._current.actual_value and not time_changed
+        )
 
     def _show_error(self, message: str) -> None:
         self.form_error.setText(message)
@@ -6418,6 +6525,18 @@ def _show_numeric_resolution_correction_history(
                 ("Actual value", f"{history.original.actual_value} {unit}"),
                 ("Resolution notes", history.original.resolution_notes),
                 ("Postmortem", history.original.postmortem),
+                *(
+                    (
+                        (
+                            "Original effective resolution time",
+                            format_local_deadline(
+                                history.original.effective_resolution_at
+                            ),
+                        ),
+                    )
+                    if history.original.effective_resolution_at is not None
+                    else ()
+                ),
             ),
             "numericResolutionOriginal",
             content,
@@ -6533,6 +6652,14 @@ def _numeric_resolution_correction_frame(
     parent: QWidget,
 ) -> QFrame:
     values = {
+        "effective_resolution_at": (
+            format_local_deadline(correction.old_effective_resolution_at)
+            if correction.old_effective_resolution_at is not None
+            else None,
+            format_local_deadline(correction.new_effective_resolution_at)
+            if correction.new_effective_resolution_at is not None
+            else None,
+        ),
         "actual_value": (
             f"{correction.old_actual_value} {unit}",
             f"{correction.new_actual_value} {unit}",

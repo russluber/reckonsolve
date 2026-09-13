@@ -13,6 +13,7 @@ from reckonsolve.domain.predictions import (
 from reckonsolve.domain.quantiles import FiveQuantiles
 
 from .forecast_contracts import quantile_tables_exist, select_forecast_contract
+from .terminal_history import _select_numeric_resolution_history
 
 
 def read_archive(connection: sqlite3.Connection) -> tuple[PredictionBrowserItem, ...]:
@@ -32,6 +33,8 @@ def read_archive(connection: sqlite3.Connection) -> tuple[PredictionBrowserItem,
     """).fetchall()
     result = []
     for row in rows:
+        history = _select_numeric_resolution_history(connection, row["id"])
+        resolution = history.effective if history else None
         tags = tuple(
             r[0]
             for r in connection.execute(
@@ -53,12 +56,18 @@ def read_archive(connection: sqlite3.Connection) -> tuple[PredictionBrowserItem,
                 latest_review_at=parse_utc(row["review_at"])
                 if row["review_at"]
                 else None,
-                terminal_decision_at=parse_utc(row["invalid_at"])
-                if row["invalid_at"]
-                else None,
+                terminal_decision_at=resolution.resolved_at
+                if resolution
+                else (parse_utc(row["invalid_at"]) if row["invalid_at"] else None),
                 tags=tags,
                 prediction_type=PredictionType.NUMERIC,
                 numeric_unit=row["numeric_unit"],
+                numeric_actual_value=resolution.actual_value if resolution else None,
+                needs_postmortem=bool(
+                    history
+                    and not resolution.postmortem
+                    and history.postmortem_completion is None
+                ),
                 forecast_contract=select_forecast_contract(connection, row["id"]),
                 numeric_quantiles=FiveQuantiles(
                     *(
