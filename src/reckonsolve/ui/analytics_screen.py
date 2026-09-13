@@ -6,8 +6,8 @@ from decimal import Decimal
 from fractions import Fraction
 from typing import Protocol
 
-from PySide6.QtCore import QEvent, QSignalBlocker, Qt
-from PySide6.QtGui import QColor, QPalette, QResizeEvent
+from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QBoxLayout,
@@ -43,6 +43,12 @@ from reckonsolve.ui.analytics_charts import (
     CalibrationChart,
     ContainmentCalibrationChart,
 )
+from reckonsolve.ui.analytics_components import (
+    _new_summary_metric,
+    _new_update_metric,
+    _ResponsiveChartTable,
+    _ResponsiveMetricRow,
+)
 from reckonsolve.ui.components import (
     ContentPanel,
     EmptyStateLabel,
@@ -50,16 +56,14 @@ from reckonsolve.ui.components import (
     PersistentMessageLabel,
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.quantile_analytics import QuantileAnalyticsView
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
     StatusTone,
-    SurfaceRole,
     TextRole,
     apply_action_role,
-    apply_surface_role,
     apply_text_role,
-    semantic_colors,
 )
 
 
@@ -74,98 +78,6 @@ class AnalyticsOperations(Protocol):
         unit: str | None = None,
     ) -> ForecastAnalyticsSnapshot:
         """Return separate type-aware views for one common filter subset."""
-
-
-def _new_summary_metric(
-    caption: str,
-    *,
-    value_object_name: str,
-    parent: QWidget,
-) -> tuple[QWidget, QLabel]:
-    """Build one compact caption/value pair for an analytical headline."""
-
-    metric = QWidget(parent)
-    metric.setObjectName(f"{value_object_name}Metric")
-    layout = QVBoxLayout(metric)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(int(Spacing.COMPACT))
-    caption_label = QLabel(caption, metric)
-    caption_label.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(caption_label, TextRole.SECONDARY)
-    value = QLabel("Loading...", metric)
-    value.setObjectName(value_object_name)
-    value.setTextFormat(Qt.TextFormat.PlainText)
-    value.setWordWrap(True)
-    apply_text_role(value, TextRole.FORECAST)
-    layout.addWidget(caption_label)
-    layout.addWidget(value)
-    return metric, value
-
-
-def _new_update_metric(
-    caption: str,
-    *,
-    value_object_name: str,
-    parent: QWidget,
-) -> tuple[QFrame, QLabel]:
-    """Build one bordered retrospective metric that remains meaningful as text."""
-
-    metric = QFrame(parent)
-    metric.setObjectName(f"{value_object_name}Metric")
-    apply_surface_role(metric, SurfaceRole.BASE)
-    metric.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-    layout = QVBoxLayout(metric)
-    layout.setContentsMargins(
-        int(Spacing.ORDINARY),
-        int(Spacing.CONTROL),
-        int(Spacing.ORDINARY),
-        int(Spacing.CONTROL),
-    )
-    layout.setSpacing(int(Spacing.COMPACT))
-    caption_label = QLabel(caption, metric)
-    caption_label.setTextFormat(Qt.TextFormat.PlainText)
-    caption_label.setWordWrap(True)
-    apply_text_role(caption_label, TextRole.SECONDARY)
-    value = QLabel("Loading...", metric)
-    value.setObjectName(value_object_name)
-    value.setTextFormat(Qt.TextFormat.PlainText)
-    value.setWordWrap(True)
-    value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-    apply_text_role(value, TextRole.SECTION_TITLE)
-    layout.addWidget(caption_label)
-    layout.addWidget(value)
-    return metric, value
-
-
-class _ResponsiveMetricRow(QWidget):
-    """Keep summary metrics horizontal until their captions would crowd."""
-
-    def __init__(
-        self,
-        metrics: tuple[QWidget, ...],
-        *,
-        stack_below: int,
-        object_name: str,
-        parent: QWidget,
-    ) -> None:
-        super().__init__(parent)
-        self.setObjectName(object_name)
-        self._stack_below = stack_below
-        self._layout = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(int(Spacing.SECTION))
-        for metric in metrics:
-            self._layout.addWidget(metric, 1)
-
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        super().resizeEvent(event)
-        direction = (
-            QBoxLayout.Direction.LeftToRight
-            if event.size().width() >= self._stack_below
-            else QBoxLayout.Direction.TopToBottom
-        )
-        if self._layout.direction() != direction:
-            self._layout.setDirection(direction)
 
 
 class _ResponsiveSummaryRow(QWidget):
@@ -200,78 +112,6 @@ class _ResponsiveSummaryRow(QWidget):
         )
         if self._layout.direction() != direction:
             self._layout.setDirection(direction)
-
-
-class _ResponsiveChartTable(QWidget):
-    """Pair a plot and its text table when both retain a useful width."""
-
-    def __init__(
-        self,
-        chart: QWidget,
-        table: QTableWidget,
-        *,
-        object_name: str,
-        parent: QWidget,
-    ) -> None:
-        super().__init__(parent)
-        self.setObjectName(object_name)
-        self._chart = chart
-        self._table = table
-        for widget in (chart, table):
-            policy = widget.sizePolicy()
-            policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
-            widget.setSizePolicy(policy)
-        self._layout = QBoxLayout(QBoxLayout.Direction.TopToBottom, self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(int(Spacing.SECTION))
-        self._layout.addWidget(chart)
-        self._layout.addWidget(table)
-        self._synchronize_surfaces()
-        self._fit_table_height()
-
-    def changeEvent(self, event: QEvent) -> None:
-        super().changeEvent(event)
-        if event.type() in (
-            QEvent.Type.PaletteChange,
-            QEvent.Type.ApplicationPaletteChange,
-            QEvent.Type.FontChange,
-            QEvent.Type.ApplicationFontChange,
-            QEvent.Type.StyleChange,
-        ):
-            self._synchronize_surfaces()
-            self._fit_table_height()
-
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        super().resizeEvent(event)
-        side_by_side = event.size().width() >= 1100
-        direction = (
-            QBoxLayout.Direction.LeftToRight
-            if side_by_side
-            else QBoxLayout.Direction.TopToBottom
-        )
-        if self._layout.direction() != direction:
-            self._layout.setDirection(direction)
-        self._layout.setStretch(0, 1 if side_by_side else 0)
-        self._layout.setStretch(1, 1 if side_by_side else 0)
-        self._fit_table_height()
-
-    def _synchronize_surfaces(self) -> None:
-        surface = QColor(semantic_colors(self.palette()).raised)
-        for widget in (self._chart, self._table, self._table.viewport()):
-            palette = widget.palette()
-            palette.setColor(QPalette.ColorRole.Base, surface)
-            palette.setColor(QPalette.ColorRole.AlternateBase, surface)
-            widget.setPalette(palette)
-
-    def _fit_table_height(self) -> None:
-        self._table.resizeRowsToContents()
-        content_height = (
-            self._table.horizontalHeader().height()
-            + sum(self._table.rowHeight(row) for row in range(self._table.rowCount()))
-            + (2 * self._table.frameWidth())
-            + 2
-        )
-        self._table.setFixedHeight(content_height)
 
 
 class AnalyticsScreen(QWidget):
@@ -426,8 +266,10 @@ class AnalyticsScreen(QWidget):
         self.numeric_content = self._create_numeric_content(content)
         self.binary_update_content = self._create_binary_update_content(content)
         self.numeric_update_content = self._create_numeric_update_content(content)
+        self.quantile_content = QuantileAnalyticsView(content)
         content_layout.addWidget(self.trajectory_summary)
         content_layout.addWidget(self.trajectory_content)
+        content_layout.addWidget(self.quantile_content)
         content_layout.addWidget(self.summary_row)
         content_layout.addWidget(self.binary_content)
         content_layout.addWidget(self.numeric_content)
@@ -617,8 +459,8 @@ class AnalyticsScreen(QWidget):
 
     def _create_numeric_summary(self) -> ContentPanel:
         summary = ContentPanel(
-            "Numeric forecasts",
-            "Containment can combine units; raw magnitude scores cannot.",
+            "Legacy Numeric forecasts — interval-v1",
+            "Legacy containment can combine units; raw magnitude scores cannot.",
             parent=self,
         )
         summary.setObjectName("numericAnalyticsSummary")
@@ -738,7 +580,7 @@ class AnalyticsScreen(QWidget):
 
     def _create_numeric_content(self, parent: QWidget) -> ContentPanel:
         section = ContentPanel(
-            "Numeric containment calibration",
+            "Legacy Numeric containment calibration",
             "Containment calibration compares interval confidence with observed "
             "inclusive containment; it can combine units, small bins are sparse, "
             "and the table repeats the chart values.",
@@ -839,7 +681,7 @@ class AnalyticsScreen(QWidget):
 
     def _create_numeric_update_content(self, parent: QWidget) -> ContentPanel:
         section = ContentPanel(
-            "Numeric retrospective update feedback",
+            "Legacy Numeric retrospective update feedback",
             "One initial/final pair per revised-and-resolved Numeric Prediction.",
             parent=parent,
         )
@@ -1023,6 +865,11 @@ class AnalyticsScreen(QWidget):
     def _render(self, snapshot: ForecastAnalyticsSnapshot) -> None:
         show_binary = snapshot.selected_type in (None, PredictionType.BINARY)
         show_numeric = snapshot.selected_type in (None, PredictionType.NUMERIC)
+        self.quantile_content.setHidden(
+            not show_numeric or snapshot.quantile_numeric.resolved_candidate_count == 0
+        )
+        if show_numeric:
+            self.quantile_content.render(snapshot.quantile_numeric)
         show_trajectory = (
             show_binary and snapshot.trajectory_binary.resolved_candidate_count > 0
         )
@@ -1036,6 +883,14 @@ class AnalyticsScreen(QWidget):
         self.numeric_content.setHidden(not show_numeric)
         self.binary_update_content.setHidden(not show_binary)
         self.numeric_update_content.setHidden(not show_numeric)
+        if (
+            show_numeric
+            and snapshot.quantile_numeric.resolved_candidate_count
+            and not snapshot.numeric.scored_prediction_count
+        ):
+            self.numeric_summary.hide()
+            self.numeric_content.hide()
+            self.numeric_update_content.hide()
         if show_binary:
             self._render_trajectory(snapshot.trajectory_binary)
             self._render_binary(snapshot.binary)
@@ -1050,7 +905,10 @@ class AnalyticsScreen(QWidget):
         trajectory_count = (
             snapshot.trajectory_binary.resolved_candidate_count if show_binary else 0
         )
-        if legacy_count == 0 and trajectory_count == 0:
+        quantile_count = (
+            snapshot.quantile_numeric.resolved_candidate_count if show_numeric else 0
+        )
+        if legacy_count == 0 and trajectory_count == 0 and quantile_count == 0:
             self.summary_row.setHidden(True)
             self.scroll_area.setHidden(True)
             self.empty_label.setText(self._empty_message(snapshot.selected_type))

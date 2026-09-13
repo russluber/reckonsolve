@@ -2327,11 +2327,13 @@ class PredictionOperations:
             binary_source,
             numeric_source,
             trajectory_source,
+            quantile_source,
         ) = self._analytics_repository.get_forecast_sources()
         return summarize_forecast_analytics(
             binary_source,
             numeric_source,
             trajectory_source=trajectory_source,
+            quantile_source=quantile_source,
             prediction_type=prediction_type,
             tag=tag,
             unit=normalized_unit,

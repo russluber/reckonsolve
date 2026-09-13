@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 52
+Status: v0.6 source release complete; v0.7 implemented through Milestone 53
 Last reviewed: 2026-09-12
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 ## 1. Current implementation
 
-Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutable model/scoring identities without inventing facts for legacy records. M47–M49 implement prospective Binary creation, exact-Deadline history, effective-time Resolution and corrections, individual Trajectory Brier, and separate aggregate feedback. M50 adds schema-18 five-quantile Numeric storage and pure exact WIS. M51 switches public Numeric creation and active GUI/CLI workflows to that model while preserving legacy interval editors. M52 completes Numeric v2 Resolution, corrections, and individual WIS scorecards without a new migration; aggregate calibration remains M53.
+Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutable model/scoring identities without inventing facts for legacy records. M47–M49 implement prospective Binary creation, exact-Deadline history, effective-time Resolution and corrections, individual Trajectory Brier, and separate aggregate feedback. M50 adds schema-18 five-quantile Numeric storage and pure exact WIS. M51 switches public Numeric creation and active GUI/CLI workflows to that model while preserving legacy interval editors. M52 completes Numeric v2 Resolution, corrections, and individual WIS scorecards without a new migration. M53 adds separate five-quantile calibration and scale-free update direction counts.
 
 | Area | Current state |
 |---|---|
@@ -833,3 +833,53 @@ Tests cover boundary times, exact signed/tied outcomes, whole-number rejection,
 correction reselection, no-score transitions, cancellation, stale context, rollback,
 Postmortem completion, source/backup restart, and GUI/CLI rendering. Schema 18 and
 the format-3 export guard remain unchanged; M53 owns aggregate calibration.
+
+### M53: five-quantile calibration and scale-free update feedback
+
+`AnalyticsRepository.get_forecast_sources` now reads all four cohorts within one
+SQLite transaction. `QuantileScoringRecord` carries the explicit contract,
+measurement definition, complete revision sequence, effective terminal history,
+and current tags. The repository neither chooses a final revision nor calculates
+scores. Historical fixture schemas without quantile tables yield an empty new
+source, not invented observations.
+
+`analytics/quantile_aggregate.py` reuses `resolved_quantile_scorecard` exactly once
+per candidate. Duplicate Prediction or Resolution identifiers are rejected.
+Invalid and unresolved records never enter the source; outcome-at-or-before-first
+records contribute only to an explicit unscored count. The final scoring revision
+and latest effective actual supply every calibration comparison. Comparisons use
+scaled integers within each definition, retaining exact signed decimals and ties.
+No interpolation or individual intermediate revision becomes an observation.
+
+Continuous-style and whole-number definitions form separate calibration groups
+even if both use zero decimal places. Each group contains the five fixed nominal
+levels, strict and inclusive proportions, inclusive 50%/90% outcome balances, and
+median below/equal/above counts. Counts and empirical fractions are exact; a
+display-only 95% Wilson interval uses the standard normal 97.5th percentile and
+floating-point square root. These pointwise descriptive ranges are not a skill
+test or simultaneous confidence band. Whole-number tie bands represent observed
+endpoint mass, not uncertainty; their two Wilson ranges remain available in the
+table. Empty proportions have no fabricated zero estimate or uncertainty range.
+
+Initial/final feedback includes only scored revisions with a final sequence above
+one. Positive/zero/negative exact Delta WIS produces better/equal/worse counts;
+sequence-one scoring selections are reported separately as unrevised, including
+histories whose later revisions were excluded by an effective-time correction.
+The aggregate has no raw WIS, Delta, error, or width mean—even for matching units.
+The overview preserves case-insensitive tag and exact-unit filtering across both
+Numeric cohorts and leaves legacy interval and Binary calculations untouched.
+
+`ui/quantile_analytics.py` renders the new cohort with native five-level plots,
+complete text alternatives, tie-aware outcome tables, and direction-only update
+cards. It invokes no persistence or scoring operation. Shared metric and equal-width
+plot/table layouts moved unchanged into `ui/analytics_components.py`, avoiding a
+dependency from new components back to the Analytics screen. Charts and tables
+share the raised surface; pairs stack when narrow and tables expose all rows.
+Empty measurement groups remain explicit without empty plots. Legacy Numeric
+sections are labeled and never silently share v2 calibration membership.
+
+Tests cover exact endpoint and collapsed-interval ties, signed fixed precision,
+strict cutoff/correction reselection, revised versus unrevised direction counts,
+nonforecast-history exclusion, filters, duplicate rejection, one-transaction reads,
+restart and read-only data preservation, Wilson boundary cases, and responsive Qt
+rendering. Schema 18, complete SQLite backup, and the M55 CSV guard are unchanged.

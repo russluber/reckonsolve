@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from reckonsolve.domain.analytics import (
     AnalyticsSource,
     NumericAnalyticsSource,
+    QuantileAnalyticsSource,
     TrajectoryAnalyticsSource,
 )
 from reckonsolve.domain.predictions import PredictionType
 
 from .numeric import NumericAnalyticsSnapshot, summarize_numeric_analytics
+from .quantile_aggregate import QuantileAnalyticsSnapshot, summarize_quantile_analytics
 from .scoring import AnalyticsSnapshot, summarize_analytics
 from .trajectory_aggregate import (
     TrajectoryAnalyticsSnapshot,
@@ -30,6 +32,7 @@ class ForecastAnalyticsSnapshot:
     binary: AnalyticsSnapshot
     numeric: NumericAnalyticsSnapshot
     trajectory_binary: TrajectoryAnalyticsSnapshot
+    quantile_numeric: QuantileAnalyticsSnapshot
     binary_updates: BinaryUpdateAnalyticsSnapshot
     numeric_updates: NumericUpdateAnalyticsSnapshot
     available_tags: tuple[str, ...]
@@ -44,6 +47,7 @@ def summarize_forecast_analytics(
     numeric_source: NumericAnalyticsSource,
     *,
     trajectory_source: TrajectoryAnalyticsSource | None = None,
+    quantile_source: QuantileAnalyticsSource | None = None,
     prediction_type: PredictionType | None = None,
     tag: str | None = None,
     unit: str | None = None,
@@ -57,6 +61,13 @@ def summarize_forecast_analytics(
 
     include_binary = prediction_type in (None, PredictionType.BINARY)
     include_numeric = prediction_type in (None, PredictionType.NUMERIC)
+    quantile = summarize_quantile_analytics(
+        quantile_source
+        if include_numeric and quantile_source is not None
+        else QuantileAnalyticsSource(records=()),
+        tag=tag,
+        unit=unit,
+    )
     trajectory = summarize_trajectory_analytics(
         (
             trajectory_source
@@ -103,15 +114,26 @@ def summarize_forecast_analytics(
         (binary_source.available_tags if include_binary else ())
         + (numeric_source.available_tags if include_numeric else ())
         + trajectory.available_tags
+        + quantile.available_tags
     )
     return ForecastAnalyticsSnapshot(
         binary=binary,
         numeric=numeric,
         trajectory_binary=trajectory,
+        quantile_numeric=quantile,
         binary_updates=binary_updates,
         numeric_updates=numeric_updates,
         available_tags=_unique_labels(tag_sources),
-        available_units=numeric_source.available_units,
+        available_units=tuple(
+            sorted(
+                set(numeric_source.available_units)
+                | (
+                    {r.definition.unit for r in quantile_source.records}
+                    if quantile_source is not None
+                    else set()
+                )
+            )
+        ),
         selected_type=prediction_type,
         selected_tag=tag,
         selected_unit=unit,

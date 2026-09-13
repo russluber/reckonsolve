@@ -7,6 +7,8 @@ from reckonsolve.domain.analytics import (
     AnalyticsSource,
     NumericAnalyticsSource,
     NumericScoringObservation,
+    QuantileAnalyticsSource,
+    QuantileScoringRecord,
     ScoringObservation,
     TrajectoryAnalyticsSource,
     TrajectoryScoringRecord,
@@ -125,7 +127,12 @@ class AnalyticsRepository:
 
     def get_forecast_sources(
         self,
-    ) -> tuple[AnalyticsSource, NumericAnalyticsSource, TrajectoryAnalyticsSource]:
+    ) -> tuple[
+        AnalyticsSource,
+        NumericAnalyticsSource,
+        TrajectoryAnalyticsSource,
+        QuantileAnalyticsSource,
+    ]:
         """Read every aggregate cohort from one consistent SQLite snapshot."""
 
         with self._database.transaction() as connection:
@@ -133,6 +140,7 @@ class AnalyticsRepository:
                 _load_binary_source(connection),
                 _load_numeric_source(connection),
                 _load_trajectory_source(connection),
+                _load_quantile_source(connection),
             )
 
 
@@ -398,6 +406,55 @@ def _load_trajectory_source(
             )
         )
     return TrajectoryAnalyticsSource(records=tuple(records))
+
+
+def _load_quantile_source(connection: sqlite3.Connection) -> QuantileAnalyticsSource:
+    # Historical fixture schemas have no prospective Numeric tables.
+    if (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'numeric_quantile_revisions'"
+        ).fetchone()
+        is None
+    ):
+        return QuantileAnalyticsSource(records=())
+    rows = connection.execute(
+        """
+        SELECT p.id, p.question FROM predictions AS p
+        JOIN prediction_forecast_contracts AS c ON c.prediction_id = p.id
+        JOIN numeric_resolutions AS r ON r.prediction_id = p.id
+        WHERE p.status = 'resolved' AND p.prediction_type = 'numeric'
+          AND c.forecast_model = 'numeric-quantiles-5-v2'
+          AND c.scoring_contract = 'numeric-wis-v1'
+        ORDER BY r.resolved_at, r.id
+        """
+    ).fetchall()
+    records: list[QuantileScoringRecord] = []
+    for row in rows:
+        prediction_id = int(row["id"])
+        contract = select_supported_contract(connection, prediction_id)
+        history = _select_numeric_resolution_history(connection, prediction_id)
+        assert contract is not None and history is not None
+        tags = tuple(
+            str(tag[0])
+            for tag in connection.execute(
+                "SELECT t.display_name FROM tags AS t "
+                "JOIN prediction_tags AS pt ON pt.tag_id = t.id "
+                "WHERE pt.prediction_id = ? ORDER BY t.normalized_name, t.id",
+                (prediction_id,),
+            )
+        )
+        records.append(
+            QuantileScoringRecord(
+                question=str(row["question"]),
+                contract=contract,
+                definition=read_definition(connection, prediction_id),
+                revisions=read_revisions(connection, prediction_id),
+                resolution_history=history,
+                tags=tags,
+            )
+        )
+    return QuantileAnalyticsSource(tuple(records))
 
 
 def _group_tags(
