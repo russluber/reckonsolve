@@ -290,3 +290,37 @@ def dark_desktop(qapp):
     finally:
         qapp.setFont(original_font)
         qapp.setPalette(original_palette)
+
+
+@pytest.mark.parametrize("width", [500, 600])
+def test_numeric_correction_reserves_wrapped_time_form_height(
+    qtbot, active, dark_desktop, width
+):
+    _, _, ops, prediction = active
+    prediction = ops.resolve_numeric_prediction(
+        prediction.prediction_id, 10, use_recorded_time=True, **context(prediction)
+    )
+    history = ops.get_numeric_resolution_history(prediction.prediction_id)
+    dialog = CorrectNumericResolutionDialog(ops, prediction, history)
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+    qtbot.addWidget(dialog)
+    install_visual_system(dialog)
+    dialog.resize(width, 620)
+    dialog.show()
+    qtbot.wait(30)
+    for actual in ("10", "12", "10", "invalid"):
+        dialog.actual_value_input.setText(actual)
+        if actual == "12":
+            dialog.submit()
+            assert dialog.form_error.isVisible()
+        qtbot.wait(30)
+        layout = dialog.layout()
+        required = max(
+            layout.minimumSize().height(),
+            layout.minimumHeightForWidth(dialog.width()),
+        )
+        assert dialog.minimumHeight() >= required
+        assert dialog.height() >= required
+        assert dialog.buttons.geometry().bottom() < dialog.height()
+    dialog.reject()
+    assert ops.get_numeric_resolution_history(prediction.prediction_id) == history

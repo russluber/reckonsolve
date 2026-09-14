@@ -19,7 +19,14 @@ class ForecastContractIntegrityError(RuntimeError):
 
 
 def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
-    """Reject a schema-16 database whose Prediction contracts are incomplete."""
+    """Reject unsupported contracts before cohort-filtered reads can omit them.
+
+    Older-schema fixtures have no contracts; a current database must have a
+    complete, recognized pair for every Prediction, not merely every result.
+    """
+
+    if not _contract_table_exists(connection):
+        return
 
     quantiles_available = quantile_tables_exist(connection)
     quantile_join = (
@@ -53,6 +60,23 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
             AND numeric_initial.sequence = 1
         {quantile_join}
         WHERE contract.prediction_id IS NULL
+            OR prediction.prediction_type NOT IN ('binary', 'numeric')
+            OR contract.forecast_model IS NULL
+            OR contract.scoring_contract IS NULL
+            OR (contract.forecast_model, contract.scoring_contract) NOT IN (
+                ('binary-final-v1', 'binary-final-brier-v1'),
+                ('binary-trajectory-v1', 'binary-trajectory-brier-v1'),
+                ('numeric-interval-v1', 'numeric-interval-score-v1'),
+                ('numeric-quantiles-5-v2', 'numeric-wis-v1')
+            )
+            OR (
+                contract.forecast_model IN ('binary-final-v1', 'numeric-interval-v1')
+                AND contract.forecast_deadline_at IS NOT NULL
+            )
+            OR (
+                contract.forecast_model IN ('binary-trajectory-v1', 'numeric-quantiles-5-v2')
+                AND contract.forecast_deadline_at IS NULL
+            )
             OR (
                 prediction.prediction_type = 'binary'
                 AND contract.forecast_model NOT IN (

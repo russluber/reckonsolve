@@ -366,10 +366,21 @@ def _print_reviewed_context(
     if prediction.forecast_contract:
         contract = prediction.forecast_contract
         print(f"Model: {contract.forecast_model.value}", file=session.output)
+        print(
+            f"Scoring contract: {contract.scoring_contract.value}", file=session.output
+        )
         if contract.forecast_deadline:
             print(
                 "Forecast Deadline (permanent): "
                 + contract.forecast_deadline.instant.astimezone().isoformat(sep=" "),
+                file=session.output,
+            )
+    if isinstance(prediction, NumericPrediction):
+        print(f"Unit: {terminal_text(prediction.unit)}", file=session.output)
+        print(f"Decimal precision: {prediction.decimal_places}", file=session.output)
+        if prediction.value_constraint is not None:
+            print(
+                f"Value constraint: {prediction.value_constraint.value}",
                 file=session.output,
             )
     print(file=session.output)

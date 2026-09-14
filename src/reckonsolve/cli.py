@@ -33,6 +33,7 @@ from reckonsolve.cli_mutations import (
 from reckonsolve.cli_text import terminal_text
 from reckonsolve.cli_transfer import backup_interactively, export_csv_interactively
 from reckonsolve.data.database import Database
+from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.attention import DashboardSnapshot
 from reckonsolve.domain.browser import (
@@ -252,6 +253,7 @@ def run(
     except (
         ApplicationDataPathError,
         ApplicationError,
+        ForecastContractIntegrityError,
         MigrationError,
         OSError,
         sqlite3.Error,
@@ -1300,6 +1302,7 @@ def _format_numeric_detail(
     if prediction.forecast_contract is not None:
         contract = prediction.forecast_contract
         _append_field(lines, "Model", contract.forecast_model.value)
+        _append_field(lines, "Scoring contract", contract.scoring_contract.value)
         if contract.forecast_deadline is not None:
             _append_field(
                 lines,

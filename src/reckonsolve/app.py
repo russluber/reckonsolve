@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
+from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.identity import STABLE_APPLICATION, ApplicationIdentity
 from reckonsolve.paths import ApplicationDataPathError, resolve_database_path
@@ -84,7 +85,13 @@ def run(
             database_path=database_path,
             identity=identity,
         )
-    except (ApplicationDataPathError, MigrationError, OSError, sqlite3.Error) as error:
+    except (
+        ApplicationDataPathError,
+        ForecastContractIntegrityError,
+        MigrationError,
+        OSError,
+        sqlite3.Error,
+    ) as error:
         application = QApplication.instance()
         if isinstance(application, QApplication):
             QMessageBox.critical(

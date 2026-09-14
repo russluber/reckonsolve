@@ -1,7 +1,7 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 53
-Last reviewed: 2026-09-12
+Status: v0.6 source release complete; v0.7 implemented through Milestone 54
+Last reviewed: 2026-09-13
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
@@ -883,3 +883,32 @@ strict cutoff/correction reselection, revised versus unrevised direction counts,
 nonforecast-history exclusion, filters, duplicate rejection, one-transaction reads,
 restart and read-only data preservation, Wilson boundary cases, and responsive Qt
 rendering. Schema 18, complete SQLite backup, and the M55 CSV guard are unchanged.
+
+### M54: four-cohort cross-interface parity
+
+The existing application operations remain the sole mutation and scoring boundary
+for desktop and CLI. Numeric CLI `show` now names its scoring contract as Binary
+already did; reviewed mutation context also displays the scoring identity and
+Numeric unit, precision, and value constraint. Offset-bearing ISO input retains
+exact UTC instants, including microseconds, while detailed terminal facts display
+the equivalent local instant with an offset. No new command or scoring path was
+introduced.
+
+`data/forecast_contracts.py` validates the closed model/scoring pairs and exact
+Deadline presence at startup and before cohort-filtered collection reads. Archive
+and Dashboard quantile projection, full-text retrieval (including no-match reads),
+and the four-source aggregate snapshot reuse that check in their existing
+transaction. Unsupported records cannot disappear merely because SQL selected
+only known models. Old-schema migration fixtures retain their explicit no-contract
+compatibility path. Desktop and CLI startup report contract-integrity failures
+without replacing the database. This check adds no persisted state or migration.
+
+`tests/test_cohort_interface_parity.py` exercises all four cohorts with independent
+CLI connections while a desktop-operation connection remains open. It covers
+public new-model creation, legacy and new-model mutations, exact Deadline and
+effective/recorded times, dynamic Saved Views, stable tag rename/merge/deletion,
+corrected Journal and terminal search provenance, deterministic repair, unchanged
+canonical data during reads, stale reviewed contexts, and a lock acquired after
+the CLI prompt but before commit. Unsupported identities are tested both on live
+collection reads and reopen. M55 still owns CSV format 4 and release hardening;
+schema 18, complete SQLite backup, and the format-3 guard remain unchanged.

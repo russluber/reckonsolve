@@ -3909,7 +3909,7 @@ class CorrectBinaryResolutionDialog(_EffectiveTimeDialog):
         self.form_error.setHidden(False)
 
 
-class CorrectNumericResolutionDialog(_StyledDialog):
+class CorrectNumericResolutionDialog(_EffectiveTimeDialog):
     """Append one confirmed exact Numeric Resolution correction snapshot."""
 
     correction_saved = Signal(object)
@@ -4107,6 +4107,7 @@ class CorrectNumericResolutionDialog(_StyledDialog):
             )
         except PredictionValidationError:
             self.score_change_notice.setHidden(False)
+            self._fit_time_form()
             return
         try:
             time_changed = (
@@ -4118,10 +4119,12 @@ class CorrectNumericResolutionDialog(_StyledDialog):
         self.score_change_notice.setHidden(
             proposed == self._current.actual_value and not time_changed
         )
+        self._fit_time_form()
 
     def _show_error(self, message: str) -> None:
         self.form_error.setText(message)
         self.form_error.setHidden(False)
+        self._fit_time_form()
 
 
 class CorrectInvalidationReasonDialog(_StyledDialog):

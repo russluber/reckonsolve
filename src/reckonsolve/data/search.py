@@ -26,7 +26,11 @@ from reckonsolve.domain.search import (
 )
 
 from .database import Database
-from .forecast_contracts import binary_corrections_relation, select_supported_contract
+from .forecast_contracts import (
+    binary_corrections_relation,
+    check_forecast_contract_integrity,
+    select_supported_contract,
+)
 from .quantile_archive import read_archive as read_quantile_archive
 from .search_index import (
     SEARCH_PROJECTION_VERSION,
@@ -89,6 +93,7 @@ class SearchRepository:
         if parsed_text.is_blank:
             return {}, (), ()
         with self._database.transaction() as connection:
+            check_forecast_contract_integrity(connection)
             _require_ready_index(connection)
             candidates: dict[int, _CandidateAccumulator] = {}
             for clause_index, clause in enumerate(parsed_text.clauses):

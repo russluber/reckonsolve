@@ -24,7 +24,10 @@ from reckonsolve.domain.predictions import (
 from reckonsolve.domain.quantiles import QuantileDefinition, QuantileRevision
 
 from .database import Database
-from .forecast_contracts import select_supported_contract
+from .forecast_contracts import (
+    check_forecast_contract_integrity,
+    select_supported_contract,
+)
 from .quantiles import read_definition, read_revisions
 from .terminal_history import (
     _select_binary_resolution_history,
@@ -136,6 +139,7 @@ class AnalyticsRepository:
         """Read every aggregate cohort from one consistent SQLite snapshot."""
 
         with self._database.transaction() as connection:
+            check_forecast_contract_integrity(connection)
             return (
                 _load_binary_source(connection),
                 _load_numeric_source(connection),

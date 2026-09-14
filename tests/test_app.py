@@ -30,6 +30,7 @@ import reckonsolve.app
 from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
+from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS, MigrationError
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
 from reckonsolve.domain.browser import ArchiveQuery
@@ -1700,9 +1701,12 @@ def test_run_closes_runtime_when_show_fails(monkeypatch, tmp_path) -> None:
     assert not database.is_open
 
 
-def test_run_reports_expected_database_startup_failure(monkeypatch, qtbot) -> None:
+@pytest.mark.parametrize("error_type", [MigrationError, ForecastContractIntegrityError])
+def test_run_reports_expected_database_startup_failure(
+    monkeypatch, qtbot, error_type
+) -> None:
     def fail_to_create_runtime(**_kwargs) -> None:
-        raise MigrationError("unrecognized database")
+        raise error_type("unrecognized database")
 
     shown_errors: list[tuple[str, str]] = []
 
