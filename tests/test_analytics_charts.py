@@ -202,14 +202,21 @@ def test_calibration_scatter_has_no_connectors_and_preserves_bin_positions(
 
 @pytest.mark.parametrize("dark", [False, True])
 def test_trajectory_diamonds_use_shared_semantic_accent(qtbot, monkeypatch, dark):
+    from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QPalette
 
     from reckonsolve.ui import analytics_charts
     from reckonsolve.ui.visual_system import semantic_colors
 
     brushes = []
+    reference_pens = []
 
     class RecordingPainter(QPainter):
+        def drawLine(self, *args):
+            if self.pen().style() == Qt.PenStyle.DashLine:
+                reference_pens.append((self.pen().color().name(), self.pen().widthF()))
+            super().drawLine(*args)
+
         def drawPolygon(self, polygon, *args):
             brushes.append(self.brush().color().name())
             super().drawPolygon(polygon, *args)
@@ -223,6 +230,7 @@ def test_trajectory_diamonds_use_shared_semantic_accent(qtbot, monkeypatch, dark
     )
     # Deliberately differ from the semantic green used by Numeric calibration.
     palette.setColor(QPalette.ColorRole.Highlight, QColor("#008000"))
+    palette.setColor(QPalette.ColorRole.Mid, QColor("#151515"))
     chart.setPalette(palette)
     chart.set_bins((CalibrationBin(60, 69, 10, 64.0, 40.0),))
     chart.resize(640, 300)
@@ -230,6 +238,10 @@ def test_trajectory_diamonds_use_shared_semantic_accent(qtbot, monkeypatch, dark
     chart.grab()
     assert brushes
     assert set(brushes) == {QColor(semantic_colors(chart.palette()).accent).name()}
+    assert reference_pens
+    assert set(reference_pens) == {
+        (QColor(semantic_colors(chart.palette()).border).name(), 1.0)
+    }
 
 
 def _trend_point(

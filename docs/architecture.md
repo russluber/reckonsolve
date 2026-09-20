@@ -1,9 +1,16 @@
 # Reckonsolve Architecture
 
 Status: v0.6 source release complete; v0.7 implemented through Milestone 54, with M54A Analytics presentation and guide
-Last reviewed: 2026-09-19
+Last reviewed: 2026-09-20
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+
+Planned, not implemented: the approved M54B amendment retires legacy application
+workflows before M55. Section 35.3 of the specification governs the supported-model
+upgrade and non-mutating refusal boundary. The four-cohort descriptions below
+still describe the running code; M54B must update them when implementation changes.
+This planning approval does not change schema 18, migrate data, or authorize any
+personal database cleanup.
 
 ## 1. Current implementation
 

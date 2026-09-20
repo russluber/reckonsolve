@@ -4,6 +4,12 @@ Reckonsolve is a local-first personal forecasting journal for Windows. It record
 
 > Reckonsolve v0.6.0 is a source release with isolated development data, local action icons, and a validated private Windows build. Original application-icon artwork, an installer, signing, and public binaries remain deferred.
 
+**Planned v0.7 compatibility change:** M54B will retire legacy Binary and
+interval-v1 Numeric workflows before release. Existing v0.7 forecasts will be
+preserved; databases or backups containing legacy predictions will be refused,
+not silently converted or cleared. This is approved but **not implemented yet**.
+See [the retirement contract and milestone plan](docs/product-spec.md#353-durable-model-and-cohort-identity).
+
 The completed binary v0.1 baseline remains intact. The staged v0.2 plan is complete: Binary and Numeric Prediction Detail record immutable Forecast Reviews while Open, using **Still at N%** or **Keep this interval**. Each Review preserves the exact retained revision, appears in the timeline, and refreshes Needs Attention without fabricating a revision, chart point, or scoring observation. Type-aware recovery, CSV export, migration, and private-build smoke coverage preserve both forecast models and Reviews.
 
 The completed v0.3 source release includes a command-line companion for reading, creating, actively maintaining, terminating, backing up, and exporting forecasts. `reckonsolve-cli-dev` shares the isolated development database used by `reckonsolve-dev`; the stable `reckonsolve-cli` command likewise shares the stable GUI database. Both interfaces route through the same application operations and canonical SQLite history without a synchronization subsystem.

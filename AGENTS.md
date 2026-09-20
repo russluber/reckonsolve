@@ -23,7 +23,9 @@ The governing product rule is:
 
 The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15.
 
-The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 54 are implemented; Milestone 55 is planned but not implemented. Work on only the milestone or coherent slice the user explicitly authorizes; do not treat the approved plan as authorization to implement the whole release at once.
+The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 54 and M54A are implemented. M54B (legacy retirement) is approved and planned, not implemented; M55 follows M54B and is also unimplemented. Work on only the milestone or coherent slice the user explicitly authorizes; approving a specification or plan is not authorization to implement it.
+
+The user-approved 2026-09-20 amendment in Section 35.3 supersedes earlier promises in this file and the design documents to maintain legacy support indefinitely. M54B will remove legacy Binary and interval-v1 Numeric runtime workflows, preserve all existing v0.7 history, and refuse legacy-only or mixed databases without conversion, deletion, or partial loading. Keep shared mathematics, storage, and migration infrastructure required by supported models. Until M54B is explicitly started, do not retire paths piecemeal. The historical milestone descriptions below explain the current implementation and its earlier obligations; they must not cause a later agent to restore retired features after M54B. Any live test-data purge or reset requires separate explicit approval and validated targets; the approved plan is not that approval.
 
 The v0.1 baseline includes:
 

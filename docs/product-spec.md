@@ -1126,7 +1126,7 @@ The v0.5 retrieval-and-organization contract is resolved in Section 33. Search i
 
 The v0.6 visual-system and application-shell contract is resolved in Section 34. The desktop follows the system light/dark preference, retains the native window frame, uses comfortable density and one restrained green accent, separates primary destinations from creation and contextual Detail, supports remembered expanded and compact navigation, and uses nonblocking status notifications only where acknowledgment does not require a decision. Presentation preferences remain noncanonical and separate from forecast data.
 
-The v0.7 forecasting-method, Binary trajectory-scoring, and five-quantile Numeric contracts are resolved in Section 35 and their three supporting design documents. They apply prospectively to Predictions created under the new model identities. Legacy Binary and Numeric Predictions keep their earlier contracts for life and are never silently converted, reconstructed, rescored, or mixed into a new-model aggregate.
+The v0.7 forecasting-method, Binary trajectory-scoring, and five-quantile Numeric contracts are resolved in Section 35 and their three supporting design documents. They apply to Predictions created under the new model identities. The approved 2026-09-20 retirement amendment in Section 35.3 replaces the earlier promise of ongoing legacy support: M54B removes legacy workflows before M55, rejects legacy-containing databases without altering them, and preserves existing v0.7 data. Legacy records are never silently converted, reconstructed, rescored, or mixed into a supported aggregate.
 
 When making these decisions, preserve the constitutional principles and choose the smallest solution that supports genuine use.
 
@@ -2681,9 +2681,11 @@ v0.6 is not complete unless all of the following are true:
 
 ## 35. v0.7 forecasting discipline, Binary trajectory scoring, and five-quantile Numeric product contract
 
-v0.7 changes the forecasting commitment for newly created Predictions while
-preserving every historical contract under which an existing Prediction was
-made. It incorporates the following accepted design inputs:
+v0.7 introduces exact forecasting commitments and supports Binary trajectory
+and five-quantile Numeric Predictions. The original staged plan preserved legacy
+workflows; the user-approved 2026-09-20 amendment retires those workflows before
+release, without rewriting or deleting their records. It incorporates the
+following accepted design inputs:
 
 - [Forecasting Rulebook v0.7](reckonsolve-forecasting-rulebook-v0.7.md);
 - [Binary Trajectory Scoring Design v0.7](reckonsolve-binary-trajectory-scoring-design-v0.7.md); and
@@ -2702,11 +2704,18 @@ The release promise is:
 > standing Binary probability path, and represent every new Numeric belief as
 > one fixed five-quantile distribution.
 
-Sections 1 through 34 remain authoritative for legacy Predictions and for
-behavior not changed here. For a Prediction carrying a v0.7 forecast-model
+Sections 1 through 34 document the earlier releases and remain authoritative for
+behavior not changed here. Section 35.3's retirement policy supersedes their
+legacy-support promises and the supporting design documents' coexistence promises.
+For a Prediction carrying a v0.7 forecast-model
 identity, this section prospectively overrides the earlier optional,
 date-only, editable Forecast Deadline; final-revision-only Binary scoring; and
 user-selected-confidence Numeric interval contracts.
+
+Implementation status: Milestones 46–54 and the M54A visual/documentation follow-up
+are implemented. M54B is approved and planned, not implemented. M55 follows M54B
+and remains unimplemented. Approving this contract does not authorize starting
+either milestone; implementation still requires the user's milestone instruction.
 
 ### 35.1 Included scope and governing invariants
 
@@ -2732,7 +2741,8 @@ v0.7 includes:
   discrete-aware calibration;
 - an implied central CDF that distinguishes elicited quantiles from
   interpolation and invents no outer-tail shape;
-- hard, visible coexistence with all pre-v0.7 Binary and Numeric records;
+- explicit retirement of legacy Binary and interval-v1 Numeric workflows,
+  preserving supported v0.7 data and refusing legacy-containing databases safely;
 - matching GUI and CLI workflows over the same canonical database; and
 - migration, search, backup, relational CSV export, recovery, and private
   frozen-build hardening for the new records.
@@ -2747,8 +2757,9 @@ The following invariants govern the release:
   doubles as model or scoring identity.
 - New creation offers only the new v0.7 model for the selected Binary or
   Numeric forecast type. It does not expose a legacy/new model selector.
-- Existing Predictions retain their legacy model for life, including
-  existing Open Predictions and all their future revisions and Resolution.
+- Existing v0.7 Predictions retain their models, facts, history, and scores.
+  Legacy records retain their original meaning in their original database but
+  are not supported by the post-M54B application; refusal never implies deletion.
 - No migration invents an exact deadline, effective resolution time,
   probability trajectory, quantile, or WIS for a legacy record.
 - New Binary and Numeric Predictions share a forecasting lifecycle but retain
@@ -2826,37 +2837,72 @@ accepted contract.
 ### 35.3 Durable model and cohort identity
 
 Every Prediction has one immutable forecast-model identity and one immutable
-scoring-contract identity. Exact stored names are an implementation detail,
-but their semantic cohorts are:
+scoring-contract identity. Exact stored names are an implementation detail.
+The original staged implementation distinguished these four cohorts; only the
+right-hand column remains supported after M54B:
 
 | Forecast type | Legacy cohort | New v0.7 cohort |
 |---|---|---|
 | Binary | one final captured probability with ordinary Brier | standing probability trajectory with Trajectory Brier |
 | Numeric | `interval-v1`: lower, median, upper, chosen confidence | `quantiles-5-v2`: q05, q25, q50, q75, q95 with WIS |
 
-The Binary legacy cohort retains the existing optional editable date-only
-Forecast Deadline, immutable captured scoring revision, Brier score,
-calibration, and cumulative-Brier behavior.
+The earlier M46–M54 implementation identified and preserved legacy records rather
+than reinterpreting them. That remains the historical description of those
+milestones, not a requirement to retain legacy editors or scoring in the release.
 
-Every Numeric Prediction already present when the migration first runs is
-marked `interval-v1`. This includes Open, Locked, Resolved, and Invalid
-records. Open legacy Numeric Predictions continue to use the interval,
-median, and confidence creation-era revision editor and legacy resolution and
-analytics rules for their entire lifetime.
-
-After the v0.7 creation switch:
+The supported contract after M54B is:
 
 - `create binary` creates only the Binary trajectory model;
 - `create numeric` creates only `quantiles-5-v2`;
 - there is no normal conversion command or model selector;
-- copying text from a legacy definition into a new Prediction, if ever
-  offered, is convenience only and creates no linked or inferred history; and
 - all reads, writes, anchors, scoring, and rendering dispatch from stored
   model identity rather than guessed table population.
 
-Legacy and new-model scores must be labeled and aggregated separately. A
-blank or unrecognized model identity is a migration or compatibility error,
-not permission to guess.
+#### Approved legacy-retirement policy (2026-09-20)
+
+The user confirmed that legacy records were disposable tests rather than a real
+forecasting archive. The product will begin genuine use with the v0.7 models.
+Maintaining old-model workflows is therefore outside the revised release scope.
+
+- **Retire behavior, not history:** remove legacy editors, lifecycle/revision
+  dispatch, individual scorecards, aggregate sections, CLI paths, and their
+  runtime-only helpers. Do not merely hide legacy cards while keeping a second
+  supported forecasting system underneath.
+- **Preserve v0.7 data:** a supported upgrade must retain every v0.7 Prediction,
+  model/scoring identity, exact Deadline, revision, Journal and correction,
+  Review, definition change, effective/recorded terminal fact, Postmortem record,
+  tag relationship, and Saved View. Rebuilt derived state must reproduce the
+  same retrieval and scoring results. Retirement does not reset either identity.
+- **Refuse mixed and legacy databases:** if even one legacy Prediction exists,
+  reject the whole database before migration, search repair, or normal writes.
+  This applies to Open, Locked, Resolved, and Invalid records, and to GUI and CLI.
+  Do not hide unsupported rows and operate on the remaining subset. A new-model
+  database containing an unknown or mismatched identity is also refused.
+- **Explain refusal clearly:** identify the unsupported model/database and explain
+  that no conversion or deletion occurred. An old database or SQLite backup
+  containing legacy records will not open in the new application. Keep the
+  original artifact usable with a compatible earlier version; do not overwrite it
+  or promise that a v0.7 analytical export can restore it.
+- **No implicit cleanup permission:** this contract authorizes no purge, reset,
+  automatic conversion, timestamp inference, or bulk deletion. Cleaning disposable
+  test data is a separate explicitly approved operation with identified targets,
+  backup/recovery guidance, and preservation of any v0.7 records the user keeps.
+  Until then a mixed database may legitimately prevent launching the new build.
+- **Separate history from shared infrastructure:** retain tables, revision anchors,
+  Brier-loss math, correction relationships, and migration machinery still needed
+  by the supported models. A table's age or name alone does not make it obsolete.
+  Any schema cleanup must be versioned, transactional, and preserve supported data;
+  never modify an already-applied migration in place. Keeping necessary historical
+  migration SQL is not a promise of legacy application support.
+
+Fresh databases and valid pre-retirement v0.7-only databases are supported inputs.
+M54B must inventory and test the supported upgrade paths, including the currently
+used schema-18 v0.7-only database. Older backups are classified by their stored
+schema and model contracts, not their filename, identity folder, or package-version
+label. Unsupported schemas and malformed/missing identities produce a clear,
+non-mutating compatibility error rather than guessed models or a fresh replacement.
+Never strand valid v0.7 history as a convenience for simplifying the schema; surface
+any such migration obstacle before implementation proceeds.
 
 ### 35.4 Shared exact forecasting-window and resolution-time contract
 
@@ -2892,9 +2938,8 @@ for a desired score. Input may use local date, time, and zone-aware platform
 controls, but the committed value must resolve to one unambiguous instant.
 
 For the new cohorts, Edit Details displays Forecast Deadline as immutable
-context and offers no addition, change, or removal action. Legacy Predictions
-retain their existing protected date-only edit and Definition-history
-behavior.
+context and offers no addition, change, or removal action. The retired date-only
+legacy editor is not part of the post-M54B application.
 
 #### Expected Resolution
 
@@ -3015,9 +3060,11 @@ Binary Analytics separates:
   Brier, distribution or time summaries, and clearly labeled diagnostics;
 - final-probability calibration for eligible new-model Predictions, using one
   final probability strictly before `C` as a diagnostic rather than a
-  trajectory score; and
-- the legacy cohort's existing final-revision Brier, calibration, and
-  cumulative performance views.
+  trajectory score.
+
+Legacy aggregate sections are removed by M54B. Ordinary Brier remains necessary
+for the supported trajectory calculation and Initial/Final diagnostics; retiring
+legacy forecasts does not retire that shared mathematics.
 
 No headline silently averages legacy Brier and Trajectory Brier. No revision
 is an independent aggregate observation. v0.7 adds no metric called
@@ -3203,9 +3250,10 @@ changes WIS, calibration, stored history, or export values. Every revision
 and its five exact quantiles remains recoverable from the textual timeline,
 so the chart is not the sole historical representation.
 
-Legacy `interval-v1` containment bins and exact-unit raw summaries remain in
-a visibly separate legacy analytics section. They never enter five-quantile
-calibration or WIS feedback.
+M54B removes legacy `interval-v1` containment bins and raw aggregate summaries.
+They never enter five-quantile calibration or WIS feedback. Binary/Numeric
+selection, tag and exact-unit filtering, and continuous-style/whole-number
+separation retain their supported meanings.
 
 ### 35.10 Creation, Detail, lifecycle, and correction workflows
 
@@ -3235,8 +3283,8 @@ Binary and Numeric Detail must show:
 - terminal effective and recorded times when Resolved; and
 - type-appropriate scorecard or explicit unscored explanation.
 
-Legacy labels should be calm but unambiguous wherever the scoring or editor
-differs. The app must not shame a legacy record or suggest conversion.
+Legacy editors, scorecards, and normal navigation are absent after M54B.
+Compatibility errors must be calm, clear, and never suggest automatic conversion.
 
 The shared active lifecycle is:
 
@@ -3266,9 +3314,7 @@ it may change scoring selection or score. Before/after effective-time facts,
 changed-field flags, reason, and correction timestamp are preserved.
 Recorded-at never changes.
 
-For legacy Resolutions, the existing immutable captured scoring revision and
-correction behavior remain authoritative. For new-model Resolutions, the
-canonical scoring selection is derived from immutable revision timestamps,
+For supported Resolutions, canonical scoring selection is derived from immutable revision timestamps,
 immutable `T`, and latest effective `R`. An audited correction to `R` may
 therefore change the final eligible revision without rewriting any revision
 or original Resolution fact. Any cached revision identifier is derived and
@@ -3282,13 +3328,13 @@ snapshot because no normal edit exists.
 
 ### 35.11 Archive, search, Saved Views, Dashboard, and CLI
 
-Dashboard and Predictions remain one mixed archive. Each row renders the
+Dashboard and Predictions remain one Binary/Numeric archive. Each row renders the
 stored forecast type, model-appropriate current forecast or terminal summary,
 lifecycle, tags, dates, and attention labels. A new Numeric row shows the
 90% interval, median, and 50% interval without a confidence selector.
 Deadline date filtering projects an exact new-model deadline into the
-query's one local-calendar view while retaining date-only semantics for
-legacy records.
+query's one local-calendar view. No legacy rows are silently omitted: their
+presence prevents opening the database under Section 35.3.
 
 Search keeps the v0.5 lexical, explainable, grouped behavior. Five-quantile
 values, score values, model identities, and timestamps remain structured
@@ -3309,16 +3355,15 @@ The existing CLI command family remains the companion interface:
 - `create numeric` creates only the five-quantile model and prompts for unit,
   precision, value constraint, all five quantiles, and exact Forecast
   Deadline;
-- `revise` dispatches to Binary trajectory, Numeric five-quantile, or the
-  appropriate legacy editor from stored model identity;
+- `revise` dispatches to Binary trajectory or Numeric five-quantile from
+  stored model identity;
 - `review` uses current-forecast wording and retains no-change semantics;
 - `resolve` collects a type-appropriate outcome plus effective resolution
   time and preserves automatic recorded-at;
 - `show` displays model identity, exact deadlines, all five quantiles,
   effective and recorded resolution facts, correction history, and
   type-appropriate score information; and
-- `list` and `search` display model-appropriate summaries without flattening
-  legacy and new records.
+- `list` and `search` display model-appropriate summaries for both supported types.
 
 CLI prompts remain human-directed and line-oriented. The CLI reuses the same
 application operations, validation, migrations, model dispatch, and SQLite
@@ -3327,8 +3372,8 @@ create a synchronization system.
 
 ### 35.12 Persistence, migration, backup, and export
 
-The first v0.7 migration follows schema version 15 and establishes the shared
-prospective contract. It must:
+The implemented M46 migration followed schema version 15 and established the
+shared prospective contract. Its historical requirements were:
 
 - add durable forecast-model and scoring-contract identities;
 - mark every existing Binary and Numeric Prediction with its exact legacy
@@ -3341,13 +3386,18 @@ prospective contract. It must:
 - be idempotent, history-validated, foreign-key checked, and covered by a
   forced-failure rollback test.
 
-The Numeric persistence migration adds a clean immutable five-quantile
+The implemented Numeric persistence migration added a clean immutable five-quantile
 revision representation rather than repurposing `numeric_forecast_revisions`.
 The physical layout may use generic child rows keyed by allowed quantile
 level, but the domain transaction must require exactly one value for each of
 5, 25, 50, 75, and 95 and no others. Journal, Review, Resolution, correction,
 search, and timeline relationships must anchor unambiguously to the
 model-appropriate complete revision.
+
+M54B supersedes the earlier legacy-upgrade promise with Section 35.3's support
+boundary. Detect unsupported legacy records before mutating an existing database;
+test supported v0.7-only upgrades and rollback separately from refusal cases.
+Do not delete supported rows to make a database fit a simplified schema.
 
 Canonical data includes model and scoring identity, exact deadline, every
 immutable revision and quantile, effective and recorded Resolution facts,
@@ -3356,12 +3406,13 @@ final scoring-revision selection, and model-appropriate display summaries
 remain derived.
 
 SQLite backup continues to copy and verify the entire current database. A
-restored backup must preserve all cohorts and deterministically reproduce
-their scores and search projection.
+restored supported backup must preserve both supported models and deterministically
+reproduce their scores and search projection. A backup containing retired models
+is subject to the same non-mutating refusal as a live database.
 
-Relational CSV export advances to **format version 4**. It retains every
-format-version-three historical relationship and adds enough explicit files
-or columns to preserve:
+Relational CSV export advances to **format version 4** for the supported models.
+It preserves every historical relationship applicable to v0.7 records, with enough
+explicit files or columns to preserve:
 
 - forecast-model and scoring-contract identity;
 - exact new-model Forecast Deadlines;
@@ -3370,12 +3421,14 @@ or columns to preserve:
 - effective and recorded resolution times;
 - effective-time corrections and their explanations;
 - revision sequence and immutable timestamps; and
-- the legacy/new cohort boundary.
+- the Binary trajectory versus five-quantile Numeric model/scoring boundary.
 
 Exact Numeric values remain scaled integers paired with precision or another
 documented exact base-ten form. The version-four data dictionary explains
 how to reconstruct each standing Binary segment, select the final Numeric
-revision, distinguish legacy analytics, and interpret nulls. CSV remains an
+revision, distinguish the supported scoring contracts, and interpret nulls.
+The format documents the retirement of legacy-only files or columns instead of
+pretending to be a format-3-compatible export. CSV remains an
 analytical export, not an import or restoration format. Saved Views,
 application settings, presentation preferences, derived scores, CDF points,
 and search-index rows remain excluded.
@@ -3388,9 +3441,13 @@ need.
 
 ### 35.13 Implementation milestones
 
-Milestones 46 through 55 implement v0.7.0. Each milestone must preserve the
-complete v0.6 application and all legacy cohorts while adding one testable
-slice.
+Milestones 46 through 55, including M54A and M54B, implement v0.7.0.
+Milestones 46–54 below retain their original implementation/acceptance history,
+including the then-required legacy preservation. They are not instructions to
+restore retired features after M54B. M54B deliberately changes the support boundary
+under Section 35.3; it must preserve all supported v0.7 behavior and data. M55
+validates and closes that revised contract rather than the superseded four-cohort
+release plan.
 
 #### Milestone 46: Rulebook and shared prospective-contract foundation
 
@@ -3570,25 +3627,103 @@ Acceptance demonstration:
 - Verify that no interface calculates its own score, issues model-specific ad
   hoc SQL, or diverges from the shared application operation.
 
+#### Milestone 54A: Analytics presentation and interpretation guide
+
+Implemented as the user-directed visual follow-up to M54. It refines Analytics
+hierarchy, compact trajectory summaries, calibration presentation, and contextual
+help; adds the worked-example Analytics guide; and organizes individual resolved
+scorecards with selectable grouped facts and Numeric interval/outcome graphics.
+It changes no scoring formula, canonical row, schema, cohort, or CLI operation.
+Its existing tests and accepted visual behavior remain part of the M54B baseline.
+
+#### Milestone 54B: Legacy retirement and supported-model boundary
+
+Status: approved plan; implementation requires a separate start instruction.
+Complete this milestone before M55. This is substantive compatibility cleanup,
+not a visual-only removal of the word “legacy.”
+
+1. **Inventory dependencies and supported inputs.** Identify legacy-only editors,
+   dialogs, domain/application dispatch, query projections, analytics, CLI prompts,
+   fixture helpers, packaging checks, and documentation. Distinguish them from
+   shared Brier math, Binary revision storage, tag/history infrastructure, and
+   other dependencies the supported models still need. Record the concrete
+   schema/model support matrix and any necessary schema migration in an ADR.
+   Preserve the currently used schema-18 v0.7-only upgrade path; identify any
+   obstacle to retaining earlier staged v0.7 history before removing code.
+2. **Enforce refusal before mutation.** Use one consistent compatibility boundary
+   for GUI and CLI startup, migration, and application/data entry points. Reject
+   legacy-only or mixed databases, regardless of lifecycle or current filters,
+   without rewriting rows, repairing their index, resetting their path, or
+   silently serving a supported subset. Retain unknown/mismatched-identity guards.
+   Explain the retired model and the absence of conversion/deletion clearly.
+3. **Preserve supported persistence.** Create fresh supported databases and upgrade
+   supported existing databases without losing identities, anchors, chronology,
+   exact values/times, corrections, Postmortems, tags, Saved Views, or settings.
+   If schema changes are necessary, use a new atomic migration with forced-failure
+   rollback and foreign-key checks. Preserve derived-result equivalence. Remove
+   old-model-only structures only when proved unused by supported records; do not
+   rewrite migration history or rebuild from an incomplete analytical export.
+4. **Remove retired product paths.** Delete legacy-only runtime editors, lifecycle
+   and correction branches, scorecards, aggregate sections, and CLI support—not
+   just their visible entry points. Simplify archive, search, Dashboard, and
+   analytics composition to the two supported model/scoring pairs. Keep unit
+   filtering and continuous-style/whole-number calibration distinct. Preserve
+   the accepted M54A presentation, keyboard behavior, and shared operation boundary.
+5. **Retarget tests without weakening guarantees.** Replace legacy fixture use in
+   still-relevant behavior tests with supported fixtures. Preserve coverage for
+   immutable history, stale writes, lock/rollback failures, tag/search operations,
+   Saved Views, terminal corrections, score selection, restart, and dev/stable
+   isolation. Keep small legacy/mixed database fixtures specifically for refusal
+   tests; remove obsolete assertions requiring functioning retired editors or
+   legacy analytics. Neither real user database is a test fixture.
+6. **Document and hand off.** Update current-behavior README, architecture, guide,
+   command help, AGENTS, and changelog. Keep previous release/milestone history
+   explicitly historical rather than rewriting it as if support never existed.
+   Document the compatibility break and explain that any personal test-data
+   cleanup needs separate approval. Do not implement a purge/reset command or
+   inspect, delete, or convert live records as part of this milestone. Keep the
+   CSV-3 guard until M55 provides format 4; complete SQLite backup remains usable
+   for supported databases.
+
+Acceptance demonstrations:
+
+- A fresh database supports both current model types through creation, revisions,
+  Journals, Reviews, resolution, correction, scorecards, Analytics, and CLI reads.
+- A populated pre-retirement v0.7-only database upgrades/reopens with identical
+  canonical facts, exact score results, search provenance, and Saved View behavior.
+- Legacy-only and mixed fixtures fail clearly in GUI and CLI with their canonical
+  rows unchanged; backup copies of those fixtures receive the same treatment.
+- Unknown identities, mismatched contracts, and unsupported schemas never trigger
+  a reset, reinterpretation, or partially usable archive.
+- The supported UI contains no legacy editor or analytics card, while ordinary
+  Binary Brier diagnostics and five-quantile calculations remain correct.
+
 #### Milestone 55: v0.7 portability, migration, and release closure
+
+Prerequisite: M54B implemented, verified, and accepted. M55 remains a separately
+authorized milestone; it must not restore the superseded legacy support contract.
 
 - Advance relational CSV export to format version 4 with complete model,
   quantile, exact-time, correction, and cohort documentation.
-- Verify complete SQLite backup and recovery, derived search rebuild, every
-  post-version-15 migration and forced rollback, restart, and
+- Verify complete supported-model SQLite backup and recovery, derived search
+  rebuild, every supported upgrade path and forced rollback, restart, and
   stable/development isolation.
-- Exercise a representative real schema-version-15-shaped database containing
-  both legacy types through upgrade and mixed-cohort use without row
-  reinterpretation.
+- Exercise representative pre-retirement v0.7-only databases, including schema 18,
+  through upgrade and combined Binary/Numeric use without changing any historical
+  fact or score. Exercise schema-version-15, legacy-only, mixed, malformed-contract,
+  and unsupported-version fixtures as non-mutating refusal cases, not as legacy
+  compatibility demonstrations.
 - Extend the relocated private frozen-build smoke across new Binary
   trajectory and Numeric five-quantile creation, revision, Review, Resolution,
   correction, scorecard, Analytics, CLI-compatible reads, search, backup, and
-  restart.
+  restart. Verify clear unsupported-database failures in the packaged application
+  as well as the source GUI/CLI, using disposable fixtures only.
 - Run the full automated suite, Ruff checks, focused duration/quantile
   property cases, and the existing manual Windows visual/accessibility
   workflow.
 - Align README, architecture, ADRs, command help, version metadata,
-  changelog, and release notes with the implemented v0.7 behavior.
+  changelog, and release notes with the implemented v0.7 behavior, including
+  the legacy-retirement compatibility break and supported recovery inputs.
 - Close v0.7 as a source release without adding Numeric trajectory scoring,
   trajectory calibration, a new forecast type, importer, installer, signing,
   updates, public binaries, or logo work.
@@ -3597,11 +3732,12 @@ Acceptance demonstration:
 
 v0.7 is not complete unless all of the following are true:
 
-1. Every completed v0.6 workflow and row retains its prior meaning unless
-   this section explicitly introduces a prospective new-model path.
-2. Every pre-upgrade Binary and Numeric Prediction receives the correct
-   durable legacy identity without an invented timestamp, quantile, score, or
-   model conversion.
+1. All supported v0.7 workflows and existing records retain their meaning through
+   retirement and release hardening. Legacy behavior is absent after M54B rather
+   than silently remapped onto supported models.
+2. Legacy-only and mixed databases, unknown/mismatched identities, and unsupported
+   schemas fail clearly before normal mutation in both GUI and CLI. No legacy
+   record is deleted, assigned invented values, converted, or silently omitted.
 3. Every new Binary and Numeric Prediction has one exact immutable Deadline
    strictly after its initial revision and commits parent, model identity,
    deadline, optional details, and first revision atomically.
@@ -3629,9 +3765,9 @@ v0.7 is not complete unless all of the following are true:
 13. Each Numeric v2 revision contains exactly q05, q25, q50, q75, and q95,
     preserves exact precision, permits equality, rejects crossing, and
     enforces its value constraint.
-14. New Numeric creation exposes no confidence selector or legacy-model
-    selector, while every Open legacy Numeric Prediction keeps its earlier
-    editor and scoring contract.
+14. Numeric creation and revision expose the fixed five quantiles, not a chosen
+    confidence or legacy-model selector. No normal GUI or CLI path operates a
+    retired forecast model.
 15. Numeric final-revision selection is strictly before `min(R, T)` and has
     no neutral truncation or trajectory component.
 16. WIS, its two interval scores, median term, boundary behavior,
@@ -3647,16 +3783,21 @@ v0.7 is not complete unless all of the following are true:
     quantiles as jumps, invents no outer-tail distribution, and never affects
     scoring.
 20. GUI and CLI create, mutate, resolve, display, and search the same canonical
-    mixed-cohort data through shared application operations.
+    Binary trajectory and five-quantile Numeric data through shared application
+    operations.
 21. Dashboard, Predictions, Saved Views, tags, attention, Definition history,
     Journal history, Reviews, Postmortems, and search retain their established
-    semantics for every cohort.
+    semantics for both supported models.
 22. Backup, CSV format version 4, migration, search repair, restart, and the
-    private frozen build preserve every new fact and every legacy boundary.
+    private frozen build preserve every supported historical fact and enforce
+    the documented unsupported-database boundary.
 23. Tests and smoke workflows use only explicit temporary databases and never
     read or write stable or development user data.
 24. The complete v0.7 application remains offline, local-first, single-user,
     and proportionate to a personal forecasting journal.
+25. Retirement never performs personal database cleanup implicitly. Backup/reset
+    or selective removal of disposable tests remains a separate explicitly
+    authorized operation; retained v0.7 records are not collateral deletion.
 
 ### 35.15 Explicitly outside v0.7
 

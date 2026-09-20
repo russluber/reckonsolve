@@ -215,7 +215,12 @@ class CalibrationChart(QWidget):
             y_title="Observed Yes frequency",
         )
 
-        reference_pen = QPen(palette.color(QPalette.ColorRole.Mid), 1.5)
+        reference_pen = QPen(
+            QColor(semantic_colors(palette).border)
+            if self._scatter
+            else palette.color(QPalette.ColorRole.Mid),
+            1.0 if self._scatter else 1.5,
+        )
         reference_pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(reference_pen)
         painter.drawLine(plot.bottomLeft(), plot.topRight())
