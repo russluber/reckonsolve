@@ -44,13 +44,14 @@ from reckonsolve.ui.analytics_charts import (
     ContainmentCalibrationChart,
 )
 from reckonsolve.ui.analytics_components import (
+    AnalyticsPanel,
+    CompactMetricGroup,
     _new_summary_metric,
     _new_update_metric,
     _ResponsiveChartTable,
     _ResponsiveMetricRow,
 )
 from reckonsolve.ui.components import (
-    ContentPanel,
     EmptyStateLabel,
     PageHeader,
     PersistentMessageLabel,
@@ -129,17 +130,18 @@ class AnalyticsScreen(QWidget):
 
         header = PageHeader(
             "Analytics",
-            "Trajectory Binary, legacy Binary, and Numeric interval scores remain "
-            "separate. Every eligible resolved Prediction contributes once; Invalid "
-            "and unresolved Predictions are excluded.",
             title_object_name="analyticsScreenTitle",
             supporting_object_name="analyticsIntroduction",
             parent=self,
         )
         header.setObjectName("analyticsPageHeader")
+        header.setAccessibleDescription(
+            "Scores remain separate by forecasting model. Every eligible resolved "
+            "Prediction contributes once; Invalid and unresolved Predictions are excluded."
+        )
 
-        filters_panel = ContentPanel(
-            "Analytics view",
+        filters_panel = AnalyticsPanel(
+            "Analytics View",
             "Every visible headline, table, and chart uses this same filtered "
             "set of resolved Predictions.",
             parent=self,
@@ -306,10 +308,11 @@ class AnalyticsScreen(QWidget):
         self.unit_filter.currentIndexChanged.connect(self.refresh)
         self.refresh_button.clicked.connect(self.refresh)
 
-    def _create_binary_summary(self) -> ContentPanel:
-        summary = ContentPanel(
-            "Legacy Binary forecasts — final Brier",
-            "One captured final probability per resolved legacy Binary Prediction.",
+    def _create_binary_summary(self) -> AnalyticsPanel:
+        summary = AnalyticsPanel(
+            "Legacy Binary Forecast — Final Brier",
+            "One captured final probability per resolved legacy Binary Prediction. "
+            "Lower is better: 0 is perfect, 1 is maximally wrong.",
             parent=self,
         )
         summary.setObjectName("analyticsBrierSummary")
@@ -330,113 +333,99 @@ class AnalyticsScreen(QWidget):
             object_name="binaryHeadlineMetrics",
             parent=summary.body,
         )
-        direction = QLabel(
-            "Lower is better. A perfect Binary forecast scores 0; a maximally "
-            "wrong forecast scores 1.",
-            summary.body,
-        )
-        direction.setObjectName("analyticsBrierDirection")
-        direction.setWordWrap(True)
-        direction.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(direction, TextRole.SECONDARY)
         summary_layout.addWidget(metrics)
-        summary_layout.addWidget(direction)
         summary_layout.addStretch()
         summary.setHidden(True)
         return summary
 
-    def _create_trajectory_summary(self, parent: QWidget) -> ContentPanel:
-        summary = ContentPanel(
-            "Trajectory Binary forecasts",
+    def _create_trajectory_summary(self, parent: QWidget) -> AnalyticsPanel:
+        summary = AnalyticsPanel(
+            "Trajectory Binary Forecast",
             "Time is weighted inside each fixed forecasting window; every eligible "
             "Prediction still receives one equal vote in this aggregate.",
             parent=parent,
         )
         summary.setObjectName("trajectoryAnalyticsSummary")
-        count_card, self.trajectory_scored_count = _new_update_metric(
-            "Eligible resolved Predictions",
-            value_object_name="trajectoryAnalyticsScoredCount",
+        score = CompactMetricGroup("Score", parent=summary.body)
+        score.setObjectName("trajectoryHeadlineMetrics")
+        self.mean_trajectory_brier = score.add_metric(
+            "Mean Trajectory Brier", "analyticsMeanTrajectoryBrier", primary=True
+        )
+        self.trajectory_scored_count = score.add_metric(
+            "Eligible resolved Predictions", "trajectoryAnalyticsScoredCount"
+        )
+        apply_text_role(self.trajectory_scored_count, TextRole.METRIC)
+        timing = CompactMetricGroup("Timing", parent=summary.body)
+        timing.setObjectName("trajectoryTimingMetrics")
+        self.trajectory_early_count = timing.add_metric(
+            "Resolved before deadline", "trajectoryEarlyResolutionCount"
+        )
+        self.trajectory_deadline_count = timing.add_metric(
+            "Reached deadline", "trajectoryReachedDeadlineCount"
+        )
+        self.trajectory_active_fraction = timing.add_metric(
+            "Average Forecast Weight", "trajectoryMeanActiveFraction"
+        )
+        self.trajectory_neutral_fraction = timing.add_metric(
+            "Average Neutral Weight", "trajectoryMeanNeutralFraction"
+        )
+        timing_explanation = (
+            "Average across eligible resolved Predictions, with one equal vote each. "
+            "These are weights in the Trajectory Brier calculation, not shares of "
+            "the resulting score. Weights follow the planned time from creation to Deadline. "
+            "Your forecasts are scored until the outcome is fixed or the Deadline "
+            "arrives. After an early outcome, the remaining time uses the neutral "
+            "score of 0.25. For example, resolving 4 hours into a 10-hour window "
+            "means 40% your forecasts and 60% neutral. This is not time spent in the app."
+        )
+        for value in (
+            self.trajectory_active_fraction,
+            self.trajectory_neutral_fraction,
+        ):
+            value.setToolTip(timing_explanation)
+            value.setAccessibleDescription(timing_explanation)
+        diagnostics = CompactMetricGroup("Updating", parent=summary.body)
+        diagnostics.setObjectName("trajectoryDiagnosticMetrics")
+        self.trajectory_initial_brier = diagnostics.add_metric(
+            "Mean initial Brier", "trajectoryMeanInitialBrier"
+        )
+        self.trajectory_final_brier = diagnostics.add_metric(
+            "Mean final Brier", "trajectoryMeanFinalBrier"
+        )
+        self.trajectory_hold_brier = diagnostics.add_metric(
+            "Mean hold-initial trajectory", "trajectoryMeanHoldInitialBrier"
+        )
+        self.trajectory_updating_gain = diagnostics.add_metric(
+            "Mean Updating Gain", "trajectoryMeanUpdatingGain"
+        )
+        metrics = _ResponsiveMetricRow(
+            (score, timing, diagnostics),
+            stack_below=1050,
+            object_name="trajectoryCompactMetrics",
             parent=summary.body,
         )
-        mean_card, self.mean_trajectory_brier = _new_update_metric(
-            "Mean Trajectory Brier",
-            value_object_name="analyticsMeanTrajectoryBrier",
-            parent=summary.body,
-        )
-        headline = _ResponsiveMetricRow(
-            (count_card, mean_card),
-            stack_below=440,
-            object_name="trajectoryHeadlineMetrics",
-            parent=summary.body,
-        )
-        early_card, self.trajectory_early_count = _new_update_metric(
-            "Resolved before deadline",
-            value_object_name="trajectoryEarlyResolutionCount",
-            parent=summary.body,
-        )
-        deadline_card, self.trajectory_deadline_count = _new_update_metric(
-            "Reached deadline",
-            value_object_name="trajectoryReachedDeadlineCount",
-            parent=summary.body,
-        )
-        active_card, self.trajectory_active_fraction = _new_update_metric(
-            "Mean active forecasting",
-            value_object_name="trajectoryMeanActiveFraction",
-            parent=summary.body,
-        )
-        timing = _ResponsiveMetricRow(
-            (early_card, deadline_card, active_card),
-            stack_below=720,
-            object_name="trajectoryTimingMetrics",
-            parent=summary.body,
-        )
-        initial_card, self.trajectory_initial_brier = _new_update_metric(
-            "Mean initial Brier",
-            value_object_name="trajectoryMeanInitialBrier",
-            parent=summary.body,
-        )
-        final_card, self.trajectory_final_brier = _new_update_metric(
-            "Mean final Brier",
-            value_object_name="trajectoryMeanFinalBrier",
-            parent=summary.body,
-        )
-        hold_card, self.trajectory_hold_brier = _new_update_metric(
-            "Mean hold-initial trajectory",
-            value_object_name="trajectoryMeanHoldInitialBrier",
-            parent=summary.body,
-        )
-        gain_card, self.trajectory_updating_gain = _new_update_metric(
-            "Mean Updating Gain",
-            value_object_name="trajectoryMeanUpdatingGain",
-            parent=summary.body,
-        )
-        diagnostics = _ResponsiveMetricRow(
-            (initial_card, final_card, hold_card, gain_card),
-            stack_below=980,
-            object_name="trajectoryDiagnosticMetrics",
-            parent=summary.body,
-        )
+        metrics.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        for group in (score, timing, diagnostics):
+            metrics.layout().setAlignment(group, Qt.AlignmentFlag.AlignTop)
         self.trajectory_guidance = QLabel(summary.body)
         self.trajectory_guidance.setObjectName("trajectoryAnalyticsGuidance")
         self.trajectory_guidance.setTextFormat(Qt.TextFormat.PlainText)
         self.trajectory_guidance.setWordWrap(True)
         apply_text_role(self.trajectory_guidance, TextRole.SECONDARY)
-        summary.body_layout.addWidget(headline)
-        summary.body_layout.addWidget(timing)
-        summary.body_layout.addWidget(diagnostics)
+        summary.body_layout.addWidget(metrics)
         summary.body_layout.addWidget(self.trajectory_guidance)
         return summary
 
-    def _create_trajectory_content(self, parent: QWidget) -> ContentPanel:
-        section = ContentPanel(
-            "Trajectory Binary final-probability calibration",
+    def _create_trajectory_content(self, parent: QWidget) -> AnalyticsPanel:
+        section = AnalyticsPanel(
+            "Trajectory Binary Final-Probability Calibration",
             "This diagnostic uses one final standing probability strictly before "
             "resolution or deadline. It is not trajectory calibration, and neutral "
             "truncation never creates a 50% observation.",
             parent=parent,
         )
         section.setObjectName("trajectoryCalibrationSection")
-        self.trajectory_calibration_chart = CalibrationChart(section.body)
+        self.trajectory_calibration_chart = CalibrationChart(section.body, scatter=True)
         self.trajectory_calibration_chart.setObjectName(
             "trajectoryFinalCalibrationChart"
         )
@@ -457,9 +446,9 @@ class AnalyticsScreen(QWidget):
         section.body_layout.addWidget(comparison)
         return section
 
-    def _create_numeric_summary(self) -> ContentPanel:
-        summary = ContentPanel(
-            "Legacy Numeric forecasts — interval-v1",
+    def _create_numeric_summary(self) -> AnalyticsPanel:
+        summary = AnalyticsPanel(
+            "Legacy Numeric Forecast — Interval-v1",
             "Legacy containment can combine units; raw magnitude scores cannot.",
             parent=self,
         )
@@ -507,18 +496,17 @@ class AnalyticsScreen(QWidget):
             parent=summary.body,
         )
 
-        self.numeric_score_guidance = QLabel(summary.body)
-        self.numeric_score_guidance.setObjectName("numericScoreGuidance")
-        self.numeric_score_guidance.setWordWrap(True)
-        for label in (self.numeric_raw_scope, self.numeric_score_guidance):
-            label.setTextFormat(Qt.TextFormat.PlainText)
-            label.setWordWrap(True)
+        self.numeric_raw_scope.setTextFormat(Qt.TextFormat.PlainText)
         apply_text_role(self.numeric_raw_scope, TextRole.SECONDARY)
-        apply_text_role(self.numeric_score_guidance, TextRole.SECONDARY)
+        raw_help = (
+            "Median error is the central estimate's miss. Interval score balances "
+            "narrowness and misses; lower is better."
+        )
+        self.numeric_raw_metrics.setToolTip(raw_help)
+        self.numeric_raw_metrics.setAccessibleDescription(raw_help)
         summary_layout.addWidget(headline_metrics)
         summary_layout.addWidget(self.numeric_raw_scope)
         summary_layout.addWidget(self.numeric_raw_metrics)
-        summary_layout.addWidget(self.numeric_score_guidance)
         summary_layout.addStretch()
         summary.setHidden(True)
         return summary
@@ -530,8 +518,8 @@ class AnalyticsScreen(QWidget):
         section_layout.setContentsMargins(0, 0, 0, 0)
         section_layout.setSpacing(int(Spacing.SECTION))
 
-        calibration_group = ContentPanel(
-            "Legacy Binary calibration / reliability",
+        calibration_group = AnalyticsPanel(
+            "Legacy Binary Calibration / Reliability",
             "Final-revision calibration compares forecast probability with the observed Yes rate; "
             "the diagonal is perfect, and the table repeats the chart values.",
             parent=section,
@@ -553,34 +541,25 @@ class AnalyticsScreen(QWidget):
         )
         calibration_layout.addWidget(calibration_comparison)
 
-        trend_group = ContentPanel(
-            "Legacy cumulative mean final Brier by resolution time",
-            "A descriptive running average, not proof that forecasting skill changed.",
+        trend_group = AnalyticsPanel(
+            "Legacy Cumulative Mean Final Brier by Resolution Time",
+            "Each point includes every legacy Binary Prediction resolved up to that time. "
+            "A descriptive running average, not proof that forecasting skill changed: "
+            "forecast difficulty and composition can change.",
             parent=section,
         )
         trend_group.setObjectName("analyticsBrierTrendSection")
         trend_layout = trend_group.body_layout
-        trend_explanation = QLabel(
-            "Each point includes every Binary Prediction resolved up to that time. "
-            "Movement does not by itself prove skill improvement because forecast "
-            "difficulty and composition can change.",
-            trend_group.body,
-        )
-        trend_explanation.setObjectName("analyticsTrendExplanation")
-        trend_explanation.setWordWrap(True)
-        trend_explanation.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(trend_explanation, TextRole.SECONDARY)
         self.brier_trend_chart = BrierTrendChart(trend_group.body)
-        trend_layout.addWidget(trend_explanation)
         trend_layout.addWidget(self.brier_trend_chart)
 
         section_layout.addWidget(calibration_group)
         section_layout.addWidget(trend_group)
         return section
 
-    def _create_numeric_content(self, parent: QWidget) -> ContentPanel:
-        section = ContentPanel(
-            "Legacy Numeric containment calibration",
+    def _create_numeric_content(self, parent: QWidget) -> AnalyticsPanel:
+        section = AnalyticsPanel(
+            "Legacy Numeric Containment Calibration",
             "Containment calibration compares interval confidence with observed "
             "inclusive containment; it can combine units, small bins are sparse, "
             "and the table repeats the chart values.",
@@ -611,24 +590,16 @@ class AnalyticsScreen(QWidget):
         section_layout.addWidget(containment_comparison)
         return section
 
-    def _create_binary_update_content(self, parent: QWidget) -> ContentPanel:
-        section = ContentPanel(
-            "Legacy Binary retrospective update feedback",
-            "One initial/final pair per revised-and-resolved Binary Prediction.",
+    def _create_binary_update_content(self, parent: QWidget) -> AnalyticsPanel:
+        section = AnalyticsPanel(
+            "Legacy Binary Retrospective Update Feedback",
+            "One initial/final pair per revised-and-resolved Binary Prediction. "
+            "Compares revision 1 with the exact final scoring revision. "
+            "Descriptive hindsight, not proof that updating caused improvement.",
             parent=parent,
         )
         section.setObjectName("binaryUpdateAnalyticsSection")
         section_layout = section.body_layout
-        explanation = QLabel(
-            "This compares revision 1 with the exact final scoring revision for "
-            "each revised-and-resolved Binary Prediction. It is descriptive "
-            "hindsight, not proof that updating caused improvement.",
-            section.body,
-        )
-        explanation.setObjectName("binaryUpdateAnalyticsExplanation")
-        explanation.setWordWrap(True)
-        explanation.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(explanation, TextRole.SECONDARY)
 
         paired_card, self.binary_update_paired_count = _new_update_metric(
             "Revised-and-resolved pairs",
@@ -673,30 +644,22 @@ class AnalyticsScreen(QWidget):
         self.binary_update_guidance.setWordWrap(True)
         self.binary_update_guidance.setTextFormat(Qt.TextFormat.PlainText)
         apply_text_role(self.binary_update_guidance, TextRole.SECONDARY)
-        section_layout.addWidget(explanation)
         section_layout.addWidget(coverage)
         section_layout.addWidget(scores)
         section_layout.addWidget(self.binary_update_guidance)
         return section
 
-    def _create_numeric_update_content(self, parent: QWidget) -> ContentPanel:
-        section = ContentPanel(
-            "Legacy Numeric retrospective update feedback",
-            "One initial/final pair per revised-and-resolved Numeric Prediction.",
+    def _create_numeric_update_content(self, parent: QWidget) -> AnalyticsPanel:
+        section = AnalyticsPanel(
+            "Legacy Numeric Retrospective Update Feedback",
+            "One initial/final pair per revised-and-resolved Numeric Prediction. "
+            "Compares revision 1 with the exact final scoring revision. "
+            "Confidence and containment may combine units; raw comparisons require "
+            "one exact unit. This is descriptive hindsight, not proof of skill.",
             parent=parent,
         )
         section.setObjectName("numericUpdateAnalyticsSection")
         section_layout = section.body_layout
-        explanation = QLabel(
-            "This compares revision 1 with the exact final scoring revision for "
-            "each revised-and-resolved Numeric Prediction. Confidence and "
-            "containment may combine units; raw comparisons require one exact unit.",
-            section.body,
-        )
-        explanation.setObjectName("numericUpdateAnalyticsExplanation")
-        explanation.setWordWrap(True)
-        explanation.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(explanation, TextRole.SECONDARY)
 
         paired_card, self.numeric_update_paired_count = _new_update_metric(
             "Revised-and-resolved pairs",
@@ -787,7 +750,6 @@ class AnalyticsScreen(QWidget):
         self.numeric_update_guidance.setWordWrap(True)
         self.numeric_update_guidance.setTextFormat(Qt.TextFormat.PlainText)
         apply_text_role(self.numeric_update_guidance, TextRole.SECONDARY)
-        section_layout.addWidget(explanation)
         section_layout.addWidget(coverage)
         section_layout.addWidget(confidence)
         section_layout.addWidget(containment)
@@ -931,6 +893,13 @@ class AnalyticsScreen(QWidget):
         self.trajectory_active_fraction.setText(
             _optional_fraction_percent(snapshot.mean_active_forecast_fraction)
         )
+        self.trajectory_neutral_fraction.setText(
+            _optional_fraction_percent(
+                None
+                if snapshot.mean_active_forecast_fraction is None
+                else 1 - snapshot.mean_active_forecast_fraction
+            )
+        )
         self.trajectory_initial_brier.setText(
             _optional_fraction(snapshot.mean_initial_brier)
         )
@@ -948,7 +917,8 @@ class AnalyticsScreen(QWidget):
             (self.mean_trajectory_brier, "Mean Trajectory Brier"),
             (self.trajectory_early_count, "Resolved before forecast deadline"),
             (self.trajectory_deadline_count, "Reached forecast deadline"),
-            (self.trajectory_active_fraction, "Mean active forecasting fraction"),
+            (self.trajectory_active_fraction, "Average Forecast Weight"),
+            (self.trajectory_neutral_fraction, "Average Neutral Weight"),
             (self.trajectory_initial_brier, "Mean initial Brier"),
             (self.trajectory_final_brier, "Mean final Brier"),
             (self.trajectory_hold_brier, "Mean hold-initial trajectory Brier"),
@@ -975,7 +945,7 @@ class AnalyticsScreen(QWidget):
             if snapshot.unscored_prediction_count
             else ""
         )
-        self.trajectory_guidance.setText(
+        guidance = (
             "Lower Trajectory Brier is better. Updating Gain compares the recorded "
             "path with holding the initial probability: "
             f"{snapshot.positive_updating_gain_count} helped, "
@@ -983,6 +953,22 @@ class AnalyticsScreen(QWidget):
             f"{snapshot.negative_updating_gain_count} hurt mechanically. "
             "This hindsight comparison does not prove that updating caused skill. "
             f"{sparse}{unscored}"
+        )
+        self.trajectory_guidance.setToolTip(guidance)
+        self.trajectory_guidance.setAccessibleDescription(guidance)
+        self.trajectory_guidance.setText(
+            (
+                f"Updates: {snapshot.positive_updating_gain_count} helped · "
+                f"{snapshot.equal_updating_gain_count} tied · "
+                f"{snapshot.negative_updating_gain_count} hurt"
+                if count
+                else "No eligible scores"
+            )
+            + (
+                f" · {snapshot.unscored_prediction_count} unscored"
+                if snapshot.unscored_prediction_count
+                else ""
+            )
         )
         self.trajectory_calibration_chart.set_bins(snapshot.final_calibration_bins)
         for row, calibration_bin in enumerate(snapshot.final_calibration_bins):
@@ -1043,8 +1029,7 @@ class AnalyticsScreen(QWidget):
         summary = snapshot.unit_summary
         if snapshot.selected_unit is None:
             self.numeric_raw_scope.setText(
-                "Select Numeric and one exact unit to see magnitude scores. "
-                "Unlike units are never averaged."
+                "Select Numeric and one unit for magnitude scores."
             )
             self._set_raw_metrics(None)
         elif summary is None:
@@ -1083,8 +1068,6 @@ class AnalyticsScreen(QWidget):
                 label.setText("Not available")
                 label.setAccessibleName(f"{accessible_name}: Not available")
             self.numeric_raw_metrics.setHidden(True)
-            self.numeric_score_guidance.clear()
-            self.numeric_score_guidance.setHidden(True)
             return
         unit = summary.unit
         self.numeric_median_error.setText(
@@ -1106,11 +1089,6 @@ class AnalyticsScreen(QWidget):
             f"Mean interval score: {self.numeric_interval_score.text()}"
         )
         self.numeric_raw_metrics.setHidden(False)
-        self.numeric_score_guidance.setText(
-            "Median error is the central estimate's miss. Interval score balances "
-            "narrowness and misses; lower is better."
-        )
-        self.numeric_score_guidance.setHidden(False)
 
     def _render_binary_updates(
         self,
@@ -1144,7 +1122,7 @@ class AnalyticsScreen(QWidget):
             "Mean Binary score improvement, initial minus final: "
             f"{self.binary_update_improvement.text()}"
         )
-        self.binary_update_guidance.setText(_update_guidance(count, "Brier"))
+        _set_update_context(self.binary_update_guidance, count, "Brier")
 
     def _render_numeric_updates(
         self,
@@ -1195,8 +1173,7 @@ class AnalyticsScreen(QWidget):
         unit_summary = snapshot.unit_summary
         if self._selected_unit() is None:
             self.numeric_update_raw_scope.setText(
-                "Choose one exact Numeric unit to compare median error, interval "
-                "width, and proper interval score. Unlike units are never averaged."
+                "Select Numeric and one unit for magnitude comparisons."
             )
             self._set_numeric_update_raw_metrics(None)
         elif unit_summary is None:
@@ -1206,11 +1183,10 @@ class AnalyticsScreen(QWidget):
             self._set_numeric_update_raw_metrics(None)
         else:
             self.numeric_update_raw_scope.setText(
-                f"Raw comparisons use {unit_summary.count} pair(s) with the exact "
-                f"unit: {unit_summary.unit}."
+                f"Magnitude comparisons · {unit_summary.count} pair(s) · {unit_summary.unit}"
             )
             self._set_numeric_update_raw_metrics(unit_summary)
-        self.numeric_update_guidance.setText(_update_guidance(count, "Numeric"))
+        _set_update_context(self.numeric_update_guidance, count, "Numeric")
 
     def _set_numeric_update_raw_metrics(
         self,
@@ -1236,16 +1212,21 @@ class AnalyticsScreen(QWidget):
             f"{_format_decimal(summary.mean_initial_interval_width)} to "
             f"{_format_decimal(summary.mean_final_interval_width)} {unit}\n"
             "Narrowing (initial minus final): "
-            f"{_format_signed_decimal(summary.mean_narrowing)} {unit}\n"
-            "Narrower is not automatically better."
+            f"{_format_signed_decimal(summary.mean_narrowing)} {unit}"
         )
         self.numeric_update_interval_score.setText(
             f"{_format_decimal(summary.mean_initial_interval_score)} to "
             f"{_format_decimal(summary.mean_final_interval_score)} {unit}\n"
             "Improvement (initial minus final): "
             f"{_format_signed_decimal(summary.mean_interval_score_improvement)} "
-            f"{unit}\nPositive is better."
+            f"{unit}"
         )
+        for label, explanation in (
+            (self.numeric_update_width, "Narrower is not automatically better."),
+            (self.numeric_update_interval_score, "Positive is better."),
+        ):
+            label.setToolTip(explanation)
+            label.setAccessibleDescription(explanation)
         for label, accessible_name in (
             (self.numeric_update_median_error, "Mean median error, initial to final"),
             (self.numeric_update_width, "Mean interval width, initial to final"),
@@ -1393,6 +1374,14 @@ def _containment_count(contained_count: int, pair_count: int) -> str:
         f"{contained_count} of {pair_count} "
         f"({_format_percent(100 * contained_count / pair_count)})"
     )
+
+
+def _set_update_context(label: QLabel, pair_count: int, score_name: str) -> None:
+    help_text = _update_guidance(pair_count, score_name)
+    label.setToolTip(help_text)
+    label.setAccessibleDescription(help_text)
+    label.setText("No revised pairs match these filters." if pair_count == 0 else "")
+    label.setHidden(pair_count > 0)
 
 
 def _update_guidance(pair_count: int, score_name: str) -> str:

@@ -6,7 +6,7 @@ from io import StringIO
 import pytest
 from PySide6.QtCore import QDate, Qt, QTime
 from PySide6.QtGui import QColor, QFont, QPalette
-from PySide6.QtWidgets import QGroupBox, QLabel, QMessageBox
+from PySide6.QtWidgets import QGroupBox, QLabel, QMessageBox, QWidget
 from test_quantile_resolution import START, Clock, context, create
 
 from reckonsolve import cli
@@ -72,7 +72,10 @@ def test_resolution_dialog_and_scored_revision_exclusion(qtbot, active):
     assert "Scored revision 1" in texts(screen.quantile_scorecard)
     assert "WIS:" in texts(screen.quantile_scorecard)
     assert "Delta WIS" in texts(screen.quantile_scorecard)
-    assert "weighted contribution" in texts(screen.quantile_scorecard)
+    assert "WIS contribution" in texts(screen.quantile_scorecard)
+    assert "weighted contribution" in "\n".join(
+        label.toolTip() for label in screen.quantile_scorecard.findChildren(QLabel)
+    )
     assert "Updating Gain" not in texts(screen.quantile_scorecard)
     details = screen.quantile_scorecard.findChild(QGroupBox)
     assert not details.isChecked()
@@ -261,7 +264,16 @@ def test_scorecard_wraps_at_narrow_and_wide_sizes(
     qtbot.wait(30)
     screen.scroll_area.ensureWidgetVisible(screen.quantile_scorecard)
     qtbot.wait(20)
-    assert screen.quantile_scorecard.width() <= screen.width()
+    assert screen.quantile_scorecard.width() <= screen.width(), [
+        (
+            type(widget).__name__,
+            widget.objectName(),
+            widget.minimumSizeHint().width(),
+            widget.minimumWidth(),
+        )
+        for widget in screen.quantile_scorecard.findChildren(QWidget)
+        if widget.minimumSizeHint().width() > 400 or widget.minimumWidth() > 400
+    ]
     assert screen.scroll_area.horizontalScrollBar().maximum() == 0
     for label in screen.quantile_scorecard.findChildren(QLabel):
         if label.isVisible():

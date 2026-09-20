@@ -2311,7 +2311,7 @@ def test_analytics_uses_shared_panels_accessible_filters_and_responsive_summarie
 
     assert _required_child(window, QWidget, "analyticsPageHeader").isVisible()
     filters = _required_child(window, ContentPanel, "analyticsFiltersPanel")
-    assert filters.title_label.text() == "Analytics view"
+    assert filters.title_label.text() == "Analytics View"
     binary_summary = _required_child(
         window,
         ContentPanel,
@@ -2414,12 +2414,13 @@ def test_analytics_uses_shared_panels_accessible_filters_and_responsive_summarie
         ContentPanel,
         "numericAnalyticsSection",
     )
-    for label, comparison in (
-        (binary_calibration_panel.supporting_label, binary_comparison),
-        (numeric_calibration_panel.supporting_label, numeric_comparison),
+    for panel in (
+        binary_calibration_panel,
+        numeric_calibration_panel,
     ):
-        assert label.width() == comparison.width()
-        assert label.height() <= label.fontMetrics().lineSpacing() + 2
+        assert panel.supporting_label.isHidden()
+        assert panel.title_label.toolTip()
+        assert panel.accessibleDescription() == panel.title_label.toolTip()
 
     for object_name in (
         "binaryUpdatePairedCountMetric",
@@ -2471,18 +2472,8 @@ def test_analytics_uses_shared_panels_accessible_filters_and_responsive_summarie
             numeric_comparison_layout.direction() == QBoxLayout.Direction.TopToBottom
         )
     )
-    qtbot.waitUntil(
-        lambda: (
-            binary_calibration_panel.supporting_label.height()
-            > binary_calibration_panel.supporting_label.fontMetrics().lineSpacing()
-        )
-    )
-    qtbot.waitUntil(
-        lambda: (
-            numeric_calibration_panel.supporting_label.height()
-            > numeric_calibration_panel.supporting_label.fontMetrics().lineSpacing()
-        )
-    )
+    assert binary_calibration_panel.supporting_label.isHidden()
+    assert numeric_calibration_panel.supporting_label.isHidden()
     assert _required_child(window, QScrollArea, "analyticsScrollArea").isVisible()
 
 
@@ -2661,7 +2652,7 @@ def test_analytics_renders_unitless_numeric_containment_without_mixing_raw_units
         "1 of 2 (50%)"
     )
     raw_scope = _required_child(window, QLabel, "numericAnalyticsRawScope")
-    assert "Unlike units are never averaged" in raw_scope.text()
+    assert raw_scope.text() == "Select Numeric and one unit for magnitude scores."
     assert _required_child(window, QLabel, "numericMeanIntervalScore").text() == (
         "Not available"
     )

@@ -52,6 +52,7 @@ The desktop uses a deliberately small, offline subset of Lucide icons while reta
 
 ## Documentation
 
+- [Analytics user's guide](docs/analytics-guide.md) — plain-language chart reading, worked examples, and practical forecasting follow-up
 - [Forecasting Rulebook](docs/reckonsolve-forecasting-rulebook-v0.7.md) — durable guidance for deciding whether and how to commit a Reckonsolve forecast
 - [Product specification](docs/product-spec.md) — implemented behavior plus the approved staged v0.7 contract and milestones
 - [Architecture](docs/architecture.md) — current implementation state and intended technical boundaries

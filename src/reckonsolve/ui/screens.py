@@ -71,7 +71,7 @@ from reckonsolve.domain.quantiles import (
     quantile_summary,
 )
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
-from reckonsolve.forecast_display import format_local_deadline, trajectory_diagnostics
+from reckonsolve.forecast_display import format_local_deadline
 from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
 from reckonsolve.ui.components import (
     ContentPanel,
@@ -86,6 +86,7 @@ from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.quantile_input import FiveQuantileInput, QuantileCDF
 from reckonsolve.ui.quantile_scorecard import QuantileScorecardPanel
+from reckonsolve.ui.scorecard_components import TrajectoryScoreDetails
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
@@ -6143,11 +6144,7 @@ class PredictionDetailScreen(QWidget):
             if not scorecard.unscored_reason:
                 content, layout = _history_content(self.trajectory_diagnostics)
                 _clear_widget_layout(layout)
-                for text in trajectory_diagnostics(scorecard):
-                    label = QLabel(text, content)
-                    label.setWordWrap(True)
-                    _make_selectable(label)
-                    layout.addWidget(label)
+                layout.addWidget(TrajectoryScoreDetails(scorecard, content))
                 self.trajectory_diagnostics.setChecked(False)
                 content.setHidden(True)
                 self.trajectory_diagnostics.setHidden(False)

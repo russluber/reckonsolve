@@ -433,13 +433,24 @@ def test_unscored_only_desktop_is_explicit_and_refresh_failures_retain_snapshot(
 
 @pytest.mark.parametrize("width", [1600, 650])
 def test_desktop_groups_responsive_tables_filters_and_rendering(
-    active, qtbot, dark_desktop, tmp_path, width
+    active, qtbot, dark_desktop, tmp_path, width, monkeypatch
 ):
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QBoxLayout
 
+    from reckonsolve.ui import quantile_analytics
     from reckonsolve.ui.analytics_screen import AnalyticsScreen
     from reckonsolve.ui.visual_system import install_visual_system
+
+    axis_ticks = []
+    paint_axes = quantile_analytics._paint_percent_axes
+
+    def record_axes(*args, **kwargs):
+        # Never retain QPainter: its lifetime must end with the paint event.
+        axis_ticks.append(kwargs["x_ticks"])
+        paint_axes(*args, **kwargs)
+
+    monkeypatch.setattr(quantile_analytics, "_paint_percent_axes", record_axes)
 
     db, clock, ops = active
     for whole in (False, True):
@@ -490,9 +501,13 @@ def test_desktop_groups_responsive_tables_filters_and_rendering(
                 <= table.viewport().width() + 2
             )
             assert table.accessibleDescription()
+        axis_ticks.clear()
         assert panel.grab().save(str(tmp_path / f"{key}-{width}.png"))
+        assert axis_ticks
+        assert all(ticks == (5, 25, 50, 75, 95) for ticks in axis_ticks)
         assert "95% Wilson" in panel.chart.accessibleDescription()
-    assert "not evidence" in view.update_guidance.text()
+    assert "not evidence" not in view.update_guidance.text()
+    assert "not evidence" in view.update_guidance.toolTip()
     screen.type_filter.setCurrentIndex(
         screen.type_filter.findData(PredictionType.NUMERIC)
     )

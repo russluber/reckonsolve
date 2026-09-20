@@ -63,6 +63,7 @@ class TextRole(StrEnum):
     LABEL = "label"
     SECTION_TITLE = "section-title"
     PAGE_TITLE = "page-title"
+    METRIC = "metric"
     FORECAST = "forecast"
 
 
@@ -132,6 +133,7 @@ _TEXT_ROLE_DELTAS = {
     TextRole.LABEL: 0.0,
     TextRole.SECTION_TITLE: 1.0,
     TextRole.PAGE_TITLE: 4.0,
+    TextRole.METRIC: 7.0,
     TextRole.FORECAST: 7.0,
 }
 
@@ -141,6 +143,7 @@ _TEXT_ROLE_WEIGHTS = {
     TextRole.LABEL: QFont.Weight.DemiBold,
     TextRole.SECTION_TITLE: QFont.Weight.DemiBold,
     TextRole.PAGE_TITLE: QFont.Weight.Bold,
+    TextRole.METRIC: QFont.Weight.Bold,
     TextRole.FORECAST: QFont.Weight.Bold,
 }
 
@@ -283,6 +286,9 @@ QLabel[reckonsolveTextRole="section-title"] {{
     color: {color.text};
 }}
 QLabel[reckonsolveTextRole="page-title"] {{
+    color: {color.text};
+}}
+QLabel[reckonsolveTextRole="metric"] {{
     color: {color.text};
 }}
 QLabel[reckonsolveTextRole="forecast"] {{

@@ -550,7 +550,7 @@ def test_numeric_analytics_filter_type_tag_and_unit_after_restart(
     assert unit_filter is not None
     assert numeric_count.text() == "2"
     assert containment.text() == "1 of 2 (50%)"
-    assert "Unlike units are never averaged" in raw_scope.text()
+    assert raw_scope.text() == "Select Numeric and one unit for magnitude scores."
     assert sum(item.count for item in chart.bins) == 2
     assert table.item(8, 1).text() == "2"
     assert table.item(8, 3).text() == "50%"

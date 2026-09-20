@@ -292,7 +292,7 @@ def test_numeric_update_feedback_renders_with_existing_filters(qtbot, tmp_path) 
             window,
             QLabel,
             "numericUpdateIntervalScore",
-        ).text()
+        ).toolTip()
     )
     assert (
         "sparse paired samples"
@@ -301,7 +301,7 @@ def test_numeric_update_feedback_renders_with_existing_filters(qtbot, tmp_path) 
             QLabel,
             "numericUpdateGuidance",
         )
-        .text()
+        .toolTip()
         .lower()
     )
     window.close()

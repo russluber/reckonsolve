@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QPalette, QResizeEvent
 from PySide6.QtWidgets import (
     QBoxLayout,
     QFrame,
+    QGridLayout,
     QLabel,
     QSizePolicy,
     QTableWidget,
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .components import ContentPanel
 from .visual_system import (
     Spacing,
     SurfaceRole,
@@ -20,6 +22,26 @@ from .visual_system import (
     apply_text_role,
     semantic_colors,
 )
+
+
+class AnalyticsPanel(ContentPanel):
+    """An Analytics card with explanations on demand, not repeated subtitles."""
+
+    def __init__(
+        self,
+        title: str,
+        explanation: str | None = None,
+        *,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(title, parent=parent)
+        self.setAccessibleName(title)
+        self.set_help_text(explanation or "")
+
+    def set_help_text(self, text: str) -> None:
+        self.title_label.setToolTip(text)
+        self.title_label.setAccessibleDescription(text)
+        self.setAccessibleDescription(text)
 
 
 def _new_summary_metric(
@@ -81,6 +103,44 @@ def _new_update_metric(
     layout.addWidget(caption_label)
     layout.addWidget(value)
     return metric, value
+
+
+class CompactMetricGroup(QWidget):
+    """A flat, top-aligned set of label/value rows, without nested metric cards."""
+
+    def __init__(self, title: str, *, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.CONTROL))
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        heading = QLabel(title, self)
+        apply_text_role(heading, TextRole.SECTION_TITLE)
+        layout.addWidget(heading)
+        self._rows = QGridLayout()
+        self._rows.setContentsMargins(0, 0, 0, 0)
+        self._rows.setHorizontalSpacing(int(Spacing.CONTROL))
+        self._rows.setVerticalSpacing(int(Spacing.COMPACT))
+        # Extra width stays after the values, not between captions and values.
+        self._rows.setColumnStretch(2, 1)
+        layout.addLayout(self._rows)
+
+    def add_metric(
+        self, caption: str, object_name: str, *, primary: bool = False
+    ) -> QLabel:
+        row = self._rows.rowCount()
+        label = QLabel(caption, self)
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        apply_text_role(label, TextRole.SECONDARY)
+        value = QLabel("Loading...", self)
+        value.setObjectName(object_name)
+        value.setTextFormat(Qt.TextFormat.PlainText)
+        value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        apply_text_role(value, TextRole.FORECAST if primary else TextRole.SECTION_TITLE)
+        self._rows.addWidget(label, row, 0)
+        self._rows.addWidget(value, row, 1, Qt.AlignmentFlag.AlignRight)
+        return value
 
 
 class _ResponsiveMetricRow(QWidget):

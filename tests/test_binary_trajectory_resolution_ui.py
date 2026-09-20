@@ -103,8 +103,44 @@ def test_resolve_now_and_scorecard_progressive_diagnostics(qtbot, active):
     assert "Initial Brier" in texts
     assert "Final Brier" in texts
     assert "Updating Gain" in texts
-    assert "Active Forecast Fraction" in texts
-    assert "mechanical hindsight" in texts
+    assert "Forecast Weight" in texts
+    assert "Neutral Weight" in texts
+    assert "75.0%" in texts
+    assert "25.0%" in texts
+    help_text = "\n".join(
+        label.toolTip() for label in screen.trajectory_diagnostics.findChildren(QLabel)
+    )
+    assert "Active Forecast Fraction" in help_text
+    assert "mechanical hindsight" in help_text
+
+
+@pytest.mark.parametrize("font_size", [9, 12])
+def test_binary_score_details_resize_without_changing_scores(
+    qtbot, qapp, active, tmp_path, font_size
+):
+    _, clock, operations, prediction = active
+    resolved = resolve(operations, prediction, clock.instant)
+    before = operations.get_prediction_scorecard(prediction.prediction_id)
+    original_font = qapp.font()
+    try:
+        qapp.setFont(QFont("Segoe UI", font_size))
+        screen = PredictionDetailScreen(operations)
+        qtbot.addWidget(screen)
+        install_visual_system(screen)
+        screen.show_prediction(resolved)
+        screen.trajectory_diagnostics.setChecked(True)
+        screen.show()
+        for width in (1300, 500, 1300):
+            screen.resize(width, 900)
+            qtbot.wait(30)
+            assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+            assert screen.scorecard_section.width() < screen.width()
+            assert screen.scorecard_section.grab().save(
+                str(tmp_path / f"binary-scorecard-{width}.png")
+            )
+        assert operations.get_prediction_scorecard(prediction.prediction_id) == before
+    finally:
+        qapp.setFont(original_font)
 
 
 def test_explicit_resolution_rejects_future_and_displays_excluded_history(

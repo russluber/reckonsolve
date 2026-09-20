@@ -1,7 +1,7 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through Milestone 54
-Last reviewed: 2026-09-13
+Status: v0.6 source release complete; v0.7 implemented through Milestone 54, with M54A Analytics presentation and guide
+Last reviewed: 2026-09-19
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
@@ -912,3 +912,55 @@ canonical data during reads, stale reviewed contexts, and a lock acquired after
 the CLI prompt but before commit. Unsupported identities are tested both on live
 collection reads and reopen. M55 still owns CSV format 4 and release hardening;
 schema 18, complete SQLite backup, and the format-3 guard remain unchanged.
+
+### M54A: compact trajectory summary and Analytics interpretation guide
+
+The user-authorized visual follow-up replaces nine nested Trajectory Binary metric
+cards with three flat `CompactMetricGroup` widgets: Score, Timing, and Updating.
+They consume the same derived snapshot fields. Captions and selectable values
+sit beside each other; groups
+align at the top, keep their natural content height, and stack at narrow widths.
+Only this summary adopts the compact treatment; no global card style or scoring
+rule changes. Responsive tests cover two font sizes and three window widths and
+verify unchanged analytical values.
+
+The eligible count uses the shared neutral headline `METRIC` text role, matching
+the score's size without its accent color. Timing presents the mean forecast-used
+share alongside its neutral remainder, with a concrete explanation in accessible
+help and the guide. Both five-quantile calibration plots label their horizontal
+axes at the elicited 5/25/50/75/95 percentiles; the 0–100% geometry, vertical ticks,
+observations, uncertainty bars, and legacy chart defaults remain unchanged.
+
+Analytics-specific `AnalyticsPanel` cards use title-case headings and move static
+explanations into title tooltips and accessible descriptions, leaving the shared
+`ContentPanel` behavior elsewhere unchanged. Dynamic counts and empty/error states
+remain visible; interpretation cautions live in contextual help and the guide.
+Timing captions are Forecast Weight and Neutral Weight: calculation weights, not
+fractions of the resulting score. No observation or statistic is removed.
+
+The aggregate timing captions explicitly say Average Forecast Weight and Average
+Neutral Weight. Trajectory final-probability calibration opts into unconnected
+diamond markers in the shared native chart; legacy calibration retains its prior
+rendering. Bin means, observations, counts, and the diagonal reference are unchanged;
+no Binary uncertainty estimator or new score is introduced. The guide distinguishes
+actionable calibration patterns from timing context and inventories the existing
+individual scorecards.
+
+`docs/analytics-guide.md`, linked from README, provides the longer explanatory
+material outside the interface: a review routine, Binary and Numeric plot axes,
+score/calibration distinctions, early-resolution weighting, whole-number tie
+bands, pointwise Wilson uncertainty, safe update comparisons, legacy behavior,
+and worked examples. It guides human interpretation, not application decisions or
+automatic forecast changes. M55 portability/release work remains separate.
+
+The authorized individual-scorecard follow-up uses `ui/scorecard_components.py`
+for selectable, responsive caption/value groups in resolved Prediction Detail.
+Binary diagnostics separate probability scores, trajectory comparison, and timing
+weights; longer definitions remain in accessible tooltips. Numeric WIS retains
+the shared plain-text summary and correction/exclusion notices, while its expanded
+breakdown groups comparison, median, and interval facts. `ui/scorecard_chart.py`
+paints the final scoring revision's two intervals, median, and effective actual on
+one linear scale. It projects exact scaled differences before converting bounded
+ratios to pixels, includes outside outcomes, and preserves tied endpoints. Exact
+text is always available alongside the graphic. No scoring selection, score
+calculation, persistence, CLI formatting, or legacy presentation changes occur.

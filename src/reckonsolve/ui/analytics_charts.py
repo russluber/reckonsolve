@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import pairwise
 
-from PySide6.QtCore import QLineF, QRectF, QSize, Qt
-from PySide6.QtGui import QPainter, QPaintEvent, QPalette, QPen
+from PySide6.QtCore import QLineF, QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPalette, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from reckonsolve.analytics import (
@@ -16,6 +16,7 @@ from reckonsolve.analytics import (
     CalibrationBin,
     ContainmentCalibrationBin,
 )
+from reckonsolve.ui.visual_system import semantic_colors
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,8 +157,9 @@ def calculate_containment_calibration_markers(
 class CalibrationChart(QWidget):
     """Paint a fixed-scale reliability diagram and perfect-calibration line."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, scatter: bool = False) -> None:
         super().__init__(parent)
+        self._scatter = scatter
         self._bins: tuple[CalibrationBin, ...] = ()
         self.setObjectName("calibrationChart")
         self.setAccessibleName("Calibration reliability diagram")
@@ -186,6 +188,10 @@ class CalibrationChart(QWidget):
             description = (
                 "Perfect calibration is the diagonal. Occupied bins: " + details
             )
+            if self._scatter:
+                description += (
+                    ". Diamonds show occupied bins; no interpolation between bins."
+                )
         self.setAccessibleDescription(description)
         self.update()
 
@@ -215,18 +221,37 @@ class CalibrationChart(QWidget):
         painter.drawLine(plot.bottomLeft(), plot.topRight())
 
         markers = calculate_calibration_markers(self._bins, plot)
-        painter.setPen(QPen(palette.color(QPalette.ColorRole.Highlight), 2.0))
-        for previous, current in pairwise(markers):
-            painter.drawLine(
-                QLineF(
-                    previous.coordinate.x,
-                    previous.coordinate.y,
-                    current.coordinate.x,
-                    current.coordinate.y,
+        accent = (
+            QColor(semantic_colors(palette).accent)
+            if self._scatter
+            else palette.color(QPalette.ColorRole.Highlight)
+        )
+        painter.setPen(QPen(accent, 2.0))
+        if not self._scatter:
+            for previous, current in pairwise(markers):
+                painter.drawLine(
+                    QLineF(
+                        previous.coordinate.x,
+                        previous.coordinate.y,
+                        current.coordinate.x,
+                        current.coordinate.y,
+                    )
                 )
-            )
-        painter.setBrush(palette.color(QPalette.ColorRole.Highlight))
+        painter.setBrush(accent)
         for marker in markers:
+            if self._scatter:
+                x, y = marker.coordinate.x, marker.coordinate.y
+                painter.drawPolygon(
+                    QPolygonF(
+                        [
+                            QPointF(x, y - 5),
+                            QPointF(x + 5, y),
+                            QPointF(x, y + 5),
+                            QPointF(x - 5, y),
+                        ]
+                    )
+                )
+                continue
             painter.drawEllipse(
                 QRectF(
                     marker.coordinate.x - 5,
@@ -411,18 +436,20 @@ def _paint_percent_axes(
     *,
     x_title: str,
     y_title: str,
+    x_ticks: tuple[int, ...] = (0, 25, 50, 75, 100),
 ) -> None:
     painter.setPen(QPen(palette.color(QPalette.ColorRole.Text), 1.0))
     painter.drawRect(plot)
     metrics = painter.fontMetrics()
-    for value in (0, 25, 50, 75, 100):
+    for value in x_ticks:
         x = plot.left() + value / 100 * plot.width()
-        y = plot.top() + (100 - value) / 100 * plot.height()
         painter.drawText(
             QRectF(x - 22, plot.bottom() + 5, 44, metrics.height()),
             Qt.AlignmentFlag.AlignCenter,
             f"{value}%",
         )
+    for value in (0, 25, 50, 75, 100):
+        y = plot.top() + (100 - value) / 100 * plot.height()
         painter.drawText(
             QRectF(0, y - metrics.height() / 2, plot.left() - 7, metrics.height()),
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
