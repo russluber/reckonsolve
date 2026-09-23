@@ -1,13 +1,13 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through M54C (visual acceptance pending); M55 pending
-Last reviewed: 2026-09-22
+Status: v0.7 implementation complete and manually accepted through M55
+Last reviewed: 2026-09-23
 
-This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+This document describes how Reckonsolve is structured from the binary v0.1 baseline through the v0.7 source version. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 **Current support boundary (M54B):** only trajectory Binary and five-quantile Numeric are executable models. Retired-only or mixed archives, and missing/unknown/mismatched contracts, fail before migration, repair, or ordinary transaction work. No conversion, deletion, or partial loading occurs. Schema 18 and all supported v0.7 history remain intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the support matrix and why no DDL cleanup is required.
 
-**Reading historical sections:** Sections 2–23 and the M46–M54A subsections record the system's evolution. Their legacy editors, calculations, compatibility promises, and old creation paths are superseded by M54B below; they are not instructions to restore those paths. Historical migration SQL remains unchanged as storage infrastructure, not runtime compatibility. Live database cleanup and M55 release work require separate authorization.
+**Reading historical sections:** Sections 2–23 and the M46–M54A subsections record the system's evolution. Their legacy editors, calculations, compatibility promises, and old creation paths are superseded by M54B below; they are not instructions to restore those paths. Historical migration SQL remains unchanged as storage infrastructure, not runtime compatibility. Live database cleanup requires separate authorization.
 
 ## 1. Current implementation
 
@@ -992,3 +992,24 @@ are rejected and repeated times require a first/second occurrence choice. The
 application receives the resulting UTC datetime and retains its under-transaction
 deadline validation. No schema, domain, CLI, or effective-resolution editor changes
 are involved. See [ADR 0020](decisions/0020-resolve-local-deadlines-explicitly.md).
+
+### M55: current-model portability and source-release closure
+
+`data/transfer.py` now reads one compatible schema-18 snapshot and writes a
+format-4 relational CSV ZIP. Prediction rows carry the closed forecast/scoring
+identity and exact immutable Deadline; five-quantile definitions/revisions,
+type-appropriate Journal/Review anchors, original effective and recorded
+terminal times, and separate append-only correction chains retain the facts
+needed for independent analysis. Retired interval-only files and date-only
+Deadline columns are absent. The included README documents every exported
+column, joins, exact scaled-integer values, standing Binary segments, strict
+Numeric cutoff selection, and nulls. CSV remains analytical, never recovery.
+Atomic same-directory replacement and archive validation are unchanged.
+
+The complete SQLite backup remains the supported recovery artifact. Supported
+schema-16/17 Binary archives upgrade through schema 18 without rewriting history;
+schema-18 archives with both models reopen and reproduce scores and search.
+Pre-contract, retired-only, mixed, missing/mismatched, or future-schema inputs
+are refused before migration/repair/write. Frozen smoke now validates CSV-4,
+both current models, backup/restart, and a byte-preserving refusal of a disposable
+unsupported archive. No new schema or production dependency is introduced.

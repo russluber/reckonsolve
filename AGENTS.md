@@ -21,9 +21,9 @@ The governing product rule is:
 
 ## Current Release Scope
 
-The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15.
+The completed previous source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only historical boundary over schema version 15.
 
-The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 54, M54A, and M54B (legacy retirement) are implemented. M54C implements the shared desktop deadline picker and is awaiting user visual acceptance; M55 follows M54C and is unimplemented. Work on only the milestone or coherent slice the user explicitly authorizes; approving a specification or plan is not authorization to implement it.
+The v0.7.0 contract is in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 55, including M54A, M54B (legacy retirement), and M54C, are implemented and manually accepted. GitHub publication is a separate user-owned step. Work on only the milestone or coherent slice the user explicitly authorizes; approving a specification or plan is not authorization to implement it.
 
 The user-approved 2026-09-20 amendment in Section 35.3 supersedes earlier promises in this file and the design documents to maintain legacy support indefinitely. M54B removes legacy Binary and interval-v1 Numeric runtime workflows, preserve all existing v0.7 history, and refuse legacy-only or mixed databases without conversion, deletion, or partial loading. Keep shared mathematics, storage, and migration infrastructure required by supported models. Do not restore the retired runtime paths. The historical milestone descriptions below explain the current implementation and its earlier obligations; they must not cause a later agent to restore retired features after M54B. Any live test-data purge or reset requires separate explicit approval and validated targets; the approved plan is not that approval.
 
@@ -124,6 +124,15 @@ repeated hours require an occurrence choice, and gaps never normalize silently.
 Keep the explicit-offset override, minute precision, type-switch draft retention,
 successful-save reset, and authoritative transaction-time future check. This is
 GUI-only; effective-resolution controls and CLI timestamp entry are unchanged.
+
+M55 closes the v0.7 source implementation without a new schema. Relational
+CSV format 4 exports supported-model identities, exact Deadlines, five-quantile
+history, recorded/effective terminal facts, and append-only corrections with an
+included data dictionary. Retired interval-only CSV files are absent. SQLite
+backup is still the complete recovery artifact; CSV remains analytical only.
+Disposable migration, refusal, backup/restart, search, and private frozen-build
+checks guard the two supported contracts. Manual acceptance is complete; GitHub
+publication remains a user step. Do not reintroduce retired model workflows.
 
 ## Technology Direction
 

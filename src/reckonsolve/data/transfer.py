@@ -42,14 +42,16 @@ _CSV_TABLES = (
             "metadata_version",
             "background",
             "resolution_criteria",
-            "forecast_deadline",
             "expected_resolution",
             "numeric_unit",
             "numeric_precision",
+            "forecast_model",
+            "scoring_contract",
+            "forecast_deadline_at_utc",
         ),
         """
         SELECT
-            id AS prediction_id,
+            predictions.id AS prediction_id,
             question,
             prediction_type,
             status AS persisted_status,
@@ -58,12 +60,16 @@ _CSV_TABLES = (
             metadata_version,
             background,
             resolution_criteria,
-            forecast_deadline,
             expected_resolution,
             numeric_unit,
-            numeric_precision
-        FROM predictions
-        ORDER BY id
+            numeric_precision,
+            contract.forecast_model,
+            contract.scoring_contract,
+            contract.forecast_deadline_at AS forecast_deadline_at_utc
+        FROM predictions AS predictions
+        JOIN prediction_forecast_contracts AS contract
+            ON contract.prediction_id = predictions.id
+        ORDER BY predictions.id
         """,
     ),
     _CsvTable(
@@ -89,34 +95,6 @@ _CSV_TABLES = (
         """,
     ),
     _CsvTable(
-        "numeric_forecast_revisions.csv",
-        (
-            "numeric_revision_id",
-            "prediction_id",
-            "sequence",
-            "lower_scaled",
-            "median_scaled",
-            "upper_scaled",
-            "confidence_percent",
-            "rationale",
-            "created_at_utc",
-        ),
-        """
-        SELECT
-            id AS numeric_revision_id,
-            prediction_id,
-            sequence,
-            lower_scaled,
-            median_scaled,
-            upper_scaled,
-            confidence_percent,
-            rationale,
-            created_at AS created_at_utc
-        FROM numeric_forecast_revisions
-        ORDER BY prediction_id, sequence, id
-        """,
-    ),
-    _CsvTable(
         "definition_changes.csv",
         (
             "definition_change_id",
@@ -126,8 +104,6 @@ _CSV_TABLES = (
             "new_question",
             "old_resolution_criteria",
             "new_resolution_criteria",
-            "old_forecast_deadline",
-            "new_forecast_deadline",
         ),
         """
         SELECT
@@ -137,9 +113,7 @@ _CSV_TABLES = (
             old_question,
             new_question,
             old_resolution_criteria,
-            new_resolution_criteria,
-            old_forecast_deadline,
-            new_forecast_deadline
+            new_resolution_criteria
         FROM prediction_definition_changes
         ORDER BY prediction_id, id
         """,
@@ -150,7 +124,7 @@ _CSV_TABLES = (
             "journal_entry_id",
             "prediction_id",
             "forecast_revision_id",
-            "numeric_forecast_revision_id",
+            "quantile_revision_id",
             "original_body",
             "created_at_utc",
         ),
@@ -159,7 +133,7 @@ _CSV_TABLES = (
             id AS journal_entry_id,
             prediction_id,
             forecast_revision_id,
-            numeric_forecast_revision_id,
+            quantile_revision_id,
             body AS original_body,
             created_at AS created_at_utc
         FROM journal_entries
@@ -194,7 +168,7 @@ _CSV_TABLES = (
             "forecast_review_id",
             "prediction_id",
             "forecast_revision_id",
-            "numeric_forecast_revision_id",
+            "quantile_revision_id",
             "created_at_utc",
             "note",
         ),
@@ -203,7 +177,7 @@ _CSV_TABLES = (
             id AS forecast_review_id,
             prediction_id,
             forecast_revision_id,
-            numeric_forecast_revision_id,
+            quantile_revision_id,
             created_at AS created_at_utc,
             note
         FROM forecast_reviews
@@ -217,6 +191,7 @@ _CSV_TABLES = (
             "prediction_id",
             "outcome",
             "resolved_at_utc",
+            "effective_resolution_at_utc",
             "scoring_revision_id",
             "resolution_notes",
             "postmortem",
@@ -227,6 +202,7 @@ _CSV_TABLES = (
             prediction_id,
             outcome,
             resolved_at AS resolved_at_utc,
+            effective_resolution_at AS effective_resolution_at_utc,
             scoring_revision_id,
             resolution_notes,
             postmortem
@@ -241,7 +217,8 @@ _CSV_TABLES = (
             "prediction_id",
             "actual_scaled",
             "resolved_at_utc",
-            "scoring_numeric_revision_id",
+            "effective_resolution_at_utc",
+            "quantile_revision_id",
             "resolution_notes",
             "postmortem",
         ),
@@ -251,7 +228,8 @@ _CSV_TABLES = (
             prediction_id,
             actual_scaled,
             resolved_at AS resolved_at_utc,
-            scoring_revision_id AS scoring_numeric_revision_id,
+            effective_resolution_at AS effective_resolution_at_utc,
+            quantile_revision_id,
             resolution_notes,
             postmortem
         FROM numeric_resolutions
@@ -295,86 +273,6 @@ _CSV_TABLES = (
         """,
     ),
     _CsvTable(
-        "resolution_corrections.csv",
-        (
-            "correction_id",
-            "prediction_id",
-            "resolution_id",
-            "sequence",
-            "old_outcome",
-            "new_outcome",
-            "old_resolution_notes",
-            "new_resolution_notes",
-            "old_postmortem",
-            "new_postmortem",
-            "outcome_changed",
-            "resolution_notes_changed",
-            "postmortem_changed",
-            "correction_reason",
-            "corrected_at_utc",
-        ),
-        """
-        SELECT
-            id AS correction_id,
-            prediction_id,
-            resolution_id,
-            sequence,
-            old_outcome,
-            new_outcome,
-            old_resolution_notes,
-            new_resolution_notes,
-            old_postmortem,
-            new_postmortem,
-            outcome_changed,
-            resolution_notes_changed,
-            postmortem_changed,
-            correction_reason,
-            corrected_at AS corrected_at_utc
-        FROM resolution_corrections
-        ORDER BY resolution_id, sequence, id
-        """,
-    ),
-    _CsvTable(
-        "numeric_resolution_corrections.csv",
-        (
-            "numeric_correction_id",
-            "prediction_id",
-            "numeric_resolution_id",
-            "sequence",
-            "old_actual_scaled",
-            "new_actual_scaled",
-            "old_resolution_notes",
-            "new_resolution_notes",
-            "old_postmortem",
-            "new_postmortem",
-            "actual_value_changed",
-            "resolution_notes_changed",
-            "postmortem_changed",
-            "correction_reason",
-            "corrected_at_utc",
-        ),
-        """
-        SELECT
-            id AS numeric_correction_id,
-            prediction_id,
-            numeric_resolution_id,
-            sequence,
-            old_actual_scaled,
-            new_actual_scaled,
-            old_resolution_notes,
-            new_resolution_notes,
-            old_postmortem,
-            new_postmortem,
-            actual_value_changed,
-            resolution_notes_changed,
-            postmortem_changed,
-            correction_reason,
-            corrected_at AS corrected_at_utc
-        FROM numeric_resolution_corrections
-        ORDER BY numeric_resolution_id, sequence, id
-        """,
-    ),
-    _CsvTable(
         "invalidation_reason_corrections.csv",
         (
             "invalidation_correction_id",
@@ -413,6 +311,105 @@ _CSV_TABLES = (
         FROM postmortem_completions
         ORDER BY id
         """,
+    ),
+)
+
+# Format 4 is deliberately a new analytical contract: retired interval-v1 rows
+# and their correction tables are not emitted as empty compatibility shells.
+_CSV_TABLES += (
+    _CsvTable(
+        "numeric_quantile_definitions.csv",
+        ("prediction_id", "value_constraint"),
+        "SELECT prediction_id, value_constraint FROM numeric_quantile_definitions "
+        "ORDER BY prediction_id",
+    ),
+    _CsvTable(
+        "numeric_quantile_revisions.csv",
+        (
+            "quantile_revision_id",
+            "prediction_id",
+            "sequence",
+            "q05_scaled",
+            "q25_scaled",
+            "q50_scaled",
+            "q75_scaled",
+            "q95_scaled",
+            "rationale",
+            "created_at_utc",
+        ),
+        """SELECT id AS quantile_revision_id, prediction_id, sequence,
+                  q05_scaled, q25_scaled, q50_scaled, q75_scaled, q95_scaled,
+                  rationale, created_at AS created_at_utc
+           FROM numeric_quantile_revisions
+           ORDER BY prediction_id, sequence, id""",
+    ),
+    _CsvTable(
+        "binary_trajectory_resolution_corrections.csv",
+        (
+            "correction_id",
+            "prediction_id",
+            "resolution_id",
+            "sequence",
+            "old_outcome",
+            "new_outcome",
+            "old_effective_resolution_at_utc",
+            "new_effective_resolution_at_utc",
+            "old_resolution_notes",
+            "new_resolution_notes",
+            "old_postmortem",
+            "new_postmortem",
+            "outcome_changed",
+            "effective_time_changed",
+            "resolution_notes_changed",
+            "postmortem_changed",
+            "correction_reason",
+            "corrected_at_utc",
+        ),
+        """SELECT id AS correction_id, prediction_id, resolution_id, sequence,
+                  old_outcome, new_outcome,
+                  old_effective_resolution_at AS old_effective_resolution_at_utc,
+                  new_effective_resolution_at AS new_effective_resolution_at_utc,
+                  old_resolution_notes, new_resolution_notes,
+                  old_postmortem, new_postmortem, outcome_changed,
+                  effective_time_changed, resolution_notes_changed,
+                  postmortem_changed, correction_reason,
+                  corrected_at AS corrected_at_utc
+           FROM binary_trajectory_resolution_corrections
+           ORDER BY resolution_id, sequence, id""",
+    ),
+    _CsvTable(
+        "numeric_quantile_resolution_corrections.csv",
+        (
+            "correction_id",
+            "prediction_id",
+            "numeric_resolution_id",
+            "sequence",
+            "old_actual_scaled",
+            "new_actual_scaled",
+            "old_effective_resolution_at_utc",
+            "new_effective_resolution_at_utc",
+            "old_resolution_notes",
+            "new_resolution_notes",
+            "old_postmortem",
+            "new_postmortem",
+            "actual_value_changed",
+            "effective_time_changed",
+            "resolution_notes_changed",
+            "postmortem_changed",
+            "correction_reason",
+            "corrected_at_utc",
+        ),
+        """SELECT id AS correction_id, prediction_id, numeric_resolution_id,
+                  sequence, old_actual_scaled, new_actual_scaled,
+                  old_effective_resolution_at AS old_effective_resolution_at_utc,
+                  new_effective_resolution_at AS new_effective_resolution_at_utc,
+                  old_resolution_notes, new_resolution_notes,
+                  old_postmortem, new_postmortem, actual_value_changed,
+                  effective_time_changed, resolution_notes_changed,
+                  postmortem_changed, correction_reason,
+                  corrected_at AS corrected_at_utc
+           FROM numeric_quantile_resolution_corrections
+           ORDER BY numeric_resolution_id, sequence, id""",
     ),
 )
 
@@ -486,21 +483,6 @@ class DataTransferRepository:
 
     def _read_csv_contents(self) -> tuple[_CsvContents, ...]:
         with self._database.transaction() as connection:
-            if (
-                connection.execute(
-                    "SELECT 1 FROM sqlite_schema WHERE type = 'table' "
-                    "AND name = 'prediction_forecast_contracts'"
-                ).fetchone()
-                and connection.execute(
-                    "SELECT 1 FROM prediction_forecast_contracts WHERE forecast_model "
-                    "NOT IN ('binary-final-v1', 'numeric-interval-v1') LIMIT 1"
-                ).fetchone()
-            ):
-                raise ValueError(
-                    "This database contains v0.7 forecasting contracts that CSV "
-                    "format 3 cannot represent. Use a SQLite backup for complete "
-                    "recovery; the v0.7 CSV upgrade is planned for M55."
-                )
             return tuple(
                 _CsvContents(
                     table=table,
@@ -567,131 +549,102 @@ def _validate_export_archive(path: Path) -> None:
 
 
 def _export_readme(exported_at: datetime) -> str:
+    files = "\n".join(
+        f"{table.filename}: {', '.join(table.columns)}" for table in _CSV_TABLES
+    )
     return f"""Reckonsolve CSV Export Bundle
 ==============================
 
-Format version: 3
+Format version: 4
 Exported at (UTC): {format_utc(exported_at)}
 
-Purpose
--------
-This ZIP is a portable analytical representation of Reckonsolve prediction data.
-It is not a complete restoration format. Use a Reckonsolve .sqlite3 backup for
-application recovery.
+Purpose and limits
+------------------
+This is a relational analytical export, not an import or a recovery artifact.
+Use a verified Reckonsolve .sqlite3 backup to recover the application. Format 4
+exports only the two supported v0.7 contracts; archives containing retired or
+mismatched contracts are refused before this ZIP is created. It is not compatible
+with the format-3 column layout. Retired numeric_forecast_revisions.csv,
+resolution_corrections.csv, and numeric_resolution_corrections.csv are absent.
+Their supported replacements are named below. Legacy date-only forecast_deadline
+and old/new deadline columns are absent. The exact immutable Deadline lives in
+predictions.csv as forecast_deadline_at_utc.
+
+Encoding and nulls
+------------------
+Each CSV uses UTF-8 with a byte-order mark, comma delimiters, fully quoted fields,
+and CRLF rows. An empty CSV field represents SQL NULL for optional columns; an
+empty required text field represents an actual empty string. All columns ending
+in _utc are RFC 3339 UTC instants; they retain microsecond precision and end in Z.
+expected_resolution is an optional ISO YYYY-MM-DD planning date, not a scoring
+cutoff. Fields ending in _scaled are exact signed integers; divide by
+10^numeric_precision from the parent predictions.csv row to obtain base-ten values.
+Never convert them through binary floating point. Free text is preserved verbatim.
+When opening in spreadsheet software, import user text as text to prevent strings
+beginning with =, +, -, or @ from being treated as formulas.
+
+Relationships and derivations
+-----------------------------
+prediction_id joins every Prediction-owned row to predictions.csv. forecast_model
+and scoring_contract identify the two closed supported pairs:
+  binary-trajectory-v1 / binary-trajectory-brier-v1
+  numeric-quantiles-5-v2 / numeric-wis-v1
+Do not pool their scores. persisted_status is open, resolved, or invalid; Locked
+is derived from an open Prediction and its exact forecast_deadline_at_utc.
+Invalid and unresolved Predictions supply history but no scoring observation.
+
+forecast_revisions.csv has every immutable Binary revision, with contiguous
+sequence, saved instant, probability_percent (0-100), and optional rationale.
+To reconstruct the Binary standing trajectory, sort by sequence, let the initial
+revision stand from its created_at_utc, and use each subsequent revision as the
+next segment boundary. The scoring window ends at the exact Deadline; effective
+resolution may truncate the active portion. The last eligible revision before
+the cutoff is not an independent scored observation. Early-resolution neutral
+weight is a derived 0.25 tail, never a stored revision.
+
+numeric_quantile_definitions.csv stores continuous or whole-number semantics.
+numeric_quantile_revisions.csv has exactly q05/q25/q50/q75/q95 per immutable
+revision. Each _scaled value uses the parent Prediction's numeric_precision;
+ties are valid. To select a final scoring revision, apply all effective-time
+corrections, set cutoff=min(effective_resolution_at_utc, forecast_deadline_at_utc),
+and choose the highest-sequence revision whose created_at_utc is strictly before
+that cutoff. A revision at the cutoff is excluded. An outcome at or before the
+initial revision has no score; do not invent a final revision.
+
+resolutions.csv and numeric_resolutions.csv hold the original immutable terminal
+facts. resolved_at_utc is the recorded-at instant; effective_resolution_at_utc is
+the initial effective instant. scoring_revision_id / quantile_revision_id are
+recording-context anchors, not scoring authority for these v0.7 contracts.
+The current effective outcome, actual value, notes, Postmortem, and effective
+time come from replaying their respective correction tables in sequence.
+binary_trajectory_resolution_corrections.csv and
+numeric_quantile_resolution_corrections.csv retain complete before/after
+snapshots, changed-field flags, explanation, and correction timestamp.
+An outcome/actual or effective-time change requires a reason. The original
+recorded-at never changes. Corrections can alter final scoring selection;
+derived scores are never exported as canonical facts.
+
+journal_entries.csv and forecast_reviews.csv anchor to exactly one of
+forecast_revision_id (Binary) or quantile_revision_id (Numeric). A Journal
+records reasoning without revising the forecast; a Review deliberately retains
+the standing forecast. journal_corrections.csv preserves every body correction;
+its last sequence supplies current displayed text, or original_body if absent.
+definition_changes.csv preserves protected Question and Resolution Criteria
+edits; the exact Deadline cannot be edited. invalidations.csv and
+invalidation_reason_corrections.csv preserve the original invalidation and
+its later explanation history. postmortem_completions.csv records a deliberate
+Skip; a later Postmortem may coexist. tags.csv and prediction_tags.csv preserve
+stable tag identities and many-to-many membership.
+
+Columns by file (all exported columns, in order)
+------------------------------------------------
+{files}
 
 Intentional exclusions
 ----------------------
-- Mutable Saved Views and application settings are interface preferences rather
-  than analytical forecast facts.
-- The prediction_search full-text rows, projection-version state, dirty queue,
-  and spelling vocabulary are disposable derivatives of canonical history.
-- Search query text, suggestions, ranking values, result order, and click history
-  are not exported; Reckonsolve does not persist hidden search telemetry.
-
-Current tag identities and Prediction/tag associations remain included in
-tags.csv and prediction_tags.csv. A complete SQLite backup retains Saved Views
-and the physical search projection, and can rebuild search from canonical data.
-
-CSV conventions
----------------
-- Encoding: UTF-8 with a byte-order mark.
-- Delimiter: comma. Every field is quoted. Rows use CRLF line endings.
-- Blank optional fields represent SQL NULL. Required text fields are never blank.
-- Columns ending in _utc contain canonical RFC 3339 UTC instants ending in Z.
-- Forecast Deadline and Expected Resolution are ISO YYYY-MM-DD calendar dates.
-- Free-text values are preserved verbatim. When opening in spreadsheet software,
-  import free-text columns as text if values beginning with =, +, -, or @ should
-  never be interpreted as formulas.
-
-Files and relationships
------------------------
-predictions.csv
-  One current Prediction row. persisted_status is open, resolved, or invalid;
-  Locked remains derived from an open row and its inclusive forecast_deadline.
-  prediction_type is binary or numeric. numeric_unit and numeric_precision are
-  blank for Binary rows and define the enduring Numeric quantity. Numeric scaled
-  values in the related files equal the displayed value multiplied by
-  10^numeric_precision; do not parse them as binary floating-point values.
-
-forecast_revisions.csv
-  Every immutable ForecastRevision. prediction_id joins predictions.csv. The
-  highest sequence is the current Binary forecast; probability_percent remains
-  0-100. It contains only Binary Prediction rows.
-
-numeric_forecast_revisions.csv
-  Every immutable Numeric ForecastRevision. prediction_id joins a Numeric row in
-  predictions.csv. lower_scaled, median_scaled, and upper_scaled use that
-  Prediction's numeric_precision; the highest sequence is the current Numeric
-  interval. confidence_percent is a whole percentage from 1 through 99.
-
-definition_changes.csv
-  Every immutable protected-definition snapshot. prediction_id joins
-  predictions.csv; old/new fields preserve Question, Resolution Criteria, and
-  Forecast Deadline context.
-
-journal_entries.csv
-  Every original Journal entry. prediction_id joins predictions.csv and
-  exactly one of forecast_revision_id or numeric_forecast_revision_id identifies
-  the type-appropriate forecast current when it was written.
-
-journal_corrections.csv
-  Every immutable Journal body correction. journal_entry_id joins
-  journal_entries.csv. The highest sequence is the current displayed body; if
-  there is no correction, original_body remains current.
-
-resolutions.csv
-  One original immutable Yes/No outcome for each resolved Binary Prediction.
-  prediction_id joins predictions.csv and scoring_revision_id identifies the exact
-  ForecastRevision used for Brier and calibration scoring.
-
-numeric_resolutions.csv
-  One original immutable outcome for each resolved Numeric Prediction.
-  prediction_id joins predictions.csv and scoring_numeric_revision_id identifies
-  the exact Numeric ForecastRevision used for Numeric scoring. actual_scaled uses
-  the parent Prediction's numeric_precision.
-
-forecast_reviews.csv
-  Every immutable deliberate reconsideration that retained the current forecast.
-  prediction_id joins predictions.csv and exactly one of forecast_revision_id or
-  numeric_forecast_revision_id identifies the type-appropriate reviewed forecast.
-  Reviews are not ForecastRevisions and do not add scoring observations.
-
-invalidations.csv
-  One original immutable invalidation record for each Invalid Prediction. Invalid
-  Predictions remain historical but are excluded from scoring.
-
-tags.csv
-  Reusable tag identities. display_name is the retained user-facing spelling;
-  normalized_name is the case-folded identity used for matching.
-
-prediction_tags.csv
-  Many-to-many links joining prediction_id to tag_id.
-
-resolution_corrections.csv
-  Every immutable Binary Resolution correction. resolution_id joins resolutions.csv;
-  sequence is contiguous from 1. Each row contains complete old/new outcome,
-  Resolution-notes, and Postmortem snapshots plus explicit changed-field flags.
-  outcome_changed = 1 identifies a score-affecting correction and requires a
-  nonblank correction_reason. To derive the effective Resolution, start with the
-  original resolutions.csv row and apply each correction in sequence; the last
-  new_* snapshot is current. resolved_at_utc and scoring_revision_id never change.
-
-numeric_resolution_corrections.csv
-  Every immutable Numeric Resolution correction. numeric_resolution_id joins
-  numeric_resolutions.csv and sequence is contiguous from 1. old_actual_scaled
-  and new_actual_scaled use the parent Prediction's numeric_precision exactly.
-  actual_value_changed = 1 identifies a score-affecting correction and requires a
-  nonblank correction_reason. Derive the effective Resolution by applying complete
-  old/new snapshots in sequence. resolved_at_utc and scoring_numeric_revision_id
-  remain the original immutable scoring context.
-
-invalidation_reason_corrections.csv
-  Every immutable Invalid-reason correction. invalidation_id joins invalidations.csv.
-  Apply rows in sequence to derive the effective reason; the original Invalid state
-  and invalidated_at_utc never change, and the Prediction remains outside scoring.
-
-postmortem_completions.csv
-  One immutable Skip Postmortem fact for a Resolved Prediction. prediction_id joins
-  predictions.csv. It records deliberate completion without prose and changes no
-  lifecycle or score. A later Postmortem correction may coexist with this fact.
+Saved Views, application settings, presentation preferences, search index and
+repair state, ranking data, derived scores, interpolated CDF points, and click
+telemetry are not analytical history and are not in this ZIP. A complete SQLite
+backup retains canonical data and settings; its derived search projection can
+be rebuilt from history.
 """

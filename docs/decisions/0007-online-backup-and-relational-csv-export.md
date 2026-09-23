@@ -19,6 +19,8 @@ The ZIP is written, reopened, checked for exact membership and corrupt entries, 
 
 M25 exposes both operations through the source CLI without changing this boundary. `backup [DESTINATION]` and `export-csv [DESTINATION]` either accept an explicit path or prompt with the same timestamped suggestion used by the desktop data-management model. CLI code selects the destination and renders results; it does not copy files directly, issue transfer SQL, weaken verification, or create a second artifact format.
 
+M55 advances the same consistent-read, verified-ZIP boundary to format 4. It exports only supported trajectory Binary and five-quantile Numeric records, adds explicit model/scoring identities and exact immutable Deadlines to Prediction rows, replaces retired interval-v1 files with complete five-quantile definitions/revisions and model-specific correction chains, and retains effective and recorded terminal times separately. Journal/Review anchors point to the supported revision type. The included format-4 data dictionary documents every column and strict cutoff derivation. This is deliberately not a format-3-compatible layout or a restoration mechanism. The startup compatibility gate refuses unsupported source archives before any export read or artifact replacement.
+
 ## Consequences
 
 - Backup remains correct if the database is open and avoids dependence on SQLite journal mode or sidecar-file copying.

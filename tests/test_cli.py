@@ -2109,7 +2109,7 @@ def test_cli_backup_is_recoverable_and_records_success_across_restart(
     recovered.close()
 
 
-def test_cli_export_prompt_refuses_lossy_format_three_for_current_contract(
+def test_cli_export_prompt_writes_format_four_for_current_contract(
     tmp_path,
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
@@ -2134,11 +2134,12 @@ def test_cli_export_prompt_refuses_lossy_format_three_for_current_contract(
         stderr=errors,
     )
 
-    assert result == 1
+    assert result == 0
     assert "Destination [reckonsolve-export-" in output.getvalue()
-    assert "CSV format 3 cannot represent" in errors.getvalue()
-    assert "SQLite backup" in errors.getvalue()
-    assert not export_path.exists()
+    assert not errors.getvalue()
+    with ZipFile(export_path) as archive:
+        assert "Format version: 4" in archive.read("README.txt").decode("utf-8")
+        assert "binary-trajectory-v1" in archive.read("predictions.csv").decode("utf-8")
     reopened = Database.open(database_path)
     assert (
         PredictionOperations(reopened).get_prediction(created.prediction_id) == created
@@ -2419,11 +2420,7 @@ def test_cli_transfer_rejects_canonical_database_destination_without_mutation(
     )
 
     assert result == 1
-    assert (
-        "live Reckonsolve database"
-        if command == "backup"
-        else "CSV format 3 cannot represent"
-    ) in errors.getvalue()
+    assert "live Reckonsolve database" in errors.getvalue()
     reopened = Database.open(database_path)
     operations = PredictionOperations(reopened)
     assert operations.get_prediction(created.prediction_id).probability_percent == 45
@@ -2471,11 +2468,7 @@ def test_cli_transfer_failure_preserves_existing_destination(
     )
 
     assert result == 1
-    assert (
-        "simulated CLI destination failure"
-        if command == "backup"
-        else "CSV format 3 cannot represent"
-    ) in errors.getvalue()
+    assert "simulated CLI destination failure" in errors.getvalue()
     assert destination.read_bytes() == original
     assert tuple(tmp_path.glob(f".{destination.name}.*.tmp")) == ()
     reopened = Database.open(database_path)

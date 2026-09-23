@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import platform
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import median
 from tempfile import TemporaryDirectory
@@ -45,13 +46,15 @@ def main() -> int:
             operations = PredictionOperations(database)
             started = perf_counter()
             prediction_ids = []
+            deadline = datetime.now(UTC) + timedelta(days=30)
             for index in range(arguments.size):
-                created = operations._create_legacy_prediction(
+                created = operations.create_prediction(
                     (
                         f"Will synthetic archive item {index:05d} reach marker "
                         f"memory{index:05d}?"
                     ),
                     index % 101,
+                    forecast_deadline=deadline,
                     rationale=(
                         f"Synthetic rationale for cohort {index % 25:02d} and "
                         f"batch {index % 10:02d}."

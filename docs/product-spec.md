@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7 Product Specifications
 
-Status: v0.6.0 source release implemented; v0.7.0 contract approved for implementation
+Status: v0.7.0 implementation and manual acceptance complete; source release publication is a separate repository step
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -2712,10 +2712,9 @@ identity, this section prospectively overrides the earlier optional,
 date-only, editable Forecast Deadline; final-revision-only Binary scoring; and
 user-selected-confidence Numeric interval contracts.
 
-Implementation status: Milestones 46–54 and the M54A visual/documentation follow-up
-and M54B are implemented. M54C's shared desktop deadline-picker refinement is
-implemented and awaiting user visual acceptance. M55 follows M54C and remains
-unimplemented; it requires a separate start instruction.
+Implementation status: Milestones 46–55, including M54A, M54B, and M54C, are
+implemented and manually accepted. Source-release commit, push, and GitHub
+publication are separate repository steps and do not change the forecast contract.
 
 ### 35.1 Included scope and governing invariants
 
@@ -3719,7 +3718,7 @@ Acceptance demonstrations:
 
 #### Milestone 54C: Quick, explicit Forecast Deadline selection
 
-Status: implemented; awaiting user visual acceptance before M55.
+Status: implemented and manually accepted.
 
 - Replace the required checkbox with the shared initially unset picker described
   in Section 35.4 for Binary and five-quantile Numeric creation.
@@ -3746,8 +3745,9 @@ Acceptance demonstration:
 
 #### Milestone 55: v0.7 portability, migration, and release closure
 
-Prerequisite: M54B and M54C implemented, verified, and accepted. M55 remains a separately
-authorized milestone; it must not restore the superseded legacy support contract.
+Status: implemented and manually accepted. M54B and M54C prerequisites were
+verified and accepted. This milestone does not restore the superseded legacy
+support contract.
 
 - Advance relational CSV export to format version 4 with complete model,
   quantile, exact-time, correction, and cohort documentation.

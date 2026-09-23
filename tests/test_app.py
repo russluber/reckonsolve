@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 from typing import cast
+from zipfile import ZipFile
 
 import pytest
 from PySide6.QtCore import QDate, Qt
@@ -256,14 +257,10 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
     )
 
     assert backup_path.is_file()
-    assert not export_path.exists()
-    assert (
-        "CSV format 3 cannot represent"
-        in runtime.window.findChild(
-            QLabel,
-            "dataManagementStatus",
-        ).text()
-    )
+    assert export_path.is_file()
+    with ZipFile(export_path) as archive:
+        assert "Format version: 4" in archive.read("README.txt").decode("utf-8")
+        assert "binary-trajectory-v1" in archive.read("predictions.csv").decode("utf-8")
     runtime.close()
 
     recovered = Database.open(backup_path)

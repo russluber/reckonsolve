@@ -18,8 +18,8 @@ This checklist closes a Reckonsolve source release. It does not publish an insta
    ```
 
 4. Run `uv run rscd --version` and confirm the release version.
-5. Complete the release's manual acceptance record. For v0.6, use [the disposable visual-verification profiles](v0.6-visual-verification.md) across the required palettes, scaling, window sizes, sidebar modes, data shapes, feedback states, responsive layouts, and keyboard paths. Do not use the stable database for test data.
-6. Confirm the final schema version is still 15, CSV export format is still 3, and generated `build\`, `dist\`, caches, temporary databases, presentation files, backups, and exports remain untracked.
+5. Complete the release's manual acceptance record. For v0.7, use [the disposable visual-verification profiles](v0.6-visual-verification.md) for palette, scaling, window size, sidebar, and keyboard checks, then exercise current Binary and Numeric creation, revision, Review, Resolution, correction, scorecards, Analytics, and export. Do not use the stable database for test data.
+6. Confirm schema version 18 and CSV export format 4. Verify a complete SQLite backup can reopen with both supported models and a repaired search index. Confirm generated `build\`, `dist\`, caches, temporary databases, presentation files, backups, and exports remain untracked.
 
 ## Publish the source release
 

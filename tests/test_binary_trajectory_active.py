@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 
 from reckonsolve.application.errors import (
     ConcurrentForecastUpdateError,
-    CsvExportError,
     ForecastReviewNotAllowedError,
     ForecastRevisionNotAllowedError,
     PredictionDeletionNotAllowedError,
@@ -348,7 +348,7 @@ def test_backup_retains_contract_and_old_csv_cannot_silently_drop_it(active, tmp
         )
     finally:
         backup.close()
-    export_path = tmp_path / "incomplete.zip"
-    with pytest.raises(CsvExportError, match="M55"):
-        operations.export_csv_bundle(export_path)
-    assert not export_path.exists()
+    export_path = tmp_path / "format-four.zip"
+    operations.export_csv_bundle(export_path)
+    with ZipFile(export_path) as archive:
+        assert "Format version: 4" in archive.read("README.txt").decode("utf-8")

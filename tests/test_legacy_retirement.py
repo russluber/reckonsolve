@@ -312,6 +312,12 @@ def test_existing_connection_refuses_external_legacy_insert_before_writing(tmp_p
         with pytest.raises(ForecastContractIntegrityError, match="retired"):
             database.backup_to(tmp_path / "refused-backup.sqlite3")
         assert not (tmp_path / "refused-backup.sqlite3").exists()
+        with pytest.raises(ForecastContractIntegrityError, match="retired"):
+            PredictionOperations(database, Clock(), UTC).export_csv_bundle(
+                tmp_path / "refused-export.zip"
+            )
+        assert not (tmp_path / "refused-export.zip").exists()
+        assert path.read_bytes() == before
     finally:
         database.close()
 

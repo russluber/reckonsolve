@@ -2,13 +2,13 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. Record probabilities and numeric forecasts, revise beliefs without rewriting history, resolve outcomes, and study calibration. Everything works offline for one user.
 
-> v0.6.0 is the latest released version. This checkout is staged v0.7 development, including M54B legacy retirement. M55 export/release hardening remains pending. Original app artwork, an installer, signing, and public binaries remain deferred.
+> v0.7.0 is the current source version. Original app artwork, an installer, signing, and public binaries remain deferred.
 
 **Compatibility:** This source supports trajectory Binary and five-quantile Numeric forecasts only. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
 
 Supported v0.7 history is preserved on schema 18; supported Binary-only schema-16/17 archives can upgrade. The retirement requires no new schema migration. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [technical decision](docs/decisions/0019-retire-legacy-runtime-without-rebuilding-history.md).
 
-## Current development features
+## Current features
 
 - **Binary:** any whole percentage from 0% to 100%, with a permanent exact Forecast Deadline. Trajectory Brier scores the standing probabilities over time; final-probability calibration remains a separate diagnostic.
 - **Numeric:** five exact percentiles (q05/q25/q50/q75/q95), a permanent unit and precision, continuous-style or whole-number values, and a permanent exact Deadline. Detail shows the elicited central CDF without invented tails, and resolved forecasts have individual WIS scorecards.
@@ -17,7 +17,7 @@ Supported v0.7 history is preserved on schema 18; supported Binary-only schema-1
 - **Learning:** separate Binary and Numeric analytics, continuous-style versus whole-number calibration, uncertainty ranges, outcome balances, and initial/final feedback. Numeric WIS comparisons stay within one Prediction; unrelated raw scores are never averaged. See the [Analytics guide](docs/analytics-guide.md) for worked examples and review habits.
 - **Archive:** explainable local full-text search, optional superseded history, rich filters, dynamic Saved Views, and transactional tag management. The search index is rebuildable from canonical history.
 - **Desktop and CLI:** both use the same application operations and matching SQLite database—no synchronization service. Metadata edits, terminal corrections, tag maintenance, and search repair remain desktop workflows.
-- **Recovery:** verified SQLite backups preserve the whole supported archive. CSV format 3 refuses populated current-model databases until M55 supplies the new format; it must not silently omit contract facts.
+- **Recovery:** verified SQLite backups preserve the whole supported archive. Relational CSV format 4 exports current-model analytical history with exact deadlines, quantiles, correction chains, and an included data dictionary. CSV is not a restoration format.
 
 The desktop uses a shared palette-aware visual system, local Lucide icons, expanded or compact navigation, responsive workspaces, keyboard shortcuts, and identity-isolated window settings outside canonical history. The stable GUI/CLI share one data identity; the `-dev` pair share a separate development identity.
 
@@ -35,6 +35,7 @@ Effective-time entry and CLI timestamps still require checking the UTC offset fo
 - [Search evaluation](docs/search-evaluation.md) — privacy-safe relevance coverage and the recorded large-corpus run
 - [v0.6 visual verification](docs/v0.6-visual-verification.md) — release-candidate matrix for palettes, scaling, window sizes, data shapes, and interaction states
 - [Source release checklist](docs/release-checklist.md) — repeatable verification and GitHub release steps
+- [v0.7 release notes](docs/v0.7-release-notes.md) — changes, recovery, and compatibility break
 
 ## Before committing a forecast
 
@@ -104,7 +105,7 @@ uv run reckonsolve-cli-dev export-csv C:\path\to\reckonsolve-export.zip
 
 `resolve`, `invalidate`, and `delete` likewise display the reviewed forecast and explain their consequence before an explicit confirmation. Resolution records a Yes/No or exact Numeric outcome, its effective time, and optional factual notes and Postmortem. The current revision is retained as recording context; scoring independently selects the eligible history before the effective cutoff. Invalid preserves complete history outside scoring. Delete permanently removes only a transaction-current untouched Open Prediction; meaningful or Locked history is directed toward Invalid. Blank or negative confirmation cancels without writing, and terminal decisions cannot be reopened or replaced.
 
-`backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` is guarded: populated current-model archives are refused until M55 implements format 4. The retained format-3 infrastructure only exports empty supported archives in this staged build. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
+`backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` creates a format-4 ZIP of the supported analytical history with a complete data dictionary. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
 
 `list`, `show`, `search`, `saved-views`, and `saved-view` remain read-only. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
 
@@ -116,7 +117,7 @@ Reckonsolve includes a private smoke build, not an installer or public release:
 powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1
 ```
 
-The script synchronizes the locked `packaging` dependency group, builds `dist\Reckonsolve\Reckonsolve.exe`, copies that onedir bundle to a disposable ignored directory, and runs the frozen executable through an offscreen smoke workflow. The workflow uses only temporary data and no source runtime. It migrates a real schema-version-13 v0.4 database; proves the complete schema-version-15 search, Saved View, tag, backup, recovery, Binary, and Numeric paths; loads the v0.6 visual system and local icons; exercises expanded/compact navigation, every primary screen, both Detail types, shortcuts, responsive sizes, and restart; and verifies that presentation-only use rewrites no SQLite row. `build\` and `dist\` are generated and must remain untracked. The frozen app intentionally has no original Reckonsolve application icon yet.
+The script synchronizes the locked `packaging` dependency group, builds `dist\Reckonsolve\Reckonsolve.exe`, copies that onedir bundle to a disposable ignored directory, and runs the frozen executable through an offscreen smoke workflow. The workflow uses only temporary data and no source runtime. It upgrades a supported schema-17 Binary archive, exercises both current forecast models through revisions, Reviews, Resolution, corrections, scorecards, Analytics, search, CSV-4 export, backup, and restart, and refuses a disposable mixed unsupported archive unchanged. It also checks local icons, expanded/compact navigation, primary screens, shortcuts, and responsive sizes. `build\` and `dist\` remain untracked. The frozen app has no original Reckonsolve application icon yet.
 
 ## Runtime data
 

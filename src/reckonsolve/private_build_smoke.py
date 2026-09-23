@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from shutil import copyfile
+from zipfile import ZipFile
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut
@@ -23,6 +25,7 @@ from reckonsolve.app import create_runtime
 from reckonsolve.application.errors import SearchUnavailableError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
+from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS
 from reckonsolve.domain.browser import ArchiveQuery, ArchiveTagMatchMode
 from reckonsolve.domain.predictions import BinaryOutcome
@@ -332,6 +335,21 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             )
 
         operations.create_backup(backup_path)
+        export_path = database_path.parent / "reckonsolve-smoke-export.zip"
+        if export_path.exists():
+            raise FileExistsError(
+                f"Private build smoke export already exists: {export_path}"
+            )
+        operations.export_csv_bundle(export_path)
+        with ZipFile(export_path) as archive:
+            if "Format version: 4" not in archive.read("README.txt").decode("utf-8"):
+                raise RuntimeError("Frozen CSV export did not use format 4.")
+            predictions_csv = archive.read("predictions.csv").decode("utf-8")
+            if not all(
+                model in predictions_csv
+                for model in ("binary-trajectory-v1", "numeric-quantiles-5-v2")
+            ):
+                raise RuntimeError("Frozen CSV export omitted a supported model.")
         state = _SmokeState(
             previous_prediction_id=previous_prediction_id,
             binary_prediction_id=binary_prediction.prediction_id,
@@ -345,6 +363,40 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
     _verify_smoke_database(database_path, state)
     _verify_smoke_database(backup_path, state)
     _verify_frozen_restart(database_path, state)
+    _verify_frozen_unsupported_refusal(backup_path)
+
+
+def _verify_frozen_unsupported_refusal(backup_path: Path) -> None:
+    """A disposable copy of the backup must be refused before any mutation."""
+
+    unsupported_path = backup_path.parent / "unsupported-smoke.sqlite3"
+    if unsupported_path.exists():
+        raise FileExistsError(
+            f"Private build smoke fixture already exists: {unsupported_path}"
+        )
+    copyfile(backup_path, unsupported_path)
+    with sqlite3.connect(unsupported_path) as connection:
+        connection.execute("DROP TRIGGER prediction_forecast_contracts_are_immutable")
+        connection.execute(
+            """UPDATE prediction_forecast_contracts
+               SET forecast_model = 'binary-final-v1',
+                   scoring_contract = 'binary-final-brier-v1',
+                   forecast_deadline_at = NULL
+               WHERE prediction_id = (
+                   SELECT prediction_id FROM prediction_forecast_contracts
+                   WHERE forecast_model = 'binary-trajectory-v1' LIMIT 1
+               )"""
+        )
+    before = unsupported_path.read_bytes()
+    try:
+        Database.open(unsupported_path)
+    except ForecastContractIntegrityError as error:
+        if "retired" not in str(error).lower():
+            raise RuntimeError("Frozen refusal omitted recovery guidance.") from error
+    else:
+        raise RuntimeError("Frozen runtime accepted a mixed unsupported database.")
+    if unsupported_path.read_bytes() != before:
+        raise RuntimeError("Frozen refusal modified an unsupported database.")
 
 
 def _exercise_supported_presentation(

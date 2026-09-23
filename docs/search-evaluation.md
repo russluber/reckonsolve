@@ -50,3 +50,14 @@ The unchanged search contract was rerun for the v0.6 release candidate on 2026-0
 | No result, including suggestion check | 86.094 ms | 0 |
 
 The v0.6 corpus build took 28.847 seconds. Every expected result remained complete, and retrieval stayed consistent with the recorded v0.5 baseline; the presentation release introduced no search-semantic or performance regression in this synthetic evidence.
+
+The v0.7 candidate run on 2026-09-23 uses supported trajectory Binary creation rather than the retired test-only Binary helper. Python 3.13.5 and SQLite 3.47.1 produced 2,000 Predictions and 6,000 derived fragments. Five timed repetitions yielded:
+
+| Scenario | Median retrieval | Complete results |
+| --- | ---: | ---: |
+| Unique remembered token | 43.001 ms | 1 |
+| Broad two-word archive query | 231.492 ms | 2,000 |
+| One cohort tag | 49.339 ms | 80 |
+| No result, including suggestion check | 101.901 ms | 0 |
+
+Corpus creation took 34.769 seconds. All expected results were complete. The timings are somewhat higher than earlier release runs, but remain well below a second on this deliberately large local corpus; they are observations, not a cross-machine service guarantee. A 100-Prediction disposable evaluation is now an automated smoke check so the benchmark cannot silently return to a retired creation path.

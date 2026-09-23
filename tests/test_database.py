@@ -129,9 +129,11 @@ def test_database_from_newer_application_is_rejected(tmp_path) -> None:
         ),
     )
     Database.open(database_path, migrations=migrations).close()
+    before = database_path.read_bytes()
 
     with pytest.raises(UnsupportedSchemaVersionError, match="newer"):
         Database.open(database_path)
+    assert database_path.read_bytes() == before
 
 
 def test_changed_migration_history_is_rejected_without_repair(tmp_path) -> None:

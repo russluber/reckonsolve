@@ -2,13 +2,17 @@
 
 All notable changes to Reckonsolve are documented here.
 
-## Unreleased
+## 0.7.0 - 2026-09-23
 
 ### Added
 
 - M46 schema-version-16 immutable forecast-model/scoring identities and exact-time foundations, preserving every existing legacy cohort without fabricated times or scores.
 - M47 Binary trajectory creation in the desktop and CLI with a required exact, permanent Forecast Deadline; explicit UTC-offset entry and optional Rulebook guidance.
 - Exact pre-Deadline revision/Review checks, transaction-time clock validation, strictly ordered immutable revisions, and contract-aware Detail, timeline, Dashboard, archive/search, metadata, and deletion behavior.
+- M48–M49 exact duration-weighted Binary Trajectory Brier, audited effective Resolution time and corrections, individual scorecards, and separate aggregate trajectory feedback.
+- M50–M53 schema-18 five-quantile Numeric storage and public desktop/CLI workflows, exact WIS scorecards, effective-time correction chains, and separate continuous-style/whole-number calibration.
+- M54 cross-interface contract-integrity checks and parity across supported models; M54A compact Analytics guidance and resolved scorecard presentation.
+- M55 relational CSV format 4 with complete model identities, exact Deadlines, quantile revisions, effective/recorded times, correction chains, and a bundled data dictionary. Expanded source and relocated private-build checks cover supported migration, backup, restart, search repair, export, and unsupported-archive refusal.
 
 ### Fixed
 
@@ -20,12 +24,11 @@ All notable changes to Reckonsolve are documented here.
 - M54B removes pre-v0.7 Binary and interval-v1 Numeric runtime workflows, legacy analytics/scorecards, interval-only chart/editor/domain paths, and test-only legacy creation factories. Trajectory Binary and five-quantile Numeric are the two supported models.
 - Databases or backups containing retired predictions are refused as a whole before migration or search repair, including mixed archives. Missing, unknown, or mismatched identities are also refused. No conversion, deletion, or partial loading occurs.
 - Supported v0.7 history stays on schema 18 without a new migration or canonical rewrite. Shared exact mathematics and historical migration/storage infrastructure are retained; supported schema-16/17 Binary upgrades, backup/restart, and disposable tooling use current contracts.
-- README and the Analytics guide now describe the two-model support boundary. SQLite backup remains the complete recovery artifact.
+- README and the Analytics guide now describe the two-model support boundary. SQLite backup remains the complete recovery artifact; CSV format 4 is analytical, not an import or restore format.
 
-### Development limitations
+### Release scope
 
-- M55 export-format and release hardening remain pending; v0.7 is not released.
-- CSV format 3 refuses databases containing prospective-model records until the M55 format upgrade. Complete SQLite backup remains available.
+- This is a source release; no installer, signing, public binary, importer, or additional forecast type is included.
 
 ## 0.6.0 - 2026-09-05
 

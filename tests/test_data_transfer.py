@@ -186,7 +186,9 @@ def test_backup_remains_usable_if_recording_its_success_time_fails(
     recovered.close()
 
 
-def test_current_history_refuses_incomplete_csv_without_losing_backup(tmp_path) -> None:
+def test_format_four_exports_complete_supported_history_without_mutating_source(
+    tmp_path,
+) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
     binary = _create_complete_history(operations)
@@ -194,9 +196,30 @@ def test_current_history_refuses_incomplete_csv_without_losing_backup(tmp_path) 
     destination = tmp_path / "export.zip"
     source = tmp_path / "source.sqlite3"
     before = source.read_bytes()
-    with pytest.raises(CsvExportError, match="format"):
-        operations.export_csv_bundle(destination)
-    assert not destination.exists()
+    result = operations.export_csv_bundle(destination)
+    assert result.csv_file_count == len(EXPORT_ARCHIVE_NAMES) - 1
+    with ZipFile(destination) as archive:
+        assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
+        assert "Format version: 4" in archive.read("README.txt").decode("utf-8")
+        predictions = _read_csv(archive, "predictions.csv")
+        by_id = {int(row["prediction_id"]): row for row in predictions}
+        assert by_id[binary.prediction_id]["forecast_model"] == "binary-trajectory-v1"
+        assert (
+            by_id[numeric.prediction_id]["forecast_model"] == "numeric-quantiles-5-v2"
+        )
+        assert by_id[binary.prediction_id]["forecast_deadline_at_utc"]
+        assert by_id[numeric.prediction_id]["forecast_deadline_at_utc"]
+        assert "numeric_forecast_revisions.csv" not in archive.namelist()
+        revisions = _read_csv(archive, "numeric_quantile_revisions.csv")
+        assert len(revisions) == 2
+        assert revisions[0]["q05_scaled"] == "-15"
+        assert revisions[1]["q50_scaled"] == "45"
+        journal = _read_csv(archive, "journal_entries.csv")
+        assert any(row["quantile_revision_id"] for row in journal)
+        reviews = _read_csv(archive, "forecast_reviews.csv")
+        assert any(row["quantile_revision_id"] for row in reviews)
+        assert _read_csv(archive, "resolutions.csv")[0]["effective_resolution_at_utc"]
+        assert _read_csv(archive, "numeric_resolutions.csv")[0]["quantile_revision_id"]
     assert source.read_bytes() == before
     assert operations.get_prediction(binary.prediction_id) == binary
     assert operations.get_numeric_prediction(numeric.prediction_id) == numeric
@@ -217,7 +240,7 @@ def test_empty_csv_bundle_has_every_header_and_no_data_rows(tmp_path) -> None:
     database.close()
 
 
-def test_numeric_csv_refusal_preserves_existing_destination(tmp_path) -> None:
+def test_numeric_csv_export_atomically_replaces_existing_destination(tmp_path) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
     numeric = create_numeric(
@@ -229,9 +252,12 @@ def test_numeric_csv_refusal_preserves_existing_destination(tmp_path) -> None:
     )
     destination = tmp_path / "export.zip"
     destination.write_bytes(b"previous export")
-    with pytest.raises(CsvExportError, match="format"):
-        operations.export_csv_bundle(destination)
-    assert destination.read_bytes() == b"previous export"
+    operations.export_csv_bundle(destination)
+    with ZipFile(destination) as archive:
+        assert (
+            _read_csv(archive, "numeric_quantile_revisions.csv")[0]["q95_scaled"]
+            == "70"
+        )
     assert operations.get_numeric_prediction(numeric.prediction_id) == numeric
     database.close()
 
@@ -266,7 +292,7 @@ def test_csv_export_rejects_the_live_database_without_mutation(tmp_path) -> None
     operations = PredictionOperations(database, FixedClock())
     created = create_binary(operations, "Will live data remain canonical?", 55)
 
-    with pytest.raises(CsvExportError, match="format"):
+    with pytest.raises(CsvExportError, match="live Reckonsolve database"):
         operations.export_csv_bundle(path)
 
     assert operations.get_prediction(created.prediction_id).question == created.question
@@ -280,7 +306,7 @@ def test_backup_preserves_both_terminal_correction_chains_and_postmortem_complet
     operations = PredictionOperations(database, FixedClock())
     binary = _create_complete_history(operations)
     numeric = _create_complete_numeric_history(operations)
-    operations.correct_binary_resolution(
+    binary_first = operations.correct_binary_resolution(
         binary.prediction_id,
         BinaryOutcome.NO,
         resolution_notes="Corrected source",
@@ -288,13 +314,35 @@ def test_backup_preserves_both_terminal_correction_chains_and_postmortem_complet
         correction_reason="Corrected outcome",
         expected_correction_id=None,
     )
-    operations.correct_numeric_resolution(
+    operations.correct_binary_resolution(
+        binary.prediction_id,
+        BinaryOutcome.NO,
+        effective_resolution_at=(
+            binary_first.effective.effective_resolution_at - timedelta(seconds=1)
+        ),
+        resolution_notes=binary_first.effective.resolution_notes,
+        postmortem=binary_first.effective.postmortem,
+        correction_reason="Certified one second earlier",
+        expected_correction_id=binary_first.current_correction_id,
+    )
+    numeric_first = operations.correct_numeric_resolution(
         numeric.prediction_id,
         "10.5",
         resolution_notes="Corrected numeric source",
         postmortem=None,
         correction_reason="Corrected actual",
         expected_correction_id=None,
+    )
+    operations.correct_numeric_resolution(
+        numeric.prediction_id,
+        "10.5",
+        effective_resolution_at=(
+            numeric_first.effective.effective_resolution_at - timedelta(seconds=1)
+        ),
+        resolution_notes=numeric_first.effective.resolution_notes,
+        postmortem=numeric_first.effective.postmortem,
+        correction_reason="Observed one second earlier",
+        expected_correction_id=numeric_first.current_correction_id,
     )
     operations.record_postmortem_skip(
         binary.prediction_id,
@@ -310,6 +358,35 @@ def test_backup_preserves_both_terminal_correction_chains_and_postmortem_complet
     )
     expected_binary = operations.get_binary_resolution_history(binary.prediction_id)
     expected_numeric = operations.get_numeric_resolution_history(numeric.prediction_id)
+    export_path = tmp_path / "corrected-export.zip"
+    operations.export_csv_bundle(export_path)
+    with ZipFile(export_path) as archive:
+        binary_corrections = _read_csv(
+            archive, "binary_trajectory_resolution_corrections.csv"
+        )
+        numeric_corrections = _read_csv(
+            archive, "numeric_quantile_resolution_corrections.csv"
+        )
+        assert len(binary_corrections) == len(numeric_corrections) == 2
+        assert binary_corrections[0]["outcome_changed"] == "1"
+        assert binary_corrections[0]["correction_reason"] == "Corrected outcome"
+        assert binary_corrections[0]["new_effective_resolution_at_utc"]
+        assert binary_corrections[1]["effective_time_changed"] == "1"
+        assert (
+            binary_corrections[1]["correction_reason"] == "Certified one second earlier"
+        )
+        assert numeric_corrections[0]["actual_value_changed"] == "1"
+        assert numeric_corrections[0]["new_actual_scaled"] == "105"
+        assert numeric_corrections[0]["correction_reason"] == "Corrected actual"
+        assert numeric_corrections[1]["effective_time_changed"] == "1"
+        assert (
+            numeric_corrections[1]["correction_reason"] == "Observed one second earlier"
+        )
+        completions = _read_csv(archive, "postmortem_completions.csv")
+        assert {int(row["prediction_id"]) for row in completions} == {
+            binary.prediction_id,
+            numeric.prediction_id,
+        }
     destination = tmp_path / "recovery.sqlite3"
     operations.create_backup(destination)
     database.close()
