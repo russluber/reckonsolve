@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from datetime import date, datetime
 from decimal import Decimal
+from itertools import pairwise
 from typing import Protocol
 
 from PySide6.QtCore import QDate, QEvent, QObject, Qt, QTimer, Signal
@@ -667,8 +668,7 @@ class NewPredictionScreen(QWidget):
         binary_fields_layout.addWidget(self.probability_input)
         binary_fields_layout.addWidget(shortcuts)
         binary_fields_layout.addWidget(self.endpoint_note)
-        self.exact_deadline = ExactDeadlineInput(self.binary_forecast_fields)
-        binary_fields_layout.addWidget(self.exact_deadline)
+        self.exact_deadline = ExactDeadlineInput(self)
         self.forecast_guidance = QGroupBox("Choosing a forecasting commitment", self)
         self.forecast_guidance.setCheckable(True)
         self.forecast_guidance.setChecked(False)
@@ -725,8 +725,8 @@ class NewPredictionScreen(QWidget):
         numeric_fields_layout.addWidget(self.numeric_constraint_input)
         self.quantile_input = FiveQuantileInput(self.numeric_forecast_fields)
         numeric_fields_layout.addWidget(self.quantile_input)
-        self.numeric_exact_deadline = ExactDeadlineInput(self.numeric_forecast_fields)
-        numeric_fields_layout.addWidget(self.numeric_exact_deadline)
+        # Both forecast forms share one draft commitment, including Custom input.
+        self.numeric_exact_deadline = self.exact_deadline
         self.numeric_guidance = QGroupBox(
             "Choosing a forecasting commitment", self.numeric_forecast_fields
         )
@@ -878,6 +878,8 @@ class NewPredictionScreen(QWidget):
         core_layout.addSpacing(int(Spacing.CONTROL))
         core_layout.addWidget(self.binary_forecast_fields)
         core_layout.addWidget(self.numeric_forecast_fields)
+        core_layout.addSpacing(int(Spacing.CONTROL))
+        core_layout.addWidget(self.exact_deadline)
 
         form_column = QWidget(self)
         form_column.setObjectName("newPredictionFormColumn")
@@ -926,17 +928,19 @@ class NewPredictionScreen(QWidget):
         self.setTabOrder(self.numeric_unit_input, self.numeric_precision_input)
         self.setTabOrder(self.numeric_precision_input, self.numeric_constraint_input)
         self.setTabOrder(self.numeric_constraint_input, self.quantile_input.inputs[5])
-        self.setTabOrder(
-            self.quantile_input.inputs[75], self.numeric_exact_deadline.toggle
-        )
-        self.setTabOrder(
-            self.numeric_exact_deadline.toggle, self.numeric_exact_deadline.editor
-        )
-        self.setTabOrder(
-            self.numeric_exact_deadline.editor, self.numeric_exact_deadline.offset
-        )
-        self.setTabOrder(self.numeric_exact_deadline.offset, self.numeric_guidance)
-        self.setTabOrder(self.numeric_guidance, self.more_details)
+        self.setTabOrder(self.quantile_input.inputs[75], self.numeric_guidance)
+        self.setTabOrder(self.numeric_guidance, self.exact_deadline.preset_buttons[0])
+        deadline_controls = [
+            *self.exact_deadline.preset_buttons.values(),
+            self.exact_deadline.custom_button,
+            self.exact_deadline.editor,
+            self.exact_deadline.occurrence,
+            self.exact_deadline.use_offset,
+            self.exact_deadline.offset,
+            self.more_details,
+        ]
+        for previous, following in pairwise(deadline_controls):
+            self.setTabOrder(previous, following)
         self.setTabOrder(self.more_details, self.rationale_input)
         self.setTabOrder(self.rationale_input, self.background_input)
         self.setTabOrder(self.background_input, self.resolution_criteria_input)
@@ -1022,7 +1026,6 @@ class NewPredictionScreen(QWidget):
         self.numeric_precision_input.setValue(0)
         self.quantile_input.clear()
         self.numeric_constraint_input.setCurrentIndex(0)
-        self.numeric_exact_deadline.reset()
         self.numeric_guidance.setChecked(False)
         self.rationale_input.clear()
         self.background_input.clear()

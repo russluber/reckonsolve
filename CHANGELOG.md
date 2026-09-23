@@ -16,6 +16,7 @@ All notable changes to Reckonsolve are documented here.
 
 ### Changed
 
+- M54C replaces the required desktop Deadline checkbox with explicit calendar shortcuts and Custom date/time entry shared by Binary and Numeric. Local offsets follow the selected date's daylight-saving rules; repeated hours require a choice, nonexistent times are rejected, and an explicit-offset override remains available. Type switching retains the draft; successful creation resets it to Not set.
 - M54B removes pre-v0.7 Binary and interval-v1 Numeric runtime workflows, legacy analytics/scorecards, interval-only chart/editor/domain paths, and test-only legacy creation factories. Trajectory Binary and five-quantile Numeric are the two supported models.
 - Databases or backups containing retired predictions are refused as a whole before migration or search repair, including mixed archives. Missing, unknown, or mismatched identities are also refused. No conversion, deletion, or partial loading occurs.
 - Supported v0.7 history stays on schema 18 without a new migration or canonical rewrite. Shared exact mathematics and historical migration/storage infrastructure are retained; supported schema-16/17 Binary upgrades, backup/restart, and disposable tooling use current contracts.

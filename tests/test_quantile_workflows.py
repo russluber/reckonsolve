@@ -384,7 +384,8 @@ def test_complete_quantile_form_and_detail_layout(qtbot, tmp_path, width):
     form.numeric_constraint_input.setCurrentIndex(1)
     for level, value in VALUES.items():
         form.quantile_input.inputs[level].setText(value)
-    form.numeric_exact_deadline.toggle.setChecked(True)
+    form.numeric_exact_deadline.choose_custom()
+    form.numeric_exact_deadline.use_offset.setChecked(True)
     form.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
     form.numeric_exact_deadline.offset.setText("+00:00")
     qtbot.wait(30)

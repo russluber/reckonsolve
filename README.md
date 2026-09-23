@@ -21,7 +21,9 @@ Supported v0.7 history is preserved on schema 18; supported Binary-only schema-1
 
 The desktop uses a shared palette-aware visual system, local Lucide icons, expanded or compact navigation, responsive workspaces, keyboard shortcuts, and identity-isolated window settings outside canonical history. The stable GUI/CLI share one data identity; the `-dev` pair share a separate development identity.
 
-For exact Deadline or effective-time entry, check the UTC offset for the chosen date, including daylight saving time. Desktop labels normally show minutes while storage retains full precision. CLI accepts offset-bearing ISO timestamps, such as `2099-10-01T18:00:00-07:00`. Choose **use recording time** / `now` only when the outcome became knowable now; an effective time after recording is rejected. An outcome already fixed at or before the first forecast is explicitly unscored.
+Desktop Deadline entry starts **Not set**. Choose **End of today**, **End of tomorrow**, **7 days**, **30 days**, or **Custom…**. Shortcuts select 11:59 PM on the corresponding local calendar date; inspect or edit the exact date/time before creating. The picker automatically uses that date's local UTC offset, asks which occurrence you mean during a repeated daylight-saving hour, and rejects nonexistent local times. **Use another UTC offset** permits an explicit override. Switching forecast type keeps the draft deadline; creating successfully clears it for the next prediction.
+
+Effective-time entry and CLI timestamps still require checking the UTC offset for the chosen date, including daylight saving time. Desktop labels normally show minutes while storage retains full precision. CLI accepts offset-bearing ISO timestamps, such as `2099-10-01T18:00:00-07:00`. Choose **use recording time** / `now` only when the outcome became knowable now; an effective time after recording is rejected. An outcome already fixed at or before the first forecast is explicitly unscored.
 
 ## Documentation
 

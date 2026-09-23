@@ -605,7 +605,8 @@ def test_numeric_create_close_reopen_displays_the_complete_interval(qtbot, tmp_p
     screen.numeric_constraint_input.setCurrentIndex(2)
     for level, value in {5: "120", 25: "150", 50: "180", 75: "210", 95: "240"}.items():
         screen.quantile_input.inputs[level].setText(value)
-    screen.numeric_exact_deadline.toggle.setChecked(True)
+    screen.numeric_exact_deadline.choose_custom()
+    screen.numeric_exact_deadline.use_offset.setChecked(True)
     screen.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
     screen.numeric_exact_deadline.offset.setText("+00:00")
     screen.submit()
@@ -1544,6 +1545,7 @@ def test_run_reports_expected_database_startup_failure(
 
 def _set_exact_deadline(window):
     deadline = window.findChild(ExactDeadlineInput)
-    deadline.toggle.setChecked(True)
+    deadline.choose_custom()
+    deadline.use_offset.setChecked(True)
     deadline.editor.setDate(QDate(2099, 12, 30))
     deadline.offset.setText("+00:00")

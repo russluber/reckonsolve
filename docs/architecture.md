@@ -1,6 +1,6 @@
 # Reckonsolve Architecture
 
-Status: v0.6 source release complete; v0.7 implemented through M54B; M55 pending
+Status: v0.6 source release complete; v0.7 implemented through M54C (visual acceptance pending); M55 pending
 Last reviewed: 2026-09-22
 
 This document describes how Reckonsolve is structured from the completed binary v0.1 baseline through the completed v0.6 source release and the staged v0.7 implementation. The [product specification](product-spec.md) governs product behavior, scope, terminology, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
@@ -978,3 +978,17 @@ calculation, persistence, CLI formatting, or legacy presentation changes occur.
 - **Presentation:** one exact-deadline lifecycle function serves both models. Metadata exposes the permanent deadline without an editable date-only control. Numeric history and displays use complete five-quantile records. Binary trajectory math and Numeric WIS selection are unchanged.
 - **Exports and tooling:** format 3 remains guarded for populated current archives; SQLite backup is the recovery path until M55. Disposable visual-review fixtures and private-build smoke use supported forecasts. Source-level smoke covers staged Binary upgrade, both types, UI resources, backup, and restart; a new packaged Windows build is not claimed here.
 - **Tests:** shared behavior uses explicit supported contracts and five quantiles. Historical raw fixtures test refusal, not a hidden legacy creation API. No automated test opens either real user database.
+
+### M54C: shared local-calendar deadline picker
+
+`ui/exact_deadline_input.py` owns the initially unset draft, calendar shortcuts,
+native date/time editor, exact summary, and optional explicit-offset entry. One
+instance in New Prediction survives Binary/Numeric switches and resets after a
+successful atomic creation. Its clock and `QTimeZone` are injectable for tests.
+The editor still carries wall-clock fields in UTC to avoid implicit normalization;
+local resolution now uses the selected date's platform zone rules. Valid matching
+before/after candidates identify ordinary times, gaps, and repeated times. Gaps
+are rejected and repeated times require a first/second occurrence choice. The
+application receives the resulting UTC datetime and retains its under-transaction
+deadline validation. No schema, domain, CLI, or effective-resolution editor changes
+are involved. See [ADR 0020](decisions/0020-resolve-local-deadlines-explicitly.md).

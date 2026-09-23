@@ -2713,9 +2713,9 @@ date-only, editable Forecast Deadline; final-revision-only Binary scoring; and
 user-selected-confidence Numeric interval contracts.
 
 Implementation status: Milestones 46–54 and the M54A visual/documentation follow-up
-are implemented. M54B is approved and planned, not implemented. M55 follows M54B
-and remains unimplemented. Approving this contract does not authorize starting
-either milestone; implementation still requires the user's milestone instruction.
+and M54B are implemented. M54C's shared desktop deadline-picker refinement is
+implemented and awaiting user visual acceptance. M55 follows M54C and remains
+unimplemented; it requires a separate start instruction.
 
 ### 35.1 Included scope and governing invariants
 
@@ -2936,6 +2936,25 @@ discourage deadlines chosen merely to match the modal expected outcome,
 unnecessarily short cutoffs, distant safety buffers, and choices optimized
 for a desired score. Input may use local date, time, and zone-aware platform
 controls, but the committed value must resolve to one unambiguous instant.
+
+M54C replaces the desktop required-field checkbox with an initially **Not set**
+deadline picker shared by both forecast types. Explicit shortcuts are **End of
+today**, **End of tomorrow**, **7 days**, and **30 days**, plus **Custom…**.
+Shortcuts use the local calendar date at the time of the click, adding 0, 1, 7,
+or 30 calendar days and choosing 23:59:00. They are conveniences, not recommended
+forecasting horizons. The selected exact date/time is always shown and editable;
+opening the screen alone chooses nothing. Custom opens editable date/time fields
+with today's 23:59 as a visible starting choice. Seconds are zero.
+
+Local entry uses the system time zone's rules for the chosen date, including
+future daylight-saving changes, and displays the resulting zone and UTC offset.
+An optional **Use another UTC offset** control retains explicit-offset entry.
+A nonexistent local time is rejected without shifting it; a repeated local time
+requires a deliberate choice between its two offsets. Invalid or expired input
+remains visible for correction, and the existing transaction still enforces
+`T > t0`. Switching forecast type retains the draft deadline; successful creation
+resets it to Not set. Expected Resolution remains independent. This change adds
+no schema, CLI prompt, persisted preference, or scoring behavior.
 
 For the new cohorts, Edit Details displays Forecast Deadline as immutable
 context and offers no addition, change, or removal action. The retired date-only
@@ -3441,7 +3460,7 @@ need.
 
 ### 35.13 Implementation milestones
 
-Milestones 46 through 55, including M54A and M54B, implement v0.7.0.
+Milestones 46 through 55, including M54A, M54B, and M54C, implement v0.7.0.
 Milestones 46–54 below retain their original implementation/acceptance history,
 including the then-required legacy preservation. They are not instructions to
 restore retired features after M54B. M54B deliberately changes the support boundary
@@ -3638,7 +3657,7 @@ Its existing tests and accepted visual behavior remain part of the M54B baseline
 
 #### Milestone 54B: Legacy retirement and supported-model boundary
 
-Status: approved plan; implementation requires a separate start instruction.
+Status: implemented and accepted.
 Complete this milestone before M55. This is substantive compatibility cleanup,
 not a visual-only removal of the word “legacy.”
 
@@ -3698,9 +3717,36 @@ Acceptance demonstrations:
 - The supported UI contains no legacy editor or analytics card, while ordinary
   Binary Brier diagnostics and five-quantile calculations remain correct.
 
+#### Milestone 54C: Quick, explicit Forecast Deadline selection
+
+Status: implemented; awaiting user visual acceptance before M55.
+
+- Replace the required checkbox with the shared initially unset picker described
+  in Section 35.4 for Binary and five-quantile Numeric creation.
+- Add the four calendar shortcuts, a compact editable Custom choice, and a
+  readable exact-deadline summary with local zone/offset context.
+- Derive the selected date's local offset through platform time-zone rules;
+  preserve explicit-offset entry and reject silent DST gap/fold normalization.
+- Retain the draft when switching forecast type and clear it after successful
+  creation. Failed validation retains all input and writes nothing.
+- Keep buttons content-sized, wrap shortcuts at narrow widths, use shared visual
+  roles, and retain calendar, typed input, keyboard access, and visible focus.
+- Verify calendar/year rollover, future DST offsets, repeated/nonexistent times,
+  minute precision, past deadlines, both creation paths, type switching, and reset
+  using disposable databases and injected clocks/time zones.
+- Preserve exact immutable commitment, atomic creation, transaction-time future
+  validation, Expected Resolution independence, schema 18, and the CSV-3 guard.
+
+Acceptance demonstration:
+
+> Open New Prediction with no deadline selected -> choose a shortcut -> inspect
+> its exact date, time, and offset -> switch Binary/Numeric without losing it ->
+> edit a custom deadline -> create -> Detail and reopened history retain that
+> exact instant, while the next creation form again starts Not set.
+
 #### Milestone 55: v0.7 portability, migration, and release closure
 
-Prerequisite: M54B implemented, verified, and accepted. M55 remains a separately
+Prerequisite: M54B and M54C implemented, verified, and accepted. M55 remains a separately
 authorized milestone; it must not restore the superseded legacy support contract.
 
 - Advance relational CSV export to format version 4 with complete model,

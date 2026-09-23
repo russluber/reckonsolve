@@ -4212,7 +4212,8 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
         95: "21.0",
     }.items():
         screen.quantile_input.inputs[level].setText(value)
-    screen.numeric_exact_deadline.toggle.setChecked(True)
+    screen.numeric_exact_deadline.choose_custom()
+    screen.numeric_exact_deadline.use_offset.setChecked(True)
     screen.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
     screen.numeric_exact_deadline.offset.setText("+00:00")
     screen.tags_input.setText("offer, timing")
@@ -4362,8 +4363,10 @@ def test_numeric_creation_failure_keeps_the_form_values_for_correction(qtbot, tm
     screen.numeric_constraint_input.setCurrentIndex(2)
     for level, value in {5: "8", 25: "2", 50: "3", 75: "9", 95: "10"}.items():
         screen.quantile_input.inputs[level].setText(value)
-    screen.numeric_exact_deadline.toggle.setChecked(True)
+    screen.numeric_exact_deadline.choose_custom()
+    screen.numeric_exact_deadline.use_offset.setChecked(True)
     screen.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
+    screen.numeric_exact_deadline.offset.setText("+00:00")
     screen.submit()
     assert screen.form_error.text()
     assert screen.quantile_input.inputs[50].text() == "3"
@@ -6912,7 +6915,8 @@ def _click_correction_button(
 
 def _set_exact_deadline(window):
     deadline = window.findChild(ExactDeadlineInput)
-    deadline.toggle.setChecked(True)
+    deadline.choose_custom()
+    deadline.use_offset.setChecked(True)
     deadline.editor.setDate(QDate(2099, 12, 30))
     deadline.editor.setTime(QTime(18, 0))
     deadline.offset.setText("+00:00")

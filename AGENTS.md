@@ -23,7 +23,7 @@ The governing product rule is:
 
 The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15.
 
-The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 54 and M54A are implemented. M54B (legacy retirement) is implemented; M55 follows M54B and is unimplemented. Work on only the milestone or coherent slice the user explicitly authorizes; approving a specification or plan is not authorization to implement it.
+The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 54, M54A, and M54B (legacy retirement) are implemented. M54C implements the shared desktop deadline picker and is awaiting user visual acceptance; M55 follows M54C and is unimplemented. Work on only the milestone or coherent slice the user explicitly authorizes; approving a specification or plan is not authorization to implement it.
 
 The user-approved 2026-09-20 amendment in Section 35.3 supersedes earlier promises in this file and the design documents to maintain legacy support indefinitely. M54B removes legacy Binary and interval-v1 Numeric runtime workflows, preserve all existing v0.7 history, and refuse legacy-only or mixed databases without conversion, deletion, or partial loading. Keep shared mathematics, storage, and migration infrastructure required by supported models. Do not restore the retired runtime paths. The historical milestone descriptions below explain the current implementation and its earlier obligations; they must not cause a later agent to restore retired features after M54B. Any live test-data purge or reset requires separate explicit approval and validated targets; the approved plan is not that approval.
 
@@ -116,6 +116,14 @@ v0.7 Milestone 54 hardens four-cohort desktop/CLI parity without a migration. St
 M54A is the user-authorized pre-M55 Analytics presentation/documentation slice, extended by feedback to resolved Prediction Detail scorecards. The Trajectory Binary summary uses flat, top-aligned Score, Timing, and Updating groups rather than nested metric cards; narrow layouts stack without changing any statistic. Individual scorecards use grouped selectable facts and contextual help; Numeric draws the final scored 50%/90% intervals, median, and effective actual on a shared scale with exact text alongside it. `docs/analytics-guide.md` is the human-facing interpretation guide, with worked examples, cohort boundaries, tie/uncertainty cautions, and actionable review habits. Keep explanations there rather than adding a long tutorial inside Analytics. This slice adds no calculation, schema, cohort, or CLI behavior; M55 remains separately authorized work.
 
 M54B retires legacy runtime behavior under ADR 0019 without a new schema version or canonical rewrite. The application accepts supported v0.7-only archives and staged supported Binary schema-16/17 upgrades, but refuses legacy-only, mixed, missing-identity, unknown, or mismatched inputs before migration/repair/write. Tests and disposable tooling must use explicit supported contracts; historical raw fixtures exist only for refusal/migration-infrastructure tests. Shared exact math, storage, and historical SQL remain; legacy editors/calculators must not be reintroduced to make an old test pass. CSV format 3 stays guarded until M55. No live database purge is authorized. Earlier milestone descriptions in this file are historical, not a second runtime support contract.
+
+M54C uses one shared New Prediction deadline draft for both forecast types. It
+starts unset; explicit local-calendar shortcuts choose 23:59:00, while Custom
+permits date/time editing. Target-date local offsets come from Qt time-zone rules,
+repeated hours require an occurrence choice, and gaps never normalize silently.
+Keep the explicit-offset override, minute precision, type-switch draft retention,
+successful-save reset, and authoritative transaction-time future check. This is
+GUI-only; effective-resolution controls and CLI timestamp entry are unchanged.
 
 ## Technology Direction
 

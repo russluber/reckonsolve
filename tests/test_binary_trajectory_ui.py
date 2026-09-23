@@ -33,7 +33,8 @@ def operations(tmp_path):
 
 
 def set_deadline(widget):
-    widget.toggle.setChecked(True)
+    widget.choose_custom()
+    widget.use_offset.setChecked(True)
     widget.editor.setDate(QDate(2026, 11, 1))
     widget.editor.setTime(QTime(1, 30))
     widget.offset.setText("-07:00")
@@ -49,7 +50,7 @@ def test_creation_requires_explicit_deadline_and_reset_does_not_guess_another(
     screen.submit()
     assert "Set an exact Forecast Deadline" in screen.form_error.text()
     assert not operations.browse_predictions().predictions
-    assert not screen.exact_deadline.toggle.isChecked()
+    assert not screen.exact_deadline.is_set
     set_deadline(screen.exact_deadline)
     screen.submit()
     prediction = operations.get_prediction(1)
@@ -57,7 +58,7 @@ def test_creation_requires_explicit_deadline_and_reset_does_not_guess_another(
     assert prediction.forecast_contract.forecast_deadline.instant == datetime(
         2026, 11, 1, 8, 30, tzinfo=UTC
     )
-    assert not screen.exact_deadline.toggle.isChecked()
+    assert not screen.exact_deadline.is_set
     assert screen.question_input.text() == ""
 
 

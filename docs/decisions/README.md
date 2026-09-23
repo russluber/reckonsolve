@@ -78,3 +78,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0017: Derive trajectory scores from immutable history and effective terminal facts](0017-derive-trajectory-scores-from-terminal-facts.md) — Accepted 2026-09-10
 - [0018: Store complete five-quantile revisions with explicit shared-history anchors](0018-five-quantile-revisions-and-shared-anchors.md) — Accepted 2026-09-11
 - [0019: Retire legacy runtime without rebuilding supported history](0019-retire-legacy-runtime-without-rebuilding-history.md) — Accepted 2026-09-20
+- [0020: Resolve local deadlines without silent clock changes](0020-resolve-local-deadlines-explicitly.md) — Accepted 2026-09-22
