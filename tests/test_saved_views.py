@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 import pytest
+from supported_fixtures import create_binary
 
 from reckonsolve.application.errors import (
     DuplicateSavedViewNameError,
@@ -54,9 +55,7 @@ def test_saved_views_retain_dynamic_configuration_and_stable_tag_references(
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(), UTC)
-    operations._create_legacy_prediction(
-        "Will evidence remain searchable?", 50, tags=("Work",)
-    )
+    create_binary(operations, "Will evidence remain searchable?", 50, tags=("Work",))
 
     created = operations.create_saved_view("  Work evidence  ", _configuration())
 
@@ -89,9 +88,7 @@ def test_saved_view_configuration_reruns_against_current_prediction_membership(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    first = operations._create_legacy_prediction(
-        "Will the first task finish?", 50, tags=("Work",)
-    )
+    first = create_binary(operations, "Will the first task finish?", 50, tags=("Work",))
     saved = operations.create_saved_view(
         "Current work",
         SavedViewConfiguration(
@@ -118,8 +115,8 @@ def test_saved_view_configuration_reruns_against_current_prediction_membership(
         )
 
     assert matching_ids() == (first.prediction_id,)
-    second = operations._create_legacy_prediction(
-        "Will the second task finish?", 50, tags=("Work",)
+    second = create_binary(
+        operations, "Will the second task finish?", 50, tags=("Work",)
     )
     assert set(matching_ids()) == {first.prediction_id, second.prediction_id}
     database.close()

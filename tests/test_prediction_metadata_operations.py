@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
+from supported_fixtures import create_binary
 
 from reckonsolve.application.errors import (
     ApplicationError,
@@ -40,9 +41,8 @@ CHANGED = datetime(2026, 8, 13, 20, 45, 12, 3456, tzinfo=UTC)
 
 def _create_operations(tmp_path) -> tuple[Database, PredictionOperations, int]:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(
-        database, FixedClock(CREATED)
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database, FixedClock(CREATED)),
         "Will it happen?",
         60,
     )
@@ -102,9 +102,8 @@ def test_meaning_change_requires_confirmation_before_any_write(tmp_path) -> None
 
 def test_confirmation_required_does_not_acquire_a_change_timestamp(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(
-        database, FixedClock(CREATED)
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database, FixedClock(CREATED)),
         "Will it happen?",
         60,
     )
@@ -172,7 +171,7 @@ def test_confirmed_save_creates_one_complete_immutable_definition_record(
         question="Will it happen by 2027?",
         background="Context",
         resolution_criteria="Official result",
-        forecast_deadline=date(2027, 1, 2),
+        forecast_deadline=None,
         expected_resolution=date(2027, 1, 3),
         tags=("Time",),
         expected_metadata_version=1,
@@ -187,14 +186,13 @@ def test_confirmed_save_creates_one_complete_immutable_definition_record(
     assert change.changed_fields == (
         "question",
         "resolution_criteria",
-        "forecast_deadline",
     )
     assert change.old_question == "Will it happen?"
     assert change.new_question == "Will it happen by 2027?"
     assert change.old_resolution_criteria is None
     assert change.new_resolution_criteria == "Official result"
     assert change.old_forecast_deadline is None
-    assert change.new_forecast_deadline == date(2027, 1, 2)
+    assert change.new_forecast_deadline is None
     assert change.changed_at == CHANGED
     with (
         pytest.raises(sqlite3.IntegrityError, match="immutable"),
@@ -393,9 +391,7 @@ def test_stale_unprotected_edit_cannot_erase_newer_metadata(tmp_path) -> None:
     first_database = Database.open(database_path)
     second_database = Database.open(database_path)
     first_operations = PredictionOperations(first_database, FixedClock(CREATED))
-    prediction_id = first_operations._create_legacy_prediction(
-        "Concurrent?", 50
-    ).prediction_id
+    prediction_id = create_binary(first_operations, "Concurrent?", 50).prediction_id
     original = first_operations.get_prediction(prediction_id)
     second_operations = PredictionOperations(second_database, FixedClock(CHANGED))
     newer = second_operations.update_metadata(
@@ -435,9 +431,7 @@ def test_change_during_confirmation_pause_rejects_confirmed_retry(tmp_path) -> N
     first_database = Database.open(database_path)
     second_database = Database.open(database_path)
     first_operations = PredictionOperations(first_database, FixedClock(CREATED))
-    prediction_id = first_operations._create_legacy_prediction(
-        "Original?", 50
-    ).prediction_id
+    prediction_id = create_binary(first_operations, "Original?", 50).prediction_id
     original = first_operations.get_prediction(prediction_id)
 
     with pytest.raises(MeaningChangeConfirmationRequired):
@@ -485,7 +479,7 @@ def test_change_during_confirmation_pause_rejects_confirmed_retry(tmp_path) -> N
 def test_tags_reuse_first_display_spelling_case_insensitively(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     first_operations = PredictionOperations(database, FixedClock(CREATED))
-    first_id = first_operations._create_legacy_prediction("First?", 50).prediction_id
+    first_id = create_binary(first_operations, "First?", 50).prediction_id
     first_operations.update_metadata(
         first_id,
         question="First?",
@@ -506,7 +500,7 @@ def test_tags_reuse_first_display_spelling_case_insensitively(tmp_path) -> None:
         tags=(),
         expected_metadata_version=2,
     )
-    second_id = first_operations._create_legacy_prediction("Second?", 50).prediction_id
+    second_id = create_binary(first_operations, "Second?", 50).prediction_id
 
     second = first_operations.update_metadata(
         second_id,
@@ -530,9 +524,7 @@ def test_metadata_tags_and_definition_history_survive_reopen(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     first_database = Database.open(database_path)
     first_operations = PredictionOperations(first_database, FixedClock(CREATED))
-    prediction_id = first_operations._create_legacy_prediction(
-        "Original?", 45
-    ).prediction_id
+    prediction_id = create_binary(first_operations, "Original?", 45).prediction_id
     expected = PredictionOperations(
         first_database,
         FixedClock(CHANGED),
@@ -541,7 +533,7 @@ def test_metadata_tags_and_definition_history_survive_reopen(tmp_path) -> None:
         question="Clarified?",
         background="Context",
         resolution_criteria="Official result",
-        forecast_deadline=date(2027, 1, 2),
+        forecast_deadline=None,
         expected_resolution=date(2027, 1, 3),
         tags=("Science", "Personal"),
         expected_metadata_version=1,
@@ -558,82 +550,55 @@ def test_metadata_tags_and_definition_history_survive_reopen(tmp_path) -> None:
     assert history[0].changed_fields == (
         "question",
         "resolution_criteria",
-        "forecast_deadline",
     )
     second_database.close()
 
 
-def test_past_deadline_displays_locked_but_deadline_day_is_open(tmp_path) -> None:
-    database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(
-        database, FixedClock(CREATED)
-    )._create_legacy_prediction(
-        "Deadline?",
-        50,
-    )
-    deadline = date(2026, 8, 12)
-    on_deadline = PredictionOperations(
-        database,
-        FixedClock(datetime(2026, 8, 12, 23, tzinfo=UTC)),
-    ).update_metadata(
-        created.prediction_id,
-        question="Deadline?",
-        background=None,
-        resolution_criteria=None,
-        forecast_deadline=deadline,
-        expected_resolution=None,
-        tags=(),
-        expected_metadata_version=1,
-        confirm_meaning_change=True,
-    )
-    after_deadline = PredictionOperations(
-        database,
-        FixedClock(datetime(2026, 8, 14, tzinfo=UTC)),
-    ).get_prediction(created.prediction_id)
-
-    assert on_deadline.status is PredictionStatus.OPEN
-    assert after_deadline.status is PredictionStatus.LOCKED
-    with database.transaction() as connection:
-        persisted = connection.execute(
-            "SELECT status FROM predictions WHERE id = ?",
-            (created.prediction_id,),
-        ).fetchone()[0]
-    assert persisted == "open"
+def test_metadata_cannot_change_exact_deadline_even_with_confirmation(tmp_path):
+    database, operations, prediction_id = _create_operations(tmp_path)
+    before = operations.get_prediction(prediction_id)
+    with pytest.raises(ValidationError, match="permanent"):
+        operations.update_metadata(
+            prediction_id,
+            question=before.question,
+            background=None,
+            resolution_criteria=None,
+            forecast_deadline=date(2027, 1, 2),
+            expected_resolution=None,
+            tags=(),
+            expected_metadata_version=before.metadata_version,
+            confirm_meaning_change=True,
+        )
+    assert operations.get_prediction(prediction_id) == before
+    assert operations.list_definition_changes(prediction_id) == ()
     database.close()
 
 
-def test_deadline_uses_injected_local_calendar_date_across_utc_midnight(
+def test_exact_deadline_locks_at_instant_not_local_day_and_does_not_write_status(
     tmp_path,
-) -> None:
+):
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     pacific = timezone(-timedelta(hours=7))
-    operations = PredictionOperations(database, FixedClock(CREATED), pacific)
-    created = operations._create_legacy_prediction("Local date?", 50)
-    operations.update_metadata(
-        created.prediction_id,
-        question="Local date?",
-        background=None,
-        resolution_criteria=None,
-        forecast_deadline=date(2026, 8, 12),
-        expected_resolution=None,
-        tags=(),
-        expected_metadata_version=1,
-        confirm_meaning_change=True,
+    deadline = datetime(2026, 8, 12, 23, tzinfo=pacific)
+    created = create_binary(
+        PredictionOperations(database, FixedClock(CREATED), pacific),
+        "Exact commitment?",
+        50,
+        forecast_deadline=deadline,
     )
-
-    still_deadline_day = PredictionOperations(
-        database,
-        FixedClock(datetime(2026, 8, 13, 2, tzinfo=UTC)),
-        pacific,
+    before = PredictionOperations(
+        database, FixedClock(deadline - timedelta(microseconds=1)), UTC
     ).get_prediction(created.prediction_id)
-    next_local_day = PredictionOperations(
-        database,
-        FixedClock(datetime(2026, 8, 13, 8, tzinfo=UTC)),
-        pacific,
+    at_cutoff = PredictionOperations(
+        database, FixedClock(deadline), pacific
     ).get_prediction(created.prediction_id)
-
-    assert still_deadline_day.status is PredictionStatus.OPEN
-    assert next_local_day.status is PredictionStatus.LOCKED
+    assert before.status is PredictionStatus.OPEN
+    assert at_cutoff.status is PredictionStatus.LOCKED
+    assert before.forecast_contract == at_cutoff.forecast_contract
+    with database.transaction() as connection:
+        assert (
+            connection.execute("SELECT status FROM predictions").fetchone()[0] == "open"
+        )
     database.close()
 
 

@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QWidget
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.errors import ConcurrentTerminalCorrectionError
 from reckonsolve.application.predictions import PredictionOperations
@@ -32,34 +33,35 @@ def test_needs_postmortem_queue_uses_effective_terminal_facts_and_skip_is_stable
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     created = PredictionOperations(database, FixedClock(CREATED), UTC)
-    binary = created._create_legacy_prediction("Will this need reflection?", 70)
-    numeric = created._create_legacy_numeric_prediction(
+    binary = create_binary(created, "Will this need reflection?", 70)
+    numeric = create_numeric(
+        created,
         "How many units need reflection?",
         "units",
         1,
-        "1.0",
-        "2.0",
-        "3.0",
-        80,
+        {5: "1.0", 25: "1.5", 50: "2.0", 75: "2.5", 95: "3.0"},
     )
-    with_postmortem = created._create_legacy_prediction("Already reflected", 50)
-    invalid = created._create_legacy_prediction("Invalid is excluded", 50)
+    with_postmortem = create_binary(created, "Already reflected", 50)
+    invalid = create_binary(created, "Invalid is excluded", 50)
     terminal = PredictionOperations(database, FixedClock(RESOLVED), UTC)
     terminal.resolve_prediction(
         binary.prediction_id,
         BinaryOutcome.YES,
+        use_recorded_time=True,
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
     terminal.resolve_numeric_prediction(
         numeric.prediction_id,
         "2.0",
+        use_recorded_time=True,
         expected_revision_id=numeric.current_revision.revision_id,
         expected_metadata_version=numeric.metadata_version,
     )
     terminal.resolve_prediction(
         with_postmortem.prediction_id,
         BinaryOutcome.NO,
+        use_recorded_time=True,
         postmortem="I captured the key lesson.",
         expected_revision_id=with_postmortem.current_revision_id,
         expected_metadata_version=with_postmortem.metadata_version,
@@ -146,24 +148,23 @@ def test_dashboard_skip_confirmation_and_detail_completion_display(
     monkeypatch,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(
-        database,
-        FixedClock(CREATED),
-        UTC,
-    )._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(
+            database,
+            FixedClock(CREATED),
+            UTC,
+        ),
         "How many days will this take?",
         "days",
         0,
-        1,
-        2,
-        3,
-        80,
+        {5: 0, 25: 1, 50: 2, 75: 3, 95: 4},
     )
     PredictionOperations(
         database, FixedClock(RESOLVED), UTC
     ).resolve_numeric_prediction(
         created.prediction_id,
         2,
+        use_recorded_time=True,
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
     )
@@ -227,16 +228,21 @@ def test_cleared_postmortem_enters_queue_and_stale_skip_appends_nothing(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = PredictionOperations(
-        database,
-        FixedClock(CREATED),
-        UTC,
-    )._create_legacy_prediction("Will a cleared reflection need attention?", 60)
+    created = create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(CREATED),
+            UTC,
+        ),
+        "Will a cleared reflection need attention?",
+        60,
+    )
     resolved = PredictionOperations(database, FixedClock(RESOLVED), UTC)
     resolved.resolve_prediction(
         created.prediction_id,
         BinaryOutcome.YES,
         postmortem="Initial reflection.",
+        use_recorded_time=True,
         expected_revision_id=created.current_revision_id,
         expected_metadata_version=created.metadata_version,
     )

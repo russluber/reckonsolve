@@ -7,11 +7,15 @@ import pytest
 from reckonsolve.domain.predictions import (
     MAX_NUMERIC_SCALED_VALUE,
     FixedPrecisionValue,
-    NewNumericForecastRevision,
-    NewNumericPrediction,
     NewNumericResolution,
     NumericResolution,
     PredictionValidationError,
+)
+from reckonsolve.domain.quantiles import (
+    FiveQuantiles,
+    NumericValueConstraint,
+    QuantileDefinition,
+    QuantileRevision,
 )
 
 
@@ -74,95 +78,19 @@ def test_scaled_integer_range_is_bounded_inside_sqlite_integer_capacity() -> Non
         FixedPrecisionValue(MAX_NUMERIC_SCALED_VALUE + 1, 6)
 
 
-@pytest.mark.parametrize("confidence", [1, 5, 50, 95, 99])
-def test_numeric_interval_accepts_inclusive_bounds_and_confidence_endpoints(
-    confidence: int,
-) -> None:
-    revision = NewNumericForecastRevision(
-        lower_bound=value("-3.00"),
-        median_estimate=value("-3.00"),
-        upper_bound=value("9.50"),
-        confidence_percent=confidence,
-        rationale="  Current evidence  ",
-    )
-
-    assert revision.lower_bound == revision.median_estimate
-    assert revision.confidence_percent == confidence
-    assert revision.rationale == "Current evidence"
-
-
-@pytest.mark.parametrize("confidence", [0, 100, 50.5, True, None])
-def test_numeric_interval_rejects_invalid_confidence(confidence: object) -> None:
-    with pytest.raises(PredictionValidationError) as error_info:
-        NewNumericForecastRevision(
-            value(1),
-            value(2),
-            value(3),
-            confidence,  # type: ignore[arg-type]
+def test_numeric_definition_normalizes_unit_and_requires_matching_precision() -> None:
+    definition = QuantileDefinition("  days  ", 2, NumericValueConstraint.CONTINUOUS)
+    assert definition.unit == "days"
+    with pytest.raises(PredictionValidationError):
+        definition.validate_quantiles(
+            FiveQuantiles.from_values({5: 1, 25: 2, 50: 3, 75: 4, 95: 5}, 3)
         )
-
-    assert error_info.value.field == "confidence_percent"
-
-
-@pytest.mark.parametrize(
-    ("lower", "median", "upper"),
-    [(3, 2, 4), (1, 5, 4)],
-)
-def test_numeric_interval_requires_ordered_bounds(
-    lower: int,
-    median: int,
-    upper: int,
-) -> None:
-    with pytest.raises(PredictionValidationError) as error_info:
-        NewNumericForecastRevision(
-            value(lower),
-            value(median),
-            value(upper),
-            80,
-        )
-
-    assert error_info.value.field == "interval"
-
-
-def test_numeric_interval_requires_one_fixed_precision() -> None:
-    with pytest.raises(PredictionValidationError) as error_info:
-        NewNumericForecastRevision(
-            value(1, 0),
-            value(2, 1),
-            value(3, 0),
-            80,
-        )
-
-    assert error_info.value.field == "interval"
-
-
-def test_numeric_prediction_normalizes_definition_and_requires_matching_precision() -> (
-    None
-):
-    revision = NewNumericForecastRevision(value(1), value(2), value(3), 80)
-    prediction = NewNumericPrediction(
-        "  How many days?  ",
-        "  days  ",
-        2,
-        revision,
-    )
-
-    assert prediction.question == "How many days?"
-    assert prediction.unit == "days"
-
-    with pytest.raises(PredictionValidationError) as error_info:
-        NewNumericPrediction("How many?", "days", 3, revision)
-
-    assert error_info.value.field == "decimal_places"
 
 
 @pytest.mark.parametrize("unit", ["", "  ", "bad\x00unit", None])
-def test_numeric_prediction_requires_a_valid_unit(unit: object) -> None:
-    revision = NewNumericForecastRevision(value(1), value(2), value(3), 80)
-
+def test_numeric_definition_requires_a_valid_unit(unit: object) -> None:
     with pytest.raises(PredictionValidationError) as error_info:
-        NewNumericPrediction("How many?", unit, 2, revision)  # type: ignore[arg-type]
-
+        QuantileDefinition(unit, 2, NumericValueConstraint.CONTINUOUS)
     assert error_info.value.field == "unit"
 
 
@@ -198,9 +126,15 @@ def test_persisted_numeric_resolution_is_an_independent_exact_value() -> None:
 
 def test_numeric_values_and_revisions_are_immutable() -> None:
     exact = value(1)
-    revision = NewNumericForecastRevision(exact, exact, exact, 50)
+    revision = QuantileRevision(
+        1,
+        1,
+        FiveQuantiles(exact, exact, exact, exact, exact),
+        1,
+        datetime(2026, 8, 20, tzinfo=UTC),
+    )
 
     with pytest.raises(FrozenInstanceError):
         exact.scaled_value = 2  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
-        revision.confidence_percent = 60  # type: ignore[misc]
+        revision.sequence = 2  # type: ignore[misc]

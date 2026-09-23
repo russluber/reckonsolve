@@ -66,7 +66,7 @@ def test_resolution_dialog_and_scored_revision_exclusion(qtbot, active):
     screen.show_prediction(ops.get_numeric_prediction(p.prediction_id))
     screen.show()
     assert screen.quantile_scorecard.isVisible()
-    assert screen.scorecard_section.isHidden()
+    assert screen.findChild(QGroupBox, "numericPredictionScorecard") is None
     assert "Recorded at" in screen.resolution_time.text()
     assert "Effective resolution" in screen.resolution_time.text()
     assert "Scored revision 1" in texts(screen.quantile_scorecard)

@@ -1,44 +1,18 @@
 import sqlite3
 
 import pytest
+from supported_fixtures import insert_binary_contract
 
 from reckonsolve.data.database import Database
-from reckonsolve.data.forecast_contracts import insert_legacy_contract_if_supported
 from reckonsolve.data.migrations import MIGRATIONS, Migration
-from reckonsolve.domain.predictions import PredictionType
 
 
-def test_v12_upgrade_preserves_v11_data_and_adds_review_table(tmp_path) -> None:
+def test_empty_v11_upgrade_adds_review_table(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
-    old = Database.open(path, migrations=MIGRATIONS[:11])
-    with old.transaction() as connection:
-        cursor = connection.execute(
-            """
-            INSERT INTO predictions (question, status, created_at, updated_at)
-            VALUES ('Preserved?', 'open', ?, ?)
-            """,
-            ("2026-08-20T18:00:00.000000Z",) * 2,
-        )
-        prediction_id = int(cursor.lastrowid)
-        connection.execute(
-            """
-            INSERT INTO forecast_revisions (
-                prediction_id, probability_percent, sequence, created_at
-            ) VALUES (?, 60, 1, ?)
-            """,
-            (prediction_id, "2026-08-20T18:00:00.000000Z"),
-        )
-    old.close()
-
+    Database.open(path, migrations=MIGRATIONS[:11]).close()
     upgraded = Database.open(path, migrations=MIGRATIONS[:12])
     assert upgraded.schema_version == 12
     with upgraded.transaction() as connection:
-        assert (
-            connection.execute(
-                "SELECT question FROM predictions WHERE id = ?", (prediction_id,)
-            ).fetchone()[0]
-            == "Preserved?"
-        )
         assert (
             connection.execute("SELECT COUNT(*) FROM forecast_reviews").fetchone()[0]
             == 0
@@ -94,9 +68,7 @@ def test_review_history_is_immutable_and_parent_cascade_remains_available(
             """,
             (prediction_id, "2026-08-20T18:00:00.000000Z"),
         )
-        insert_legacy_contract_if_supported(
-            connection, prediction_id, PredictionType.BINARY
-        )
+        insert_binary_contract(connection, prediction_id, "2026-08-20T18:00:00.000000Z")
         review_id = int(
             connection.execute(
                 """

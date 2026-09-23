@@ -7,6 +7,7 @@ from zipfile import ZipFile
 import pytest
 from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtWidgets import QListWidget
+from supported_fixtures import create_binary, create_numeric
 
 import reckonsolve.cli
 from reckonsolve import main_cli, main_cli_dev
@@ -182,9 +183,8 @@ def test_cli_list_distinguishes_empty_database_from_no_matching_filters(
     assert empty_output.getvalue() == "No predictions yet.\n"
 
     database = Database.open(database_path)
-    PredictionOperations(
-        database, FixedClock(NOW), local_timezone=UTC
-    )._create_legacy_prediction(
+    create_binary(
+        PredictionOperations(database, FixedClock(NOW), local_timezone=UTC),
         "Will one Open Prediction exist?",
         60,
     )
@@ -209,19 +209,18 @@ def test_cli_list_combines_filters_and_formats_type_aware_attention(
     database = Database.open(database_path)
     old = NOW - timedelta(days=30)
     operations = PredictionOperations(database, FixedClock(old), local_timezone=UTC)
-    operations._create_legacy_prediction(
+    create_binary(
+        operations,
         "Will the unrelated Binary item remain hidden?",
         35,
         tags=("Other",),
     )
-    numeric = operations._create_legacy_numeric_prediction(
+    numeric = create_numeric(
+        operations,
         "How many caf\u00e9 orders will arrive?",
         "orders",
         2,
-        "-1.20",
-        "2.00",
-        "9.50",
-        85,
+        {5: "-1.20", 25: "-1.20", 50: "2.00", 75: "9.50", 95: "9.50"},
         expected_resolution=date(2026, 8, 1),
         tags=("Caf\u00e9", "Work"),
     )
@@ -248,7 +247,7 @@ def test_cli_list_combines_filters_and_formats_type_aware_attention(
     rendered = output.getvalue()
     assert "Predictions (1)" in rendered
     assert f"#{numeric.prediction_id} | NUMERIC | OPEN" in rendered
-    assert "85% interval -1.20 to 9.50 orders; median 2.00 orders" in rendered
+    assert "90% interval: -1.20 to 9.50 orders; median: 2.00 orders" in rendered
     assert "Question: How many caf\u00e9 orders will arrive?" in rendered
     assert "Tags: Caf\u00e9, Work" in rendered
     assert "Attention: Needs Attention, Ready to Resolve" in rendered
@@ -259,7 +258,8 @@ def test_cli_search_uses_shared_explainable_query_and_rich_filters(tmp_path) -> 
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    target = operations._create_legacy_prediction(
+    target = create_binary(
+        operations,
         "Will the calibrated report arrive?",
         65,
         background="A tracked research deliverable.",
@@ -283,19 +283,15 @@ def test_cli_search_uses_shared_explainable_query_and_rich_filters(tmp_path) -> 
         expected_metadata_version=target.metadata_version,
         confirm_meaning_change=True,
     )
-    operations._create_legacy_numeric_prediction(
+    create_numeric(
+        operations,
         "How many unrelated deliveries will arrive?",
         "items",
         0,
-        1,
-        2,
-        3,
-        80,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
         tags=("Work",),
     )
-    operations._create_legacy_prediction(
-        "Will the mission launch?", 50, tags=("Other",)
-    )
+    create_binary(operations, "Will the mission launch?", 50, tags=("Other",))
     database.close()
 
     output = StringIO()
@@ -404,7 +400,8 @@ def test_cli_saved_views_list_and_execute_current_dynamic_queries(tmp_path) -> N
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    binary = operations._create_legacy_prediction(
+    binary = create_binary(
+        operations,
         "Will saved-view evidence arrive?",
         55,
         tags=("Work", "Evidence"),
@@ -415,14 +412,12 @@ def test_cli_saved_views_list_and_execute_current_dynamic_queries(tmp_path) -> N
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations._create_legacy_numeric_prediction(
+    numeric = create_numeric(
+        operations,
         "How many work items will finish?",
         "items",
         0,
-        1,
-        2,
-        3,
-        80,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
         tags=("Work",),
     )
     evidence_view = operations.create_saved_view(
@@ -523,17 +518,18 @@ def test_cli_show_binary_includes_terminal_detail_and_complete_history(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(
-        database,
-        FixedClock(NOW),
-        local_timezone=UTC,
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(NOW),
+            local_timezone=UTC,
+        ),
         "Will the first wording hold?",
         40,
         rationale="Initial <reason>\x1b[31m",
         background="Two lines\nSecond line",
         resolution_criteria="Use the published result.",
-        forecast_deadline=date(2099, 12, 30),
+        forecast_deadline=datetime(2099, 12, 30, tzinfo=UTC),
         expected_resolution=date(2099, 12, 31),
         tags=("History", "CLI"),
     )
@@ -605,6 +601,7 @@ def test_cli_show_binary_includes_terminal_detail_and_complete_history(
         postmortem="The revision was justified.",
         expected_revision_id=updated.current_revision_id,
         expected_metadata_version=updated.metadata_version,
+        use_recorded_time=True,
     )
     database.close()
 
@@ -627,7 +624,7 @@ def test_cli_show_binary_includes_terminal_detail_and_complete_history(
     assert "Background: Two lines\n  Second line" in rendered
     assert "Tags: CLI, History" in rendered
     assert "Outcome: Yes" in rendered
-    assert "Scoring forecast: 65% Yes (revision 2" in rendered
+    assert "Forecast at recording (audit only): 65% Yes (revision 2" in rendered
     assert "Resolution notes: Certified result published." in rendered
     assert "Postmortem: The revision was justified." in rendered
     assert "Definition history" in rendered
@@ -654,18 +651,16 @@ def test_cli_show_numeric_preserves_exact_values_reviews_and_resolution(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(
-        database,
-        FixedClock(NOW),
-        local_timezone=UTC,
-    )._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(
+            database,
+            FixedClock(NOW),
+            local_timezone=UTC,
+        ),
         "What exact temperature will be measured?",
         "\u00b0C",
         3,
-        "-10.125",
-        "0.000",
-        "12.500",
-        80,
+        {5: "-10.125", 25: "-10.125", 50: "0.000", 75: "12.500", 95: "12.500"},
         rationale="Exact signed decimal baseline.",
         tags=("Numeric",),
     )
@@ -673,12 +668,9 @@ def test_cli_show_numeric_preserves_exact_values_reviews_and_resolution(
         database,
         FixedClock(NOW + timedelta(minutes=1)),
         local_timezone=UTC,
-    ).revise_numeric_forecast(
+    ).revise_quantile_forecast(
         created.prediction_id,
-        "-8.250",
-        "1.125",
-        "11.750",
-        90,
+        {5: "-8.250", 25: "-8.250", 50: "1.125", 75: "11.750", 95: "11.750"},
         rationale="A better instrument arrived.",
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
@@ -703,6 +695,7 @@ def test_cli_show_numeric_preserves_exact_values_reviews_and_resolution(
         resolution_notes="Read directly from the display.",
         expected_revision_id=revised.current_revision.revision_id,
         expected_metadata_version=revised.metadata_version,
+        use_recorded_time=True,
     )
     database.close()
 
@@ -720,25 +713,22 @@ def test_cli_show_numeric_preserves_exact_values_reviews_and_resolution(
     assert "Type: Numeric" in rendered
     assert "Status: Resolved" in rendered
     assert (
-        "Current forecast: 90% interval -8.250 to 11.750 \u00b0C; median 1.125 \u00b0C"
+        "Current forecast: 90% interval: -8.250 to 11.750 \u00b0C; median: 1.125 \u00b0C"
         in rendered
     )
     assert "Decimal precision: 3" in rendered
     assert "Actual value: -8.250 \u00b0C" in rendered
-    assert (
-        "Scoring forecast: 90% interval -8.250 to 11.750 \u00b0C; median 1.125 \u00b0C"
-        in rendered
-    )
+    assert "Numeric WIS scorecard" in rendered
     assert f"ID {resolved.resolution.scoring_revision_id}" in rendered
     assert (
-        "Before: 80% interval -10.125 to 12.500 \u00b0C; median 0.000 \u00b0C"
+        "Forecast: 90% interval: -10.125 to 12.500 \u00b0C; median: 0.000 \u00b0C"
         in rendered
     )
     assert (
-        "Forecast: 90% interval -8.250 to 11.750 \u00b0C; median 1.125 \u00b0C"
+        "Forecast: 90% interval: -8.250 to 11.750 \u00b0C; median: 1.125 \u00b0C"
         in rendered
     )
-    assert "REVIEW | Review" in rendered
+    assert "REVIEW | ID" in rendered
     assert "Note: Kept after checking the instrument." in rendered
 
 
@@ -770,7 +760,8 @@ def test_cli_read_commands_do_not_create_or_change_product_history(tmp_path) -> 
         FixedClock(NOW),
         local_timezone=UTC,
     )
-    created = operations._create_legacy_prediction(
+    created = create_binary(
+        operations,
         "Will read-only CLI commands leave history untouched?",
         52,
         rationale="One immutable forecast.",
@@ -1055,7 +1046,8 @@ def test_cli_revises_binary_with_validation_retry_and_immutable_history(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will the Binary CLI revision be retained?\x1b[31m",
         40,
     )
@@ -1101,14 +1093,12 @@ def test_cli_revises_numeric_with_exact_defaults_and_validation_retry(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(database),
         "What exact value will the Numeric CLI revise?",
         "units",
         3,
-        "-1.250",
-        "2.000",
-        "9.500",
-        80,
+        {5: "-1.250", 25: "-1.250", 50: "2.000", 75: "9.500", 95: "9.500"},
     )
     database.close()
     output = StringIO()
@@ -1118,36 +1108,35 @@ def test_cli_revises_numeric_with_exact_defaults_and_validation_retry(
         ["revise", str(created.prediction_id)],
         database_path=database_path,
         stdin=StringIO(
-            "3.000\n2.000\n1.000\n80\n"
-            "\n\n\n\n"
-            "\n2.125\n\n90\nInstrument reading changed\n"
+            "3.000\n1.000\n2.000\n3.000\n1.000\n"
+            "-1.250\n9.500\n2.000\n-1.250\n9.500\n"
+            "\n\n2.125\n\n\nInstrument reading changed\n"
         ),
         stdout=output,
         stderr=errors,
     )
 
     assert result == 0
-    assert "Lower bound [-1.250]:" in output.getvalue()
-    assert "Median estimate [2.000]:" in output.getvalue()
-    assert "Upper bound [9.500]:" in output.getvalue()
-    assert "Confidence [80]:" in output.getvalue()
+    assert "90% interval lower (q05) [-1.250]:" in output.getvalue()
+    assert "Median (q50) [2.000]:" in output.getvalue()
+    assert "90% interval upper (q95) [9.500]:" in output.getvalue()
+    assert "50% interval lower (q25) [-1.250]:" in output.getvalue()
     assert (
-        "Current forecast: 90% interval -1.250 to 9.500 units; "
-        "median 2.125 units" in output.getvalue()
+        "Current forecast: 90% interval: -1.250 to 9.500 units; "
+        "median: 2.125 units" in output.getvalue()
     )
-    assert "Invalid numeric forecast:" in errors.getvalue()
-    assert "The numeric forecast is unchanged." in errors.getvalue()
+    assert "q05 <= q25 <= q50 <= q75 <= q95" in errors.getvalue()
+    assert "The five quantiles are unchanged." in errors.getvalue()
 
     database = Database.open(database_path)
     revisions = PredictionOperations(database).list_numeric_forecast_revisions(
         created.prediction_id
     )
     assert len(revisions) == 2
-    assert str(revisions[0].median_estimate) == "2.000"
-    assert str(revisions[1].lower_bound) == "-1.250"
-    assert str(revisions[1].median_estimate) == "2.125"
-    assert str(revisions[1].upper_bound) == "9.500"
-    assert revisions[1].confidence_percent == 90
+    assert str(revisions[0].quantiles.q50) == "2.000"
+    assert str(revisions[1].quantiles.q05) == "-1.250"
+    assert str(revisions[1].quantiles.q50) == "2.125"
+    assert str(revisions[1].quantiles.q95) == "9.500"
     assert revisions[1].rationale == "Instrument reading changed"
     database.close()
 
@@ -1161,18 +1150,14 @@ def test_cli_journal_and_review_preserve_forecast_history_and_cross_interface_ti
     database = Database.open(database_path)
     operations = PredictionOperations(database)
     if prediction_type == "binary":
-        created = operations._create_legacy_prediction(
-            "Will active records stay distinct?", 65
-        )
+        created = create_binary(operations, "Will active records stay distinct?", 65)
     else:
-        created = operations._create_legacy_numeric_prediction(
+        created = create_numeric(
+            operations,
             "How many active records will stay distinct?",
             "records",
             0,
-            "2",
-            "5",
-            "9",
-            75,
+            {5: "2", 25: "2", 50: "5", 75: "9", 95: "9"},
         )
     database.close()
     journal_output = StringIO()
@@ -1227,9 +1212,13 @@ def test_cli_journal_and_review_preserve_forecast_history_and_cross_interface_ti
         == 0
     )
     rendered = show_output.getvalue()
-    assert "JOURNAL | Entry" in rendered
+    assert (
+        "JOURNAL | Entry" if prediction_type == "binary" else "JOURNAL |"
+    ) in rendered
     assert "Body: A concise CLI Journal entry" in rendered
-    assert "REVIEW | Review" in rendered
+    assert (
+        "REVIEW | Review" if prediction_type == "binary" else "REVIEW |"
+    ) in rendered
     assert "Note: Rechecked the available evidence" in rendered
 
 
@@ -1240,11 +1229,15 @@ def test_cli_journal_does_not_refresh_attention_but_review_does(
     database_path = tmp_path / "reckonsolve.sqlite3"
     old = NOW - timedelta(days=30)
     database = Database.open(database_path)
-    created = PredictionOperations(
-        database,
-        FixedClock(old),
-        local_timezone=UTC,
-    )._create_legacy_prediction("Will Review refresh this stale forecast?", 55)
+    created = create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(old),
+            local_timezone=UTC,
+        ),
+        "Will Review refresh this stale forecast?",
+        55,
+    )
     database.close()
     monkeypatch.setattr(
         reckonsolve.cli,
@@ -1306,7 +1299,8 @@ def test_cli_mutation_eof_cancels_without_history(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will cancelled active commands leave history alone?",
         45,
     )
@@ -1334,7 +1328,8 @@ def test_cli_rejects_stale_revision_context_without_overwriting_other_change(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will concurrent CLI revision context be rejected?",
         30,
     )
@@ -1400,7 +1395,8 @@ def test_cli_journal_and_review_reject_stale_metadata_context(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will stale prose context be rejected?",
         35,
     )
@@ -1456,14 +1452,15 @@ def test_cli_active_commands_respect_derived_lock_boundaries(
     database_path = tmp_path / "reckonsolve.sqlite3"
     created_at = NOW - timedelta(days=3)
     database = Database.open(database_path)
-    created = PredictionOperations(
-        database,
-        FixedClock(created_at),
-        local_timezone=UTC,
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(created_at),
+            local_timezone=UTC,
+        ),
         "Will this forecast be Locked at the command boundary?",
         60,
-        forecast_deadline=(created_at + timedelta(days=1)).date(),
+        forecast_deadline=created_at + timedelta(days=1),
     )
     database.close()
     monkeypatch.setattr(
@@ -1520,9 +1517,7 @@ def test_cli_resolves_binary_with_confirmation_and_final_scoring_revision(
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    created = operations._create_legacy_prediction(
-        "Will the CLI resolution be Yes?", 60
-    )
+    created = create_binary(operations, "Will the CLI resolution be Yes?", 60)
     revised = operations.revise_forecast(
         created.prediction_id,
         35,
@@ -1537,7 +1532,7 @@ def test_cli_resolves_binary_with_confirmation_and_final_scoring_revision(
         ["resolve", str(created.prediction_id)],
         database_path=database_path,
         stdin=StringIO(
-            "maybe\nyes\nCertified public result\nI updated too slowly\nperhaps\ny\n"
+            "maybe\nyes\nnow\nCertified public result\nI updated too slowly\nperhaps\ny\n"
         ),
         stdout=output,
         stderr=errors,
@@ -1560,7 +1555,12 @@ def test_cli_resolves_binary_with_confirmation_and_final_scoring_revision(
     assert resolved.resolution.scoring_probability_percent == 35
     assert resolved.resolution.resolution_notes == "Certified public result"
     assert resolved.resolution.postmortem == "I updated too slowly"
-    assert PredictionOperations(database).get_analytics().scored_prediction_count == 1
+    assert (
+        PredictionOperations(database)
+        .get_forecast_analytics()
+        .trajectory_binary.scored_prediction_count
+        == 1
+    )
     database.close()
 
 
@@ -1569,14 +1569,12 @@ def test_cli_resolves_numeric_with_exact_validation_and_optional_text(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(database),
         "What exact quantity will resolve?",
         "widgets",
         2,
-        "-5.00",
-        "1.25",
-        "8.50",
-        85,
+        {5: "-5.00", 25: "-5.00", 50: "1.25", 75: "8.50", 95: "8.50"},
     )
     database.close()
     output = StringIO()
@@ -1585,7 +1583,7 @@ def test_cli_resolves_numeric_with_exact_validation_and_optional_text(
     result = run(
         ["resolve", str(created.prediction_id)],
         database_path=database_path,
-        stdin=StringIO("\n1.234\n-2.5\nMeasured directly\n\nyes\n"),
+        stdin=StringIO("\n1.234\n-2.5\nnow\nMeasured directly\n\nyes\n"),
         stdout=output,
         stderr=errors,
     )
@@ -1607,7 +1605,10 @@ def test_cli_resolves_numeric_with_exact_validation_and_optional_text(
     )
     assert resolved.resolution.resolution_notes == "Measured directly"
     assert resolved.resolution.postmortem is None
-    assert operations.get_forecast_analytics().numeric.scored_prediction_count == 1
+    assert (
+        operations.get_forecast_analytics().quantile_numeric.scored_prediction_count
+        == 1
+    )
     database.close()
 
 
@@ -1620,16 +1621,14 @@ def test_cli_invalidation_preserves_both_forecast_types_outside_scoring(
     database = Database.open(database_path)
     operations = PredictionOperations(database)
     if prediction_type == "binary":
-        created = operations._create_legacy_prediction("Will this become Invalid?", 45)
+        created = create_binary(operations, "Will this become Invalid?", 45)
     else:
-        created = operations._create_legacy_numeric_prediction(
+        created = create_numeric(
+            operations,
             "How many invalid quantities will remain?",
             "items",
             0,
-            "1",
-            "3",
-            "8",
-            70,
+            {5: "1", 25: "1", 50: "3", 75: "8", 95: "8"},
         )
     database.close()
     output = StringIO()
@@ -1654,8 +1653,8 @@ def test_cli_invalidation_preserves_both_forecast_types_outside_scoring(
     assert invalid.invalidation.reason == "The event became undefined"
     assert invalid.resolution is None
     analytics = operations.get_forecast_analytics()
-    assert analytics.binary.scored_prediction_count == 0
-    assert analytics.numeric.scored_prediction_count == 0
+    assert analytics.trajectory_binary.scored_prediction_count == 0
+    assert analytics.quantile_numeric.scored_prediction_count == 0
     database.close()
 
 
@@ -1667,20 +1666,16 @@ def test_cli_permanently_deletes_only_confirmed_untouched_open_predictions(
     database_path = tmp_path / f"{prediction_type}.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    operations._create_legacy_prediction("Will a survivor remain?", 50)
+    create_binary(operations, "Will a survivor remain?", 50)
     if prediction_type == "binary":
-        target = operations._create_legacy_prediction(
-            "Will this disposable row go?", 50
-        )
+        target = create_binary(operations, "Will this disposable row go?", 50)
     else:
-        target = operations._create_legacy_numeric_prediction(
+        target = create_numeric(
+            operations,
             "How many disposable rows will go?",
             "rows",
             0,
-            "1",
-            "2",
-            "3",
-            80,
+            {5: "1", 25: "1", 50: "2", 75: "3", 95: "3"},
         )
     database.close()
     output = StringIO()
@@ -1710,7 +1705,7 @@ def test_cli_permanently_deletes_only_confirmed_untouched_open_predictions(
 @pytest.mark.parametrize(
     ("command", "command_input"),
     (
-        ("resolve", "yes\nFactual result\nReflection\nno\n"),
+        ("resolve", "yes\nnow\nFactual result\nReflection\nno\n"),
         ("invalidate", "Optional reason\n\n"),
         ("delete", "n\n"),
     ),
@@ -1722,7 +1717,8 @@ def test_cli_declined_terminal_confirmation_cancels_without_changes(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will declining confirmation preserve this row?",
         52,
     )
@@ -1755,9 +1751,7 @@ def test_cli_delete_directs_meaningful_history_to_invalid(
     database = Database.open(database_path)
     operations = PredictionOperations(database)
     if prediction_type == "binary":
-        created = operations._create_legacy_prediction(
-            "Will revised history survive?", 40
-        )
+        created = create_binary(operations, "Will revised history survive?", 40)
         operations.revise_forecast(
             created.prediction_id,
             60,
@@ -1765,14 +1759,12 @@ def test_cli_delete_directs_meaningful_history_to_invalid(
             expected_metadata_version=created.metadata_version,
         )
     else:
-        created = operations._create_legacy_numeric_prediction(
+        created = create_numeric(
+            operations,
             "How many journaled records survive?",
             "records",
             0,
-            "1",
-            "2",
-            "4",
-            80,
+            {5: "1", 25: "1", 50: "2", 75: "4", 95: "4"},
         )
         operations.add_numeric_journal_entry(
             created.prediction_id,
@@ -1823,22 +1815,21 @@ def test_cli_locked_predictions_allow_both_terminal_decisions(
         FixedClock(created_at),
         local_timezone=UTC,
     )
-    deadline = (created_at + timedelta(days=1)).date()
+    deadline = created_at + timedelta(days=1)
     if prediction_type == "binary":
-        created = operations._create_legacy_prediction(
+        created = create_binary(
+            operations,
             "Will this Locked Binary terminate?",
             65,
             forecast_deadline=deadline,
         )
     else:
-        created = operations._create_legacy_numeric_prediction(
+        created = create_numeric(
+            operations,
             "How many Locked Numeric values terminate?",
             "values",
             0,
-            "1",
-            "5",
-            "9",
-            80,
+            {5: "1", 25: "1", 50: "5", 75: "9", 95: "9"},
             forecast_deadline=deadline,
         )
     database.close()
@@ -1854,9 +1845,9 @@ def test_cli_locked_predictions_allow_both_terminal_decisions(
     if command == "invalidate":
         command_input = "Deadline made it unresolvable\ny\n"
     elif prediction_type == "binary":
-        command_input = "no\n\n\ny\n"
+        command_input = "no\nnow\n\n\ny\n"
     else:
-        command_input = "6\n\n\ny\n"
+        command_input = "6\nnow\n\n\ny\n"
 
     assert (
         run(
@@ -1885,7 +1876,8 @@ def test_cli_rejects_every_terminal_action_after_resolution(
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    created = operations._create_legacy_prediction(
+    created = create_binary(
+        operations,
         "Will terminal CLI decisions remain one-way?",
         70,
     )
@@ -1894,6 +1886,7 @@ def test_cli_rejects_every_terminal_action_after_resolution(
         BinaryOutcome.YES,
         expected_revision_id=created.current_revision_id,
         expected_metadata_version=created.metadata_version,
+        use_recorded_time=True,
     )
     database.close()
     errors = StringIO()
@@ -1919,7 +1912,7 @@ def test_cli_rejects_every_terminal_action_after_resolution(
 @pytest.mark.parametrize(
     ("command", "command_input"),
     (
-        ("resolve", "yes\n\n\ny\n"),
+        ("resolve", "yes\nnow\n\n\ny\n"),
         ("invalidate", "Reason reviewed locally\ny\n"),
     ),
 )
@@ -1930,7 +1923,8 @@ def test_cli_terminal_commands_reject_stale_reviewed_forecast(
 ) -> None:
     database_path = tmp_path / f"{command}.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will a concurrent forecast block termination?",
         25,
     )
@@ -1977,7 +1971,8 @@ def test_cli_delete_rechecks_untouched_history_after_confirmation_prompt(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will concurrent history block deletion?",
         50,
     )
@@ -2023,7 +2018,8 @@ def test_cli_terminal_write_lock_failure_is_clear_and_preserves_state(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will lock contention leave this prediction Open?",
         50,
     )
@@ -2067,14 +2063,12 @@ def test_cli_backup_is_recoverable_and_records_success_across_restart(
     database_path = tmp_path / "reckonsolve.sqlite3"
     backup_path = tmp_path / "cli-backup.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(database),
         "How many records will the CLI backup recover?",
         "records",
         2,
-        "-1.25",
-        "3.00",
-        "9.50",
-        80,
+        {5: "-1.25", 25: "-1.25", 50: "3.00", 75: "9.50", 95: "9.50"},
         rationale="Preserve this exact interval.",
         tags=("CLI", "Recovery"),
     )
@@ -2109,17 +2103,20 @@ def test_cli_backup_is_recoverable_and_records_success_across_restart(
         created.prediction_id
     )
     assert recovered_prediction.question == created.question
-    assert str(recovered_prediction.current_revision.lower_bound) == "-1.25"
-    assert str(recovered_prediction.current_revision.upper_bound) == "9.50"
+    assert str(recovered_prediction.current_revision.quantiles.q05) == "-1.25"
+    assert str(recovered_prediction.current_revision.quantiles.q95) == "9.50"
     assert recovered_prediction.tags == ("CLI", "Recovery")
     recovered.close()
 
 
-def test_cli_export_prompt_creates_complete_format_three_bundle(tmp_path) -> None:
+def test_cli_export_prompt_refuses_lossy_format_three_for_current_contract(
+    tmp_path,
+) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     export_path = tmp_path / "cli-export.zip"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will the CLI export retain this Binary history?",
         65,
         rationale="Retain this rationale.",
@@ -2127,27 +2124,29 @@ def test_cli_export_prompt_creates_complete_format_three_bundle(tmp_path) -> Non
     )
     database.close()
     output = StringIO()
+    errors = StringIO()
 
     result = run(
         ["export-csv"],
         database_path=database_path,
         stdin=StringIO(f"{export_path}\n"),
         stdout=output,
+        stderr=errors,
     )
 
-    assert result == 0
+    assert result == 1
     assert "Destination [reckonsolve-export-" in output.getvalue()
-    assert f"CSV export created: {export_path.resolve()}" in output.getvalue()
-    assert "Exported 16 CSV files in format version 3." in output.getvalue()
-    assert "not a recovery backup" in output.getvalue()
-    with ZipFile(export_path) as archive:
-        assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
-        assert archive.testzip() is None
-        assert str(created.prediction_id).encode() in archive.read("predictions.csv")
-        assert b"Format version: 3" in archive.read("README.txt")
+    assert "CSV format 3 cannot represent" in errors.getvalue()
+    assert "SQLite backup" in errors.getvalue()
+    assert not export_path.exists()
+    reopened = Database.open(database_path)
+    assert (
+        PredictionOperations(reopened).get_prediction(created.prediction_id) == created
+    )
+    reopened.close()
 
 
-def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) -> None:
+def test_cli_show_preserves_complete_terminal_histories_read_only(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
 
@@ -2156,7 +2155,8 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         FixedClock(NOW),
         local_timezone=UTC,
     )
-    binary = binary_operations._create_legacy_prediction(
+    binary = create_binary(
+        binary_operations,
         "Will CLI show every Binary terminal fact?",
         70,
     )
@@ -2166,6 +2166,7 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         resolution_notes="Original Binary notes",
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
+        use_recorded_time=True,
     )
     PredictionOperations(
         database,
@@ -2193,14 +2194,12 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         FixedClock(NOW + timedelta(minutes=3)),
         local_timezone=UTC,
     )
-    numeric = numeric_operations._create_legacy_numeric_prediction(
+    numeric = create_numeric(
+        numeric_operations,
         "What exact value will CLI show?",
         "points",
         2,
-        "-2.00",
-        "1.50",
-        "8.00",
-        80,
+        {5: "-2.00", 25: "-2.00", 50: "1.50", 75: "8.00", 95: "8.00"},
     )
     numeric_operations.resolve_numeric_prediction(
         numeric.prediction_id,
@@ -2208,6 +2207,7 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         postmortem="Original Numeric reflection",
         expected_revision_id=numeric.current_revision.revision_id,
         expected_metadata_version=numeric.metadata_version,
+        use_recorded_time=True,
     )
     PredictionOperations(
         database,
@@ -2227,7 +2227,8 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         FixedClock(NOW + timedelta(minutes=5)),
         local_timezone=UTC,
     )
-    invalid = invalid_operations._create_legacy_prediction(
+    invalid = create_binary(
+        invalid_operations,
         "Will CLI show Invalid reason history?",
         20,
     )
@@ -2250,8 +2251,8 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         counts_before = tuple(
             connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             for table in (
-                "resolution_corrections",
-                "numeric_resolution_corrections",
+                "binary_trajectory_resolution_corrections",
+                "numeric_quantile_resolution_corrections",
                 "invalidation_reason_corrections",
                 "postmortem_completions",
             )
@@ -2317,8 +2318,8 @@ def test_cli_show_preserves_complete_v04_terminal_histories_read_only(tmp_path) 
         counts_after = tuple(
             connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             for table in (
-                "resolution_corrections",
-                "numeric_resolution_corrections",
+                "binary_trajectory_resolution_corrections",
+                "numeric_quantile_resolution_corrections",
                 "invalidation_reason_corrections",
                 "postmortem_completions",
             )
@@ -2337,10 +2338,7 @@ def test_cli_blank_transfer_prompt_accepts_timestamped_suggestion(
 ) -> None:
     database_path = tmp_path / "data" / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    PredictionOperations(database)._create_legacy_prediction(
-        "Will the suggested export destination work?",
-        50,
-    )
+    # Empty archives still exercise transfer naming without bypassing the CSV-3 guard.
     database.close()
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
@@ -2372,7 +2370,8 @@ def test_cli_transfer_prompt_eof_cancels_without_artifact_or_setting_change(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    PredictionOperations(database)._create_legacy_prediction(
+    create_binary(
+        PredictionOperations(database),
         "Will transfer cancellation leave canonical data alone?",
         50,
     )
@@ -2404,7 +2403,8 @@ def test_cli_transfer_rejects_canonical_database_destination_without_mutation(
 ) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
-    created = PredictionOperations(database)._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database),
         "Will a rejected transfer preserve this forecast?",
         45,
     )
@@ -2419,7 +2419,11 @@ def test_cli_transfer_rejects_canonical_database_destination_without_mutation(
     )
 
     assert result == 1
-    assert "live Reckonsolve database" in errors.getvalue()
+    assert (
+        "live Reckonsolve database"
+        if command == "backup"
+        else "CSV format 3 cannot represent"
+    ) in errors.getvalue()
     reopened = Database.open(database_path)
     operations = PredictionOperations(reopened)
     assert operations.get_prediction(created.prediction_id).probability_percent == 45
@@ -2446,7 +2450,8 @@ def test_cli_transfer_failure_preserves_existing_destination(
     original = b"existing safe artifact"
     destination.write_bytes(original)
     database = Database.open(database_path)
-    PredictionOperations(database)._create_legacy_prediction(
+    create_binary(
+        PredictionOperations(database),
         "Will an existing artifact survive CLI failure?",
         55,
     )
@@ -2466,7 +2471,11 @@ def test_cli_transfer_failure_preserves_existing_destination(
     )
 
     assert result == 1
-    assert "simulated CLI destination failure" in errors.getvalue()
+    assert (
+        "simulated CLI destination failure"
+        if command == "backup"
+        else "CSV format 3 cannot represent"
+    ) in errors.getvalue()
     assert destination.read_bytes() == original
     assert tuple(tmp_path.glob(f".{destination.name}.*.tmp")) == ()
     reopened = Database.open(database_path)
@@ -2480,7 +2489,8 @@ def test_cli_and_desktop_connections_share_reads_and_sequential_writes(
     database_path = tmp_path / "reckonsolve.sqlite3"
     desktop_database = Database.open(database_path)
     desktop_operations = PredictionOperations(desktop_database)
-    created = desktop_operations._create_legacy_prediction(
+    created = create_binary(
+        desktop_operations,
         "Will independent connections preserve one canonical history?",
         30,
     )
@@ -2518,6 +2528,7 @@ def test_cli_and_desktop_connections_share_reads_and_sequential_writes(
         BinaryOutcome.YES,
         expected_revision_id=refreshed.current_revision_id,
         expected_metadata_version=refreshed.metadata_version,
+        use_recorded_time=True,
     )
     assert resolved.resolution is not None
     desktop_operations.correct_binary_resolution(

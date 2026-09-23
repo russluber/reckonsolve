@@ -6,7 +6,6 @@ from datetime import datetime
 from reckonsolve.clock import Clock, as_utc, format_utc, parse_utc
 from reckonsolve.domain.forecast_contracts import (
     EffectiveResolutionTime,
-    ForecastCohort,
     ResolutionTiming,
 )
 from reckonsolve.domain.predictions import (
@@ -100,15 +99,12 @@ class TerminalHistoryRepository:
                 history.current_correction_id, expected_correction_id
             )
             current = history.effective
-            contract = select_supported_contract(connection, prediction_id)
-            prospective = contract is not None and not contract.is_legacy
-            if prospective:
-                ResolutionTiming(
-                    EffectiveResolutionTime(proposed.effective_resolution_at),
-                    current.resolved_at,
-                )
-                if clock is not None:
-                    corrected_at = as_utc(clock.now())
+            ResolutionTiming(
+                EffectiveResolutionTime(proposed.effective_resolution_at),
+                current.resolved_at,
+            )
+            if clock is not None:
+                corrected_at = as_utc(clock.now())
             changed_fields = changed_resolution_fields(current, proposed)
             if not changed_fields:
                 raise TerminalCorrectionUnchangedError
@@ -117,24 +113,12 @@ class TerminalHistoryRepository:
             ) and proposed.correction_reason is None:
                 raise OutcomeCorrectionReasonRequiredError
 
-            table = (
-                "binary_trajectory_resolution_corrections"
-                if prospective
-                else "resolution_corrections"
-            )
-            extra_columns = (
-                ", old_effective_resolution_at, new_effective_resolution_at, effective_time_changed"
-                if prospective
-                else ""
-            )
+            table = "binary_trajectory_resolution_corrections"
+            extra_columns = ", old_effective_resolution_at, new_effective_resolution_at, effective_time_changed"
             extra_values = (
-                (
-                    format_utc(current.effective_resolution_at),
-                    format_utc(proposed.effective_resolution_at),
-                    int("effective_resolution_at" in changed_fields),
-                )
-                if prospective
-                else ()
+                format_utc(current.effective_resolution_at),
+                format_utc(proposed.effective_resolution_at),
+                int("effective_resolution_at" in changed_fields),
             )
             cursor = connection.execute(
                 f"""
@@ -145,7 +129,7 @@ class TerminalHistoryRepository:
                     old_postmortem, new_postmortem,
                     outcome_changed, resolution_notes_changed,
                     postmortem_changed, correction_reason, corrected_at {extra_columns}
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? {", ?, ?, ?" if prospective else ""})
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?)
                 """,
                 (
                     prediction_id,
@@ -193,24 +177,21 @@ class TerminalHistoryRepository:
                 history.current_correction_id, expected_correction_id
             )
             current = history.effective
-            contract = select_supported_contract(connection, prediction_id)
-            prospective = contract is not None and not contract.is_legacy
-            if prospective:
-                ResolutionTiming(
-                    EffectiveResolutionTime(proposed.effective_resolution_at),
-                    current.resolved_at,
-                )
-                row = connection.execute(
-                    """SELECT p.numeric_unit, p.numeric_precision, d.value_constraint
-                    FROM predictions p JOIN numeric_quantile_definitions d ON d.prediction_id = p.id
-                    WHERE p.id = ?""",
-                    (prediction_id,),
-                ).fetchone()
-                QuantileDefinition(
-                    row[0], row[1], NumericValueConstraint(row[2])
-                ).validate_value(proposed.actual_value)
-                if clock is not None:
-                    corrected_at = as_utc(clock.now())
+            ResolutionTiming(
+                EffectiveResolutionTime(proposed.effective_resolution_at),
+                current.resolved_at,
+            )
+            row = connection.execute(
+                """SELECT p.numeric_unit, p.numeric_precision, d.value_constraint
+                FROM predictions p JOIN numeric_quantile_definitions d ON d.prediction_id = p.id
+                WHERE p.id = ?""",
+                (prediction_id,),
+            ).fetchone()
+            QuantileDefinition(
+                row[0], row[1], NumericValueConstraint(row[2])
+            ).validate_value(proposed.actual_value)
+            if clock is not None:
+                corrected_at = as_utc(clock.now())
             changed_fields = changed_numeric_resolution_fields(current, proposed)
             if not changed_fields:
                 raise TerminalCorrectionUnchangedError
@@ -219,24 +200,12 @@ class TerminalHistoryRepository:
             ) and proposed.correction_reason is None:
                 raise OutcomeCorrectionReasonRequiredError
 
-            table = (
-                "numeric_quantile_resolution_corrections"
-                if prospective
-                else "numeric_resolution_corrections"
-            )
-            extra_columns = (
-                ", old_effective_resolution_at, new_effective_resolution_at, effective_time_changed"
-                if prospective
-                else ""
-            )
+            table = "numeric_quantile_resolution_corrections"
+            extra_columns = ", old_effective_resolution_at, new_effective_resolution_at, effective_time_changed"
             extra_values = (
-                (
-                    format_utc(current.effective_resolution_at),
-                    format_utc(proposed.effective_resolution_at),
-                    int("effective_resolution_at" in changed_fields),
-                )
-                if prospective
-                else ()
+                format_utc(current.effective_resolution_at),
+                format_utc(proposed.effective_resolution_at),
+                int("effective_resolution_at" in changed_fields),
             )
             cursor = connection.execute(
                 f"""
@@ -247,7 +216,7 @@ class TerminalHistoryRepository:
                     old_postmortem, new_postmortem,
                     actual_value_changed, resolution_notes_changed,
                     postmortem_changed, correction_reason, corrected_at {extra_columns}
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? {", ?, ?, ?" if prospective else ""})
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?)
                 """,
                 (
                     prediction_id,
@@ -400,7 +369,6 @@ def _select_binary_resolution_history(
     ):
         return None
     contract = select_supported_contract(connection, prediction_id)
-    prospective = contract is not None and not contract.is_legacy
     exact_time_column = (
         "resolution.effective_resolution_at" if contract is not None else "NULL"
     )
@@ -447,11 +415,7 @@ def _select_binary_resolution_history(
             else parse_utc(original_row["effective_resolution_at"])
         ),
     )
-    table = (
-        "binary_trajectory_resolution_corrections"
-        if prospective
-        else "resolution_corrections"
-    )
+    table = "binary_trajectory_resolution_corrections"
     rows = connection.execute(
         f"""
         SELECT *
@@ -477,13 +441,8 @@ def _select_numeric_resolution_history(
     prediction_id: int,
 ) -> NumericResolutionHistory | None:
     contract = select_supported_contract(connection, prediction_id)
-    prospective = (
-        contract is not None and contract.cohort is ForecastCohort.QUANTILE_NUMERIC
-    )
-    revision_table = (
-        "numeric_quantile_revisions" if prospective else "numeric_forecast_revisions"
-    )
-    anchor = "quantile_revision_id" if prospective else "scoring_revision_id"
+    revision_table = "numeric_quantile_revisions"
+    anchor = "quantile_revision_id"
     exact_time_column = (
         "resolution.effective_resolution_at" if contract is not None else "NULL"
     )
@@ -527,15 +486,9 @@ def _select_numeric_resolution_history(
         scoring_revision_sequence=int(original_row["scoring_revision_sequence"]),
         resolution_notes=_optional_string(original_row["resolution_notes"]),
         postmortem=_optional_string(original_row["postmortem"]),
-        effective_resolution_at=parse_utc(original_row["effective_resolution_at"])
-        if prospective
-        else None,
+        effective_resolution_at=parse_utc(original_row["effective_resolution_at"]),
     )
-    correction_table = (
-        "numeric_quantile_resolution_corrections"
-        if prospective
-        else "numeric_resolution_corrections"
-    )
+    correction_table = "numeric_quantile_resolution_corrections"
     rows = connection.execute(
         f"""
         SELECT *

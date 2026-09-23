@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from supported_fixtures import create_binary, create_numeric
+
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import PredictionType
@@ -26,18 +28,21 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
     database = Database.open(tmp_path / "relevance.sqlite3")
     operations = PredictionOperations(database)
 
-    exact = operations._create_legacy_prediction(
+    exact = create_binary(
+        operations,
         "Will the Orion permit arrive by Friday?",
         65,
         rationale="The clerk confirmed the ordinary processing window.",
         tags=("Spaceflight", "Work"),
     )
-    operations._create_legacy_prediction(
+    create_binary(
+        operations,
         "Will the routine permit review finish?",
         55,
         background="The Orion filing might arrive by Friday after review.",
     )
-    split = operations._create_legacy_prediction(
+    split = create_binary(
+        operations,
         "Will the Vega launch happen?",
         60,
     )
@@ -47,11 +52,13 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
         expected_revision_id=split.current_revision_id,
         expected_metadata_version=split.metadata_version,
     )
-    phrase = operations._create_legacy_prediction(
+    phrase = create_binary(
+        operations,
         "Will the lunar launch permit be approved?",
         50,
     )
-    phrase_split = operations._create_legacy_prediction(
+    phrase_split = create_binary(
+        operations,
         "Will the lunar mission launch on schedule?",
         50,
     )
@@ -61,30 +68,32 @@ def test_full_privacy_safe_relevance_corpus(tmp_path) -> None:
         expected_revision_id=phrase_split.current_revision_id,
         expected_metadata_version=phrase_split.metadata_version,
     )
-    unicode_prediction = operations._create_legacy_prediction(
+    unicode_prediction = create_binary(
+        operations,
         "Will the café résumé arrive tomorrow?",
         70,
     )
-    punctuation = operations._create_legacy_prediction(
+    punctuation = create_binary(
+        operations,
         "Will O'Brien's 50%-funded follow-up succeed?",
         45,
     )
-    duplicated = operations._create_legacy_prediction(
+    duplicated = create_binary(
+        operations,
         "Will duplicated memory remain searchable?",
         40,
         background="Duplicated memory appears in more than one fragment.",
     )
-    numeric = operations._create_legacy_numeric_prediction(
+    numeric = create_numeric(
+        operations,
         "How many aurora samples will arrive?",
         "samples",
         0,
-        2,
-        5,
-        9,
-        80,
+        {5: 2, 25: 3, 50: 5, 75: 7, 95: 9},
         rationale="A spectrometer estimate supplies the interval.",
     )
-    corrected = operations._create_legacy_prediction(
+    corrected = create_binary(
+        operations,
         "Will the corrected field report remain useful?",
         50,
     )

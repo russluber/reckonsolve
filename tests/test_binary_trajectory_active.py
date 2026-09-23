@@ -229,16 +229,15 @@ def test_contract_insert_failure_rolls_back_initial_revision_and_tags(active):
         assert connection.execute("SELECT count(*) FROM tags").fetchone()[0] == 0
 
 
-def test_new_resolution_requires_effective_time_while_legacy_resolution_works(active):
+def test_resolution_requires_effective_time_or_explicit_recording_time(active):
     _, _, operations = active
     new = operations.create_prediction("New cohort?", 60, forecast_deadline=DEADLINE)
     with pytest.raises(ValidationError, match="[Ee]ffective"):
         operations.resolve_prediction(
             new.prediction_id, BinaryOutcome.YES, **context(new)
         )
-    legacy = operations._create_legacy_prediction("Legacy cohort?", 60)
     resolved = operations.resolve_prediction(
-        legacy.prediction_id, BinaryOutcome.YES, **context(legacy)
+        new.prediction_id, BinaryOutcome.YES, use_recorded_time=True, **context(new)
     )
     assert resolved.status is PredictionStatus.RESOLVED
 

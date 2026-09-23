@@ -9,7 +9,6 @@ from PySide6.QtCore import QDate, QPoint, QPointF, QRect, Qt, QTime, QTimer
 from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap, QShortcut, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
-    QBoxLayout,
     QCheckBox,
     QComboBox,
     QDateEdit,
@@ -35,19 +34,17 @@ from PySide6.QtWidgets import (
 from pytestqt.qtbot import QtBot
 
 from reckonsolve.analytics import (
-    AnalyticsSnapshot,
-    AnalyticsSource,
     ForecastAnalyticsSnapshot,
-    NumericAnalyticsSource,
-    NumericScoringObservation,
-    ScoringObservation,
-    summarize_analytics,
     summarize_forecast_analytics,
 )
 from reckonsolve.application.errors import (
     ApplicationError,
     ConcurrentPredictionUpdateError,
     MeaningChangeConfirmationRequired,
+)
+from reckonsolve.domain.analytics import (
+    QuantileAnalyticsSource,
+    TrajectoryAnalyticsSource,
 )
 from reckonsolve.domain.attention import DashboardPrediction, DashboardSnapshot
 from reckonsolve.domain.browser import (
@@ -59,6 +56,7 @@ from reckonsolve.domain.browser import (
     PredictionBrowserItem,
     PredictionBrowserSnapshot,
 )
+from reckonsolve.domain.forecast_contracts import ForecastDeadline, prospective_contract
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     BinaryResolutionHistory,
@@ -71,6 +69,12 @@ from reckonsolve.domain.predictions import (
     PredictionStatus,
     PredictionType,
     Resolution,
+)
+from reckonsolve.domain.quantiles import (
+    FiveQuantiles,
+    NumericValueConstraint,
+    QuantileRevision,
+    QuantileTimelineEvent,
 )
 from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import (
@@ -97,11 +101,6 @@ from reckonsolve.domain.transfer import (
     DataManagementStatus,
 )
 from reckonsolve.ui import MainWindow
-from reckonsolve.ui.analytics_charts import (
-    BrierTrendChart,
-    CalibrationChart,
-    ContainmentCalibrationChart,
-)
 from reckonsolve.ui.components import ContentPanel
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.notifications import NotificationHost
@@ -155,6 +154,11 @@ class FakeResolution:
     scoring_probability_percent: int
     resolution_notes: str | None = None
     postmortem: str | None = None
+    effective_resolution_at: datetime | None = None
+
+    def __post_init__(self):
+        if self.effective_resolution_at is None:
+            object.__setattr__(self, "effective_resolution_at", self.resolved_at)
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +189,10 @@ class FakePrediction:
     resolution: FakeResolution | None = None
     invalidation: FakeInvalidation | None = None
     deletion_allowed: bool = True
+    forecast_contract: object = prospective_contract(
+        PredictionType.BINARY,
+        ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,17 +205,7 @@ class FakeForecastRevision:
     rationale: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class FakeNumericRevision:
-    revision_id: int
-    prediction_id: int
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    sequence: int
-    created_at: datetime
-    rationale: str | None = None
+FakeNumericRevision = QuantileRevision
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,8 +227,10 @@ class FakeNumericPrediction:
     resolution: FakeNumericResolution | None = None
     invalidation: FakeInvalidation | None = None
     deletion_allowed: bool = True
-    forecast_contract: object | None = None
-    value_constraint: object | None = None
+    forecast_contract: object = prospective_contract(
+        PredictionType.NUMERIC, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+    )
+    value_constraint: object = NumericValueConstraint.CONTINUOUS
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,40 +243,6 @@ class FakeNumericResolution:
     scoring_revision_sequence: int
     resolution_notes: str | None = None
     postmortem: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class FakeNumericForecastTimelineEvent:
-    revision_id: int
-    prediction_id: int
-    created_at: datetime
-    sequence: int
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    previous_lower_bound: FixedPrecisionValue | None
-    previous_median_estimate: FixedPrecisionValue | None
-    previous_upper_bound: FixedPrecisionValue | None
-    previous_confidence_percent: int | None
-    rationale: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class FakeNumericJournalTimelineEvent:
-    entry_id: int
-    prediction_id: int
-    created_at: datetime
-    body: str
-    original_body: str
-    numeric_forecast_revision_id: int
-    forecast_revision_sequence: int
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    current_correction_id: int | None = None
-    corrections: tuple[FakeJournalCorrection, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,23 +281,6 @@ class FakeJournalTimelineEvent:
 class CreatePredictionCall:
     question: str
     probability_percent: int
-    rationale: str | None
-    background: str | None
-    resolution_criteria: str | None
-    forecast_deadline: date | None
-    expected_resolution: date | None
-    tags: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class CreateNumericPredictionCall:
-    question: str
-    unit: str
-    decimal_places: int
-    lower_bound: str
-    median_estimate: str
-    upper_bound: str
-    confidence_percent: int
     rationale: str | None
     background: str | None
     resolution_criteria: str | None
@@ -411,10 +360,8 @@ class FakePredictionOperations:
         self.create_error: ApplicationError | None = None
         self.numeric_latest: FakeNumericPrediction | None = None
         self.numeric_revisions: list[FakeNumericRevision] = []
-        self.numeric_journal_entries: list[FakeNumericJournalTimelineEvent] = []
         self.numeric_revision_error: ApplicationError | None = None
         self.numeric_timeline_error: ApplicationError | None = None
-        self.numeric_create_calls: list[CreateNumericPredictionCall] = []
         self.numeric_create_error: ApplicationError | None = None
         self.revise_calls: list[ReviseForecastCall] = []
         self.revise_error: ApplicationError | None = None
@@ -487,12 +434,8 @@ class FakePredictionOperations:
         self.saved_view_next_id = 1
         self.tag_library: list[TagLibraryItem] = []
         self.tag_library_error: ApplicationError | None = None
-        self.analytics_source = AnalyticsSource(observations=(), available_tags=())
-        self.numeric_analytics_source = NumericAnalyticsSource(
-            observations=(),
-            available_tags=(),
-            available_units=(),
-        )
+        self.analytics_source = TrajectoryAnalyticsSource(records=())
+        self.numeric_analytics_source = QuantileAnalyticsSource(records=())
         self.analytics_error: ApplicationError | None = None
         self.analytics_calls: list[str | None] = []
         self.forecast_analytics_calls: list[
@@ -568,75 +511,6 @@ class FakePredictionOperations:
         ]
         return prediction
 
-    def _create_legacy_numeric_prediction(
-        self,
-        question: str,
-        unit: str,
-        decimal_places: int,
-        lower_bound: object,
-        median_estimate: object,
-        upper_bound: object,
-        confidence_percent: int,
-        *,
-        rationale: str | None = None,
-        background: str | None = None,
-        resolution_criteria: str | None = None,
-        forecast_deadline: date | None = None,
-        expected_resolution: date | None = None,
-        tags: tuple[str, ...] = (),
-    ) -> FakeNumericPrediction:
-        self.numeric_create_calls.append(
-            CreateNumericPredictionCall(
-                question=question,
-                unit=unit,
-                decimal_places=decimal_places,
-                lower_bound=str(lower_bound),
-                median_estimate=str(median_estimate),
-                upper_bound=str(upper_bound),
-                confidence_percent=confidence_percent,
-                rationale=rationale,
-                background=background,
-                resolution_criteria=resolution_criteria,
-                forecast_deadline=forecast_deadline,
-                expected_resolution=expected_resolution,
-                tags=tags,
-            )
-        )
-        if self.numeric_create_error is not None:
-            raise self.numeric_create_error
-        revision = FakeNumericRevision(
-            revision_id=1,
-            prediction_id=99,
-            lower_bound=FixedPrecisionValue.from_value(lower_bound, decimal_places),
-            median_estimate=FixedPrecisionValue.from_value(
-                median_estimate,
-                decimal_places,
-            ),
-            upper_bound=FixedPrecisionValue.from_value(upper_bound, decimal_places),
-            confidence_percent=confidence_percent,
-            sequence=1,
-            created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
-            rationale=(rationale or "").strip() or None,
-        )
-        prediction = FakeNumericPrediction(
-            prediction_id=99,
-            question=question.strip(),
-            unit=unit.strip(),
-            decimal_places=decimal_places,
-            status=PredictionStatus.OPEN,
-            created_at=revision.created_at,
-            updated_at=revision.created_at,
-            current_revision=revision,
-            background=(background or "").strip() or None,
-            resolution_criteria=(resolution_criteria or "").strip() or None,
-            forecast_deadline=forecast_deadline,
-            expected_resolution=expected_resolution,
-            tags=tags,
-        )
-        self.numeric_latest = prediction
-        self.numeric_revisions = [revision]
-        return prediction
-
     def revise_forecast(
         self,
         prediction_id: int,
@@ -681,48 +555,6 @@ class FakePredictionOperations:
             )
         )
         return self.latest
-
-    def revise_numeric_forecast(
-        self,
-        prediction_id: int,
-        lower_bound: object,
-        median_estimate: object,
-        upper_bound: object,
-        confidence_percent: int,
-        *,
-        rationale: str | None = None,
-        expected_revision_id: int,
-        expected_metadata_version: int,
-    ) -> FakeNumericPrediction:
-        if (
-            self.numeric_latest is None
-            or self.numeric_latest.prediction_id != prediction_id
-        ):
-            raise ApplicationError("Numeric Prediction not found.")
-        if self.numeric_revision_error is not None:
-            raise self.numeric_revision_error
-        current = self.numeric_latest.current_revision
-        revision = FakeNumericRevision(
-            revision_id=current.revision_id + 1,
-            prediction_id=prediction_id,
-            lower_bound=FixedPrecisionValue.from_value(
-                lower_bound, self.numeric_latest.decimal_places
-            ),
-            median_estimate=FixedPrecisionValue.from_value(
-                median_estimate, self.numeric_latest.decimal_places
-            ),
-            upper_bound=FixedPrecisionValue.from_value(
-                upper_bound, self.numeric_latest.decimal_places
-            ),
-            confidence_percent=confidence_percent,
-            sequence=current.sequence + 1,
-            created_at=datetime(2026, 8, 21, 19, 30, tzinfo=UTC),
-            rationale=(rationale or "").strip() or None,
-        )
-        self.numeric_revisions.append(revision)
-        self.numeric_latest = replace(self.numeric_latest, current_revision=revision)
-        self.numeric_latest = replace(self.numeric_latest, deletion_allowed=False)
-        return self.numeric_latest
 
     def resolve_numeric_prediction(
         self,
@@ -804,11 +636,6 @@ class FakePredictionOperations:
             for revision in self.numeric_revisions
             if revision.prediction_id != prediction_id
         ]
-        self.numeric_journal_entries = [
-            entry
-            for entry in self.numeric_journal_entries
-            if entry.prediction_id != prediction_id
-        ]
         self.numeric_latest = None
         return None
 
@@ -837,120 +664,21 @@ class FakePredictionOperations:
             if revision.prediction_id == prediction_id
         )
 
-    def add_numeric_journal_entry(
-        self,
-        prediction_id: int,
-        body: str,
-        *,
-        expected_revision_id: int,
-        expected_metadata_version: int,
-    ) -> FakeNumericJournalTimelineEvent:
-        if (
-            self.numeric_latest is None
-            or self.numeric_latest.prediction_id != prediction_id
-        ):
-            raise ApplicationError("Numeric Prediction not found.")
-        current = self.numeric_latest.current_revision
-        entry = FakeNumericJournalTimelineEvent(
-            entry_id=len(self.numeric_journal_entries) + 1,
-            prediction_id=prediction_id,
-            created_at=datetime(2026, 8, 21, 19, 30, tzinfo=UTC),
-            body=body.strip(),
-            original_body=body.strip(),
-            numeric_forecast_revision_id=current.revision_id,
-            forecast_revision_sequence=current.sequence,
-            lower_bound=current.lower_bound,
-            median_estimate=current.median_estimate,
-            upper_bound=current.upper_bound,
-            confidence_percent=current.confidence_percent,
-        )
-        self.numeric_journal_entries.append(entry)
-        self.numeric_latest = replace(self.numeric_latest, deletion_allowed=False)
-        return entry
-
-    def correct_numeric_journal_entry(
-        self,
-        prediction_id: int,
-        entry_id: int,
-        body: str,
-        *,
-        expected_correction_id: int | None,
-    ) -> FakeNumericJournalTimelineEvent:
-        for index, entry in enumerate(self.numeric_journal_entries):
-            if entry.prediction_id == prediction_id and entry.entry_id == entry_id:
-                correction_id = len(entry.corrections) + 1
-                correction = FakeJournalCorrection(
-                    correction_id=correction_id,
-                    body=body.strip(),
-                    corrected_at=datetime(2026, 8, 22, 19, 30, tzinfo=UTC),
-                )
-                updated = replace(
-                    entry,
-                    body=correction.body,
-                    current_correction_id=correction_id,
-                    corrections=(*entry.corrections, correction),
-                )
-                self.numeric_journal_entries[index] = updated
-                return updated
-        raise ApplicationError("Journal entry not found.")
-
     def list_numeric_timeline(
-        self,
-        prediction_id: int,
-    ) -> tuple[FakeNumericForecastTimelineEvent | FakeNumericJournalTimelineEvent, ...]:
+        self, prediction_id: int
+    ) -> tuple[QuantileTimelineEvent, ...]:
         if self.numeric_timeline_error is not None:
             raise self.numeric_timeline_error
-        previous: FakeNumericRevision | None = None
-        events: list[
-            FakeNumericForecastTimelineEvent | FakeNumericJournalTimelineEvent
-        ] = []
-        for revision in self.numeric_revisions:
-            if revision.prediction_id != prediction_id:
-                continue
-            events.append(
-                FakeNumericForecastTimelineEvent(
-                    revision_id=revision.revision_id,
-                    prediction_id=prediction_id,
-                    created_at=revision.created_at,
-                    sequence=revision.sequence,
-                    lower_bound=revision.lower_bound,
-                    median_estimate=revision.median_estimate,
-                    upper_bound=revision.upper_bound,
-                    confidence_percent=revision.confidence_percent,
-                    previous_lower_bound=None
-                    if previous is None
-                    else previous.lower_bound,
-                    previous_median_estimate=None
-                    if previous is None
-                    else previous.median_estimate,
-                    previous_upper_bound=None
-                    if previous is None
-                    else previous.upper_bound,
-                    previous_confidence_percent=None
-                    if previous is None
-                    else previous.confidence_percent,
-                    rationale=revision.rationale,
-                )
-            )
-            previous = revision
-        events.extend(
-            entry
-            for entry in self.numeric_journal_entries
-            if entry.prediction_id == prediction_id
-        )
         return tuple(
-            sorted(
-                events,
-                key=lambda event: (
-                    event.sequence
-                    if isinstance(event, FakeNumericForecastTimelineEvent)
-                    else event.forecast_revision_sequence,
-                    0 if isinstance(event, FakeNumericForecastTimelineEvent) else 1,
-                    event.revision_id
-                    if isinstance(event, FakeNumericForecastTimelineEvent)
-                    else event.entry_id,
-                ),
+            QuantileTimelineEvent(
+                "forecast",
+                revision.revision_id,
+                revision,
+                revision.created_at,
+                revision.rationale,
             )
+            for revision in self.numeric_revisions
+            if revision.prediction_id == prediction_id
         )
 
     def add_journal_entry(
@@ -1033,6 +761,8 @@ class FakePredictionOperations:
         *,
         resolution_notes: str | None = None,
         postmortem: str | None = None,
+        effective_resolution_at: datetime | None = None,
+        use_recorded_time: bool = False,
         expected_revision_id: int,
         expected_metadata_version: int,
     ) -> FakePrediction:
@@ -1060,6 +790,7 @@ class FakePredictionOperations:
             scoring_probability_percent=self.latest.probability_percent,
             resolution_notes=(resolution_notes or "").strip() or None,
             postmortem=(postmortem or "").strip() or None,
+            effective_resolution_at=effective_resolution_at,
         )
         self.latest = replace(
             self.latest,
@@ -1222,6 +953,7 @@ class FakePredictionOperations:
                 scoring_probability_percent=resolution.scoring_probability_percent,
                 resolution_notes=resolution.resolution_notes,
                 postmortem=resolution.postmortem,
+                effective_resolution_at=resolution.effective_resolution_at,
             )
         )
 
@@ -1369,6 +1101,10 @@ class FakePredictionOperations:
                 latest_revision_at=self.latest.created_at,
                 forecast_deadline=self.latest.forecast_deadline,
                 expected_resolution=self.latest.expected_resolution,
+                forecast_contract=prospective_contract(
+                    PredictionType.BINARY,
+                    ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                ),
             )
             open_predictions = (
                 (prediction,) if self.latest.status is PredictionStatus.OPEN else ()
@@ -1422,6 +1158,10 @@ class FakePredictionOperations:
                         latest_revision_at=self.latest.created_at,
                         forecast_deadline=self.latest.forecast_deadline,
                         tags=self.latest.tags,
+                        forecast_contract=prospective_contract(
+                            PredictionType.BINARY,
+                            ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                        ),
                     ),
                 ),
                 available_tags=tuple(
@@ -1509,11 +1249,12 @@ class FakePredictionOperations:
                     terminal_decision_at=item.terminal_decision_at,
                     needs_postmortem=item.needs_postmortem,
                     probability_percent=item.probability_percent,
-                    numeric_lower_bound=item.numeric_lower_bound,
-                    numeric_median_estimate=item.numeric_median_estimate,
-                    numeric_upper_bound=item.numeric_upper_bound,
-                    numeric_confidence_percent=item.numeric_confidence_percent,
+                    numeric_quantiles=item.numeric_quantiles,
                     numeric_unit=item.numeric_unit,
+                    forecast_contract=prospective_contract(
+                        item.prediction_type,
+                        ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                    ),
                 ),
                 best_match=SearchFragmentHit(
                     document=(
@@ -1546,12 +1287,6 @@ class FakePredictionOperations:
             suggestion=self.search_suggestion if not hits else None,
             available_tags=source.available_tags,
         )
-
-    def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
-        self.analytics_calls.append(tag)
-        if self.analytics_error is not None:
-            raise self.analytics_error
-        return summarize_analytics(self.analytics_source, tag=tag)
 
     def list_saved_views(self) -> tuple[SavedView, ...]:
         if self.saved_view_error is not None:
@@ -2295,188 +2030,6 @@ def test_analytics_screen_replaces_the_placeholder(window: MainWindow) -> None:
     assert window.findChild(QLabel, "analyticsScreenPlaceholder") is None
 
 
-def test_analytics_uses_shared_panels_accessible_filters_and_responsive_summaries(
-    qtbot: QtBot,
-) -> None:
-    operations = FakePredictionOperations()
-    operations.analytics_source = AnalyticsSource(
-        observations=(_scoring_observation(1, 60, BinaryOutcome.YES),),
-        available_tags=("Work",),
-    )
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-    window.resize(1600, 900)
-    window.show()
-    window.navigate_to("Analytics")
-
-    assert _required_child(window, QWidget, "analyticsPageHeader").isVisible()
-    filters = _required_child(window, ContentPanel, "analyticsFiltersPanel")
-    assert filters.title_label.text() == "Analytics View"
-    binary_summary = _required_child(
-        window,
-        ContentPanel,
-        "analyticsBrierSummary",
-    )
-    numeric_summary = _required_child(
-        window,
-        ContentPanel,
-        "numericAnalyticsSummary",
-    )
-    assert binary_summary.isVisible()
-    assert numeric_summary.isVisible()
-    assert (
-        binary_summary.body_layout.itemAt(
-            binary_summary.body_layout.count() - 1
-        ).spacerItem()
-        is not None
-    )
-    assert (
-        numeric_summary.body_layout.itemAt(
-            numeric_summary.body_layout.count() - 1
-        ).spacerItem()
-        is not None
-    )
-    assert _required_child(window, QWidget, "numericRawMetricGrid").isHidden()
-    refresh = _required_child(window, QPushButton, "refreshAnalyticsButton")
-    assert refresh.property(ACTION_ROLE_PROPERTY) == ActionRole.QUIET.value
-    unit = _required_child(window, QComboBox, "analyticsUnitFilter")
-    assert "raw error" in unit.accessibleDescription()
-    table = _required_child(window, QTableWidget, "calibrationBinTable")
-    assert "count of zero" in table.accessibleDescription()
-    numeric_table = _required_child(
-        window,
-        QTableWidget,
-        "containmentCalibrationBinTable",
-    )
-    binary_chart = _required_child(window, CalibrationChart, "calibrationChart")
-    numeric_chart = _required_child(
-        window,
-        ContainmentCalibrationChart,
-        "containmentCalibrationChart",
-    )
-
-    summary_row = _required_child(window, QWidget, "analyticsSummaryRow")
-    summary_layout = summary_row.layout()
-    assert isinstance(summary_layout, QBoxLayout)
-    binary_comparison = _required_child(
-        window,
-        QWidget,
-        "binaryCalibrationComparison",
-    )
-    numeric_comparison = _required_child(
-        window,
-        QWidget,
-        "numericCalibrationComparison",
-    )
-    binary_comparison_layout = binary_comparison.layout()
-    numeric_comparison_layout = numeric_comparison.layout()
-    assert isinstance(binary_comparison_layout, QBoxLayout)
-    assert isinstance(numeric_comparison_layout, QBoxLayout)
-    qtbot.waitUntil(
-        lambda: summary_layout.direction() == QBoxLayout.Direction.LeftToRight
-    )
-    qtbot.waitUntil(
-        lambda: binary_comparison_layout.direction() == QBoxLayout.Direction.LeftToRight
-    )
-    qtbot.waitUntil(
-        lambda: (
-            numeric_comparison_layout.direction() == QBoxLayout.Direction.LeftToRight
-        )
-    )
-    qtbot.waitUntil(lambda: abs(binary_chart.width() - table.width()) <= 1)
-    qtbot.waitUntil(lambda: abs(numeric_chart.width() - numeric_table.width()) <= 1)
-    for chart, bin_table in (
-        (binary_chart, table),
-        (numeric_chart, numeric_table),
-    ):
-        assert chart.palette().color(QPalette.ColorRole.Base) == (
-            bin_table.viewport().palette().color(QPalette.ColorRole.Base)
-        )
-        assert (
-            bin_table.horizontalScrollBarPolicy()
-            == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        assert (
-            bin_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        assert bin_table.viewport().height() >= sum(
-            bin_table.rowHeight(row) for row in range(bin_table.rowCount())
-        )
-        rendered_background = chart.grab().toImage().pixelColor(0, 0)
-        assert rendered_background == QColor(semantic_colors(window.palette()).raised)
-    binary_calibration_panel = _required_child(
-        window,
-        ContentPanel,
-        "analyticsCalibrationSection",
-    )
-    numeric_calibration_panel = _required_child(
-        window,
-        ContentPanel,
-        "numericAnalyticsSection",
-    )
-    for panel in (
-        binary_calibration_panel,
-        numeric_calibration_panel,
-    ):
-        assert panel.supporting_label.isHidden()
-        assert panel.title_label.toolTip()
-        assert panel.accessibleDescription() == panel.title_label.toolTip()
-
-    for object_name in (
-        "binaryUpdatePairedCountMetric",
-        "binaryUpdateUnrevisedCountMetric",
-        "binaryUpdateInitialBrierMetric",
-        "binaryUpdateFinalBrierMetric",
-        "binaryUpdateImprovementMetric",
-        "numericUpdatePairedCountMetric",
-        "numericUpdateUnrevisedCountMetric",
-        "numericUpdateInitialConfidenceMetric",
-        "numericUpdateFinalConfidenceMetric",
-        "numericUpdateInitialContainmentMetric",
-        "numericUpdateFinalContainmentMetric",
-    ):
-        metric = _required_child(window, QFrame, object_name)
-        assert metric.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.BASE.value
-
-    binary_update_scores = _required_child(
-        window,
-        QWidget,
-        "binaryUpdateScoreMetrics",
-    ).layout()
-    numeric_update_confidence = _required_child(
-        window,
-        QWidget,
-        "numericUpdateConfidenceMetrics",
-    ).layout()
-    assert isinstance(binary_update_scores, QBoxLayout)
-    assert isinstance(numeric_update_confidence, QBoxLayout)
-    qtbot.waitUntil(
-        lambda: binary_update_scores.direction() == QBoxLayout.Direction.LeftToRight
-    )
-    qtbot.waitUntil(
-        lambda: (
-            numeric_update_confidence.direction() == QBoxLayout.Direction.LeftToRight
-        )
-    )
-
-    window.resize(760, 520)
-
-    qtbot.waitUntil(
-        lambda: summary_layout.direction() == QBoxLayout.Direction.TopToBottom
-    )
-    qtbot.waitUntil(
-        lambda: binary_comparison_layout.direction() == QBoxLayout.Direction.TopToBottom
-    )
-    qtbot.waitUntil(
-        lambda: (
-            numeric_comparison_layout.direction() == QBoxLayout.Direction.TopToBottom
-        )
-    )
-    assert binary_calibration_panel.supporting_label.isHidden()
-    assert numeric_calibration_panel.supporting_label.isHidden()
-    assert _required_child(window, QScrollArea, "analyticsScrollArea").isVisible()
-
-
 def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> None:
     operations = FakePredictionOperations()
     window = MainWindow(operations)
@@ -2486,10 +2039,6 @@ def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> Non
 
     window.navigate_to("Analytics")
 
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "0"
-    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == (
-        "Not available"
-    )
     assert _required_child(window, QLabel, "analyticsEmpty").text() == (
         "No scored predictions yet. Resolve a prediction to begin analytics."
     )
@@ -2504,244 +2053,6 @@ def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> Non
     assert empty_region.height() > empty_label.height()
 
 
-def test_analytics_renders_summary_bins_counts_and_cumulative_series(
-    qtbot: QtBot,
-) -> None:
-    operations = FakePredictionOperations()
-    operations.analytics_source = AnalyticsSource(
-        observations=(
-            _scoring_observation(1, 20, BinaryOutcome.NO, tags=("Work",)),
-            _scoring_observation(
-                2,
-                80,
-                BinaryOutcome.YES,
-                resolved_at=datetime(2026, 8, 21, 19, 30, tzinfo=UTC),
-                tags=("Personal",),
-            ),
-            _scoring_observation(
-                3,
-                90,
-                BinaryOutcome.NO,
-                resolved_at=datetime(2026, 8, 22, 19, 30, tzinfo=UTC),
-                tags=("Work",),
-            ),
-        ),
-        available_tags=("Personal", "Work"),
-    )
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-
-    window.navigate_to("Analytics")
-
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "3"
-    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == "0.297"
-    tag_filter = _required_child(window, QComboBox, "analyticsTagFilter")
-    assert [tag_filter.itemText(index) for index in range(tag_filter.count())] == [
-        "All tags",
-        "Personal",
-        "Work",
-    ]
-    calibration = _required_child(window, CalibrationChart, "calibrationChart")
-    trend = _required_child(window, BrierTrendChart, "brierTrendChart")
-    table = _required_child(window, QTableWidget, "calibrationBinTable")
-    assert sum(item.count for item in calibration.bins) == 3
-    assert [point.scored_count for point in trend.points] == [1, 2, 3]
-    assert table.item(2, 0).text() == "20-29%"
-    assert table.item(2, 1).text() == "1"
-    assert table.item(2, 2).text() == "20%"
-    assert table.item(2, 3).text() == "0%"
-    assert table.item(4, 1).text() == "0"
-    assert table.item(4, 2).text() == "Not available"
-    assert not _required_child(window, QWidget, "analyticsScrollArea").isHidden()
-
-
-def test_analytics_tag_filter_recomputes_all_views_from_one_subset(
-    qtbot: QtBot,
-) -> None:
-    operations = FakePredictionOperations()
-    operations.analytics_source = AnalyticsSource(
-        observations=(
-            _scoring_observation(1, 20, BinaryOutcome.NO, tags=("Work",)),
-            _scoring_observation(2, 80, BinaryOutcome.YES, tags=("Personal",)),
-            _scoring_observation(3, 20, BinaryOutcome.YES, tags=("Work",)),
-        ),
-        available_tags=("Personal", "Work"),
-    )
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-    window.navigate_to("Analytics")
-    tag_filter = _required_child(window, QComboBox, "analyticsTagFilter")
-
-    tag_filter.setCurrentIndex(tag_filter.findData("Work"))
-
-    assert operations.analytics_calls[-1] == "Work"
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "2"
-    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == "0.340"
-    calibration = _required_child(window, CalibrationChart, "calibrationChart")
-    trend = _required_child(window, BrierTrendChart, "brierTrendChart")
-    assert sum(item.count for item in calibration.bins) == 2
-    assert len(trend.points) == 2
-
-
-def test_analytics_reports_initial_and_stale_refresh_errors(qtbot: QtBot) -> None:
-    operations = FakePredictionOperations()
-    operations.analytics_error = ApplicationError("Scores could not be loaded.")
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-
-    window.navigate_to("Analytics")
-    error = _required_child(window, QLabel, "analyticsError")
-    assert error.text() == "Analytics unavailable. Scores could not be loaded."
-    assert _required_child(window, QWidget, "analyticsBrierSummary").isHidden()
-
-    operations.analytics_error = None
-    operations.analytics_source = AnalyticsSource(
-        observations=(_scoring_observation(1, 60, BinaryOutcome.YES),),
-        available_tags=(),
-    )
-    window.navigate_to("New Prediction")
-    window.navigate_to("Analytics")
-    assert _required_child(window, QLabel, "analyticsScoredCount").text() == "1"
-    operations.analytics_error = ApplicationError("Refresh failed.")
-    window.navigate_to("New Prediction")
-    window.navigate_to("Analytics")
-
-    assert error.text() == (
-        "Analytics could not refresh; showing the last loaded results. Refresh failed."
-    )
-    assert _required_child(window, QLabel, "analyticsMeanBrier").text() == "0.160"
-
-
-def test_analytics_renders_unitless_numeric_containment_without_mixing_raw_units(
-    qtbot: QtBot,
-) -> None:
-    operations = FakePredictionOperations()
-    operations.numeric_analytics_source = NumericAnalyticsSource(
-        observations=(
-            _numeric_scoring_observation(
-                1,
-                lower=0,
-                median=5,
-                upper=10,
-                actual=10,
-                confidence=80,
-                unit="days",
-                tags=("Work",),
-            ),
-            _numeric_scoring_observation(
-                2,
-                lower=100,
-                median=150,
-                upper=200,
-                actual=250,
-                confidence=80,
-                unit="USD",
-                tags=("Money",),
-            ),
-        ),
-        available_tags=("Money", "Work"),
-        available_units=("days", "USD"),
-    )
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-
-    window.navigate_to("Analytics")
-
-    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == "2"
-    assert _required_child(window, QLabel, "numericAnalyticsContainment").text() == (
-        "1 of 2 (50%)"
-    )
-    raw_scope = _required_child(window, QLabel, "numericAnalyticsRawScope")
-    assert raw_scope.text() == "Select Numeric and one unit for magnitude scores."
-    assert _required_child(window, QLabel, "numericMeanIntervalScore").text() == (
-        "Not available"
-    )
-    assert _required_child(window, QWidget, "numericRawMetricGrid").isHidden()
-    table = _required_child(window, QTableWidget, "containmentCalibrationBinTable")
-    assert table.item(8, 0).text() == "80-89%"
-    assert table.item(8, 1).text() == "2"
-    assert table.item(8, 2).text() == "80%"
-    assert table.item(8, 3).text() == "50%"
-    chart = _required_child(
-        window,
-        ContainmentCalibrationChart,
-        "containmentCalibrationChart",
-    )
-    assert sum(item.count for item in chart.bins) == 2
-    unit_filter = _required_child(window, QComboBox, "analyticsUnitFilter")
-    assert not unit_filter.isEnabled()
-
-
-def test_numeric_type_and_exact_unit_filter_every_numeric_view(qtbot: QtBot) -> None:
-    operations = FakePredictionOperations()
-    operations.numeric_analytics_source = NumericAnalyticsSource(
-        observations=(
-            _numeric_scoring_observation(
-                1,
-                lower=0,
-                median=5,
-                upper=10,
-                actual=8,
-                confidence=80,
-                unit="days",
-                tags=("Work",),
-            ),
-            _numeric_scoring_observation(
-                2,
-                lower=100,
-                median=150,
-                upper=200,
-                actual=250,
-                confidence=80,
-                unit="USD",
-                tags=("Work",),
-            ),
-        ),
-        available_tags=("Work",),
-        available_units=("days", "USD"),
-    )
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-    window.navigate_to("Analytics")
-    type_filter = _required_child(window, QComboBox, "analyticsTypeFilter")
-    unit_filter = _required_child(window, QComboBox, "analyticsUnitFilter")
-
-    type_filter.setCurrentIndex(type_filter.findData(PredictionType.NUMERIC))
-    unit_filter.setCurrentIndex(unit_filter.findData("days"))
-
-    assert unit_filter.isEnabled()
-    assert operations.forecast_analytics_calls[-1] == (
-        PredictionType.NUMERIC,
-        None,
-        "days",
-    )
-    assert _required_child(window, QWidget, "analyticsBrierSummary").isHidden()
-    assert not _required_child(window, QWidget, "numericAnalyticsSummary").isHidden()
-    assert _required_child(window, QLabel, "numericAnalyticsScoredCount").text() == "1"
-    assert _required_child(window, QLabel, "numericMeanMedianAbsoluteError").text() == (
-        "3 days"
-    )
-    assert _required_child(window, QLabel, "numericMeanIntervalWidth").text() == (
-        "10 days"
-    )
-    assert _required_child(window, QLabel, "numericMeanIntervalScore").text() == (
-        "10 days"
-    )
-    assert not _required_child(window, QWidget, "numericRawMetricGrid").isHidden()
-    table = _required_child(window, QTableWidget, "containmentCalibrationBinTable")
-    assert table.item(8, 1).text() == "1"
-    assert table.item(8, 3).text() == "100%"
-
-    type_filter.setCurrentIndex(type_filter.findData(PredictionType.BINARY))
-    assert not unit_filter.isEnabled()
-    assert unit_filter.currentData() is None
-    assert operations.forecast_analytics_calls[-1] == (
-        PredictionType.BINARY,
-        None,
-        None,
-    )
-
-
 def test_prediction_browser_renders_all_results_and_filter_choices(
     qtbot: QtBot,
 ) -> None:
@@ -2753,6 +2064,9 @@ def test_prediction_browser_renders_all_results_and_filter_choices(
         created_at=datetime(2026, 8, 18, 19, 30, tzinfo=UTC),
         latest_revision_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
         tags=("Work",),
+        forecast_contract=prospective_contract(
+            PredictionType.BINARY, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+        ),
     )
     second = PredictionBrowserItem(
         prediction_id=2,
@@ -2762,6 +2076,9 @@ def test_prediction_browser_renders_all_results_and_filter_choices(
         created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
         latest_revision_at=datetime(2026, 8, 20, 20, 30, tzinfo=UTC),
         tags=("Personal", "Work"),
+        forecast_contract=prospective_contract(
+            PredictionType.BINARY, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+        ),
     )
     operations = FakePredictionOperations()
     operations.browser_snapshot = PredictionBrowserSnapshot(
@@ -3144,6 +2461,10 @@ def test_prediction_browser_combines_filters_and_clear_restores_archive(
             created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
             latest_revision_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
             tags=("Work",),
+            forecast_contract=prospective_contract(
+                PredictionType.BINARY,
+                ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+            ),
         ),
         PredictionBrowserItem(
             prediction_id=2,
@@ -3153,6 +2474,10 @@ def test_prediction_browser_combines_filters_and_clear_restores_archive(
             created_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
             latest_revision_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
             tags=("Work",),
+            forecast_contract=prospective_contract(
+                PredictionType.BINARY,
+                ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+            ),
         ),
         PredictionBrowserItem(
             prediction_id=1,
@@ -3162,6 +2487,10 @@ def test_prediction_browser_combines_filters_and_clear_restores_archive(
             created_at=datetime(2026, 8, 18, 19, 30, tzinfo=UTC),
             latest_revision_at=datetime(2026, 8, 18, 19, 30, tzinfo=UTC),
             tags=("Personal",),
+            forecast_contract=prospective_contract(
+                PredictionType.BINARY,
+                ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+            ),
         ),
     )
     operations = FakePredictionOperations()
@@ -3219,6 +2548,9 @@ def test_prediction_browser_clears_a_filter_when_its_last_tag_is_removed(
         created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
         latest_revision_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
         tags=("Temporary",),
+        forecast_contract=prospective_contract(
+            PredictionType.BINARY, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+        ),
     )
     operations = FakePredictionOperations()
     operations.browser_snapshot = PredictionBrowserSnapshot(
@@ -3265,6 +2597,10 @@ def test_prediction_browser_sends_rich_archive_filters_and_resets_defaults(
                 created_at=instant,
                 latest_revision_at=instant,
                 tags=("Blue", "Red"),
+                forecast_contract=prospective_contract(
+                    PredictionType.BINARY,
+                    ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                ),
             ),
         ),
         available_tags=("Blue", "Green", "Red"),
@@ -3366,6 +2702,10 @@ def test_prediction_browser_applies_and_explicitly_updates_dynamic_saved_views(
                 latest_revision_at=instant,
                 expected_resolution=date(2026, 8, 15),
                 tags=("Work",),
+                forecast_contract=prospective_contract(
+                    PredictionType.BINARY,
+                    ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                ),
             ),
         ),
         available_tags=("Work",),
@@ -3629,10 +2969,9 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
     numeric_revision = FakeNumericRevision(
         revision_id=20,
         prediction_id=2,
-        lower_bound=FixedPrecisionValue(20, 1),
-        median_estimate=FixedPrecisionValue(40, 1),
-        upper_bound=FixedPrecisionValue(80, 1),
-        confidence_percent=80,
+        quantiles=FiveQuantiles.from_values(
+            {5: "2.0", 25: "3.0", 50: "4.0", 75: "6.0", 95: "8.0"}, 1
+        ),
         sequence=1,
         created_at=instant,
     )
@@ -3654,6 +2993,9 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
         status=PredictionStatus.OPEN,
         created_at=instant,
         latest_revision_at=instant,
+        forecast_contract=prospective_contract(
+            PredictionType.BINARY, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+        ),
     )
     numeric_item = PredictionBrowserItem(
         prediction_id=numeric.prediction_id,
@@ -3664,14 +3006,15 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
         latest_revision_at=instant,
         tags=numeric.tags,
         prediction_type=PredictionType.NUMERIC,
-        numeric_lower_bound=numeric_revision.lower_bound,
-        numeric_median_estimate=numeric_revision.median_estimate,
-        numeric_upper_bound=numeric_revision.upper_bound,
-        numeric_confidence_percent=numeric_revision.confidence_percent,
+        numeric_quantiles=numeric_revision.quantiles,
         numeric_unit=numeric.unit,
+        forecast_contract=prospective_contract(
+            PredictionType.NUMERIC, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+        ),
     )
     operations = FakePredictionOperations()
     operations.numeric_latest = numeric
+    operations.numeric_revisions = [numeric_revision]
     operations.dashboard_snapshot = DashboardSnapshot(
         stale_threshold_days=14,
         open_predictions=(
@@ -3682,11 +3025,12 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
                 status=numeric.status,
                 latest_revision_at=instant,
                 prediction_type=PredictionType.NUMERIC,
-                numeric_lower_bound=numeric_revision.lower_bound,
-                numeric_median_estimate=numeric_revision.median_estimate,
-                numeric_upper_bound=numeric_revision.upper_bound,
-                numeric_confidence_percent=numeric_revision.confidence_percent,
+                numeric_quantiles=numeric_revision.quantiles,
                 numeric_unit=numeric.unit,
+                forecast_contract=prospective_contract(
+                    PredictionType.NUMERIC,
+                    ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                ),
             ),
         ),
         needs_attention_predictions=(),
@@ -3701,8 +3045,8 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
     qtbot.addWidget(window)
 
     dashboard_row = _required_child(window, QPushButton, "dashboardOpenPrediction2")
-    assert "NUMERIC" in dashboard_row.text()
-    assert "80% interval: 2.0–8.0 days; median: 4.0 days" in dashboard_row.text()
+    assert "Five-quantile" in dashboard_row.text()
+    assert "90% interval: 2.0 to 8.0 days; median: 4.0 days" in dashboard_row.text()
     qtbot.mouseClick(dashboard_row, Qt.MouseButton.LeftButton)
     assert window.current_screen_name == "Prediction Detail"
     assert _required_child(window, QLabel, "numericPredictionQuestion").text() == (
@@ -3728,7 +3072,7 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
             QLabel,
             f"predictionResultForecast{numeric.prediction_id}",
         ).text()
-        == "Current interval · 80%: 2.0–8.0 days; median 4.0 days"
+        == "Five-quantile forecast: 90% interval: 2.0 to 8.0 days; median: 4.0 days; 50% interval: 3.0 to 6.0 days"
     )
     assert operations.browser_type_calls[-1] is PredictionType.NUMERIC
 
@@ -3768,6 +3112,10 @@ def test_prediction_browser_distinguishes_new_database_and_no_matches(
                 status=PredictionStatus.OPEN,
                 created_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
                 latest_revision_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
+                forecast_contract=prospective_contract(
+                    PredictionType.BINARY,
+                    ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                ),
             ),
         ),
         available_tags=(),
@@ -4074,6 +3422,9 @@ def test_dashboard_renders_overlapping_buckets_without_losing_classifications(
         probability_percent=45,
         status=PredictionStatus.OPEN,
         latest_revision_at=datetime(2026, 8, 19, 19, 30, tzinfo=UTC),
+        forecast_contract=prospective_contract(
+            PredictionType.BINARY, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+        ),
     )
     overlap = DashboardPrediction(
         prediction_id=7,
@@ -4085,6 +3436,9 @@ def test_dashboard_renders_overlapping_buckets_without_losing_classifications(
         expected_resolution=date(2026, 8, 15),
         needs_attention=True,
         ready_to_resolve=True,
+        forecast_contract=prospective_contract(
+            PredictionType.BINARY, ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC))
+        ),
     )
     operations = FakePredictionOperations()
     operations.dashboard_snapshot = DashboardSnapshot(
@@ -4196,6 +3550,10 @@ def test_contextual_detail_preserves_prediction_search_state_without_refresh(
                 status=PredictionStatus.OPEN,
                 created_at=datetime(2026, 8, 20, 19, index, tzinfo=UTC),
                 latest_revision_at=datetime(2026, 8, 20, 19, index, tzinfo=UTC),
+                forecast_contract=prospective_contract(
+                    PredictionType.BINARY,
+                    ForecastDeadline(datetime(2099, 1, 1, tzinfo=UTC)),
+                ),
             )
             for index in range(1, 31)
         ),
@@ -4746,7 +4104,7 @@ def test_m42_binary_detail_separates_identity_common_and_lifecycle_actions(
     assert (
         question.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
     )
-    assert forecast_type.text() == "BINARY · LEGACY"
+    assert forecast_type.text() == "BINARY · TRAJECTORY"
     assert status.property(BADGE_TONE_PROPERTY) == StatusTone.ACCENT.value
     assert summary.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
     assert action_panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
@@ -4888,10 +4246,9 @@ def test_numeric_edit_details_reuses_metadata_dialog_and_preserves_definition(
     revision = FakeNumericRevision(
         revision_id=20,
         prediction_id=2,
-        lower_bound=FixedPrecisionValue(125, 2),
-        median_estimate=FixedPrecisionValue(350, 2),
-        upper_bound=FixedPrecisionValue(1075, 2),
-        confidence_percent=80,
+        quantiles=FiveQuantiles.from_values(
+            {5: "1.25", 25: "2.00", 50: "3.50", 75: "7.00", 95: "10.75"}, 2
+        ),
         sequence=1,
         created_at=instant,
         rationale="Initial rationale",
@@ -4951,10 +4308,9 @@ def test_numeric_edit_details_cancel_is_side_effect_free(qtbot: QtBot) -> None:
     revision = FakeNumericRevision(
         revision_id=20,
         prediction_id=2,
-        lower_bound=FixedPrecisionValue(125, 2),
-        median_estimate=FixedPrecisionValue(350, 2),
-        upper_bound=FixedPrecisionValue(1075, 2),
-        confidence_percent=80,
+        quantiles=FiveQuantiles.from_values(
+            {5: "1.25", 25: "2.00", 50: "3.50", 75: "7.00", 95: "10.75"}, 2
+        ),
         sequence=1,
         created_at=instant,
     )
@@ -5020,15 +4376,24 @@ def test_prediction_detail_prefers_the_newer_numeric_prediction_when_times_tie(
     qtbot: QtBot,
 ) -> None:
     operations = FakePredictionOperations(FakePrediction(7, "Binary first?", 60))
-    numeric = operations._create_legacy_numeric_prediction(
+    revision = QuantileRevision(
+        1,
+        99,
+        FiveQuantiles.from_values({5: 1, 25: 1, 50: 2, 75: 3, 95: 3}, 0),
+        1,
+        operations.latest.created_at,
+    )
+    numeric = FakeNumericPrediction(
+        99,
         "Numeric later?",
         "days",
         0,
-        1,
-        2,
-        3,
-        80,
+        PredictionStatus.OPEN,
+        revision.created_at,
+        revision.created_at,
+        revision,
     )
+    operations.numeric_revisions = [revision]
     operations.numeric_latest = replace(
         numeric,
         created_at=operations.latest.created_at,
@@ -5100,15 +4465,6 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
         QPlainTextEdit,
         "initialResolutionCriteriaInput",
     ).setPlainText("A published result counts.")
-    deadline_toggle = _required_child(
-        window,
-        QCheckBox,
-        "initialForecastDeadlineToggle",
-    )
-    deadline_toggle.setChecked(True)
-    _required_child(window, QDateEdit, "initialForecastDeadlineInput").setDate(
-        QDate(2026, 9, 1)
-    )
     expected_toggle = _required_child(
         window,
         QCheckBox,
@@ -5151,12 +4507,7 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
         _required_child(window, QPlainTextEdit, "initialRationaleInput").toPlainText()
         == ""
     )
-    assert not deadline_toggle.isChecked()
-    assert _required_child(
-        window,
-        QDateEdit,
-        "initialForecastDeadlineInput",
-    ).isHidden()
+    assert window.findChild(QCheckBox, "initialForecastDeadlineToggle") is None
     assert not expected_toggle.isChecked()
     assert _required_child(window, QLineEdit, "initialTagsInput").text() == ""
     assert not _required_child(
@@ -5216,15 +4567,6 @@ def test_creation_failure_keeps_optional_details_for_correction(
     _required_child(window, QPlainTextEdit, "initialRationaleInput").setPlainText(
         "Keep me"
     )
-    deadline_toggle = _required_child(
-        window,
-        QCheckBox,
-        "initialForecastDeadlineToggle",
-    )
-    deadline_toggle.setChecked(True)
-    _required_child(window, QDateEdit, "initialForecastDeadlineInput").setDate(
-        QDate(2020, 1, 1)
-    )
 
     _set_exact_deadline(window)
     qtbot.mouseClick(
@@ -5234,7 +4576,6 @@ def test_creation_failure_keeps_optional_details_for_correction(
 
     assert window.current_screen_name == "New Prediction"
     assert more_details.isChecked()
-    assert deadline_toggle.isChecked()
     assert (
         _required_child(window, QPlainTextEdit, "initialRationaleInput").toPlainText()
         == "Keep me"
@@ -5516,7 +4857,7 @@ def test_prediction_detail_shows_present_metadata_and_hides_missing_sections(
         "#release  #desktop"
     )
     deadline = _required_child(window, QLabel, "predictionDetailForecastDeadline")
-    assert "2026" in deadline.text()
+    assert "(permanent)" in deadline.text()
     assert not _required_child(
         window,
         QWidget,
@@ -5548,7 +4889,6 @@ def test_prediction_detail_hides_all_empty_optional_metadata(qtbot: QtBot) -> No
 
     for object_name in (
         "predictionDetailTags",
-        "predictionDetailForecastDeadlineRow",
         "predictionDetailExpectedResolutionRow",
         "predictionDetailBackgroundSection",
         "predictionDetailResolutionCriteriaSection",
@@ -6538,20 +5878,8 @@ def test_edit_details_dialog_prefills_values_and_optional_date_controls(
         dialog, QPlainTextEdit, "editBackgroundInput"
     ).toPlainText() == ("Context")
     assert _required_child(dialog, QLineEdit, "editTagsInput").text() == "ui, m3"
-    deadline_toggle = _required_child(
-        dialog,
-        QCheckBox,
-        "editForecastDeadlineToggle",
-    )
-    deadline_input = _required_child(
-        dialog,
-        QDateEdit,
-        "editForecastDeadlineInput",
-    )
-    assert deadline_toggle.isChecked()
-    assert deadline_input.isEnabled()
-    assert deadline_input.isVisible()
-    assert deadline_input.date() == QDate(2026, 9, 2)
+    assert dialog.findChild(QCheckBox, "editForecastDeadlineToggle") is None
+    assert dialog.findChild(QDateEdit, "editForecastDeadlineInput") is None
     expected_toggle = _required_child(
         dialog,
         QCheckBox,
@@ -6565,8 +5893,8 @@ def test_edit_details_dialog_prefills_values_and_optional_date_controls(
     assert not expected_toggle.isChecked()
     assert not expected_input.isEnabled()
     assert expected_input.isHidden()
-    assert deadline_input.minimumDate() == QDate(1752, 9, 14)
-    assert deadline_input.maximumDate() == QDate(9999, 12, 31)
+    assert expected_input.minimumDate() == QDate(1752, 9, 14)
+    assert expected_input.maximumDate() == QDate(9999, 12, 31)
 
 
 def test_unset_optional_date_is_revealed_only_when_enabled(qtbot: QtBot) -> None:
@@ -6579,12 +5907,12 @@ def test_unset_optional_date_is_revealed_only_when_enabled(qtbot: QtBot) -> None
     deadline_toggle = _required_child(
         dialog,
         QCheckBox,
-        "editForecastDeadlineToggle",
+        "editExpectedResolutionToggle",
     )
     deadline_input = _required_child(
         dialog,
         QDateEdit,
-        "editForecastDeadlineInput",
+        "editExpectedResolutionInput",
     )
 
     assert not deadline_toggle.isChecked()
@@ -6611,7 +5939,10 @@ def test_edit_details_dialog_preserves_earliest_supported_date(
     window = MainWindow(
         FakePredictionOperations(
             FakePrediction(
-                7, "Earliest supported deadline?", 55, forecast_deadline=earliest
+                7,
+                "Earliest supported expected resolution?",
+                55,
+                expected_resolution=earliest,
             )
         )
     )
@@ -6619,7 +5950,7 @@ def test_edit_details_dialog_preserves_earliest_supported_date(
 
     dialog = _open_edit_dialog(qtbot, window)
 
-    deadline = _required_child(dialog, QDateEdit, "editForecastDeadlineInput")
+    deadline = _required_child(dialog, QDateEdit, "editExpectedResolutionInput")
     assert deadline.date() == QDate(1752, 9, 14)
     assert deadline.isVisible()
 
@@ -6899,48 +6230,19 @@ def test_expected_edit_failure_is_shown_inline(
     assert operations.mutation_count == 0
 
 
-def test_deadline_only_warning_explains_locking_without_proposition_guidance(
-    qtbot: QtBot,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_permanent_deadline_has_no_metadata_edit_controls(qtbot: QtBot) -> None:
     operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
-    operations.confirmation_fields = ("forecast_deadline",)
     window = MainWindow(operations)
     qtbot.addWidget(window)
-    warnings: list[tuple[str, str]] = []
-
-    def decline_warning(
-        _parent: QWidget,
-        title: str,
-        message: str,
-        _buttons: QMessageBox.StandardButton,
-        _default: QMessageBox.StandardButton,
-    ) -> QMessageBox.StandardButton:
-        warnings.append((title, message))
-        return QMessageBox.StandardButton.Cancel
-
-    monkeypatch.setattr(QMessageBox, "warning", decline_warning)
     dialog = _open_edit_dialog(qtbot, window)
-    deadline_toggle = _required_child(
-        dialog,
-        QCheckBox,
-        "editForecastDeadlineToggle",
-    )
-    qtbot.mouseClick(deadline_toggle, Qt.MouseButton.LeftButton)
 
-    qtbot.mouseClick(
-        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
-        Qt.MouseButton.LeftButton,
+    assert dialog.findChild(QCheckBox, "editForecastDeadlineToggle") is None
+    assert dialog.findChild(QDateEdit, "editForecastDeadlineInput") is None
+    assert any(
+        "Forecast Deadline (permanent)" in label.text()
+        for label in dialog.findChildren(QLabel)
     )
-
-    assert len(operations.update_calls) == 1
-    assert operations.mutation_count == 0
-    assert dialog.isVisible()
-    assert warnings[0][0] == "Confirm forecast deadline change"
-    assert "forecast revisions become locked" in warnings[0][1]
-    assert "Definition history" in warnings[0][1]
-    assert "what this prediction means" not in warnings[0][1]
-    assert "new prediction" not in warnings[0][1]
+    assert operations.update_calls == []
 
 
 def test_semantic_change_warning_decline_does_not_retry_or_mutate(
@@ -6989,7 +6291,7 @@ def test_meaning_change_confirmation_retries_and_refreshes_returned_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
-    operations.confirmation_fields = ("question", "forecast_deadline")
+    operations.confirmation_fields = ("question", "resolution_criteria")
     window = MainWindow(operations)
     qtbot.addWidget(window)
     warnings: list[tuple[str, str]] = []
@@ -7007,14 +6309,8 @@ def test_meaning_change_confirmation_retries_and_refreshes_returned_detail(
     monkeypatch.setattr(QMessageBox, "warning", accept_warning)
     dialog = _open_edit_dialog(qtbot, window)
     _required_child(dialog, QLineEdit, "editQuestionInput").setText("Changed question")
-    deadline_toggle = _required_child(
-        dialog,
-        QCheckBox,
-        "editForecastDeadlineToggle",
-    )
-    deadline_toggle.setChecked(True)
-    _required_child(dialog, QDateEdit, "editForecastDeadlineInput").setDate(
-        QDate(2026, 9, 30)
+    _required_child(dialog, QPlainTextEdit, "editResolutionCriteriaInput").setPlainText(
+        "Published result counts."
     )
 
     qtbot.mouseClick(
@@ -7034,10 +6330,10 @@ def test_meaning_change_confirmation_retries_and_refreshes_returned_detail(
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
         "Changed question"
     )
-    assert warnings[0][0] == "Confirm definition and deadline changes"
+    assert warnings[0][0] == "Confirm definition change"
     assert "what this prediction means" in warnings[0][1]
     assert "create a new prediction" in warnings[0][1]
-    assert "forecast revisions become locked" in warnings[0][1]
+    assert "forecast revisions become locked" not in warnings[0][1]
     assert "Definition history" in warnings[0][1]
     assert not dialog.isVisible()
     assert operations.definition_change_calls == [7, 7, 7, 7]
@@ -7177,7 +6473,7 @@ def test_resolve_dialog_is_side_effect_free_until_an_outcome_is_saved(
 
     explanation = _required_child(dialog, QLabel, "resolvePredictionExplanation")
     save = _required_child(dialog, QPushButton, "confirmResolvePredictionButton")
-    assert "cannot be reopened" in explanation.text()
+    assert "Resolution is final" in explanation.text()
     assert explanation.textFormat() is Qt.TextFormat.PlainText
     assert not save.isEnabled()
     assert operations.resolve_calls == []
@@ -7502,53 +6798,6 @@ def _select_tag_rows(table: QTableWidget, *display_names: str) -> None:
         item = table.item(row, 0)
         if item is not None and item.text() in wanted:
             item.setSelected(True)
-
-
-def _scoring_observation(
-    identifier: int,
-    probability_percent: int,
-    outcome: BinaryOutcome,
-    *,
-    resolved_at: datetime = datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
-    tags: tuple[str, ...] = (),
-) -> ScoringObservation:
-    return ScoringObservation(
-        prediction_id=identifier,
-        question=f"Prediction {identifier}",
-        resolution_id=identifier,
-        resolved_at=resolved_at,
-        scoring_revision_id=identifier,
-        probability_percent=probability_percent,
-        outcome=outcome,
-        tags=tags,
-    )
-
-
-def _numeric_scoring_observation(
-    identifier: int,
-    *,
-    lower: int,
-    median: int,
-    upper: int,
-    actual: int,
-    confidence: int,
-    unit: str,
-    tags: tuple[str, ...] = (),
-) -> NumericScoringObservation:
-    return NumericScoringObservation(
-        prediction_id=identifier,
-        question=f"Numeric Prediction {identifier}",
-        resolution_id=identifier,
-        resolved_at=datetime(2026, 8, 20, 19, 30, tzinfo=UTC),
-        scoring_revision_id=identifier,
-        unit=unit,
-        lower_bound=FixedPrecisionValue(lower, 0),
-        median_estimate=FixedPrecisionValue(median, 0),
-        upper_bound=FixedPrecisionValue(upper, 0),
-        confidence_percent=confidence,
-        actual_value=FixedPrecisionValue(actual, 0),
-        tags=tags,
-    )
 
 
 def _open_edit_dialog(qtbot: QtBot, window: MainWindow) -> QDialog:

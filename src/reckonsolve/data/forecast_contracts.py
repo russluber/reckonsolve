@@ -9,7 +9,6 @@ from reckonsolve.domain.forecast_contracts import (
     ForecastDeadline,
     ForecastModel,
     ScoringContract,
-    legacy_contract,
 )
 from reckonsolve.domain.predictions import PredictionType
 
@@ -18,13 +17,60 @@ class ForecastContractIntegrityError(RuntimeError):
     """Raised when persisted model identity is missing, unknown, or inconsistent."""
 
 
+class RetiredForecastModelError(ForecastContractIntegrityError):
+    """An entire database is unsupported if it contains a retired Prediction."""
+
+
+def reject_retired_forecasts(connection: sqlite3.Connection) -> None:
+    """Read-only compatibility gate, including databases predating model identity.
+
+    Run under the caller's transaction before migration, repair, or normal work.
+    Never infer a replacement contract or serve only the supported subset.
+    """
+    if (
+        connection.execute(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'predictions'"
+        ).fetchone()
+        is None
+    ):
+        return
+    if not _contract_table_exists(connection):
+        row = connection.execute("SELECT id FROM predictions LIMIT 1").fetchone()
+        if row is None:
+            return
+        raise ForecastContractIntegrityError(
+            f"Prediction {int(row[0])} has no stored forecast-model identity. "
+            "Pre-v0.7 forecasts are retired. This database cannot be opened; "
+            "no conversion or deletion occurred. Keep the original database or "
+            "backup for use with a compatible earlier Reckonsolve version."
+        )
+    row = connection.execute(
+        """
+        SELECT prediction.id, contract.forecast_model
+        FROM predictions AS prediction
+        JOIN prediction_forecast_contracts AS contract
+            ON contract.prediction_id = prediction.id
+        WHERE contract.forecast_model IN ('binary-final-v1', 'numeric-interval-v1')
+        ORDER BY prediction.id LIMIT 1
+        """
+    ).fetchone()
+    if row is not None:
+        raise RetiredForecastModelError(
+            f"Prediction {int(row[0])} uses retired model '{row[1]}'. "
+            "This database cannot be opened, even if it also contains current "
+            "forecasts. No conversion or deletion occurred. Keep the original "
+            "database or backup for use with a compatible earlier Reckonsolve version."
+        )
+
+
 def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
     """Reject unsupported contracts before cohort-filtered reads can omit them.
 
-    Older-schema fixtures have no contracts; a current database must have a
-    complete, recognized pair for every Prediction, not merely every result.
+    Empty historical schemas can migrate. Every retained Prediction must have a
+    supported, complete pair, not merely every Prediction in a filtered result.
     """
 
+    reject_retired_forecasts(connection)
     if not _contract_table_exists(connection):
         return
 
@@ -64,30 +110,17 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
             OR contract.forecast_model IS NULL
             OR contract.scoring_contract IS NULL
             OR (contract.forecast_model, contract.scoring_contract) NOT IN (
-                ('binary-final-v1', 'binary-final-brier-v1'),
                 ('binary-trajectory-v1', 'binary-trajectory-brier-v1'),
-                ('numeric-interval-v1', 'numeric-interval-score-v1'),
                 ('numeric-quantiles-5-v2', 'numeric-wis-v1')
             )
-            OR (
-                contract.forecast_model IN ('binary-final-v1', 'numeric-interval-v1')
-                AND contract.forecast_deadline_at IS NOT NULL
-            )
-            OR (
-                contract.forecast_model IN ('binary-trajectory-v1', 'numeric-quantiles-5-v2')
-                AND contract.forecast_deadline_at IS NULL
-            )
+            OR contract.forecast_deadline_at IS NULL
             OR (
                 prediction.prediction_type = 'binary'
-                AND contract.forecast_model NOT IN (
-                    'binary-final-v1', 'binary-trajectory-v1'
-                )
+                AND contract.forecast_model != 'binary-trajectory-v1'
             )
             OR (
                 prediction.prediction_type = 'numeric'
-                AND contract.forecast_model NOT IN (
-                    'numeric-interval-v1', 'numeric-quantiles-5-v2'
-                )
+                AND contract.forecast_model != 'numeric-quantiles-5-v2'
             )
             OR (
                 contract.forecast_model = 'binary-trajectory-v1'
@@ -109,37 +142,6 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
         raise ForecastContractIntegrityError(
             f"Prediction {int(row[0])} has a missing or inconsistent forecast contract."
         )
-
-
-def insert_legacy_contract_if_supported(
-    connection: sqlite3.Connection,
-    prediction_id: int,
-    prediction_type: PredictionType,
-) -> None:
-    """Assign current creation flows explicitly when schema 16 is available.
-
-    Migration tests intentionally exercise current repositories against older
-    schema slices, so absence of the table is the only supported no-op.
-    """
-
-    if not _contract_table_exists(connection):
-        return
-    contract = legacy_contract(prediction_type)
-    connection.execute(
-        """
-        INSERT INTO prediction_forecast_contracts (
-            prediction_id,
-            forecast_model,
-            scoring_contract,
-            forecast_deadline_at
-        ) VALUES (?, ?, ?, NULL)
-        """,
-        (
-            prediction_id,
-            contract.forecast_model.value,
-            contract.scoring_contract.value,
-        ),
-    )
 
 
 def select_forecast_contract(
@@ -189,7 +191,7 @@ def insert_prospective_contract(
 ) -> None:
     """Persist a validated new-model contract for later vertical slices."""
 
-    if contract.is_legacy or contract.forecast_deadline is None:
+    if contract.forecast_deadline is None:
         raise ForecastContractIntegrityError(
             "A prospective contract with an exact Deadline is required."
         )
@@ -225,12 +227,8 @@ def _contract_table_exists(connection: sqlite3.Connection) -> bool:
 
 
 def binary_corrections_relation(connection: sqlite3.Connection) -> str:
-    """Shared terminal text/history only; scoring still dispatches by cohort."""
-    if connection.execute(
-        "SELECT 1 FROM sqlite_schema WHERE type = 'view' AND name = 'binary_resolution_history_rows'"
-    ).fetchone():
-        return "binary_resolution_history_rows"
-    return "resolution_corrections"
+    """Supported Binary correction chain, also present in staged schema 16."""
+    return "binary_trajectory_resolution_corrections"
 
 
 def quantile_tables_exist(connection: sqlite3.Connection) -> bool:
@@ -244,25 +242,18 @@ def quantile_tables_exist(connection: sqlite3.Connection) -> bool:
 
 def numeric_corrections_relation(connection: sqlite3.Connection) -> str:
     """Common effective terminal projection, never scoring-revision authority."""
-    if quantile_tables_exist(connection):
-        columns = "id, prediction_id, numeric_resolution_id, sequence, new_actual_scaled, new_postmortem"
-        return f"(SELECT {columns} FROM numeric_resolution_corrections UNION ALL SELECT {columns} FROM numeric_quantile_resolution_corrections)"
-    return "numeric_resolution_corrections"
+    return "numeric_quantile_resolution_corrections"
 
 
 def select_supported_contract(
     connection: sqlite3.Connection, prediction_id: int
-) -> ForecastContract | None:
-    """Only historical schema fixtures may lack a contract table."""
-    if not _contract_table_exists(connection):
-        return None
+) -> ForecastContract:
+    """Read one supported identity after the whole-database compatibility gate."""
     return select_forecast_contract(connection, prediction_id)
 
 
 def binary_contract_columns(connection: sqlite3.Connection) -> str:
-    """Project the durable identity alongside the legacy-compatible detail query."""
-    if not _contract_table_exists(connection):
-        return ""
+    """Project the durable identity alongside the Binary detail query."""
     return """
         , (SELECT forecast_model FROM prediction_forecast_contracts
            WHERE prediction_id = prediction.id) AS forecast_model
@@ -273,9 +264,7 @@ def binary_contract_columns(connection: sqlite3.Connection) -> str:
     """
 
 
-def map_binary_contract(row: sqlite3.Row) -> ForecastContract | None:
-    if "forecast_model" not in row.keys():  # noqa: SIM118 -- Row membership tests values.
-        return None
+def map_binary_contract(row: sqlite3.Row) -> ForecastContract:
     try:
         return ForecastContract(
             PredictionType.BINARY,

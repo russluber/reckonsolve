@@ -116,7 +116,11 @@ class Database:
 
         connection.execute("BEGIN IMMEDIATE")
         try:
+            check_forecast_contract_integrity(connection)
             yield connection
+            # A stale process or lower-level caller must not introduce a retired
+            # or malformed contract between startup and the next operation.
+            check_forecast_contract_integrity(connection)
             if self._search_enabled:
                 try:
                     refresh_pending_search_documents(connection)
@@ -209,6 +213,7 @@ class Database:
             target.row_factory = sqlite3.Row
             try:
                 source.backup(target, pages=256, sleep=0.05)
+                check_forecast_contract_integrity(target)
                 quick_check = target.execute("PRAGMA quick_check").fetchone()
                 if quick_check is None or quick_check[0] != "ok":
                     raise sqlite3.DatabaseError(

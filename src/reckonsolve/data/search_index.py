@@ -12,7 +12,7 @@ from reckonsolve.domain.search import (
     normalize_search_literal,
 )
 
-from .forecast_contracts import binary_corrections_relation, quantile_tables_exist
+from .forecast_contracts import quantile_tables_exist
 
 SEARCH_PROJECTION_VERSION = 1
 
@@ -294,7 +294,7 @@ def project_prediction_documents(
     ).fetchall():
         add(SearchSourceKind.TAG, int(row["id"]), row["display_name"])
 
-    revision_tables = ("forecast_revisions", "numeric_forecast_revisions")
+    revision_tables = ("forecast_revisions",)
     if quantile_tables_exist(connection):
         revision_tables += ("numeric_quantile_revisions",)
     for table in revision_tables:
@@ -320,14 +320,11 @@ def project_prediction_documents(
         f"""
         SELECT
             review.id, review.created_at, review.note,
-            COALESCE(binary_revision.sequence, numeric_revision.sequence{quantile_sequence}) AS sequence
+            COALESCE(binary_revision.sequence{quantile_sequence}, NULL) AS sequence
         FROM forecast_reviews AS review
         LEFT JOIN forecast_revisions AS binary_revision
             ON binary_revision.id = review.forecast_revision_id
             AND binary_revision.prediction_id = review.prediction_id
-        LEFT JOIN numeric_forecast_revisions AS numeric_revision
-            ON numeric_revision.id = review.numeric_forecast_revision_id
-            AND numeric_revision.prediction_id = review.prediction_id
         {quantile_join}
         WHERE review.prediction_id = ? AND review.note IS NOT NULL
         ORDER BY review.id
@@ -356,14 +353,11 @@ def _append_journal_documents(connection, prediction_id: int, add) -> None:
         f"""
         SELECT
             entry.id, entry.body, entry.created_at,
-            COALESCE(binary_revision.sequence, numeric_revision.sequence{quantile_sequence}) AS sequence
+            COALESCE(binary_revision.sequence{quantile_sequence}, NULL) AS sequence
         FROM journal_entries AS entry
         LEFT JOIN forecast_revisions AS binary_revision
             ON binary_revision.id = entry.forecast_revision_id
             AND binary_revision.prediction_id = entry.prediction_id
-        LEFT JOIN numeric_forecast_revisions AS numeric_revision
-            ON numeric_revision.id = entry.numeric_forecast_revision_id
-            AND numeric_revision.prediction_id = entry.prediction_id
         {quantile_join}
         WHERE entry.prediction_id = ?
         ORDER BY entry.id
@@ -453,12 +447,18 @@ def _append_definition_history_documents(
 
 
 def _append_resolution_documents(connection, prediction_id: int, add) -> None:
-    for resolution_table, correction_table, actual_flag in (
-        ("resolutions", "resolution_corrections", "outcome_changed"),
+    for resolution_table, correction_table, parent_column, actual_flag in (
+        (
+            "resolutions",
+            "binary_trajectory_resolution_corrections",
+            "resolution_id",
+            "(outcome_changed OR effective_time_changed)",
+        ),
         (
             "numeric_resolutions",
-            "numeric_resolution_corrections",
-            "actual_value_changed",
+            "numeric_quantile_resolution_corrections",
+            "numeric_resolution_id",
+            "(actual_value_changed OR effective_time_changed)",
         ),
     ):
         resolution = connection.execute(
@@ -472,24 +472,6 @@ def _append_resolution_documents(connection, prediction_id: int, add) -> None:
         if resolution is None:
             continue
         resolution_id = int(resolution["id"])
-        parent_column = (
-            "resolution_id"
-            if correction_table == "resolution_corrections"
-            else "numeric_resolution_id"
-        )
-        if resolution_table == "resolutions":
-            correction_table = binary_corrections_relation(connection)
-            if correction_table != "resolution_corrections":
-                actual_flag = "(outcome_changed OR effective_time_changed)"
-        elif (
-            quantile_tables_exist(connection)
-            and connection.execute(
-                "SELECT 1 FROM prediction_forecast_contracts WHERE prediction_id = ? AND forecast_model = 'numeric-quantiles-5-v2'",
-                (prediction_id,),
-            ).fetchone()
-        ):
-            correction_table = "numeric_quantile_resolution_corrections"
-            actual_flag = "(actual_value_changed OR effective_time_changed)"
         corrections = connection.execute(
             f"""
             SELECT

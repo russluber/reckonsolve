@@ -1,8 +1,9 @@
-"""Launch disposable v0.6 visual-review databases without touching user data."""
+"""Launch disposable current-model visual profiles without touching user data."""
 
 from __future__ import annotations
 
 import argparse
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -10,6 +11,7 @@ from reckonsolve.app import run
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.domain.quantiles import NumericValueConstraint
 from reckonsolve.identity import DEVELOPMENT_APPLICATION
 
 
@@ -41,15 +43,17 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
     database = Database.open(database_path)
     try:
         operations = PredictionOperations(database)
+        deadline = datetime.now(UTC) + timedelta(days=30)
         repeated = (
             " This deliberately long text checks wrapping, selectable history, and "
             "responsive layout without truncating meaningful personal context."
             if long_text
             else ""
         )
-        open_binary = operations._create_legacy_prediction(
+        open_binary = operations.create_prediction(
             f"Will the representative Binary forecast remain readable?{repeated}",
             65,
+            forecast_deadline=deadline,
             rationale=f"Initial evidence remains visible.{repeated}",
             background=f"Background context for the visual review.{repeated}",
             resolution_criteria=f"Resolve Yes when the stated event occurs.{repeated}",
@@ -67,54 +71,56 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
             expected_revision_id=open_binary.current_revision_id,
             expected_metadata_version=open_binary.metadata_version,
         )
-        operations._create_legacy_numeric_prediction(
+        operations.create_numeric_prediction(
             f"How many days will the representative Numeric forecast take?{repeated}",
             "days",
             1,
-            "1.0",
-            "3.0",
-            "8.0",
-            80,
+            {5: "1.0", 25: "2.0", 50: "3.0", 75: "5.0", 95: "8.0"},
+            value_constraint=NumericValueConstraint.CONTINUOUS,
+            forecast_deadline=deadline,
             rationale=f"The interval captures the plausible range.{repeated}",
             tags=("Visual review", "Numeric"),
         )
 
-        resolved_binary = operations._create_legacy_prediction(
+        resolved_binary = operations.create_prediction(
             f"Will a resolved Binary scorecard remain legible?{repeated}",
             75,
+            forecast_deadline=deadline,
             tags=("Visual review", "Resolved"),
         )
         operations.resolve_prediction(
             resolved_binary.prediction_id,
             BinaryOutcome.YES,
+            use_recorded_time=True,
             resolution_notes=f"The event happened.{repeated}",
             postmortem=f"The evidence was directionally useful.{repeated}",
             expected_revision_id=resolved_binary.current_revision_id,
             expected_metadata_version=resolved_binary.metadata_version,
         )
 
-        resolved_numeric = operations._create_legacy_numeric_prediction(
+        resolved_numeric = operations.create_numeric_prediction(
             f"How many items were in the resolved Numeric outcome?{repeated}",
             "items",
             0,
-            "4",
-            "7",
-            "12",
-            70,
+            {5: 4, 25: 5, 50: 7, 75: 9, 95: 12},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=deadline,
             tags=("Visual review", "Resolved"),
         )
         operations.resolve_numeric_prediction(
             resolved_numeric.prediction_id,
             "9",
+            use_recorded_time=True,
             resolution_notes=f"Nine items were observed.{repeated}",
             postmortem=f"The interval contained the outcome.{repeated}",
             expected_revision_id=resolved_numeric.current_revision.revision_id,
             expected_metadata_version=resolved_numeric.metadata_version,
         )
 
-        invalid = operations._create_legacy_prediction(
+        invalid = operations.create_prediction(
             f"Will an Invalid lifecycle state remain explicit?{repeated}",
             40,
+            forecast_deadline=deadline,
             tags=("Visual review", "Invalid"),
         )
         operations.invalidate_prediction(

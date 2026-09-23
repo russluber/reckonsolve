@@ -1,11 +1,12 @@
 import csv
 import io
 import sqlite3
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from zipfile import ZipFile
 
 import pytest
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.errors import BackupError, CsvExportError
 from reckonsolve.application.predictions import PredictionOperations
@@ -21,8 +22,12 @@ NOW = datetime(2026, 8, 20, 18, 30, 45, 123456, tzinfo=UTC)
 
 
 class FixedClock:
+    def __init__(self):
+        self.instant = NOW
+
     def now(self) -> datetime:
-        return NOW
+        self.instant += timedelta(seconds=1)
+        return self.instant
 
 
 def test_backup_is_recoverable_and_records_success_across_restart(tmp_path) -> None:
@@ -46,9 +51,12 @@ def test_backup_is_recoverable_and_records_success_across_restart(tmp_path) -> N
     result = operations.create_backup(backup_path)
 
     assert result.destination == backup_path.resolve()
-    assert result.completed_at == NOW
+    assert result.completed_at >= NOW
     assert result.last_successful_time_recorded
-    assert operations.get_data_management_status().last_successful_backup_at == NOW
+    assert (
+        operations.get_data_management_status().last_successful_backup_at
+        == result.completed_at
+    )
     assert operations.get_prediction(expected.prediction_id) == expected
     database.close()
 
@@ -57,7 +65,7 @@ def test_backup_is_recoverable_and_records_success_across_restart(tmp_path) -> N
         PredictionOperations(reopened_source, FixedClock())
         .get_data_management_status()
         .last_successful_backup_at
-        == NOW
+        == result.completed_at
     )
     reopened_source.close()
 
@@ -82,10 +90,13 @@ def test_backup_is_recoverable_and_records_success_across_restart(tmp_path) -> N
         "Recovery work"
     ]
     assert recovered_numeric.unit == "days"
-    assert recovered_numeric.current_revision.lower_bound.decimal_value == Decimal(
+    assert recovered_numeric.current_revision.quantiles.q05.decimal_value == Decimal(
         "0.0"
     )
-    assert recovered_numeric.current_revision.confidence_percent == 80
+    assert (
+        recovered_numeric.current_revision.quantiles
+        == expected_numeric.current_revision.quantiles
+    )
     assert recovered_numeric.resolution is not None
     assert recovered_numeric.resolution.actual_value.decimal_value == Decimal("9.5")
     assert (
@@ -109,9 +120,7 @@ def test_failed_backup_preserves_existing_destination_and_success_time(
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    operations._create_legacy_prediction(
-        "Will the old backup survive replacement failure?", 50
-    )
+    create_binary(operations, "Will the old backup survive replacement failure?", 50)
     destination = tmp_path / "existing.sqlite3"
     original = b"previous usable backup"
     destination.write_bytes(original)
@@ -134,7 +143,7 @@ def test_backup_rejects_the_live_database_without_mutation(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock())
-    created = operations._create_legacy_prediction("Will self-backup be rejected?", 50)
+    created = create_binary(operations, "Will self-backup be rejected?", 50)
 
     with pytest.raises(BackupError, match="cannot be its own backup"):
         operations.create_backup(path)
@@ -150,9 +159,7 @@ def test_backup_remains_usable_if_recording_its_success_time_fails(
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    created = operations._create_legacy_prediction(
-        "Will this backup remain usable?", 65
-    )
+    created = create_binary(operations, "Will this backup remain usable?", 65)
     destination = tmp_path / "usable.sqlite3"
 
     def fail_to_record(_value) -> None:
@@ -179,131 +186,20 @@ def test_backup_remains_usable_if_recording_its_success_time_fails(
     recovered.close()
 
 
-def test_csv_bundle_preserves_relational_history_and_raw_text(tmp_path) -> None:
+def test_current_history_refuses_incomplete_csv_without_losing_backup(tmp_path) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    expected = _create_complete_history(operations)
-    expected_numeric = _create_complete_numeric_history(operations)
-    operations.create_saved_view(
-        "Not analytical export",
-        SavedViewConfiguration(
-            search_text="evidence",
-            match_mode=SearchMatchMode.ALL,
-            include_superseded=False,
-            archive_query=ArchiveQuery(tags=("Research",)),
-        ),
-    )
-    export_path = tmp_path / "reckonsolve-export.zip"
-
-    result = operations.export_csv_bundle(export_path)
-
-    assert result.destination == export_path.resolve()
-    assert result.exported_at == NOW
-    assert result.csv_file_count == 16
-    assert SettingsRepository(database).get_last_successful_backup_at() is None
-    with ZipFile(export_path) as archive:
-        assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
-        assert archive.testzip() is None
-        predictions = _read_csv(archive, "predictions.csv")
-        revisions = _read_csv(archive, "forecast_revisions.csv")
-        numeric_revisions = _read_csv(archive, "numeric_forecast_revisions.csv")
-        definitions = _read_csv(archive, "definition_changes.csv")
-        journals = _read_csv(archive, "journal_entries.csv")
-        corrections = _read_csv(archive, "journal_corrections.csv")
-        reviews = _read_csv(archive, "forecast_reviews.csv")
-        resolutions = _read_csv(archive, "resolutions.csv")
-        numeric_resolutions = _read_csv(archive, "numeric_resolutions.csv")
-        invalidations = _read_csv(archive, "invalidations.csv")
-        tags = _read_csv(archive, "tags.csv")
-        prediction_tags = _read_csv(archive, "prediction_tags.csv")
-        readme = archive.read("README.txt").decode("utf-8")
-
-    resolved_row = next(
-        row
-        for row in predictions
-        if row["prediction_id"] == str(expected.prediction_id)
-    )
-    assert resolved_row["question"] == expected.question
-    assert resolved_row["persisted_status"] == "resolved"
-    assert resolved_row["background"] == "Context, with a comma\nand a new line."
-    numeric_row = next(
-        row
-        for row in predictions
-        if row["prediction_id"] == str(expected_numeric.prediction_id)
-    )
-    assert numeric_row["prediction_type"] == "numeric"
-    assert numeric_row["numeric_unit"] == "days"
-    assert numeric_row["numeric_precision"] == "1"
-    resolved_revisions = [
-        row for row in revisions if row["prediction_id"] == str(expected.prediction_id)
-    ]
-    assert [row["sequence"] for row in resolved_revisions] == ["1", "2"]
-    assert [row["probability_percent"] for row in resolved_revisions] == ["40", "70"]
-    assert len(definitions) == 1
-    assert journals[0]["original_body"] == 'Evidence said, "wait".\nThen changed.'
-    assert journals[0]["forecast_revision_id"] == resolved_revisions[0]["revision_id"]
-    numeric_journal = next(
-        row
-        for row in journals
-        if row["prediction_id"] == str(expected_numeric.prediction_id)
-    )
-    assert (
-        corrections[0]["body"] == "Corrected evidence, still multiline.\nSecond line."
-    )
-    assert resolutions[0]["scoring_revision_id"] == resolved_revisions[1]["revision_id"]
-    assert resolutions[0]["outcome"] == "yes"
-    numeric_history = [
-        row
-        for row in numeric_revisions
-        if row["prediction_id"] == str(expected_numeric.prediction_id)
-    ]
-    assert [row["sequence"] for row in numeric_history] == ["1", "2"]
-    assert [row["lower_scaled"] for row in numeric_history] == ["-15", "0"]
-    assert [row["median_scaled"] for row in numeric_history] == ["20", "45"]
-    assert [row["upper_scaled"] for row in numeric_history] == ["70", "90"]
-    assert [row["confidence_percent"] for row in numeric_history] == ["80", "80"]
-    assert numeric_journal["forecast_revision_id"] == ""
-    assert (
-        numeric_journal["numeric_forecast_revision_id"]
-        == numeric_history[0]["numeric_revision_id"]
-    )
-    binary_review = next(
-        row for row in reviews if row["prediction_id"] == str(expected.prediction_id)
-    )
-    numeric_review = next(
-        row
-        for row in reviews
-        if row["prediction_id"] == str(expected_numeric.prediction_id)
-    )
-    assert binary_review["forecast_revision_id"] == resolved_revisions[0]["revision_id"]
-    assert binary_review["numeric_forecast_revision_id"] == ""
-    assert numeric_review["forecast_revision_id"] == ""
-    assert (
-        numeric_review["numeric_forecast_revision_id"]
-        == numeric_history[0]["numeric_revision_id"]
-    )
-    numeric_resolution = next(
-        row
-        for row in numeric_resolutions
-        if row["prediction_id"] == str(expected_numeric.prediction_id)
-    )
-    assert numeric_resolution["actual_scaled"] == "95"
-    assert (
-        numeric_resolution["scoring_numeric_revision_id"]
-        == numeric_history[1]["numeric_revision_id"]
-    )
-    assert len(invalidations) == 1
-    assert {row["display_name"] for row in tags} == {"Research", "Test"}
-    assert len(prediction_tags) == 3
-    assert "not a complete restoration format" in readme
-    assert "highest sequence is the current Binary forecast" in readme
-    assert "scoring_revision_id" in readme
-    assert "Format version: 3" in readme
-    assert "numeric_forecast_revisions.csv" in readme
-    assert "forecast_reviews.csv" in readme
-    assert "Mutable Saved Views" in readme
-    assert "prediction_search full-text rows" in readme
-    assert "does not persist hidden search telemetry" in readme
+    binary = _create_complete_history(operations)
+    numeric = _create_complete_numeric_history(operations)
+    destination = tmp_path / "export.zip"
+    source = tmp_path / "source.sqlite3"
+    before = source.read_bytes()
+    with pytest.raises(CsvExportError, match="format"):
+        operations.export_csv_bundle(destination)
+    assert not destination.exists()
+    assert source.read_bytes() == before
+    assert operations.get_prediction(binary.prediction_id) == binary
+    assert operations.get_numeric_prediction(numeric.prediction_id) == numeric
     database.close()
 
 
@@ -321,38 +217,22 @@ def test_empty_csv_bundle_has_every_header_and_no_data_rows(tmp_path) -> None:
     database.close()
 
 
-def test_csv_export_includes_numeric_interval_data(tmp_path) -> None:
+def test_numeric_csv_refusal_preserves_existing_destination(tmp_path) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    numeric = operations._create_legacy_numeric_prediction(
-        "How many days will the reply take?",
+    numeric = create_numeric(
+        operations,
+        "Numeric export?",
         "days",
-        0,
         1,
-        3,
-        7,
-        80,
+        {5: "-1.5", 25: "0.0", 50: "2.0", 75: "4.0", 95: "7.0"},
     )
-    destination = tmp_path / "numeric-export.zip"
-
-    result = operations.export_csv_bundle(destination)
-
-    assert result.csv_file_count == 16
-    with ZipFile(destination) as archive:
-        rows = _read_csv(archive, "numeric_forecast_revisions.csv")
-    assert rows == [
-        {
-            "numeric_revision_id": str(numeric.current_revision.revision_id),
-            "prediction_id": str(numeric.prediction_id),
-            "sequence": "1",
-            "lower_scaled": "1",
-            "median_scaled": "3",
-            "upper_scaled": "7",
-            "confidence_percent": "80",
-            "rationale": "",
-            "created_at_utc": "2026-08-20T18:30:45.123456Z",
-        }
-    ]
+    destination = tmp_path / "export.zip"
+    destination.write_bytes(b"previous export")
+    with pytest.raises(CsvExportError, match="format"):
+        operations.export_csv_bundle(destination)
+    assert destination.read_bytes() == b"previous export"
+    assert operations.get_numeric_prediction(numeric.prediction_id) == numeric
     database.close()
 
 
@@ -362,9 +242,6 @@ def test_failed_csv_export_preserves_existing_destination_and_source(
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-    created = operations._create_legacy_prediction(
-        "Will export failure preserve data?", 35
-    )
     destination = tmp_path / "existing.zip"
     original = b"previous export"
     destination.write_bytes(original)
@@ -379,7 +256,7 @@ def test_failed_csv_export_preserves_existing_destination_and_source(
 
     assert destination.read_bytes() == original
     assert tuple(tmp_path.glob(".existing.zip.*.tmp")) == ()
-    assert operations.get_prediction(created.prediction_id).question == created.question
+    assert operations.browse_predictions().predictions == ()
     database.close()
 
 
@@ -387,143 +264,72 @@ def test_csv_export_rejects_the_live_database_without_mutation(tmp_path) -> None
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock())
-    created = operations._create_legacy_prediction(
-        "Will live data remain canonical?", 55
-    )
+    created = create_binary(operations, "Will live data remain canonical?", 55)
 
-    with pytest.raises(CsvExportError, match="cannot be an export file"):
+    with pytest.raises(CsvExportError, match="format"):
         operations.export_csv_bundle(path)
 
     assert operations.get_prediction(created.prediction_id).question == created.question
     database.close()
 
 
-def test_format_three_export_preserves_terminal_corrections_and_completion(
+def test_backup_preserves_both_terminal_correction_chains_and_postmortem_completion(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
     operations = PredictionOperations(database, FixedClock())
-
-    binary = operations._create_legacy_prediction("Will Binary correction export?", 65)
-    operations.resolve_prediction(
-        binary.prediction_id,
-        BinaryOutcome.YES,
-        resolution_notes="Original Binary notes",
-        expected_revision_id=binary.current_revision_id,
-        expected_metadata_version=binary.metadata_version,
-    )
-    operations.record_postmortem_skip(
-        binary.prediction_id,
-        expected_correction_id=None,
-    )
+    binary = _create_complete_history(operations)
+    numeric = _create_complete_numeric_history(operations)
     operations.correct_binary_resolution(
         binary.prediction_id,
         BinaryOutcome.NO,
-        resolution_notes="Corrected Binary notes",
-        postmortem="Later Binary Postmortem",
-        correction_reason="Certified result was No.",
+        resolution_notes="Corrected source",
+        postmortem=None,
+        correction_reason="Corrected outcome",
         expected_correction_id=None,
-    )
-
-    numeric = operations._create_legacy_numeric_prediction(
-        "What exact Numeric correction exports?",
-        "units",
-        2,
-        "-5.00",
-        "0.00",
-        "8.00",
-        80,
-    )
-    operations.resolve_numeric_prediction(
-        numeric.prediction_id,
-        "7.25",
-        postmortem="Original Numeric Postmortem",
-        expected_revision_id=numeric.current_revision.revision_id,
-        expected_metadata_version=numeric.metadata_version,
     )
     operations.correct_numeric_resolution(
         numeric.prediction_id,
-        "-1.25",
-        resolution_notes="Corrected Numeric notes",
+        "10.5",
+        resolution_notes="Corrected numeric source",
         postmortem=None,
-        correction_reason="The source reported a signed quantity.",
+        correction_reason="Corrected actual",
         expected_correction_id=None,
     )
-
-    invalid = operations._create_legacy_prediction(
-        "Will Invalid correction export?", 15
+    operations.record_postmortem_skip(
+        binary.prediction_id,
+        expected_correction_id=operations.get_binary_resolution_history(
+            binary.prediction_id
+        ).current_correction_id,
     )
-    operations.invalidate_prediction(
-        invalid.prediction_id,
-        reason="Original Invalid reason",
-        expected_revision_id=invalid.current_revision_id,
-        expected_metadata_version=invalid.metadata_version,
+    operations.record_postmortem_skip(
+        numeric.prediction_id,
+        expected_correction_id=operations.get_numeric_resolution_history(
+            numeric.prediction_id
+        ).current_correction_id,
     )
-    operations.correct_invalidation_reason(
-        invalid.prediction_id,
-        "Corrected Invalid reason",
-        expected_correction_id=None,
-    )
-
-    destination = tmp_path / "v04-export.zip"
-    result = operations.export_csv_bundle(destination)
-
-    assert result.csv_file_count == 16
-    with ZipFile(destination) as archive:
-        binary_rows = _read_csv(archive, "resolution_corrections.csv")
-        numeric_rows = _read_csv(archive, "numeric_resolution_corrections.csv")
-        invalid_rows = _read_csv(archive, "invalidation_reason_corrections.csv")
-        completion_rows = _read_csv(archive, "postmortem_completions.csv")
-        readme = archive.read("README.txt").decode("utf-8")
-
-    assert binary_rows == [
-        {
-            "correction_id": binary_rows[0]["correction_id"],
-            "prediction_id": str(binary.prediction_id),
-            "resolution_id": binary_rows[0]["resolution_id"],
-            "sequence": "1",
-            "old_outcome": "yes",
-            "new_outcome": "no",
-            "old_resolution_notes": "Original Binary notes",
-            "new_resolution_notes": "Corrected Binary notes",
-            "old_postmortem": "",
-            "new_postmortem": "Later Binary Postmortem",
-            "outcome_changed": "1",
-            "resolution_notes_changed": "1",
-            "postmortem_changed": "1",
-            "correction_reason": "Certified result was No.",
-            "corrected_at_utc": "2026-08-20T18:30:45.123456Z",
-        }
-    ]
-    assert numeric_rows[0]["old_actual_scaled"] == "725"
-    assert numeric_rows[0]["new_actual_scaled"] == "-125"
-    assert numeric_rows[0]["actual_value_changed"] == "1"
-    assert numeric_rows[0]["old_postmortem"] == "Original Numeric Postmortem"
-    assert numeric_rows[0]["new_postmortem"] == ""
-    assert (
-        numeric_rows[0]["correction_reason"] == "The source reported a signed quantity."
-    )
-    assert invalid_rows[0]["prediction_id"] == str(invalid.prediction_id)
-    assert invalid_rows[0]["old_reason"] == "Original Invalid reason"
-    assert invalid_rows[0]["new_reason"] == "Corrected Invalid reason"
-    assert completion_rows[0]["prediction_id"] == str(binary.prediction_id)
-    assert completion_rows[0]["completed_at_utc"] == ("2026-08-20T18:30:45.123456Z")
-    assert "Format version: 3" in readme
-    assert "outcome_changed = 1 identifies a score-affecting correction" in readme
-    assert "old_actual_scaled" in readme
-    assert "apply each correction in sequence" in readme
-    assert "later Postmortem correction may coexist" in readme
+    expected_binary = operations.get_binary_resolution_history(binary.prediction_id)
+    expected_numeric = operations.get_numeric_resolution_history(numeric.prediction_id)
+    destination = tmp_path / "recovery.sqlite3"
+    operations.create_backup(destination)
     database.close()
+    recovered = Database.open(destination)
+    ops = PredictionOperations(recovered, FixedClock())
+    assert ops.get_binary_resolution_history(binary.prediction_id) == expected_binary
+    assert ops.get_numeric_resolution_history(numeric.prediction_id) == expected_numeric
+    recovered.check_search_index()
+    recovered.close()
 
 
 def _create_complete_history(operations: PredictionOperations):
-    created = operations._create_legacy_prediction(
+    created = create_binary(
+        operations,
         "Will the full, quoted history survive?",
         40,
         rationale="Initial rationale",
         background="Context, with a comma\nand a new line.",
         resolution_criteria="A published result counts.",
-        forecast_deadline=date(2026, 8, 20),
+        forecast_deadline=datetime(2026, 8, 21, tzinfo=UTC),
         expected_resolution=date(2026, 8, 21),
         tags=("Research",),
     )
@@ -557,7 +363,7 @@ def _create_complete_history(operations: PredictionOperations):
         question="Will the full, quoted history survive export?",
         background=created.background,
         resolution_criteria=created.resolution_criteria,
-        forecast_deadline=created.forecast_deadline,
+        forecast_deadline=None,
         expected_resolution=created.expected_resolution,
         tags=("Research",),
         expected_metadata_version=revised.metadata_version,
@@ -566,12 +372,14 @@ def _create_complete_history(operations: PredictionOperations):
     resolved = operations.resolve_prediction(
         created.prediction_id,
         BinaryOutcome.YES,
+        use_recorded_time=True,
         resolution_notes="Verified, with a source.",
         postmortem="The revision was warranted.",
         expected_revision_id=edited.current_revision_id,
         expected_metadata_version=edited.metadata_version,
     )
-    invalid = operations._create_legacy_prediction(
+    invalid = create_binary(
+        operations,
         "Will an invalid record remain exported?",
         10,
         tags=("Test",),
@@ -586,14 +394,12 @@ def _create_complete_history(operations: PredictionOperations):
 
 
 def _create_complete_numeric_history(operations: PredictionOperations):
-    created = operations._create_legacy_numeric_prediction(
+    created = create_numeric(
+        operations,
         "How many days will the type-aware export take?",
         "days",
         1,
-        "-1.5",
-        "2.0",
-        "7.0",
-        80,
+        {5: "-1.5", 25: "0.0", 50: "2.0", 75: "4.0", 95: "7.0"},
         rationale="Initial numeric rationale.",
         tags=("Research",),
     )
@@ -615,12 +421,9 @@ def _create_complete_numeric_history(operations: PredictionOperations):
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
     )
-    revised = operations.revise_numeric_forecast(
+    revised = operations.revise_quantile_forecast(
         created.prediction_id,
-        "0.0",
-        "4.5",
-        "9.0",
-        80,
+        {5: "0.0", 25: "2.0", 50: "4.5", 75: "6.0", 95: "9.0"},
         rationale="New evidence shifted the interval upward.",
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
@@ -628,6 +431,7 @@ def _create_complete_numeric_history(operations: PredictionOperations):
     return operations.resolve_numeric_prediction(
         revised.prediction_id,
         "9.5",
+        use_recorded_time=True,
         resolution_notes="Observed in the final response.",
         postmortem="The upper tail was too narrow.",
         expected_revision_id=revised.current_revision.revision_id,

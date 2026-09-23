@@ -2,19 +2,12 @@ import sqlite3
 from datetime import UTC, datetime
 
 import pytest
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS, Migration
 from reckonsolve.data.numeric_predictions import NumericPredictionRepository
-from reckonsolve.domain.predictions import (
-    BinaryOutcome,
-    FixedPrecisionValue,
-    JournalTimelineEvent,
-    NewNumericForecastRevision,
-    NewNumericPrediction,
-    PredictionStatus,
-)
 
 TIMESTAMP = "2026-08-20T20:00:00.000000Z"
 
@@ -24,92 +17,36 @@ class FixedClock:
         return datetime(2026, 8, 20, 20, tzinfo=UTC)
 
 
-def new_numeric_prediction() -> NewNumericPrediction:
-    decimal_places = 2
-    return NewNumericPrediction(
+def new_numeric_prediction(operations):
+    return create_numeric(
+        operations,
         "How many days?",
         "days",
-        decimal_places,
-        NewNumericForecastRevision(
-            FixedPrecisionValue.from_value("-1.25", decimal_places),
-            FixedPrecisionValue.from_value("4.00", decimal_places),
-            FixedPrecisionValue.from_value("12.75", decimal_places),
-            80,
-            "Initial range",
-        ),
+        2,
+        {5: "-1.25", 25: "0.00", 50: "4.00", 75: "8.00", 95: "12.75"},
+        rationale="Initial quantiles",
     )
 
 
-def test_v9_upgrade_preserves_existing_binary_data_and_behavior(tmp_path) -> None:
+def test_v9_upgrade_of_empty_database_preserves_migration_path(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
-    old_database = Database.open(path, migrations=MIGRATIONS[:8])
-    old_operations = PredictionOperations(old_database, FixedClock())
-    created = old_operations._create_legacy_prediction(
-        "Will the v8 binary prediction survive?",
-        64,
-        rationale="Original binary rationale",
-        tags=("migration",),
-    )
-    revised = old_operations.revise_forecast(
-        created.prediction_id,
-        71,
-        expected_revision_id=created.current_revision_id,
-        expected_metadata_version=created.metadata_version,
-    )
-    old_operations.add_journal_entry(
-        created.prediction_id,
-        "Preserve this binary Journal history.",
-        expected_revision_id=revised.current_revision_id,
-        expected_metadata_version=revised.metadata_version,
-    )
-    old_operations.resolve_prediction(
-        created.prediction_id,
-        BinaryOutcome.YES,
-        resolution_notes="Preserve this binary Resolution.",
-        expected_revision_id=revised.current_revision_id,
-        expected_metadata_version=revised.metadata_version,
-    )
-    old_database.close()
-
+    Database.open(path, migrations=MIGRATIONS[:8]).close()
     upgraded = Database.open(path, migrations=MIGRATIONS[:9])
-    upgraded_operations = PredictionOperations(upgraded, FixedClock())
-    reopened = upgraded_operations.get_prediction(created.prediction_id)
-
     assert upgraded.schema_version == 9
-    assert reopened.question == created.question
-    assert reopened.probability_percent == 71
-    assert reopened.current_revision_id == revised.current_revision_id
-    assert reopened.tags == ("migration",)
-    assert reopened.status is PredictionStatus.RESOLVED
-    assert reopened.resolution is not None
-    assert reopened.resolution.outcome is BinaryOutcome.YES
-    assert reopened.resolution.resolution_notes == "Preserve this binary Resolution."
-    timeline = upgraded_operations.list_timeline(created.prediction_id)
-    assert any(
-        isinstance(event, JournalTimelineEvent)
-        and event.body == "Preserve this binary Journal history."
-        for event in timeline
-    )
     with upgraded.transaction() as connection:
-        type_row = connection.execute(
-            """
-            SELECT prediction_type, numeric_unit, numeric_precision
-            FROM predictions
-            WHERE id = ?
-            """,
-            (created.prediction_id,),
-        ).fetchone()
-    assert tuple(type_row) == ("binary", None, None)
+        assert connection.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] == 0
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(predictions)")
+        }
+        assert {"prediction_type", "numeric_unit", "numeric_precision"} <= columns
     upgraded.close()
 
 
 def test_v9_enforces_type_specific_definitions_and_revision_ownership(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    numeric = NumericPredictionRepository(database).create_prediction(
-        new_numeric_prediction(),
-        FixedClock().now(),
-    )
-    binary = PredictionOperations(database, FixedClock())._create_legacy_prediction(
+    numeric = new_numeric_prediction(PredictionOperations(database, FixedClock()))
+    binary = create_binary(
+        PredictionOperations(database, FixedClock()),
         "Will this stay binary?",
         60,
     )
@@ -156,6 +93,7 @@ def test_v9_enforces_type_specific_definitions_and_revision_ownership(tmp_path) 
 @pytest.mark.parametrize(
     "values",
     [
+        (1, 2, 3, 80),  # Even a valid retired interval cannot anchor a v0.7 forecast.
         (2, 1, 3, 80),
         (1, 4, 3, 80),
         (1, 2, 3, 0),
@@ -163,15 +101,12 @@ def test_v9_enforces_type_specific_definitions_and_revision_ownership(tmp_path) 
         (-1_000_000_000_000_000_000, 0, 1, 80),
     ],
 )
-def test_v9_numeric_revision_constraints_reject_invalid_rows(
+def test_v9_retained_interval_table_rejects_rows_for_quantile_predictions(
     tmp_path,
     values: tuple[int, int, int, int],
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    numeric = NumericPredictionRepository(database).create_prediction(
-        new_numeric_prediction(),
-        FixedClock().now(),
-    )
+    numeric = new_numeric_prediction(PredictionOperations(database, FixedClock()))
     lower, median, upper, confidence = values
 
     with pytest.raises(sqlite3.IntegrityError), database.transaction() as connection:
@@ -199,7 +134,7 @@ def test_v9_numeric_revision_constraints_reject_invalid_rows(
 def test_v9_numeric_definition_and_revision_history_are_immutable(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     repository = NumericPredictionRepository(database)
-    numeric = repository.create_prediction(new_numeric_prediction(), FixedClock().now())
+    numeric = new_numeric_prediction(PredictionOperations(database, FixedClock()))
     revision = numeric.current_revision
 
     for statement, parameters in (
@@ -208,20 +143,20 @@ def test_v9_numeric_definition_and_revision_history_are_immutable(tmp_path) -> N
             (numeric.prediction_id,),
         ),
         (
-            "UPDATE numeric_forecast_revisions SET median_scaled = 500 WHERE id = ?",
+            "UPDATE numeric_quantile_revisions SET q50_scaled = 500 WHERE id = ?",
             (revision.revision_id,),
         ),
         (
-            "DELETE FROM numeric_forecast_revisions WHERE id = ?",
+            "DELETE FROM numeric_quantile_revisions WHERE id = ?",
             (revision.revision_id,),
         ),
         (
             """
-            INSERT OR REPLACE INTO numeric_forecast_revisions (
-                id, prediction_id, lower_scaled, median_scaled, upper_scaled,
-                confidence_percent, created_at, sequence, rationale
+            INSERT OR REPLACE INTO numeric_quantile_revisions (
+                id, prediction_id, q05_scaled, q25_scaled, q50_scaled,
+                q75_scaled, q95_scaled, created_at, sequence, rationale
             )
-            VALUES (?, ?, -100, 500, 1300, 80, ?, 1, NULL)
+            VALUES (?, ?, -100, 0, 500, 800, 1300, ?, 1, NULL)
             """,
             (revision.revision_id, numeric.prediction_id, TIMESTAMP),
         ),

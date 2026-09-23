@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.errors import PredictionNotFoundError, ValidationError
 from reckonsolve.application.predictions import PredictionOperations
@@ -27,18 +28,16 @@ def test_create_numeric_prediction_persists_complete_initial_state_atomically(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
 
-    created = operations._create_legacy_numeric_prediction(
+    created = create_numeric(
+        operations,
         "  How many days will the response take?  ",
         "  days  ",
         2,
-        "-3.25",
-        "7",
-        "21.50",
-        80,
+        {5: "-3.25", 25: "2.00", 50: "7", 75: "14.00", 95: "21.50"},
         rationale="  Initial evidence  ",
         background="  Waiting on a written offer.  ",
         resolution_criteria="  Count complete calendar days.  ",
-        forecast_deadline=date(2026, 8, 20),
+        forecast_deadline=NOW + timedelta(hours=1),
         expected_resolution=date(2026, 9, 5),
         tags=("Work", "Timing", "work"),
     )
@@ -47,14 +46,15 @@ def test_create_numeric_prediction_persists_complete_initial_state_atomically(
     assert created.unit == "days"
     assert created.decimal_places == 2
     assert created.status is PredictionStatus.OPEN
-    assert str(created.current_revision.lower_bound) == "-3.25"
-    assert str(created.current_revision.median_estimate) == "7.00"
-    assert str(created.current_revision.upper_bound) == "21.50"
-    assert created.current_revision.confidence_percent == 80
+    assert str(created.current_revision.quantiles.q05) == "-3.25"
+    assert str(created.current_revision.quantiles.q50) == "7.00"
+    assert str(created.current_revision.quantiles.q95) == "21.50"
     assert created.current_revision.rationale == "Initial evidence"
     assert created.background == "Waiting on a written offer."
     assert created.resolution_criteria == "Count complete calendar days."
-    assert created.forecast_deadline == date(2026, 8, 20)
+    assert created.forecast_contract.forecast_deadline.instant == NOW + timedelta(
+        hours=1
+    )
     assert created.expected_resolution == date(2026, 9, 5)
     assert created.tags == ("Timing", "Work")
 
@@ -63,7 +63,7 @@ def test_create_numeric_prediction_persists_complete_initial_state_atomically(
             """
             SELECT
                 (SELECT COUNT(*) FROM predictions WHERE prediction_type = 'numeric'),
-                (SELECT COUNT(*) FROM numeric_forecast_revisions),
+                (SELECT COUNT(*) FROM numeric_quantile_revisions),
                 (SELECT COUNT(*) FROM prediction_tags)
             """
         ).fetchone()
@@ -76,16 +76,12 @@ def test_numeric_prediction_round_trips_through_restart_with_metadata_and_tags(
 ) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     first_database = Database.open(path)
-    created = PredictionOperations(
-        first_database, FixedClock(NOW), UTC
-    )._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(first_database, FixedClock(NOW), UTC),
         "How much will it cost?",
         "USD",
         2,
-        "0.01",
-        "50.00",
-        "125.75",
-        95,
+        {5: "0.01", 25: "25.00", 50: "50.00", 75: "90.00", 95: "125.75"},
         background="Quote pending.",
         tags=("Budget",),
     )
@@ -103,9 +99,9 @@ def test_numeric_prediction_round_trips_through_restart_with_metadata_and_tags(
     ("field", "kwargs"),
     [
         ("unit", {"unit": " "}),
-        ("lower_bound", {"lower_bound": "1.001"}),
-        ("interval", {"lower_bound": "4", "median_estimate": "3"}),
-        ("confidence_percent", {"confidence_percent": 100}),
+        ("q05", {"quantiles": {5: "1.001", 25: 2, 50: 3, 75: 4, 95: 5}}),
+        ("quantiles", {"quantiles": {5: 4, 25: 2, 50: 3, 75: 4, 95: 5}}),
+        ("quantiles", {"quantiles": {5: 1, 50: 3, 95: 5}}),
     ],
 )
 def test_numeric_creation_surfaces_expected_validation_errors_without_writes(
@@ -118,16 +114,13 @@ def test_numeric_creation_surfaces_expected_validation_errors_without_writes(
     values: dict[str, object] = {
         "question": "How many?",
         "unit": "days",
-        "decimal_places": 2,
-        "lower_bound": "1.00",
-        "median_estimate": "2.00",
-        "upper_bound": "3.00",
-        "confidence_percent": 80,
+        "precision": 2,
+        "quantiles": {5: 1, 25: 2, 50: 3, 75: 4, 95: 5},
     }
     values.update(kwargs)
 
     with pytest.raises(ValidationError) as error_info:
-        operations._create_legacy_numeric_prediction(**values)  # type: ignore[arg-type]
+        create_numeric(operations, **values)  # type: ignore[arg-type]
 
     assert error_info.value.field == field
     with database.transaction() as connection:
@@ -143,15 +136,13 @@ def test_numeric_creation_rejects_an_initial_deadline_that_has_already_passed(
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
 
     with pytest.raises(ValidationError) as error_info:
-        operations._create_legacy_numeric_prediction(
+        create_numeric(
+            operations,
             "How many?",
             "days",
             0,
-            1,
-            2,
-            3,
-            80,
-            forecast_deadline=(NOW - timedelta(days=1)).date(),
+            {5: 1, 25: 2, 50: 3, 75: 4, 95: 5},
+            forecast_deadline=NOW - timedelta(days=1),
         )
 
     assert error_info.value.field == "forecast_deadline"
@@ -166,7 +157,7 @@ def test_numeric_creation_rolls_back_metadata_and_tags_with_a_failed_initial_rev
         connection.execute(
             """
             CREATE TRIGGER force_numeric_creation_rollback
-            BEFORE INSERT ON numeric_forecast_revisions
+            BEFORE INSERT ON numeric_quantile_revisions
             BEGIN
                 SELECT RAISE(ABORT, 'forced numeric creation failure');
             END
@@ -175,14 +166,12 @@ def test_numeric_creation_rolls_back_metadata_and_tags_with_a_failed_initial_rev
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
 
     with pytest.raises(sqlite3.IntegrityError, match="forced numeric creation failure"):
-        operations._create_legacy_numeric_prediction(
+        create_numeric(
+            operations,
             "How many?",
             "days",
             0,
-            1,
-            2,
-            3,
-            80,
+            {5: 1, 25: 2, 50: 3, 75: 4, 95: 5},
             background="Must roll back.",
             tags=("Rollback",),
         )
@@ -192,7 +181,7 @@ def test_numeric_creation_rolls_back_metadata_and_tags_with_a_failed_initial_rev
             """
             SELECT
                 (SELECT COUNT(*) FROM predictions),
-                (SELECT COUNT(*) FROM numeric_forecast_revisions),
+                (SELECT COUNT(*) FROM numeric_quantile_revisions),
                 (SELECT COUNT(*) FROM prediction_tags),
                 (SELECT COUNT(*) FROM tags)
             """
@@ -204,7 +193,7 @@ def test_numeric_creation_rolls_back_metadata_and_tags_with_a_failed_initial_rev
 def test_numeric_read_does_not_treat_a_binary_prediction_as_numeric(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    binary = operations._create_legacy_prediction("Will this stay binary?", 60)
+    binary = create_binary(operations, "Will this stay binary?", 60)
 
     with pytest.raises(PredictionNotFoundError):
         operations.get_numeric_prediction(binary.prediction_id)

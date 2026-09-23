@@ -4,11 +4,11 @@ from collections import deque
 from collections.abc import Callable, Iterable
 from itertools import groupby
 
-from .predictions import NumericTimelineEvent, TimelineEvent
+from .predictions import TimelineEvent
 from .quantiles import QuantileTimelineEvent
 
 
-def order_timeline[T: TimelineEvent | NumericTimelineEvent | QuantileTimelineEvent](
+def order_timeline[T: TimelineEvent | QuantileTimelineEvent](
     events: Iterable[T], *, key: Callable[[T], tuple[int, int, int]]
 ) -> tuple[T, ...]:
     """Preserve revision anchors and per-kind save order, merging by exact time.

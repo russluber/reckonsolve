@@ -1,13 +1,18 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
 
+from reckonsolve.domain.forecast_contracts import (
+    ForecastDeadline,
+    contract_status,
+    prospective_contract,
+)
 from reckonsolve.domain.predictions import (
     PredictionMetadataUpdate,
     PredictionStatus,
+    PredictionType,
     PredictionValidationError,
-    display_status,
 )
 
 
@@ -85,18 +90,16 @@ def test_metadata_update_rejects_nul_text(field: str, value: Any) -> None:
     assert error_info.value.field == field
 
 
-def test_deadline_is_open_through_named_date_then_locked() -> None:
-    deadline = date(2027, 1, 2)
-
-    assert (
-        display_status(PredictionStatus.OPEN, deadline, date(2027, 1, 2))
-        is PredictionStatus.OPEN
-    )
-    assert (
-        display_status(PredictionStatus.OPEN, deadline, date(2027, 1, 3))
-        is PredictionStatus.LOCKED
-    )
-    assert (
-        display_status(PredictionStatus.RESOLVED, deadline, date(2027, 1, 3))
-        is PredictionStatus.RESOLVED
-    )
+def test_exact_deadline_locks_at_the_instant_without_changing_terminal_status() -> None:
+    deadline = datetime(2027, 1, 2, 12, tzinfo=UTC)
+    contract = prospective_contract(PredictionType.BINARY, ForecastDeadline(deadline))
+    for status, instant, expected in (
+        (
+            PredictionStatus.OPEN,
+            deadline - timedelta(microseconds=1),
+            PredictionStatus.OPEN,
+        ),
+        (PredictionStatus.OPEN, deadline, PredictionStatus.LOCKED),
+        (PredictionStatus.RESOLVED, deadline, PredictionStatus.RESOLVED),
+    ):
+        assert contract_status(status, contract, instant) is expected

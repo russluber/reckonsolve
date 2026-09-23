@@ -1,11 +1,10 @@
 import sqlite3
 
 import pytest
+from supported_fixtures import insert_binary_contract
 
 from reckonsolve.data.database import Database
-from reckonsolve.data.forecast_contracts import insert_legacy_contract_if_supported
 from reckonsolve.data.migrations import MIGRATIONS, Migration
-from reckonsolve.domain.predictions import PredictionType
 
 TIMESTAMP = "2026-08-12T19:30:00.000000Z"
 
@@ -23,9 +22,7 @@ def _insert_prediction(
             (question, TIMESTAMP, TIMESTAMP),
         ).lastrowid
         assert prediction_id is not None
-        insert_legacy_contract_if_supported(
-            connection, prediction_id, PredictionType.BINARY
-        )
+        insert_binary_contract(connection, prediction_id, TIMESTAMP)
         revision_id = connection.execute(
             """
             INSERT INTO forecast_revisions (
@@ -38,37 +35,28 @@ def _insert_prediction(
     return prediction_id, revision_id
 
 
-def test_migration_five_preserves_v4_history_and_adds_empty_journal_tables(
-    tmp_path,
-) -> None:
+def test_empty_v4_upgrade_adds_journal_tables(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
-    v4 = Database.open(path, migrations=MIGRATIONS[:4])
-    prediction_id, revision_id = _insert_prediction(v4)
-    v4.close()
-
+    Database.open(path, migrations=MIGRATIONS[:4]).close()
     upgraded = Database.open(path, migrations=MIGRATIONS[:5])
-
     assert upgraded.schema_version == 5
     with upgraded.transaction() as connection:
-        revision = connection.execute(
-            "SELECT id, prediction_id, probability_percent FROM forecast_revisions"
-        ).fetchone()
-        counts = connection.execute(
-            """
-            SELECT
-                (SELECT COUNT(*) FROM journal_entries),
-                (SELECT COUNT(*) FROM journal_entry_corrections)
-            """
-        ).fetchone()
-    assert tuple(revision) == (revision_id, prediction_id, 60)
-    assert tuple(counts) == (0, 0)
+        assert (
+            connection.execute("SELECT COUNT(*) FROM journal_entries").fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM journal_entry_corrections"
+            ).fetchone()[0]
+            == 0
+        )
     upgraded.close()
 
 
 def test_failing_migration_five_rolls_back_the_entire_v4_upgrade(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     v4 = Database.open(path, migrations=MIGRATIONS[:4])
-    _insert_prediction(v4)
     v4.close()
     failing_v5 = Migration(
         version=5,
@@ -169,10 +157,7 @@ def test_journal_anchor_must_belong_to_prediction_and_be_current(tmp_path) -> No
 def test_terminal_predictions_reject_raw_new_entries_but_accept_corrections(
     tmp_path,
 ) -> None:
-    database = Database.open(
-        tmp_path / "reckonsolve.sqlite3",
-        migrations=MIGRATIONS[:5],
-    )
+    database = Database.open(tmp_path / "reckonsolve.sqlite3")
     prediction_id, revision_id = _insert_prediction(database)
     with database.transaction() as connection:
         entry_id = connection.execute(
@@ -185,8 +170,10 @@ def test_terminal_predictions_reject_raw_new_entries_but_accept_corrections(
         ).lastrowid
         assert entry_id is not None
         connection.execute(
-            "UPDATE predictions SET status = 'resolved' WHERE id = ?",
-            (prediction_id,),
+            """INSERT INTO resolutions
+            (prediction_id, outcome, resolved_at, scoring_revision_id, effective_resolution_at)
+            VALUES (?, 'yes', ?, ?, ?)""",
+            (prediction_id, TIMESTAMP, revision_id, TIMESTAMP),
         )
 
     with (

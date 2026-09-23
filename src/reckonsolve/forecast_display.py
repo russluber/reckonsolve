@@ -11,9 +11,7 @@ def format_local_deadline(value: datetime) -> str:
     return value.astimezone().isoformat(sep=" ", timespec="minutes")
 
 
-def binary_contract_summary(contract: ForecastContract | None) -> str:
-    if contract is None or contract.is_legacy:
-        return "Legacy Binary"
+def binary_contract_summary(contract: ForecastContract) -> str:
     assert contract.forecast_deadline is not None
     deadline = format_local_deadline(contract.forecast_deadline.instant)
     return f"Trajectory Binary; Deadline {deadline} (permanent)"

@@ -13,7 +13,6 @@ from reckonsolve.domain.forecast_contracts import (
     ResolutionTiming,
     ScoringContract,
     dispatch_forecast_contract,
-    legacy_contract,
     prospective_contract,
 )
 from reckonsolve.domain.predictions import PredictionType
@@ -23,48 +22,37 @@ DEADLINE = ForecastDeadline(T0 + timedelta(days=7))
 
 
 @pytest.mark.parametrize(
-    ("prediction_type", "cohort", "model", "scoring"),
+    ("prediction_type", "model", "scoring"),
     (
         (
             PredictionType.BINARY,
-            ForecastCohort.LEGACY_BINARY,
             ForecastModel.BINARY_FINAL_V1,
             ScoringContract.BINARY_FINAL_BRIER_V1,
         ),
         (
             PredictionType.NUMERIC,
-            ForecastCohort.LEGACY_NUMERIC,
             ForecastModel.NUMERIC_INTERVAL_V1,
             ScoringContract.NUMERIC_INTERVAL_SCORE_V1,
         ),
     ),
 )
-def test_legacy_contracts_are_explicit_and_have_no_exact_deadline(
+def test_retired_contracts_cannot_enter_runtime_domain(
     prediction_type,
-    cohort,
     model,
     scoring,
 ) -> None:
-    contract = legacy_contract(prediction_type)
-
-    assert contract.cohort is cohort
-    assert contract.forecast_model is model
-    assert contract.scoring_contract is scoring
-    assert contract.forecast_deadline is None
-    assert contract.is_legacy
+    with pytest.raises(ForecastContractValidationError):
+        ForecastContract(prediction_type, model, scoring)
 
 
 def test_prospective_contract_dispatch_uses_durable_identity() -> None:
     contract = prospective_contract(PredictionType.BINARY, DEADLINE)
 
     assert contract.cohort is ForecastCohort.TRAJECTORY_BINARY
-    assert not contract.is_legacy
     assert (
         dispatch_forecast_contract(
             contract,
-            legacy_binary="legacy Binary",
             trajectory_binary="trajectory Binary",
-            legacy_numeric="legacy Numeric",
             quantile_numeric="quantile Numeric",
         )
         == "trajectory Binary"

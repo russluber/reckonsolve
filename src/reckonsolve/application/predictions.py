@@ -10,12 +10,8 @@ from pathlib import Path
 from zipfile import BadZipFile
 
 from reckonsolve.analytics import (
-    AnalyticsSnapshot,
     ForecastAnalyticsSnapshot,
     PredictionScorecard,
-    binary_scorecard,
-    numeric_scorecard,
-    summarize_analytics,
     summarize_forecast_analytics,
 )
 from reckonsolve.analytics.quantiles import (
@@ -28,7 +24,6 @@ from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
 from reckonsolve.data.numeric_predictions import (
-    NumericForecastRevisionUnchangedError,
     NumericPredictionRepository,
 )
 from reckonsolve.data.predictions import (
@@ -126,19 +121,13 @@ from reckonsolve.domain.predictions import (
     NewInvalidationReasonCorrection,
     NewJournalCorrection,
     NewJournalEntry,
-    NewNumericForecastRevision,
-    NewNumericPrediction,
     NewNumericResolution,
     NewNumericResolutionCorrection,
     NewPrediction,
     NewResolution,
     NewResolutionCorrection,
-    NumericForecastReviewTimelineEvent,
-    NumericForecastRevision,
-    NumericJournalTimelineEvent,
     NumericPrediction,
     NumericResolutionHistory,
-    NumericTimelineEvent,
     PostmortemCompletion,
     PredictionDetail,
     PredictionMetadataUpdate,
@@ -149,7 +138,6 @@ from reckonsolve.domain.predictions import (
     changed_definition_fields,
     changed_numeric_resolution_fields,
     changed_resolution_fields,
-    display_status,
     metadata_would_change,
     normalize_tag_label,
 )
@@ -204,7 +192,6 @@ from .errors import (
     JournalEntryNotFoundError,
     LifecycleTransitionNotAllowedError,
     MeaningChangeConfirmationRequired,
-    NumericForecastUnchangedError,
     PostmortemCompletionNotAllowedError,
     PredictionDeletionConfirmationRequired,
     PredictionDeletionNotAllowedError,
@@ -282,55 +269,6 @@ class PredictionOperations:
             raise ValidationError(str(error), field=error.field) from error
         return self._with_derived_status(detail, created_at)
 
-    def _create_legacy_prediction(
-        self,
-        question: str,
-        probability_percent: int,
-        *,
-        rationale: str | None = None,
-        background: str | None = None,
-        resolution_criteria: str | None = None,
-        forecast_deadline: date | None = None,
-        expected_resolution: date | None = None,
-        tags: tuple[str, ...] = (),
-    ) -> PredictionDetail:
-        """Seed legacy compatibility fixtures; never a GUI or CLI creation path.
-
-        Migration/recovery tests and disposable visual/build fixtures need to
-        construct creation-era histories explicitly. Normal callers must use
-        create_prediction, which cannot choose or fall back to this contract.
-        """
-
-        try:
-            new_prediction = NewPrediction(
-                question=question,
-                probability_percent=probability_percent,
-                rationale=rationale,
-                background=background,
-                resolution_criteria=resolution_criteria,
-                forecast_deadline=forecast_deadline,
-                expected_resolution=expected_resolution,
-                tags=tags,
-            )
-        except PredictionValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
-
-        created_at = as_utc(self._clock.now())
-        current_date = created_at.astimezone(self._local_timezone).date()
-        if (
-            new_prediction.forecast_deadline is not None
-            and new_prediction.forecast_deadline < current_date
-        ):
-            raise ValidationError(
-                "Forecast Deadline cannot be earlier than today when creating a "
-                "prediction.",
-                field="forecast_deadline",
-            )
-        return self._with_derived_status(
-            self._repository.create_prediction(new_prediction, created_at),
-            created_at,
-        )
-
     def create_numeric_prediction(
         self,
         question: str,
@@ -372,12 +310,7 @@ class PredictionOperations:
         expected_metadata_version: int,
         rationale: str | None = None,
     ) -> NumericPrediction:
-        current = self.get_numeric_prediction(prediction_id)
-        if not isinstance(current.current_revision, QuantileRevision):
-            raise ValidationError(
-                "Use the legacy interval editor for this Prediction.",
-                field="forecast_model",
-            )
+        self.get_numeric_prediction(prediction_id)
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
             expected_metadata_version, "expected_metadata_version"
@@ -391,75 +324,6 @@ class PredictionOperations:
                 rationale=rationale,
             ),
             as_utc(self._clock.now()),
-        )
-
-    def _create_legacy_numeric_prediction(
-        self,
-        question: str,
-        unit: str,
-        decimal_places: int,
-        lower_bound: Decimal | int | str,
-        median_estimate: Decimal | int | str,
-        upper_bound: Decimal | int | str,
-        confidence_percent: int,
-        *,
-        rationale: str | None = None,
-        background: str | None = None,
-        resolution_criteria: str | None = None,
-        forecast_deadline: date | None = None,
-        expected_resolution: date | None = None,
-        tags: tuple[str, ...] = (),
-    ) -> NumericPrediction:
-        """Private legacy fixture seed; never expose through normal creation."""
-
-        try:
-            revision = NewNumericForecastRevision(
-                lower_bound=FixedPrecisionValue.from_value(
-                    lower_bound,
-                    decimal_places,
-                    field="lower_bound",
-                ),
-                median_estimate=FixedPrecisionValue.from_value(
-                    median_estimate,
-                    decimal_places,
-                    field="median_estimate",
-                ),
-                upper_bound=FixedPrecisionValue.from_value(
-                    upper_bound,
-                    decimal_places,
-                    field="upper_bound",
-                ),
-                confidence_percent=confidence_percent,
-                rationale=rationale,
-            )
-            new_prediction = NewNumericPrediction(
-                question=question,
-                unit=unit,
-                decimal_places=decimal_places,
-                initial_revision=revision,
-                background=background,
-                resolution_criteria=resolution_criteria,
-                forecast_deadline=forecast_deadline,
-                expected_resolution=expected_resolution,
-                tags=tags,
-            )
-        except PredictionValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
-
-        created_at = as_utc(self._clock.now())
-        current_date = created_at.astimezone(self._local_timezone).date()
-        if (
-            new_prediction.forecast_deadline is not None
-            and new_prediction.forecast_deadline < current_date
-        ):
-            raise ValidationError(
-                "Forecast Deadline cannot be earlier than today when creating a "
-                "prediction.",
-                field="forecast_deadline",
-            )
-        return self._with_derived_numeric_status(
-            self._numeric_repository.create_prediction(new_prediction, created_at),
-            created_at,
         )
 
     def revise_forecast(
@@ -497,11 +361,7 @@ class PredictionOperations:
         revised_at = as_utc(self._clock.now())
         current_date = revised_at.astimezone(self._local_timezone).date()
         effective_status = contract_status(
-            current.status,
-            current.forecast_deadline,
-            current_date,
-            current.forecast_contract,
-            revised_at,
+            current.status, current.forecast_contract, revised_at
         )
         if effective_status is not PredictionStatus.OPEN:
             raise ForecastRevisionNotAllowedError(effective_status)
@@ -528,82 +388,6 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         return self._with_derived_status(updated, revised_at)
 
-    def revise_numeric_forecast(
-        self,
-        prediction_id: int,
-        lower_bound: Decimal | int | str,
-        median_estimate: Decimal | int | str,
-        upper_bound: Decimal | int | str,
-        confidence_percent: int,
-        *,
-        rationale: str | None = None,
-        expected_revision_id: int,
-        expected_metadata_version: int,
-    ) -> NumericPrediction:
-        """Append a changed Numeric interval after rechecking reviewed context."""
-
-        self._validate_positive_token(expected_revision_id, "expected_revision_id")
-        self._validate_positive_token(
-            expected_metadata_version,
-            "expected_metadata_version",
-        )
-        current = self._numeric_repository.get_prediction(prediction_id)
-        if current is None:
-            raise PredictionNotFoundError(prediction_id)
-        if isinstance(current.current_revision, QuantileRevision):
-            raise ValidationError(
-                "Use the five-quantile editor for this Prediction.",
-                field="forecast_model",
-            )
-        try:
-            new_revision = NewNumericForecastRevision(
-                FixedPrecisionValue.from_value(
-                    lower_bound,
-                    current.decimal_places,
-                    field="lower_bound",
-                ),
-                FixedPrecisionValue.from_value(
-                    median_estimate,
-                    current.decimal_places,
-                    field="median_estimate",
-                ),
-                FixedPrecisionValue.from_value(
-                    upper_bound,
-                    current.decimal_places,
-                    field="upper_bound",
-                ),
-                confidence_percent,
-                rationale,
-            )
-        except PredictionValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
-        if (
-            current.current_revision.revision_id != expected_revision_id
-            or current.metadata_version != expected_metadata_version
-        ):
-            raise ConcurrentForecastUpdateError(prediction_id)
-
-        revised_at = as_utc(self._clock.now())
-        current_date = revised_at.astimezone(self._local_timezone).date()
-        try:
-            updated = self._numeric_repository.append_forecast_revision(
-                prediction_id,
-                new_revision,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-                created_at=revised_at,
-                current_date=current_date,
-            )
-        except ForecastContextChangedError as error:
-            raise ConcurrentForecastUpdateError(prediction_id) from error
-        except NumericForecastRevisionUnchangedError as error:
-            raise NumericForecastUnchangedError() from error
-        except ForecastRevisionDisallowedError as error:
-            raise ForecastRevisionNotAllowedError(error.status) from error
-        if updated is None:
-            raise PredictionNotFoundError(prediction_id)
-        return self._with_derived_numeric_status(updated, revised_at)
-
     def list_forecast_revisions(
         self,
         prediction_id: int,
@@ -618,18 +402,11 @@ class PredictionOperations:
     def list_numeric_forecast_revisions(
         self,
         prediction_id: int,
-    ) -> tuple[NumericForecastRevision | QuantileRevision, ...]:
+    ) -> tuple[QuantileRevision, ...]:
         """Return one Numeric Prediction's immutable revisions in sequence order."""
 
-        if isinstance(
-            self.get_numeric_prediction(prediction_id).current_revision,
-            QuantileRevision,
-        ):
-            return self._quantiles.repository.list_revisions(prediction_id)
-        revisions = self._numeric_repository.list_forecast_revisions(prediction_id)
-        if revisions is None:
-            raise PredictionNotFoundError(prediction_id)
-        return revisions
+        self.get_numeric_prediction(prediction_id)
+        return self._quantiles.repository.list_revisions(prediction_id)
 
     def add_numeric_forecast_review(
         self,
@@ -638,67 +415,21 @@ class PredictionOperations:
         note: str | None = None,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> NumericForecastReviewTimelineEvent | QuantileTimelineEvent:
+    ) -> QuantileTimelineEvent:
         """Record that the current Numeric forecast was deliberately retained."""
 
-        if isinstance(
-            self.get_numeric_prediction(prediction_id).current_revision,
-            QuantileRevision,
-        ):
-            self._validate_positive_token(expected_revision_id, "expected_revision_id")
-            self._validate_positive_token(
-                expected_metadata_version, "expected_metadata_version"
-            )
-            return self._quantiles.note(
-                prediction_id,
-                note,
-                review=True,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-            )
-
-        try:
-            review = NewForecastReview(note)
-        except PredictionValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
+        self.get_numeric_prediction(prediction_id)
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
-            expected_metadata_version,
-            "expected_metadata_version",
+            expected_metadata_version, "expected_metadata_version"
         )
-        current = self._numeric_repository.get_prediction(prediction_id)
-        if current is None:
-            raise PredictionNotFoundError(prediction_id)
-        if (
-            current.current_revision.revision_id != expected_revision_id
-            or current.metadata_version != expected_metadata_version
-        ):
-            raise ConcurrentForecastReviewError(prediction_id)
-        now = as_utc(self._clock.now())
-        current_date = now.astimezone(self._local_timezone).date()
-        effective_status = display_status(
-            current.status,
-            current.forecast_deadline,
-            current_date,
+        return self._quantiles.note(
+            prediction_id,
+            note,
+            review=True,
+            expected_revision_id=expected_revision_id,
+            expected_metadata_version=expected_metadata_version,
         )
-        if effective_status is not PredictionStatus.OPEN:
-            raise ForecastReviewNotAllowedError(effective_status)
-        try:
-            event = self._numeric_repository.add_forecast_review(
-                prediction_id,
-                review,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-                created_at=now,
-                current_date=current_date,
-            )
-        except ForecastReviewContextChangedError as error:
-            raise ConcurrentForecastReviewError(prediction_id) from error
-        except ForecastReviewDisallowedError as error:
-            raise ForecastReviewNotAllowedError(error.status) from error
-        if event is None:
-            raise PredictionNotFoundError(prediction_id)
-        return event
 
     def add_numeric_journal_entry(
         self,
@@ -707,66 +438,21 @@ class PredictionOperations:
         *,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> NumericJournalTimelineEvent | QuantileTimelineEvent:
+    ) -> QuantileTimelineEvent:
         """Append reasoning tied to the reviewed current Numeric interval."""
 
-        if isinstance(
-            self.get_numeric_prediction(prediction_id).current_revision,
-            QuantileRevision,
-        ):
-            self._validate_positive_token(expected_revision_id, "expected_revision_id")
-            self._validate_positive_token(
-                expected_metadata_version, "expected_metadata_version"
-            )
-            return self._quantiles.note(
-                prediction_id,
-                body,
-                review=False,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-            )
-
-        try:
-            entry = NewJournalEntry(body)
-        except PredictionValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
+        self.get_numeric_prediction(prediction_id)
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
-            expected_metadata_version,
-            "expected_metadata_version",
+            expected_metadata_version, "expected_metadata_version"
         )
-        current = self._numeric_repository.get_prediction(prediction_id)
-        if current is None:
-            raise PredictionNotFoundError(prediction_id)
-        if (
-            current.current_revision.revision_id != expected_revision_id
-            or current.metadata_version != expected_metadata_version
-        ):
-            raise ConcurrentJournalUpdateError(prediction_id)
-        now = as_utc(self._clock.now())
-        effective_status = display_status(
-            current.status,
-            current.forecast_deadline,
-            now.astimezone(self._local_timezone).date(),
+        return self._quantiles.note(
+            prediction_id,
+            body,
+            review=False,
+            expected_revision_id=expected_revision_id,
+            expected_metadata_version=expected_metadata_version,
         )
-        if effective_status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
-            raise JournalEntryNotAllowedError(effective_status)
-        try:
-            event = self._numeric_repository.add_journal_entry(
-                prediction_id,
-                entry,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-                created_at=now,
-                current_date=now.astimezone(self._local_timezone).date(),
-            )
-        except JournalContextChangedError as error:
-            raise ConcurrentJournalUpdateError(prediction_id) from error
-        except JournalEntryDisallowedError as error:
-            raise JournalEntryNotAllowedError(error.status) from error
-        if event is None:
-            raise PredictionNotFoundError(prediction_id)
-        return event
 
     def correct_numeric_journal_entry(
         self,
@@ -775,7 +461,7 @@ class PredictionOperations:
         body: str,
         *,
         expected_correction_id: int | None,
-    ) -> NumericJournalTimelineEvent | QuantileTimelineEvent:
+    ) -> QuantileTimelineEvent:
         """Append a transparent correction to a Numeric Journal entry."""
 
         self._validate_positive_token(entry_id, "entry_id")
@@ -784,62 +470,22 @@ class PredictionOperations:
                 expected_correction_id, "expected_correction_id"
             )
 
-        if isinstance(
-            self.get_numeric_prediction(prediction_id).current_revision,
-            QuantileRevision,
-        ):
-            return self._quantiles.correct_journal(
-                prediction_id,
-                entry_id,
-                body,
-                expected_correction_id=expected_correction_id,
-            )
-
-        try:
-            correction = NewJournalCorrection(body)
-        except PredictionValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
-        self._validate_positive_token(entry_id, "entry_id")
-        if expected_correction_id is not None:
-            self._validate_positive_token(
-                expected_correction_id,
-                "expected_correction_id",
-            )
-        current = self._numeric_repository.get_journal_entry(prediction_id, entry_id)
-        if current is None:
-            raise JournalEntryNotFoundError(entry_id)
-        if current.body == correction.body:
-            return current
-        corrected_at = as_utc(self._clock.now())
-        try:
-            updated = self._numeric_repository.append_journal_correction(
-                prediction_id,
-                entry_id,
-                correction,
-                expected_correction_id=expected_correction_id,
-                corrected_at=corrected_at,
-            )
-        except JournalCorrectionContextChangedError as error:
-            raise ConcurrentJournalCorrectionError(entry_id) from error
-        if updated is None:
-            raise JournalEntryNotFoundError(entry_id)
-        return updated
+        self.get_numeric_prediction(prediction_id)
+        return self._quantiles.correct_journal(
+            prediction_id,
+            entry_id,
+            body,
+            expected_correction_id=expected_correction_id,
+        )
 
     def list_numeric_timeline(
         self,
         prediction_id: int,
-    ) -> tuple[NumericTimelineEvent | QuantileTimelineEvent, ...]:
+    ) -> tuple[QuantileTimelineEvent, ...]:
         """Return Numeric revisions and anchored Journal entries causally."""
 
-        if isinstance(
-            self.get_numeric_prediction(prediction_id).current_revision,
-            QuantileRevision,
-        ):
-            return self._quantiles.repository.list_timeline(prediction_id)
-        timeline = self._numeric_repository.list_timeline(prediction_id)
-        if timeline is None:
-            raise PredictionNotFoundError(prediction_id)
-        return timeline
+        self.get_numeric_prediction(prediction_id)
+        return self._quantiles.repository.list_timeline(prediction_id)
 
     def resolve_numeric_prediction(
         self,
@@ -863,19 +509,9 @@ class PredictionOperations:
         current = self._numeric_repository.get_prediction(prediction_id)
         if current is None:
             raise PredictionNotFoundError(prediction_id)
-        prospective = (
-            current.forecast_contract is not None
-            and not current.forecast_contract.is_legacy
-        )
-        if (
-            not prospective
-            and (effective_resolution_at is not None or use_recorded_time)
-        ) or (
-            prospective
-            and (bool(use_recorded_time) == (effective_resolution_at is not None))
-        ):
+        if bool(use_recorded_time) == (effective_resolution_at is not None):
             raise ValidationError(
-                "Choose either an effective resolution time or use recording time for a five-quantile Prediction; legacy Predictions use neither.",
+                "Choose either an effective resolution time or use recording time.",
                 field="effective_resolution_at",
             )
         try:
@@ -897,30 +533,18 @@ class PredictionOperations:
         ):
             raise ConcurrentLifecycleUpdateError(prediction_id)
         now = as_utc(self._clock.now())
-        effective_status = display_status(
-            current.status,
-            current.forecast_deadline,
-            now.astimezone(self._local_timezone).date(),
+        effective_status = contract_status(
+            current.status, current.forecast_contract, now
         )
         if effective_status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
             raise LifecycleTransitionNotAllowedError("resolved", effective_status)
         try:
-            updated = (
-                self._quantiles.repository.resolve_prediction(
-                    prediction_id,
-                    resolution,
-                    expected_revision_id=expected_revision_id,
-                    expected_metadata_version=expected_metadata_version,
-                    use_recorded_time=use_recorded_time,
-                )
-                if prospective
-                else self._numeric_repository.resolve_prediction(
-                    prediction_id,
-                    resolution,
-                    expected_revision_id=expected_revision_id,
-                    expected_metadata_version=expected_metadata_version,
-                    resolved_at=now,
-                )
+            updated = self._quantiles.repository.resolve_prediction(
+                prediction_id,
+                resolution,
+                expected_revision_id=expected_revision_id,
+                expected_metadata_version=expected_metadata_version,
+                use_recorded_time=use_recorded_time,
             )
         except (PredictionValidationError, ForecastContractValidationError) as error:
             raise ValidationError(str(error), field=error.field) from error
@@ -944,69 +568,19 @@ class PredictionOperations:
     ) -> NumericPrediction:
         """Mark a Numeric Prediction terminal Invalid and outside scoring."""
 
-        if isinstance(
-            self.get_numeric_prediction(prediction_id).current_revision,
-            QuantileRevision,
-        ):
-            self._validate_positive_token(expected_revision_id, "expected_revision_id")
-            self._validate_positive_token(
-                expected_metadata_version, "expected_metadata_version"
-            )
-            self._quantiles.invalidate_or_delete(
-                prediction_id,
-                delete=False,
-                reason=reason,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-            )
-            return self.get_numeric_prediction(prediction_id)
-
-        try:
-            invalidation = NewInvalidation(reason)
-        except PredictionValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
+        self.get_numeric_prediction(prediction_id)
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
-            expected_metadata_version,
-            "expected_metadata_version",
+            expected_metadata_version, "expected_metadata_version"
         )
-        current = self._numeric_repository.get_prediction(prediction_id)
-        if current is None:
-            raise PredictionNotFoundError(prediction_id)
-        if (
-            current.current_revision.revision_id != expected_revision_id
-            or current.metadata_version != expected_metadata_version
-        ):
-            raise ConcurrentLifecycleUpdateError(prediction_id)
-        now = as_utc(self._clock.now())
-        effective_status = display_status(
-            current.status,
-            current.forecast_deadline,
-            now.astimezone(self._local_timezone).date(),
+        self._quantiles.invalidate_or_delete(
+            prediction_id,
+            delete=False,
+            reason=reason,
+            expected_revision_id=expected_revision_id,
+            expected_metadata_version=expected_metadata_version,
         )
-        if effective_status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
-            raise LifecycleTransitionNotAllowedError(
-                "marked Invalid",
-                effective_status,
-            )
-        try:
-            updated = self._numeric_repository.invalidate_prediction(
-                prediction_id,
-                invalidation,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-                invalidated_at=now,
-            )
-        except LifecycleContextChangedError as error:
-            raise ConcurrentLifecycleUpdateError(prediction_id) from error
-        except LifecycleTransitionDisallowedError as error:
-            raise LifecycleTransitionNotAllowedError(
-                "marked Invalid",
-                error.status,
-            ) from error
-        if updated is None:
-            raise PredictionNotFoundError(prediction_id)
-        return self._with_derived_numeric_status(updated, now)
+        return self.get_numeric_prediction(prediction_id)
 
     def delete_numeric_prediction(
         self,
@@ -1020,51 +594,19 @@ class PredictionOperations:
 
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
-            expected_metadata_version,
-            "expected_metadata_version",
+            expected_metadata_version, "expected_metadata_version"
         )
         if confirm_permanent_deletion is not True:
             raise PredictionDeletionConfirmationRequired
-        current = self.get_numeric_prediction(prediction_id)
-        if isinstance(current.current_revision, QuantileRevision):
-            self._quantiles.invalidate_or_delete(
-                prediction_id,
-                delete=True,
-                reason=None,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-            )
-            return self.get_latest_numeric_prediction()
-        if (
-            current.current_revision.revision_id != expected_revision_id
-            or current.metadata_version != expected_metadata_version
-        ):
-            raise ConcurrentLifecycleUpdateError(prediction_id)
-        if not current.deletion_allowed:
-            reason = (
-                current.status.value
-                if current.status is not PredictionStatus.OPEN
-                else "meaningful_history"
-            )
-            raise PredictionDeletionNotAllowedError(reason)
-        now = as_utc(self._clock.now())
-        try:
-            deleted = self._numeric_repository.delete_prediction(
-                prediction_id,
-                expected_revision_id=expected_revision_id,
-                expected_metadata_version=expected_metadata_version,
-                current_date=now.astimezone(self._local_timezone).date(),
-            )
-        except LifecycleContextChangedError as error:
-            raise ConcurrentLifecycleUpdateError(prediction_id) from error
-        except PredictionDeletionDisallowedError as error:
-            raise PredictionDeletionNotAllowedError(error.reason) from error
-        if not deleted:
-            raise PredictionNotFoundError(prediction_id)
-        latest = self._numeric_repository.get_latest_prediction()
-        return (
-            None if latest is None else self._with_derived_numeric_status(latest, now)
+        self.get_numeric_prediction(prediction_id)
+        self._quantiles.invalidate_or_delete(
+            prediction_id,
+            delete=True,
+            reason=None,
+            expected_revision_id=expected_revision_id,
+            expected_metadata_version=expected_metadata_version,
         )
+        return self.get_latest_numeric_prediction()
 
     def add_journal_entry(
         self,
@@ -1144,11 +686,7 @@ class PredictionOperations:
         now = as_utc(self._clock.now())
         current_date = now.astimezone(self._local_timezone).date()
         effective_status = contract_status(
-            current.status,
-            current.forecast_deadline,
-            current_date,
-            current.forecast_contract,
-            now,
+            current.status, current.forecast_contract, now
         )
         if effective_status is not PredictionStatus.OPEN:
             raise ForecastReviewNotAllowedError(effective_status)
@@ -1228,7 +766,7 @@ class PredictionOperations:
         expected_revision_id: int,
         expected_metadata_version: int,
     ) -> PredictionDetail:
-        """Persist terminal facts under the stored legacy or prospective contract."""
+        """Persist terminal facts under the immutable trajectory contract."""
 
         try:
             resolution = NewResolution(
@@ -1248,25 +786,9 @@ class PredictionOperations:
         current = self._repository.get_prediction(prediction_id)
         if current is None:
             raise PredictionNotFoundError(prediction_id)
-        prospective = (
-            current.forecast_contract is not None
-            and not current.forecast_contract.is_legacy
-        )
-        if prospective and effective_resolution_at is None and not use_recorded_time:
+        if bool(use_recorded_time) == (effective_resolution_at is not None):
             raise ValidationError(
-                "Choose an effective resolution time or use recording time.",
-                field="effective_resolution_at",
-            )
-        if use_recorded_time and (
-            not prospective or effective_resolution_at is not None
-        ):
-            raise ValidationError(
-                "Choose either recording time or an explicit effective time.",
-                field="effective_resolution_at",
-            )
-        if not prospective and effective_resolution_at is not None:
-            raise ValidationError(
-                "Legacy Resolutions do not use an effective resolution time.",
+                "Choose either an effective resolution time or use recording time.",
                 field="effective_resolution_at",
             )
         if (
@@ -1279,23 +801,22 @@ class PredictionOperations:
 
         resolved_at = as_utc(self._clock.now())
         try:
-            if prospective:
-                timing = ResolutionTiming(
-                    EffectiveResolutionTime(
-                        resolved_at if use_recorded_time else effective_resolution_at
-                    ),
-                    resolved_at,
-                )
-                resolution = replace(
-                    resolution, effective_resolution_at=timing.effective.instant
-                )
+            timing = ResolutionTiming(
+                EffectiveResolutionTime(
+                    resolved_at if use_recorded_time else effective_resolution_at
+                ),
+                resolved_at,
+            )
+            resolution = replace(
+                resolution, effective_resolution_at=timing.effective.instant
+            )
             updated = self._repository.resolve_prediction(
                 prediction_id,
                 resolution,
                 expected_revision_id=expected_revision_id,
                 expected_metadata_version=expected_metadata_version,
                 resolved_at=resolved_at,
-                clock=self._clock if prospective else None,
+                clock=self._clock,
                 use_recorded_time=use_recorded_time,
             )
         except ForecastContractValidationError as error:
@@ -1418,25 +939,15 @@ class PredictionOperations:
         prediction = self._repository.get_prediction(prediction_id)
         if prediction is None:
             raise PredictionNotFoundError(prediction_id)
-        prospective = (
-            prediction.forecast_contract is not None
-            and not prediction.forecast_contract.is_legacy
-        )
-        if effective_resolution_at is not None and not prospective:
-            raise ValidationError(
-                "Legacy Resolutions do not use an effective resolution time.",
-                field="effective_resolution_at",
-            )
         try:
-            if prospective:
-                effective_resolution_at = ResolutionTiming(
-                    EffectiveResolutionTime(
-                        effective_resolution_at
-                        if effective_resolution_at is not None
-                        else history.effective.effective_resolution_at
-                    ),
-                    history.original.resolved_at,
-                ).effective.instant
+            effective_resolution_at = ResolutionTiming(
+                EffectiveResolutionTime(
+                    effective_resolution_at
+                    if effective_resolution_at is not None
+                    else history.effective.effective_resolution_at
+                ),
+                history.original.resolved_at,
+            ).effective.instant
             proposed = NewResolutionCorrection(
                 outcome=outcome,
                 resolution_notes=resolution_notes,
@@ -1466,7 +977,7 @@ class PredictionOperations:
                     proposed,
                     expected_correction_id=expected_correction_id,
                     corrected_at=corrected_at,
-                    clock=self._clock if prospective else None,
+                    clock=self._clock,
                 )
             )
         except ForecastContractValidationError as error:
@@ -1498,26 +1009,16 @@ class PredictionOperations:
         """Append one complete exact Numeric Resolution correction snapshot."""
 
         history = self.get_numeric_resolution_history(prediction_id)
-        prediction = self.get_numeric_prediction(prediction_id)
-        prospective = (
-            prediction.forecast_contract is not None
-            and not prediction.forecast_contract.is_legacy
-        )
-        if not prospective and effective_resolution_at is not None:
-            raise ValidationError(
-                "Legacy Resolutions do not use an effective resolution time.",
-                field="effective_resolution_at",
-            )
+        self.get_numeric_prediction(prediction_id)
         try:
-            if prospective:
-                effective_resolution_at = ResolutionTiming(
-                    EffectiveResolutionTime(
-                        effective_resolution_at
-                        if effective_resolution_at is not None
-                        else history.effective.effective_resolution_at
-                    ),
-                    history.original.resolved_at,
-                ).effective.instant
+            effective_resolution_at = ResolutionTiming(
+                EffectiveResolutionTime(
+                    effective_resolution_at
+                    if effective_resolution_at is not None
+                    else history.effective.effective_resolution_at
+                ),
+                history.original.resolved_at,
+            ).effective.instant
             proposed = NewNumericResolutionCorrection(
                 actual_value=FixedPrecisionValue.from_value(
                     actual_value,
@@ -1551,7 +1052,7 @@ class PredictionOperations:
                     proposed,
                     expected_correction_id=expected_correction_id,
                     corrected_at=corrected_at,
-                    clock=self._clock if prospective else None,
+                    clock=self._clock,
                 )
             )
         except (PredictionValidationError, ForecastContractValidationError) as error:
@@ -2228,26 +1729,13 @@ class PredictionOperations:
         except RepositoryTagLibraryContextChangedError as error:
             raise ConcurrentTagLibraryUpdateError from error
 
-    def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
-        """Return exactly-once scoring analytics for all or one tag subset."""
-
-        if tag is not None and not isinstance(tag, str):
-            raise ValidationError(
-                "The analytics tag filter is invalid.",
-                field="tag",
-            )
-        return summarize_analytics(
-            self._analytics_repository.get_source(),
-            tag=tag,
-        )
-
     def get_prediction_scorecard(
         self,
         prediction_id: int,
     ) -> PredictionScorecard | QuantileScorecard | None:
         """Return one resolved Prediction's type-aware derived scorecard.
 
-        Legacy cards use their captured scoring revision. Prospective cards use
+        Supported cards use
         complete immutable history and effective terminal facts from analytics
         data access; the original recording anchor never substitutes for scoring.
         Unresolved and Invalid Predictions intentionally have no scorecard.
@@ -2262,30 +1750,7 @@ class PredictionOperations:
         )
         if trajectory_source is not None:
             return trajectory_scorecard(*trajectory_source)
-        binary_source, numeric_source = self._analytics_repository.get_sources()
-        binary_observation = next(
-            (
-                observation
-                for observation in binary_source.observations
-                if observation.prediction_id == prediction_id
-            ),
-            None,
-        )
-        if binary_observation is not None:
-            return binary_scorecard(binary_observation)
-        numeric_observation = next(
-            (
-                observation
-                for observation in numeric_source.observations
-                if observation.prediction_id == prediction_id
-            ),
-            None,
-        )
-        return (
-            None
-            if numeric_observation is None
-            else numeric_scorecard(numeric_observation)
-        )
+        return None
 
     def get_forecast_analytics(
         self,
@@ -2323,17 +1788,12 @@ class PredictionOperations:
                 "Choose Numeric analytics before filtering by unit.",
                 field="unit",
             )
-        (
-            binary_source,
-            numeric_source,
+        trajectory_source, quantile_source = (
+            self._analytics_repository.get_forecast_sources()
+        )
+        return summarize_forecast_analytics(
             trajectory_source,
             quantile_source,
-        ) = self._analytics_repository.get_forecast_sources()
-        return summarize_forecast_analytics(
-            binary_source,
-            numeric_source,
-            trajectory_source=trajectory_source,
-            quantile_source=quantile_source,
             prediction_type=prediction_type,
             tag=tag,
             unit=normalized_unit,
@@ -2495,11 +1955,7 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         if current.metadata_version != expected_metadata_version:
             raise ConcurrentPredictionUpdateError(prediction_id)
-        if (
-            current.forecast_contract
-            and not current.forecast_contract.is_legacy
-            and update.forecast_deadline is not None
-        ):
+        if current.forecast_contract and update.forecast_deadline is not None:
             raise ValidationError(
                 "Forecast Deadline is permanent and cannot be edited.",
                 field="forecast_deadline",
@@ -2553,14 +2009,7 @@ class PredictionOperations:
         detail: PredictionDetail,
         now: datetime,
     ) -> PredictionDetail:
-        local_date = now.astimezone(self._local_timezone).date()
-        status = contract_status(
-            detail.status,
-            detail.forecast_deadline,
-            local_date,
-            detail.forecast_contract,
-            now,
-        )
+        status = contract_status(detail.status, detail.forecast_contract, now)
         return replace(
             detail,
             status=status,
@@ -2574,13 +2023,7 @@ class PredictionOperations:
         detail: NumericPrediction,
         now: datetime,
     ) -> NumericPrediction:
-        status = contract_status(
-            detail.status,
-            detail.forecast_deadline,
-            now.astimezone(self._local_timezone).date(),
-            detail.forecast_contract,
-            now,
-        )
+        status = contract_status(detail.status, detail.forecast_contract, now)
         return replace(
             detail,
             status=status,
@@ -2597,13 +2040,7 @@ class PredictionOperations:
         current_date: date,
         stale_threshold_days: int,
     ) -> DashboardPrediction:
-        status = contract_status(
-            prediction.status,
-            prediction.forecast_deadline,
-            current_date,
-            prediction.forecast_contract,
-            now,
-        )
+        status = contract_status(prediction.status, prediction.forecast_contract, now)
         return replace(
             prediction,
             status=status,

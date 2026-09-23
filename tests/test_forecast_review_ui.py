@@ -1,13 +1,13 @@
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QLabel, QPlainTextEdit, QPushButton, QWidget
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.ui.main_window import MainWindow
-from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
@@ -35,7 +35,7 @@ NOW = datetime(2026, 8, 20, 18, 0, tzinfo=UTC)
 def test_binary_review_dialog_cancel_save_timeline_and_chart(qtbot, tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations._create_legacy_prediction("Will this forecast hold?", 60)
+    prediction = create_binary(operations, "Will this forecast hold?", 60)
     window = MainWindow(operations)
     qtbot.addWidget(window)
     window.show()
@@ -89,21 +89,19 @@ def test_binary_review_dialog_cancel_save_timeline_and_chart(qtbot, tmp_path) ->
     database.close()
 
 
-def test_numeric_review_uses_interval_context_and_locked_disables_action(
+def test_numeric_review_uses_quantile_context_and_locked_disables_action(
     qtbot,
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     created_operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = created_operations._create_legacy_numeric_prediction(
+    prediction = create_numeric(
+        created_operations,
         "How many days?",
         "days",
         0,
-        2,
-        4,
-        8,
-        80,
-        forecast_deadline=date(2026, 8, 20),
+        {5: 2, 25: 3, 50: 4, 75: 6, 95: 8},
+        forecast_deadline=NOW + timedelta(hours=1),
     )
     operations = PredictionOperations(
         database,
@@ -116,12 +114,12 @@ def test_numeric_review_uses_interval_context_and_locked_disables_action(
     window.navigate_to("Prediction Detail")
 
     action = window.findChild(QPushButton, "reviewNumericForecastButton")
-    chart = window.findChild(NumericHistoryChart)
+    chart = window._prediction_detail_host._numeric_detail.quantile_cdf
     assert action is not None
-    assert action.text() == "Keep this interval"
+    assert action.text() == "Keep forecast"
     assert not action.isEnabled()
     assert chart is not None
-    assert len(chart.samples) == 1
+    assert chart.quantiles == prediction.current_revision.quantiles
     assert len(operations.list_numeric_timeline(prediction.prediction_id)) == 1
     database.close()
 
@@ -132,8 +130,8 @@ def test_numeric_review_saves_without_note_and_does_not_add_chart_point(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations._create_legacy_numeric_prediction(
-        "How many days?", "days", 0, 2, 4, 8, 80
+    prediction = create_numeric(
+        operations, "How many days?", "days", 0, {5: 2, 25: 3, 50: 4, 75: 6, 95: 8}
     )
     window = MainWindow(operations)
     qtbot.addWidget(window)
@@ -149,14 +147,15 @@ def test_numeric_review_saves_without_note_and_does_not_add_chart_point(
     context = dialog.findChild(QLabel, "forecastReviewContext")
     save = dialog.findChild(QPushButton, "saveForecastReviewButton")
     assert context is not None
-    assert "80% interval" in context.text()
+    assert "90% interval: 2 to 8 days" in context.text()
+    assert "50% interval: 3 to 6 days" in context.text()
     assert save is not None
     qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
 
     assert window.findChild(QLabel, "numericReviewNote1") is None
     assert window.findChild(QWidget, "numericTimelineReview1") is not None
-    chart = window.findChild(NumericHistoryChart)
+    chart = window._prediction_detail_host._numeric_detail.quantile_cdf
     assert chart is not None
-    assert len(chart.samples) == 1
+    assert chart.quantiles == prediction.current_revision.quantiles
     assert len(operations.list_numeric_timeline(prediction.prediction_id)) == 2
     database.close()

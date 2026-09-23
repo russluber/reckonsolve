@@ -994,17 +994,4 @@ def _forecast_summary(prediction: DashboardPrediction) -> str:
         return "Five-quantile forecast: " + quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""
         )
-    if (
-        prediction.numeric_lower_bound is None
-        or prediction.numeric_median_estimate is None
-        or prediction.numeric_upper_bound is None
-        or prediction.numeric_confidence_percent is None
-        or prediction.numeric_unit is None
-    ):
-        raise ValueError("A Numeric Dashboard row requires complete interval data.")
-    return (
-        f"NUMERIC  {prediction.numeric_confidence_percent}% interval: "
-        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
-        f"{prediction.numeric_unit}; median: "
-        f"{prediction.numeric_median_estimate} {prediction.numeric_unit}"
-    )
+    raise ValueError("A Numeric row requires all five exact quantiles and its unit.")

@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from supported_fixtures import create_binary
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.clock import format_utc
@@ -20,7 +21,7 @@ from reckonsolve.domain.forecast_contracts import (
     ForecastContractValidationError,
     ForecastDeadline,
 )
-from reckonsolve.domain.predictions import PredictionValidationError
+from reckonsolve.domain.predictions import BinaryOutcome, PredictionValidationError
 from reckonsolve.domain.quantiles import (
     FiveQuantiles,
     NewQuantilePrediction,
@@ -280,12 +281,12 @@ def test_history_anchors_reject_wrong_prediction_wrong_model_and_stale_revision(
     database, clock, repo = storage
     first = repo.create_prediction(new())
     other = repo.create_prediction(new())
-    legacy = PredictionOperations(
-        database, clock, UTC
-    )._create_legacy_numeric_prediction("Legacy?", "mm", 2, -2, 0, 2, 80)
+    binary = create_binary(
+        PredictionOperations(database, clock, UTC), "Other model?", 50
+    )
     for prediction_id, anchor in (
         (first.prediction_id, other.revision_id),
-        (legacy.prediction_id, first.revision_id),
+        (binary.prediction_id, first.revision_id),
     ):
         for table in ("journal_entries", "forecast_reviews"):
             with pytest.raises(sqlite3.IntegrityError), database.transaction() as c:
@@ -298,8 +299,8 @@ def test_history_anchors_reject_wrong_prediction_wrong_model_and_stale_revision(
                 )
     with pytest.raises(sqlite3.IntegrityError), database.transaction() as c:
         c.execute(
-            "INSERT INTO journal_entries(prediction_id, numeric_forecast_revision_id, body, created_at) VALUES (?, ?, 'Wrong model', ?)",
-            (first.prediction_id, legacy.current_revision.revision_id, format_utc(T0)),
+            "INSERT INTO journal_entries(prediction_id, forecast_revision_id, body, created_at) VALUES (?, ?, 'Wrong model', ?)",
+            (first.prediction_id, binary.current_revision_id, format_utc(T0)),
         )
     clock.instant += timedelta(minutes=5)
     second = repo.append_revision(first.prediction_id, quantiles(1), **context(first))
@@ -420,49 +421,40 @@ def test_search_projection_failure_rolls_back_quantile_creation_and_revision(
 
 
 @pytest.mark.parametrize("fail_midway", [False, True])
-def test_schema18_preserves_populated_legacy_rows_and_rolls_back_failure(
+def test_schema18_preserves_trajectory_rows_and_rolls_back_failure(
     tmp_path, fail_midway
 ):
     path = tmp_path / "upgrade.sqlite3"
     db = Database.open(path, migrations=MIGRATIONS[:17])
     clock = Clock()
     ops = PredictionOperations(db, clock, UTC)
-    for binary in (False, True):
-        p = (
-            ops._create_legacy_prediction("Legacy binary", 70)
-            if binary
-            else ops._create_legacy_numeric_prediction(
-                "Legacy numeric", "mm", 2, -2, 0, 2, 80
-            )
-        )
-        kwargs = {
-            "expected_revision_id": p.current_revision_id
-            if binary
-            else p.current_revision.revision_id,
-            "expected_metadata_version": 1,
-        }
-        journal = (ops.add_journal_entry if binary else ops.add_numeric_journal_entry)(
-            p.prediction_id, "Historical journal", **kwargs
-        )
-        (ops.correct_journal_entry if binary else ops.correct_numeric_journal_entry)(
-            p.prediction_id,
-            journal.entry_id,
-            "Historical corrected journal",
-            expected_correction_id=None,
-        )
-        (ops.add_forecast_review if binary else ops.add_numeric_forecast_review)(
-            p.prediction_id, note="Historical review", **kwargs
-        )
-        if not binary:
-            ops.resolve_numeric_prediction(p.prediction_id, "1.50", **kwargs)
-            ops.correct_numeric_resolution(
-                p.prediction_id,
-                "1.75",
-                resolution_notes=None,
-                postmortem=None,
-                correction_reason="Historical correction",
-                expected_correction_id=None,
-            )
+    p = create_binary(ops, "Trajectory history", 70)
+    kwargs = {
+        "expected_revision_id": p.current_revision_id,
+        "expected_metadata_version": 1,
+    }
+    journal = ops.add_journal_entry(p.prediction_id, "Historical journal", **kwargs)
+    ops.correct_journal_entry(
+        p.prediction_id,
+        journal.entry_id,
+        "Historical corrected journal",
+        expected_correction_id=None,
+    )
+    clock.instant += timedelta(minutes=1)
+    ops.add_forecast_review(p.prediction_id, note="Historical review", **kwargs)
+    clock.instant += timedelta(minutes=1)
+    ops.resolve_prediction(
+        p.prediction_id, BinaryOutcome.YES, use_recorded_time=True, **kwargs
+    )
+    clock.instant += timedelta(minutes=1)
+    ops.correct_binary_resolution(
+        p.prediction_id,
+        BinaryOutcome.NO,
+        resolution_notes=None,
+        postmortem=None,
+        correction_reason="Historical correction",
+        expected_correction_id=None,
+    )
     with db.transaction() as c:
         before = snapshot(c)
         schema_before = [

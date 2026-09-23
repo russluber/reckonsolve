@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from fractions import Fraction
 
 import pytest
+from PySide6.QtWidgets import QWidget
 
 from reckonsolve.analytics.quantile_aggregate import (
     Proportion,
@@ -178,7 +179,7 @@ def test_corrected_effective_cutoff_reselects_once_and_no_score_exclusion(active
     assert snapshot.resolved_candidate_count == snapshot.unscored_prediction_count == 1
     assert snapshot.scored_prediction_count == snapshot.continuous.sample_size == 0
     assert all(l.inclusive.fraction is None for l in snapshot.continuous.levels)
-    assert len(AnalyticsRepository(db).get_forecast_sources()[3].records) == 1
+    assert len(AnalyticsRepository(db).get_forecast_sources()[1].records) == 1
 
 
 def test_signs_exclude_unrevised_and_never_average_even_identical_units(active):
@@ -207,7 +208,7 @@ def test_signs_exclude_unrevised_and_never_average_even_identical_units(active):
     assert not any("mean" in field for field in snapshot.__dataclass_fields__)
 
 
-def test_filters_legacy_invalid_open_and_restart_are_isolated(active):
+def test_filters_invalid_open_and_restart_are_isolated(active):
     db, clock, ops = active
     for whole, unit, tag in ((False, "days", "Continuous"), (True, "Days", "Whole")):
         resolve(
@@ -216,10 +217,6 @@ def test_filters_legacy_invalid_open_and_restart_are_isolated(active):
             create(ops, clock, whole=whole, unit=unit, tags=(tag, "Shared")),
             0,
         )
-    legacy = ops._create_legacy_numeric_prediction(
-        "Legacy?", "days", 0, 0, 5, 10, 80, tags=("Shared",)
-    )
-    ops.resolve_numeric_prediction(legacy.prediction_id, 5, **context(legacy))
     invalid = create(ops, clock, tags=("Invalid only",))
     ops.invalidate_numeric_prediction(
         invalid.prediction_id, reason="Malformed", **context(invalid)
@@ -227,7 +224,6 @@ def test_filters_legacy_invalid_open_and_restart_are_isolated(active):
 
     create(ops, clock, tags=("Open only",))
     snapshot = ops.get_forecast_analytics()
-    assert snapshot.numeric.scored_prediction_count == 1
     assert snapshot.quantile_numeric.scored_prediction_count == 2
     assert set(snapshot.available_tags) == {"Continuous", "Whole", "Shared"}
     assert set(snapshot.available_units) == {"Days", "days"}
@@ -242,7 +238,6 @@ def test_filters_legacy_invalid_open_and_restart_are_isolated(active):
     )
     assert filtered.quantile_numeric.continuous.sample_size == 1
     assert filtered.quantile_numeric.whole_number.sample_size == 0
-    assert filtered.numeric.scored_prediction_count == 1
     assert (
         ops.get_forecast_analytics(
             prediction_type=PredictionType.BINARY
@@ -274,7 +269,7 @@ def test_filters_legacy_invalid_open_and_restart_are_isolated(active):
 def test_duplicate_canonical_observation_is_rejected(active):
     db, clock, ops = active
     resolve(ops, clock, create(ops, clock), 0)
-    source = AnalyticsRepository(db).get_forecast_sources()[3]
+    source = AnalyticsRepository(db).get_forecast_sources()[1]
     with pytest.raises(ValueError, match="at most once"):
         summarize_quantile_analytics(QuantileAnalyticsSource(source.records * 2))
     # No implicit confidence buckets or CDF interpolation: exactly five records.
@@ -336,7 +331,7 @@ def test_actual_correction_and_nonforecast_history_do_not_inflate_sample(active)
         expected_correction_id=history.current_correction_id,
     )
     assert ops.get_forecast_analytics().quantile_numeric == after
-    assert len(AnalyticsRepository(db).get_forecast_sources()[3].records) == 1
+    assert len(AnalyticsRepository(db).get_forecast_sources()[1].records) == 1
 
 
 def test_late_resolution_uses_deadline_cutoff_and_snapshot_is_single_transaction(
@@ -418,7 +413,7 @@ def test_unscored_only_desktop_is_explicit_and_refresh_failures_retain_snapshot(
     assert not screen.empty_label.isVisible()
     assert "1 unscored" in screen.quantile_content.summary.text()
     assert not screen.quantile_content.continuous.pair.isVisible()
-    assert not screen.numeric_content.isVisible()
+    assert screen.findChild(QWidget, "numericAnalyticsSection") is None
     previous = screen._loaded_snapshot
 
     def fail(**kwargs):

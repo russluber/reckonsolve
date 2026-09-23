@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.errors import (
     ConcurrentForecastReviewError,
@@ -12,9 +13,9 @@ from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     ForecastReviewTimelineEvent,
-    NumericForecastReviewTimelineEvent,
     PredictionStatus,
 )
+from reckonsolve.domain.quantiles import QuantileTimelineEvent
 
 
 @dataclass(frozen=True)
@@ -28,7 +29,7 @@ class FixedClock:
 NOW = datetime(2026, 8, 20, 18, 0, tzinfo=UTC)
 
 
-@pytest.mark.parametrize("cohort", ["trajectory", "legacy", "numeric"])
+@pytest.mark.parametrize("cohort", ["trajectory", "numeric"])
 @pytest.mark.parametrize(
     "step", [timedelta(minutes=1), timedelta(microseconds=1), timedelta(0)]
 )
@@ -37,17 +38,14 @@ def test_reviews_and_journals_interleave_by_exact_time(tmp_path, cohort, step):
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
     if cohort == "numeric":
-        prediction = operations._create_legacy_numeric_prediction(
-            "How many?", "days", 0, 1, 2, 3, 80
+        prediction = create_numeric(
+            operations, "How many?", "days", 0, {5: 1, 25: 1, 50: 2, 75: 3, 95: 3}
         )
         revision_id = prediction.current_revision.revision_id
     else:
-        if cohort == "trajectory":
-            prediction = operations.create_prediction(
-                "Will it happen?", 60, forecast_deadline=NOW + timedelta(days=1)
-            )
-        else:
-            prediction = operations._create_legacy_prediction("Will it happen?", 60)
+        prediction = operations.create_prediction(
+            "Will it happen?", 60, forecast_deadline=NOW + timedelta(days=1)
+        )
         revision_id = prediction.current_revision_id
     events = []
     for index, kind in enumerate(("review", "journal", "review", "journal"), 1):
@@ -88,7 +86,7 @@ def test_reviews_and_journals_interleave_by_exact_time(tmp_path, cohort, step):
 def test_binary_review_retains_forecast_and_appears_in_timeline(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations._create_legacy_prediction("Will the review be useful?", 60)
+    prediction = create_binary(operations, "Will the review be useful?", 60)
 
     review = operations.add_forecast_review(
         prediction.prediction_id,
@@ -106,12 +104,16 @@ def test_binary_review_retains_forecast_and_appears_in_timeline(tmp_path) -> Non
     database.close()
 
 
-def test_numeric_review_retains_exact_interval_and_survives_restart(tmp_path) -> None:
+def test_numeric_review_retains_exact_quantiles_and_survives_restart(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    prediction = operations._create_legacy_numeric_prediction(
-        "How many days?", "days", 1, "2.0", "4.0", "8.0", 80
+    prediction = create_numeric(
+        operations,
+        "How many days?",
+        "days",
+        1,
+        {5: "2.0", 25: "3.0", 50: "4.0", 75: "6.0", 95: "8.0"},
     )
 
     review = operations.add_numeric_forecast_review(
@@ -119,10 +121,10 @@ def test_numeric_review_retains_exact_interval_and_survives_restart(tmp_path) ->
         expected_revision_id=prediction.current_revision.revision_id,
         expected_metadata_version=prediction.metadata_version,
     )
-    assert isinstance(review, NumericForecastReviewTimelineEvent)
-    assert str(review.lower_bound) == "2.0"
-    assert str(review.median_estimate) == "4.0"
-    assert review.note is None
+    assert isinstance(review, QuantileTimelineEvent)
+    assert review.kind == "review"
+    assert review.revision.quantiles == prediction.current_revision.quantiles
+    assert review.text is None
     assert (
         len(operations.list_numeric_forecast_revisions(prediction.prediction_id)) == 1
     )
@@ -140,7 +142,7 @@ def test_binary_review_resets_attention(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     created_at = NOW - timedelta(days=20)
     created_ops = PredictionOperations(database, FixedClock(created_at), UTC)
-    prediction = created_ops._create_legacy_prediction("Still current?", 55)
+    prediction = create_binary(created_ops, "Still current?", 55)
     now_ops = PredictionOperations(database, FixedClock(NOW), UTC)
     assert now_ops.get_dashboard().needs_attention_predictions
 
@@ -159,11 +161,17 @@ def test_binary_review_resets_attention(tmp_path) -> None:
 
 def test_numeric_review_resets_type_aware_attention_reference(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    prediction = PredictionOperations(
-        database,
-        FixedClock(NOW - timedelta(days=20)),
-        UTC,
-    )._create_legacy_numeric_prediction("How many days?", "days", 0, 2, 4, 8, 80)
+    prediction = create_numeric(
+        PredictionOperations(
+            database,
+            FixedClock(NOW - timedelta(days=20)),
+            UTC,
+        ),
+        "How many days?",
+        "days",
+        0,
+        {5: 2, 25: 3, 50: 4, 75: 6, 95: 8},
+    )
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
     assert operations.get_dashboard().needs_attention_predictions
 
@@ -183,20 +191,21 @@ def test_review_is_rejected_after_deadline_for_both_types(tmp_path, numeric) -> 
     database = Database.open(tmp_path / f"{numeric}.sqlite3")
     create_ops = PredictionOperations(database, FixedClock(NOW), UTC)
     if numeric:
-        prediction = create_ops._create_legacy_numeric_prediction(
+        prediction = create_numeric(
+            create_ops,
             "How many?",
             "days",
             0,
-            1,
-            2,
-            3,
-            80,
-            forecast_deadline=date(2026, 8, 20),
+            {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
+            forecast_deadline=NOW + timedelta(hours=1),
         )
         revision_id = prediction.current_revision.revision_id
     else:
-        prediction = create_ops._create_legacy_prediction(
-            "Will it happen?", 60, forecast_deadline=date(2026, 8, 20)
+        prediction = create_binary(
+            create_ops,
+            "Will it happen?",
+            60,
+            forecast_deadline=NOW + timedelta(hours=1),
         )
         revision_id = prediction.current_revision_id
     locked_ops = PredictionOperations(
@@ -230,8 +239,10 @@ def test_review_rechecks_revision_across_independent_connections(
     first_database = Database.open(path)
     second_database = Database.open(path)
     first = PredictionOperations(first_database, FixedClock(NOW), UTC)
-    second = PredictionOperations(second_database, FixedClock(NOW), UTC)
-    prediction = first._create_legacy_prediction("Will context stay current?", 40)
+    second = PredictionOperations(
+        second_database, FixedClock(NOW + timedelta(seconds=1)), UTC
+    )
+    prediction = create_binary(first, "Will context stay current?", 40)
     original_add = first._repository.add_forecast_review
 
     def race_after_application_precheck(*args, **kwargs):
@@ -266,15 +277,16 @@ def test_review_rechecks_revision_across_independent_connections(
 def test_terminal_predictions_reject_reviews_for_both_types(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW), UTC)
-    binary = operations._create_legacy_prediction("Will it resolve?", 60)
+    binary = create_binary(operations, "Will it resolve?", 60)
     operations.resolve_prediction(
         binary.prediction_id,
         outcome=BinaryOutcome.YES,
+        use_recorded_time=True,
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations._create_legacy_numeric_prediction(
-        "How many days?", "days", 0, 2, 4, 8, 80
+    numeric = create_numeric(
+        operations, "How many days?", "days", 0, {5: 2, 25: 3, 50: 4, 75: 6, 95: 8}
     )
     operations.invalidate_numeric_prediction(
         numeric.prediction_id,

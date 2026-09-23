@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from supported_fixtures import create_numeric
 
 from reckonsolve.application.errors import (
     ConcurrentLifecycleUpdateError,
@@ -30,16 +31,12 @@ class FixedClock:
 
 
 def _create(database: Database, **kwargs):
-    return PredictionOperations(
-        database, FixedClock(CREATED), UTC
-    )._create_legacy_numeric_prediction(
+    return create_numeric(
+        PredictionOperations(database, FixedClock(CREATED), UTC),
         "How many days will the response take?",
         "days",
         1,
-        "3.0",
-        "7.0",
-        "21.0",
-        80,
+        {5: "3.0", 25: "5.0", 50: "7.0", 75: "14.0", 95: "21.0"},
         **kwargs,
     )
 
@@ -48,6 +45,7 @@ def _resolve(operations: PredictionOperations, prediction, actual="40.5", **kwar
     return operations.resolve_numeric_prediction(
         prediction.prediction_id,
         actual,
+        use_recorded_time=True,
         expected_revision_id=prediction.current_revision.revision_id,
         expected_metadata_version=prediction.metadata_version,
         **kwargs,
@@ -59,13 +57,12 @@ def test_numeric_resolution_accepts_outside_value_and_captures_final_revision(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     created = _create(database)
-    revision_ops = PredictionOperations(database, FixedClock(CREATED), UTC)
-    revised = revision_ops.revise_numeric_forecast(
+    revision_ops = PredictionOperations(
+        database, FixedClock(CREATED + timedelta(minutes=1)), UTC
+    )
+    revised = revision_ops.revise_quantile_forecast(
         created.prediction_id,
-        "4.0",
-        "8.0",
-        "24.0",
-        90,
+        {5: "4.0", 25: "6.0", 50: "8.0", 75: "16.0", 95: "24.0"},
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
     )
@@ -94,7 +91,7 @@ def test_numeric_resolution_accepts_outside_value_and_captures_final_revision(
 
 def test_locked_numeric_prediction_resolves_but_rejects_revisions(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = _create(database, forecast_deadline=CREATED.date())
+    created = _create(database, forecast_deadline=CREATED + timedelta(hours=1))
     later = PredictionOperations(database, FixedClock(CREATED + timedelta(days=1)), UTC)
     locked = later.get_numeric_prediction(created.prediction_id)
 
@@ -166,12 +163,9 @@ def test_numeric_resolution_validation_and_stale_context_write_nothing(
 
     with pytest.raises(ValidationError):
         _resolve(operations, created, actual="7.01")
-    operations.revise_numeric_forecast(
+    operations.revise_quantile_forecast(
         created.prediction_id,
-        "4.0",
-        "8.0",
-        "22.0",
-        80,
+        {5: "4.0", 25: "6.0", 50: "8.0", 75: "16.0", 95: "22.0"},
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
     )
@@ -229,21 +223,18 @@ def test_numeric_resolution_rechecks_context_across_two_connections(
         FixedClock(TERMINATED),
         UTC,
     )
-    original_resolve = operations._numeric_repository.resolve_prediction
+    original_resolve = operations._quantiles.repository.resolve_prediction
 
     def race(*args, **kwargs):
-        competing.revise_numeric_forecast(
+        competing.revise_quantile_forecast(
             reviewed.prediction_id,
-            "4.0",
-            "8.0",
-            "22.0",
-            80,
+            {5: "4.0", 25: "6.0", 50: "8.0", 75: "16.0", 95: "22.0"},
             expected_revision_id=reviewed.current_revision.revision_id,
             expected_metadata_version=reviewed.metadata_version,
         )
         return original_resolve(*args, **kwargs)
 
-    monkeypatch.setattr(operations._numeric_repository, "resolve_prediction", race)
+    monkeypatch.setattr(operations._quantiles.repository, "resolve_prediction", race)
     with pytest.raises(ConcurrentLifecycleUpdateError):
         _resolve(operations, reviewed, actual="7.0")
     with competing_database.transaction() as connection:
@@ -334,12 +325,9 @@ def test_numeric_resolution_schema_guards_scoring_identity_and_parent_cascade(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     created = _create(database)
     operations = PredictionOperations(database, FixedClock(TERMINATED), UTC)
-    revised = operations.revise_numeric_forecast(
+    revised = operations.revise_quantile_forecast(
         created.prediction_id,
-        "4.0",
-        "8.0",
-        "22.0",
-        80,
+        {5: "4.0", 25: "6.0", 50: "8.0", 75: "16.0", 95: "22.0"},
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
     )
@@ -350,8 +338,9 @@ def test_numeric_resolution_schema_guards_scoring_identity_and_parent_cascade(
         connection.execute(
             """
             INSERT INTO numeric_resolutions (
-                prediction_id, actual_scaled, resolved_at, scoring_revision_id
-            ) VALUES (?, 70, ?, ?)
+                prediction_id, actual_scaled, resolved_at, quantile_revision_id,
+                effective_resolution_at
+            ) VALUES (?, 70, ?, ?, '2026-08-23T18:45:12.003456Z')
             """,
             (
                 created.prediction_id,
@@ -369,8 +358,9 @@ def test_numeric_resolution_schema_guards_scoring_identity_and_parent_cascade(
         connection.execute(
             """
             INSERT OR REPLACE INTO numeric_resolutions (
-                id, prediction_id, actual_scaled, resolved_at, scoring_revision_id
-            ) VALUES (?, ?, 80, ?, ?)
+                id, prediction_id, actual_scaled, resolved_at, quantile_revision_id,
+                effective_resolution_at
+            ) VALUES (?, ?, 80, ?, ?, '2026-08-23T18:45:12.003456Z')
             """,
             (
                 resolved.resolution.resolution_id,

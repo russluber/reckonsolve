@@ -1,8 +1,9 @@
 import sqlite3
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from supported_fixtures import create_numeric
 
 from reckonsolve.application.errors import (
     ConcurrentPredictionUpdateError,
@@ -34,19 +35,17 @@ def _create_numeric(
     database: Database,
     *,
     question: str = "How many days will this take?",
-    forecast_deadline: date | None = None,
+    forecast_deadline: datetime | None = None,
 ) -> tuple[PredictionOperations, NumericPrediction]:
     operations = PredictionOperations(database, FixedClock(CREATED), UTC)
-    created = operations._create_legacy_numeric_prediction(
+    created = create_numeric(
+        operations,
         question,
         "days",
         2,
-        "-1.25",
-        "3.50",
-        "10.75",
-        80,
+        {5: "-1.25", 25: "1.00", 50: "3.50", 75: "6.00", 95: "10.75"},
         rationale="Initial numeric rationale",
-        forecast_deadline=forecast_deadline,
+        forecast_deadline=forecast_deadline or CREATED + timedelta(days=30),
         tags=("Original",),
     )
     return operations, created
@@ -117,7 +116,7 @@ def test_numeric_protected_edit_requires_confirmation_and_appends_definition(
             question="Clarified numeric question?",
             background="Must wait for confirmation",
             resolution_criteria="Use the certified numeric result.",
-            forecast_deadline=CREATED.date(),
+            forecast_deadline=None,
             expected_resolution=None,
             tags=("Confirmed",),
             expected_metadata_version=created.metadata_version,
@@ -126,7 +125,6 @@ def test_numeric_protected_edit_requires_confirmation_and_appends_definition(
     assert error_info.value.changed_fields == (
         "question",
         "resolution_criteria",
-        "forecast_deadline",
     )
     unchanged = operations.get_numeric_prediction(created.prediction_id)
     assert unchanged.question == created.question
@@ -139,7 +137,7 @@ def test_numeric_protected_edit_requires_confirmation_and_appends_definition(
         question="Clarified numeric question?",
         background="Confirmed context",
         resolution_criteria="Use the certified numeric result.",
-        forecast_deadline=CREATED.date(),
+        forecast_deadline=None,
         expected_resolution=None,
         tags=("Confirmed",),
         expected_metadata_version=created.metadata_version,
@@ -147,7 +145,8 @@ def test_numeric_protected_edit_requires_confirmation_and_appends_definition(
     )
 
     assert isinstance(updated, NumericPrediction)
-    assert updated.status is PredictionStatus.LOCKED
+    assert updated.status is PredictionStatus.OPEN
+    assert updated.forecast_contract == created.forecast_contract
     assert updated.unit == "days"
     assert updated.decimal_places == 2
     assert updated.current_revision == created.current_revision
@@ -157,7 +156,7 @@ def test_numeric_protected_edit_requires_confirmation_and_appends_definition(
     assert history[0].old_question == "Original numeric question?"
     assert history[0].new_question == "Clarified numeric question?"
     assert history[0].old_forecast_deadline is None
-    assert history[0].new_forecast_deadline == CREATED.date()
+    assert history[0].new_forecast_deadline is None
     assert operations.search_predictions("original numeric question").hits == ()
     historical = operations.search_predictions(
         "original numeric question",
@@ -258,7 +257,7 @@ def test_numeric_metadata_edit_is_available_in_every_lifecycle(
     lifecycle: str,
 ) -> None:
     database = Database.open(tmp_path / f"{lifecycle}.sqlite3")
-    initial_deadline = CREATED.date() if lifecycle == "locked" else None
+    initial_deadline = CREATED + timedelta(hours=1) if lifecycle == "locked" else None
     _, created = _create_numeric(database, forecast_deadline=initial_deadline)
     operations = PredictionOperations(database, FixedClock(CHANGED), UTC)
     current = operations.get_numeric_prediction(created.prediction_id)
@@ -266,6 +265,7 @@ def test_numeric_metadata_edit_is_available_in_every_lifecycle(
         current = operations.resolve_numeric_prediction(
             created.prediction_id,
             "4.25",
+            use_recorded_time=True,
             expected_revision_id=current.current_revision.revision_id,
             expected_metadata_version=current.metadata_version,
         )
@@ -285,7 +285,7 @@ def test_numeric_metadata_edit_is_available_in_every_lifecycle(
         question=current.question,
         background=f"Edited while {lifecycle}",
         resolution_criteria=current.resolution_criteria,
-        forecast_deadline=current.forecast_deadline,
+        forecast_deadline=None,
         expected_resolution=current.expected_resolution,
         tags=current.tags,
         expected_metadata_version=current.metadata_version,

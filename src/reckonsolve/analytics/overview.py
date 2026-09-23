@@ -1,40 +1,26 @@
-"""Type-aware composition of Binary and Numeric analytics views."""
+"""Composition of the two supported forecasting models; never pooled scores."""
 
 from dataclasses import dataclass
 
 from reckonsolve.domain.analytics import (
-    AnalyticsSource,
-    NumericAnalyticsSource,
     QuantileAnalyticsSource,
     TrajectoryAnalyticsSource,
 )
 from reckonsolve.domain.predictions import PredictionType
 
-from .numeric import NumericAnalyticsSnapshot, summarize_numeric_analytics
 from .quantile_aggregate import QuantileAnalyticsSnapshot, summarize_quantile_analytics
-from .scoring import AnalyticsSnapshot, summarize_analytics
 from .trajectory_aggregate import (
     TrajectoryAnalyticsSnapshot,
     summarize_trajectory_analytics,
-)
-from .updates import (
-    BinaryUpdateAnalyticsSnapshot,
-    NumericUpdateAnalyticsSnapshot,
-    summarize_binary_updates,
-    summarize_numeric_updates,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class ForecastAnalyticsSnapshot:
-    """Separate type-specific metrics sharing one forecast-type/tag subset."""
+    """Separate model-specific metrics sharing one forecast-type/tag subset."""
 
-    binary: AnalyticsSnapshot
-    numeric: NumericAnalyticsSnapshot
     trajectory_binary: TrajectoryAnalyticsSnapshot
     quantile_numeric: QuantileAnalyticsSnapshot
-    binary_updates: BinaryUpdateAnalyticsSnapshot
-    numeric_updates: NumericUpdateAnalyticsSnapshot
     available_tags: tuple[str, ...]
     available_units: tuple[str, ...]
     selected_type: PredictionType | None = None
@@ -43,96 +29,37 @@ class ForecastAnalyticsSnapshot:
 
 
 def summarize_forecast_analytics(
-    binary_source: AnalyticsSource,
-    numeric_source: NumericAnalyticsSource,
+    trajectory_source: TrajectoryAnalyticsSource,
+    quantile_source: QuantileAnalyticsSource,
     *,
-    trajectory_source: TrajectoryAnalyticsSource | None = None,
-    quantile_source: QuantileAnalyticsSource | None = None,
     prediction_type: PredictionType | None = None,
     tag: str | None = None,
     unit: str | None = None,
 ) -> ForecastAnalyticsSnapshot:
-    """Calculate separate metrics without mixing forecast types or raw units."""
+    """Calculate model-specific metrics without pooling scores or raw units."""
 
-    if prediction_type is PredictionType.BINARY and unit is not None:
-        raise ValueError("A unit filter applies only to Numeric analytics.")
-    if prediction_type is None and unit is not None:
+    if prediction_type is not PredictionType.NUMERIC and unit is not None:
         raise ValueError("Choose Numeric analytics before filtering by unit.")
 
     include_binary = prediction_type in (None, PredictionType.BINARY)
     include_numeric = prediction_type in (None, PredictionType.NUMERIC)
     quantile = summarize_quantile_analytics(
-        quantile_source
-        if include_numeric and quantile_source is not None
-        else QuantileAnalyticsSource(records=()),
+        quantile_source if include_numeric else QuantileAnalyticsSource(records=()),
         tag=tag,
         unit=unit,
     )
     trajectory = summarize_trajectory_analytics(
-        (
-            trajectory_source
-            if include_binary and trajectory_source is not None
-            else TrajectoryAnalyticsSource(records=())
-        ),
+        trajectory_source if include_binary else TrajectoryAnalyticsSource(records=()),
         tag=tag,
-    )
-    binary = summarize_analytics(
-        binary_source
-        if include_binary
-        else AnalyticsSource(observations=(), available_tags=()),
-        tag=tag,
-    )
-    numeric = summarize_numeric_analytics(
-        numeric_source
-        if include_numeric
-        else NumericAnalyticsSource(
-            observations=(),
-            available_tags=(),
-            available_units=numeric_source.available_units,
-        ),
-        tag=tag,
-        unit=unit,
-    )
-    binary_updates = summarize_binary_updates(
-        binary_source
-        if include_binary
-        else AnalyticsSource(observations=(), available_tags=()),
-        tag=tag,
-    )
-    numeric_updates = summarize_numeric_updates(
-        numeric_source
-        if include_numeric
-        else NumericAnalyticsSource(
-            observations=(),
-            available_tags=(),
-            available_units=numeric_source.available_units,
-        ),
-        tag=tag,
-        unit=unit,
-    )
-    tag_sources = (
-        (binary_source.available_tags if include_binary else ())
-        + (numeric_source.available_tags if include_numeric else ())
-        + trajectory.available_tags
-        + quantile.available_tags
     )
     return ForecastAnalyticsSnapshot(
-        binary=binary,
-        numeric=numeric,
         trajectory_binary=trajectory,
         quantile_numeric=quantile,
-        binary_updates=binary_updates,
-        numeric_updates=numeric_updates,
-        available_tags=_unique_labels(tag_sources),
+        available_tags=_unique_labels(
+            trajectory.available_tags + quantile.available_tags
+        ),
         available_units=tuple(
-            sorted(
-                set(numeric_source.available_units)
-                | (
-                    {r.definition.unit for r in quantile_source.records}
-                    if quantile_source is not None
-                    else set()
-                )
-            )
+            sorted({r.definition.unit for r in quantile_source.records})
         ),
         selected_type=prediction_type,
         selected_tag=tag,

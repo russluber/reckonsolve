@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.errors import (
     ConcurrentTerminalCorrectionError,
@@ -39,15 +40,15 @@ class CountingClock:
 
 
 def _resolved_binary(database: Database, *, postmortem: str | None = None):
-    created = PredictionOperations(
-        database, FixedClock(CREATED), UTC
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database, FixedClock(CREATED), UTC),
         "Will the recorded outcome be corrected?",
         70,
     )
     return PredictionOperations(database, FixedClock(RESOLVED), UTC).resolve_prediction(
         created.prediction_id,
         BinaryOutcome.NO,
+        use_recorded_time=True,
         resolution_notes="Original source",
         postmortem=postmortem,
         expected_revision_id=created.current_revision_id,
@@ -56,18 +57,16 @@ def _resolved_binary(database: Database, *, postmortem: str | None = None):
 
 
 def _resolved_numeric(database: Database):
-    created = PredictionOperations(
-        database,
-        FixedClock(CREATED),
-        UTC,
-    )._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(
+            database,
+            FixedClock(CREATED),
+            UTC,
+        ),
         "What exact value will be observed?",
         "units",
         2,
-        "-5.00",
-        "0.00",
-        "5.00",
-        80,
+        {5: "-5.00", 25: "-2.50", 50: "0.00", 75: "2.50", 95: "5.00"},
     )
     return PredictionOperations(
         database,
@@ -76,6 +75,7 @@ def _resolved_numeric(database: Database):
     ).resolve_numeric_prediction(
         created.prediction_id,
         "1.25",
+        use_recorded_time=True,
         resolution_notes="Original measurement",
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
@@ -120,18 +120,19 @@ def test_binary_corrections_append_snapshots_and_drive_effective_analytics(
     assert second.corrections[1].changed_fields == ("postmortem",)
     assert second.corrections[0].corrected_at == CORRECTED
 
-    source = AnalyticsRepository(database).get_source()
-    assert len(source.observations) == 1
-    assert source.observations[0].outcome is BinaryOutcome.YES
-    assert source.observations[0].scoring_revision_id == original_scoring_revision_id
-    assert source.observations[0].outcome_corrected is True
+    source, _ = AnalyticsRepository(database).get_forecast_sources()
+    assert len(source.records) == 1
+    assert source.records[0].resolution_history == second
     scorecard = operations.get_prediction_scorecard(resolved.prediction_id)
     assert scorecard is not None
-    assert scorecard.scoring_revision_id == original_scoring_revision_id
+    assert scorecard.segments[-1].revision_id == original_scoring_revision_id
     assert scorecard.outcome is BinaryOutcome.YES
-    assert scorecard.brier_score == pytest.approx(0.09)
-    assert scorecard.outcome_corrected is True
-    assert operations.get_analytics().scored_prediction_count == 1
+    assert float(scorecard.final_brier) == pytest.approx(0.09)
+    assert scorecard.scoring_facts_corrected is True
+    assert (
+        operations.get_forecast_analytics().trajectory_binary.scored_prediction_count
+        == 1
+    )
     with database.transaction() as connection:
         original = connection.execute(
             "SELECT outcome, resolution_notes, postmortem FROM resolutions"
@@ -188,7 +189,7 @@ def test_score_affecting_correction_requires_reason_and_no_op_reads_no_clock(
     with database.transaction() as connection:
         assert (
             connection.execute(
-                "SELECT COUNT(*) FROM resolution_corrections"
+                "SELECT COUNT(*) FROM binary_trajectory_resolution_corrections"
             ).fetchone()[0]
             == 0
         )
@@ -251,18 +252,18 @@ def test_numeric_correction_round_trips_exactly_and_updates_one_observation(
     assert history.effective.scoring_revision_id == scoring_revision_id
     assert history.corrections[0].old_actual_value.scaled_value == 125
     assert history.corrections[0].new_actual_value.scaled_value == -250
-    source = AnalyticsRepository(database).get_numeric_source()
-    assert len(source.observations) == 1
-    assert str(source.observations[0].actual_value) == "-2.50"
-    assert source.observations[0].scoring_revision_id == scoring_revision_id
-    assert source.observations[0].actual_value_corrected is True
+    _, source = AnalyticsRepository(database).get_forecast_sources()
+    assert len(source.records) == 1
+    assert source.records[0].resolution_history == history
     scorecard = operations.get_prediction_scorecard(resolved.prediction_id)
     assert scorecard is not None
-    assert scorecard.scoring_revision_id == scoring_revision_id
+    assert scorecard.final_revision_id == scoring_revision_id
     assert str(scorecard.actual_value) == "-2.50"
-    assert scorecard.contained is True
-    assert scorecard.actual_value_corrected is True
-    assert operations.get_forecast_analytics().numeric.scored_prediction_count == 1
+    assert scorecard.scoring_facts_corrected is True
+    assert (
+        operations.get_forecast_analytics().quantile_numeric.scored_prediction_count
+        == 1
+    )
 
     with pytest.raises(ValidationError) as precision_error:
         operations.correct_numeric_resolution(
@@ -280,15 +281,13 @@ def test_numeric_correction_round_trips_exactly_and_updates_one_observation(
 def test_invalidation_reason_correction_is_append_only_for_both_types(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(CREATED), UTC)
-    binary = operations._create_legacy_prediction("Will this remain meaningful?", 50)
-    numeric = operations._create_legacy_numeric_prediction(
+    binary = create_binary(operations, "Will this remain meaningful?", 50)
+    numeric = create_numeric(
+        operations,
         "How many meaningful units?",
         "units",
         0,
-        1,
-        2,
-        3,
-        80,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
     )
     terminal = PredictionOperations(database, FixedClock(RESOLVED), UTC)
     binary_invalid = terminal.invalidate_prediction(
@@ -328,10 +327,8 @@ def test_invalidation_reason_correction_is_append_only_for_both_types(tmp_path) 
 def test_unresolved_and_invalid_predictions_have_no_scorecard(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(CREATED), UTC)
-    open_prediction = operations._create_legacy_prediction("Will this remain open?", 50)
-    invalid_candidate = operations._create_legacy_prediction(
-        "Will this be invalid?", 50
-    )
+    open_prediction = create_binary(operations, "Will this remain open?", 50)
+    invalid_candidate = create_binary(operations, "Will this be invalid?", 50)
     invalid = operations.invalidate_prediction(
         invalid_candidate.prediction_id,
         reason="The premise was withdrawn.",
@@ -392,7 +389,7 @@ def test_database_failure_rolls_back_entire_correction(tmp_path) -> None:
         connection.execute(
             """
             CREATE TRIGGER fail_m26_correction
-            AFTER INSERT ON resolution_corrections
+            AFTER INSERT ON binary_trajectory_resolution_corrections
             BEGIN SELECT RAISE(ABORT, 'forced correction failure'); END
             """
         )

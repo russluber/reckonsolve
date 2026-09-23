@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from .forecast_contracts import check_forecast_contract_integrity
 from .m48_migration import M48_STATEMENTS
 from .m50_migration import build_m50_statements
 
@@ -3388,6 +3389,9 @@ def apply_migrations(
     connection.execute("BEGIN IMMEDIATE")
     try:
         applied_count = _validated_applied_count(connection, ordered_migrations)
+        # Compatibility must be established before any pending DDL, identity
+        # backfill, or derived-index work can alter an existing database.
+        check_forecast_contract_integrity(connection)
         for migration in ordered_migrations[applied_count:]:
             for statement in migration.statements:
                 connection.execute(statement)

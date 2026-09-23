@@ -117,7 +117,7 @@ def test_new_binary_edit_keeps_deadline_readonly_and_can_save_metadata(
     dialog = EditPredictionDetailsDialog(operations, original)
     qtbot.addWidget(dialog)
     dialog.show()
-    assert not dialog.forecast_deadline_toggle.isVisible()
+    assert not hasattr(dialog, "forecast_deadline_toggle")
     assert "permanent" in dialog.exact_deadline_context.text()
     dialog.background_input.setPlainText("Added background")
     dialog.submit()

@@ -108,10 +108,6 @@ class PredictionBrowserItem:
     needs_postmortem: bool = False
     tags: tuple[str, ...] = ()
     prediction_type: PredictionType = PredictionType.BINARY
-    numeric_lower_bound: FixedPrecisionValue | None = None
-    numeric_median_estimate: FixedPrecisionValue | None = None
-    numeric_upper_bound: FixedPrecisionValue | None = None
-    numeric_confidence_percent: int | None = None
     numeric_unit: str | None = None
     forecast_contract: ForecastContract | None = None
     numeric_quantiles: FiveQuantiles | None = None
@@ -190,13 +186,7 @@ def classify_archive_items[TArchiveItem: _ArchiveItem](
 
     classified: list[TArchiveItem] = []
     for item in items:
-        status = contract_status(
-            item.status,
-            item.forecast_deadline,
-            current_date,
-            item.forecast_contract,
-            now,
-        )
+        status = contract_status(item.status, item.forecast_contract, now)
         classified.append(
             replace(
                 item,

@@ -1,8 +1,9 @@
 import sqlite3
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from supported_fixtures import create_binary
 
 from reckonsolve.application.errors import (
     ConcurrentLifecycleUpdateError,
@@ -38,9 +39,8 @@ class CountingClock:
 
 
 def _create(database: Database, **kwargs):
-    return PredictionOperations(
-        database, FixedClock(CREATED)
-    )._create_legacy_prediction(
+    return create_binary(
+        PredictionOperations(database, FixedClock(CREATED)),
         "Will the lifecycle work?",
         60,
         **kwargs,
@@ -51,6 +51,7 @@ def _resolve(operations: PredictionOperations, detail, **kwargs):
     return operations.resolve_prediction(
         detail.prediction_id,
         BinaryOutcome.YES,
+        use_recorded_time=True,
         expected_revision_id=detail.current_revision_id,
         expected_metadata_version=detail.metadata_version,
         **kwargs,
@@ -71,7 +72,9 @@ def test_resolution_captures_one_current_scoring_revision_and_optional_text(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     created = _create(database)
-    revisions = PredictionOperations(database, FixedClock(CREATED))
+    revisions = PredictionOperations(
+        database, FixedClock(CREATED + timedelta(minutes=1))
+    )
     revised = revisions.revise_forecast(
         created.prediction_id,
         35,
@@ -88,7 +91,9 @@ def test_resolution_captures_one_current_scoring_revision_and_optional_text(
         postmortem="  I updated too slowly.  ",
     )
 
-    assert clock.calls == 1
+    assert (
+        clock.calls == 2
+    )  # preflight plus authoritative recorded-at under transaction
     assert resolved.status is PredictionStatus.RESOLVED
     assert resolved.deletion_allowed is False
     assert resolved.resolution is not None
@@ -115,7 +120,7 @@ def test_resolution_captures_one_current_scoring_revision_and_optional_text(
 
 def test_locked_prediction_can_resolve_and_uses_its_final_revision(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    created = _create(database, forecast_deadline=date(2026, 8, 12))
+    created = _create(database, forecast_deadline=CREATED + timedelta(hours=1))
     operations = PredictionOperations(database, FixedClock(TERMINATED))
     locked = operations.get_prediction(created.prediction_id)
 
@@ -399,7 +404,9 @@ def test_every_approved_meaningful_history_boundary_blocks_delete(
     created = _create(
         database,
         **(
-            {"forecast_deadline": date(2026, 8, 12)} if history_kind == "locked" else {}
+            {"forecast_deadline": CREATED + timedelta(hours=1)}
+            if history_kind == "locked"
+            else {}
         ),
     )
     operations = PredictionOperations(database, FixedClock(TERMINATED))
@@ -443,9 +450,8 @@ def test_confirmed_untouched_open_delete_cascades_and_returns_previous_latest(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     first = _create(database, tags=("keep",))
-    second = PredictionOperations(
-        database, FixedClock(TERMINATED)
-    )._create_legacy_prediction(
+    second = create_binary(
+        PredictionOperations(database, FixedClock(TERMINATED)),
         "Delete this duplicate",
         25,
         rationale="Accidental duplicate",

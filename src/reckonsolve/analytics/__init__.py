@@ -1,87 +1,26 @@
-"""Scoring and calibration calculations for resolved predictions."""
+"""Supported forecast scoring and calibration calculations."""
 
-from reckonsolve.domain.analytics import (
-    AnalyticsSource,
-    NumericAnalyticsSource,
-    NumericScoringObservation,
-    ScoringObservation,
-    TrajectoryAnalyticsSource,
-    TrajectoryScoringRecord,
-)
-
-from .numeric import (
-    ContainmentCalibrationBin,
-    NumericAnalyticsSnapshot,
-    NumericScoredPrediction,
-    NumericUnitSummary,
-    score_numeric_observation,
-    summarize_numeric_analytics,
-)
 from .overview import ForecastAnalyticsSnapshot, summarize_forecast_analytics
-from .scorecards import (
-    BinaryScorecard,
-    NumericScorecard,
-    PredictionScorecard,
-    binary_scorecard,
-    numeric_scorecard,
-)
-from .scoring import (
-    AnalyticsSnapshot,
-    BrierTrendPoint,
-    CalibrationBin,
-    ScoredPrediction,
-    brier_score,
-    summarize_analytics,
-)
+from .quantiles import QuantileScorecard
+from .scoring import CalibrationBin, brier_score
+from .trajectory import TrajectoryScorecard
 from .trajectory_aggregate import (
     TrajectoryAnalyticsSnapshot,
     TrajectoryScoredPrediction,
     summarize_trajectory_analytics,
 )
-from .updates import (
-    BinaryUpdateAnalyticsSnapshot,
-    BinaryUpdatePair,
-    NumericUnitUpdateSummary,
-    NumericUpdateAnalyticsSnapshot,
-    NumericUpdatePair,
-    summarize_binary_updates,
-    summarize_numeric_updates,
-)
+
+PredictionScorecard = TrajectoryScorecard | QuantileScorecard
 
 __all__ = [
-    "AnalyticsSnapshot",
-    "AnalyticsSource",
-    "BinaryScorecard",
-    "BinaryUpdateAnalyticsSnapshot",
-    "BinaryUpdatePair",
-    "BrierTrendPoint",
     "CalibrationBin",
-    "ContainmentCalibrationBin",
     "ForecastAnalyticsSnapshot",
-    "NumericAnalyticsSnapshot",
-    "NumericAnalyticsSource",
-    "NumericScorecard",
-    "NumericScoredPrediction",
-    "NumericScoringObservation",
-    "NumericUnitSummary",
-    "NumericUnitUpdateSummary",
-    "NumericUpdateAnalyticsSnapshot",
-    "NumericUpdatePair",
     "PredictionScorecard",
-    "ScoredPrediction",
-    "ScoringObservation",
+    "QuantileScorecard",
     "TrajectoryAnalyticsSnapshot",
-    "TrajectoryAnalyticsSource",
+    "TrajectoryScorecard",
     "TrajectoryScoredPrediction",
-    "TrajectoryScoringRecord",
-    "binary_scorecard",
     "brier_score",
-    "numeric_scorecard",
-    "score_numeric_observation",
-    "summarize_analytics",
-    "summarize_binary_updates",
     "summarize_forecast_analytics",
-    "summarize_numeric_analytics",
-    "summarize_numeric_updates",
     "summarize_trajectory_analytics",
 ]

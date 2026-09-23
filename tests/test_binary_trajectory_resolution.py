@@ -77,7 +77,10 @@ def test_exact_segments_early_deadline_and_late_resolution(
     assert card.updating_gain == card.hold_initial_brier - card.trajectory_brier
     assert card.active_forecast_fraction == Fraction(min(hours, 4), 4)
     assert len(operations.list_forecast_revisions(prediction.prediction_id)) == 2
-    assert not operations.get_analytics().scored_predictions
+    assert (
+        operations.get_forecast_analytics().trajectory_binary.scored_prediction_count
+        == 1
+    )
 
 
 def test_time_correction_reselects_without_erasing_post_effective_revisions(active):
@@ -450,7 +453,10 @@ def test_corrected_postmortem_clear_skip_and_backup_survive_restart(active, tmp_
         prediction.prediction_id, expected_correction_id=history.current_correction_id
     )
     assert not operations.get_dashboard().needs_postmortem_predictions
-    assert not operations.get_analytics().available_tags
+    assert (
+        operations.get_forecast_analytics().quantile_numeric.scored_prediction_count
+        == 0
+    )
     assert operations.search_predictions("amended").hits
     assert not operations.search_predictions("reflection").hits
     card = operations.get_prediction_scorecard(prediction.prediction_id)

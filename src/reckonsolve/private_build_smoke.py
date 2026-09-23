@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS
 from reckonsolve.domain.browser import ArchiveQuery, ArchiveTagMatchMode
 from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.domain.quantiles import NumericValueConstraint
 from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.ui.presentation_settings import MINIMUM_WINDOW_SIZE
@@ -41,7 +43,7 @@ class _SmokeState:
 
 
 def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
-    """Exercise frozen v0.6 presentation and the complete v0.5 data boundary."""
+    """Exercise current presentation, staged v0.7 upgrade, and recovery boundaries."""
 
     database_path = database_path.resolve()
     backup_path = backup_path.resolve()
@@ -57,31 +59,34 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         )
     backup_path.parent.mkdir(parents=True, exist_ok=True)
 
-    previous_database = Database.open(database_path, migrations=MIGRATIONS[:13])
+    deadline = datetime.now(UTC) + timedelta(days=30)
+    previous_database = Database.open(database_path, migrations=MIGRATIONS[:17])
     try:
         previous_operations = PredictionOperations(previous_database)
-        previous_prediction = previous_operations._create_legacy_prediction(
-            "M38 v0.4 prediction survives the frozen migration?",
+        previous_prediction = previous_operations.create_prediction(
+            "Staged v0.7 Binary prediction survives the frozen migration?",
             55,
+            forecast_deadline=deadline,
         )
         previous_prediction = previous_operations.resolve_prediction(
             previous_prediction.prediction_id,
             BinaryOutcome.YES,
-            resolution_notes="Original v0.4 terminal fact.",
+            use_recorded_time=True,
+            resolution_notes="Original staged v0.7 terminal fact.",
             expected_revision_id=previous_prediction.current_revision_id,
             expected_metadata_version=previous_prediction.metadata_version,
         )
         previous_operations.correct_binary_resolution(
             previous_prediction.prediction_id,
             BinaryOutcome.NO,
-            resolution_notes="Effective v0.4 terminal fact.",
-            postmortem="Migrated v0.4 Postmortem.",
-            correction_reason="The v0.4 smoke fixture corrects its outcome.",
+            resolution_notes="Effective staged v0.7 terminal fact.",
+            postmortem="Migrated v0.7 Postmortem.",
+            correction_reason="The staged v0.7 smoke fixture corrects its outcome.",
             expected_correction_id=None,
         )
         previous_prediction_id = previous_prediction.prediction_id
-        if previous_database.schema_version != 13:
-            raise RuntimeError("The frozen smoke fixture was not a v0.4 database.")
+        if previous_database.schema_version != 17:
+            raise RuntimeError("The frozen smoke fixture was not a schema-17 database.")
     finally:
         previous_database.close()
 
@@ -108,11 +113,14 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             or previous_history.effective.outcome is not BinaryOutcome.NO
             or len(previous_history.corrections) != 1
         ):
-            raise RuntimeError("The frozen migration did not preserve v0.4 history.")
+            raise RuntimeError(
+                "The frozen migration did not preserve staged v0.7 history."
+            )
         runtime.database.check_search_index()
-        binary_prediction = operations._create_legacy_prediction(
-            "M38 private frozen-build Binary prediction?",
+        binary_prediction = operations.create_prediction(
+            "Private frozen-build Binary prediction?",
             60,
+            forecast_deadline=deadline,
             rationale="Initial Binary smoke forecast.",
             tags=(
                 "private-smoke",
@@ -149,6 +157,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         binary_prediction = operations.resolve_prediction(
             binary_prediction.prediction_id,
             BinaryOutcome.YES,
+            use_recorded_time=True,
             resolution_notes="Frozen Binary resolution path works.",
             expected_revision_id=binary_prediction.current_revision_id,
             expected_metadata_version=binary_prediction.metadata_version,
@@ -165,14 +174,13 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             correction_reason="Frozen smoke corrects the certified outcome.",
             expected_correction_id=None,
         )
-        numeric_prediction = operations._create_legacy_numeric_prediction(
-            "M31 private frozen-build Numeric prediction?",
+        numeric_prediction = operations.create_numeric_prediction(
+            "Private frozen-build Numeric prediction?",
             "days",
             1,
-            "-1.5",
-            "2.0",
-            "7.0",
-            80,
+            {5: "-1.5", 25: "0.0", 50: "2.0", 75: "4.0", 95: "7.0"},
+            value_constraint=NumericValueConstraint.CONTINUOUS,
+            forecast_deadline=deadline,
             rationale="Initial Numeric smoke forecast.",
             tags=("private-smoke",),
         )
@@ -182,12 +190,9 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             expected_revision_id=numeric_prediction.current_revision.revision_id,
             expected_metadata_version=numeric_prediction.metadata_version,
         )
-        numeric_prediction = operations.revise_numeric_forecast(
+        numeric_prediction = operations.revise_quantile_forecast(
             numeric_prediction.prediction_id,
-            "0.0",
-            "4.5",
-            "9.0",
-            80,
+            {5: "0.0", 25: "2.0", 50: "4.5", 75: "7.0", 95: "9.0"},
             rationale="Frozen Numeric revision path works.",
             expected_revision_id=numeric_prediction.current_revision.revision_id,
             expected_metadata_version=numeric_prediction.metadata_version,
@@ -195,6 +200,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         numeric_prediction = operations.resolve_numeric_prediction(
             numeric_prediction.prediction_id,
             "9.5",
+            use_recorded_time=True,
             resolution_notes="Frozen Numeric resolution path works.",
             expected_revision_id=numeric_prediction.current_revision.revision_id,
             expected_metadata_version=numeric_prediction.metadata_version,
@@ -207,14 +213,16 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             correction_reason="Frozen smoke corrects the exact observed value.",
             expected_correction_id=None,
         )
-        needs_postmortem = operations._create_legacy_prediction(
-            "M38 frozen Needs Postmortem prediction?",
+        needs_postmortem = operations.create_prediction(
+            "Frozen Needs Postmortem prediction?",
             50,
+            forecast_deadline=deadline,
             tags=("private-smoke",),
         )
         needs_postmortem = operations.resolve_prediction(
             needs_postmortem.prediction_id,
             BinaryOutcome.YES,
+            use_recorded_time=True,
             expected_revision_id=needs_postmortem.current_revision_id,
             expected_metadata_version=needs_postmortem.metadata_version,
         )
@@ -231,8 +239,8 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             raise RuntimeError("The frozen Numeric scorecard was not available.")
         analytics = operations.get_forecast_analytics()
         if (
-            analytics.binary_updates.paired_count != 1
-            or analytics.numeric_updates.paired_count != 1
+            analytics.trajectory_binary.scored_prediction_count != 3
+            or analytics.quantile_numeric.better.total != 1
         ):
             raise RuntimeError("The frozen update analytics were incomplete.")
         queued_ids = {
@@ -312,7 +320,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         runtime.database.check_search_index()
 
         before_presentation = _sqlite_logical_snapshot(database_path)
-        _exercise_v06_presentation(
+        _exercise_supported_presentation(
             runtime,
             operations,
             binary_prediction_id=binary_prediction.prediction_id,
@@ -320,7 +328,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         )
         if _sqlite_logical_snapshot(database_path) != before_presentation:
             raise RuntimeError(
-                "Using the frozen v0.6 presentation rewrote schema-version-15 data."
+                "Using the presentation rewrote supported schema-version-18 data."
             )
 
         operations.create_backup(backup_path)
@@ -339,7 +347,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
     _verify_frozen_restart(database_path, state)
 
 
-def _exercise_v06_presentation(
+def _exercise_supported_presentation(
     runtime,
     operations: PredictionOperations,
     *,
@@ -475,7 +483,7 @@ def _verify_frozen_restart(database_path: Path, state: _SmokeState) -> None:
     finally:
         runtime.close()
     if _sqlite_logical_snapshot(database_path) != before_restart:
-        raise RuntimeError("Restarting the frozen v0.6 shell rewrote canonical data.")
+        raise RuntimeError("Restarting the frozen shell rewrote canonical data.")
 
 
 def _sqlite_logical_snapshot(
@@ -550,9 +558,9 @@ def _verify_smoke_database(
         if (
             previous_history.original.outcome is not BinaryOutcome.YES
             or previous_history.effective.outcome is not BinaryOutcome.NO
-            or previous_history.effective.postmortem != "Migrated v0.4 Postmortem."
+            or previous_history.effective.postmortem != "Migrated v0.7 Postmortem."
         ):
-            raise RuntimeError("The migrated v0.4 terminal history did not survive.")
+            raise RuntimeError("The migrated v0.7 terminal history did not survive.")
         if binary_prediction.resolution is None:
             raise RuntimeError("The frozen Binary resolution did not survive restart.")
         binary_history = operations.get_binary_resolution_history(
@@ -570,9 +578,9 @@ def _verify_smoke_database(
         if len(binary_revisions) != 2 or len(binary_timeline) != 4:
             raise RuntimeError("The frozen Binary history did not survive restart.")
         if (
-            numeric_prediction.current_revision.lower_bound.decimal_value
+            numeric_prediction.current_revision.quantiles.q05.decimal_value
             != Decimal("0.0")
-            or numeric_prediction.current_revision.upper_bound.decimal_value
+            or numeric_prediction.current_revision.quantiles.q95.decimal_value
             != Decimal("9.0")
             or numeric_prediction.resolution is None
         ):
@@ -596,8 +604,8 @@ def _verify_smoke_database(
             raise RuntimeError("The frozen Numeric scorecard did not survive restart.")
         analytics = operations.get_forecast_analytics()
         if (
-            analytics.binary_updates.paired_count != 1
-            or analytics.numeric_updates.paired_count != 1
+            analytics.trajectory_binary.scored_prediction_count != 3
+            or analytics.quantile_numeric.better.total != 1
         ):
             raise RuntimeError("The frozen update analytics did not survive restart.")
         queued_ids = {

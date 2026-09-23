@@ -23,9 +23,9 @@ The governing product rule is:
 
 The completed source release is v0.6.0. Its contract and Milestones 39 through 45, including Milestone 42A, are defined in Section 34 of `docs/product-spec.md` and are complete. Preserve its presentation-only boundary over schema version 15.
 
-The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 54 and M54A are implemented. M54B (legacy retirement) is approved and planned, not implemented; M55 follows M54B and is also unimplemented. Work on only the milestone or coherent slice the user explicitly authorizes; approving a specification or plan is not authorization to implement it.
+The v0.7.0 contract is approved for staged implementation in Section 35 of `docs/product-spec.md`, with accepted supporting rationale in the three v0.7 design documents linked there. Milestones 46 through 54 and M54A are implemented. M54B (legacy retirement) is implemented; M55 follows M54B and is unimplemented. Work on only the milestone or coherent slice the user explicitly authorizes; approving a specification or plan is not authorization to implement it.
 
-The user-approved 2026-09-20 amendment in Section 35.3 supersedes earlier promises in this file and the design documents to maintain legacy support indefinitely. M54B will remove legacy Binary and interval-v1 Numeric runtime workflows, preserve all existing v0.7 history, and refuse legacy-only or mixed databases without conversion, deletion, or partial loading. Keep shared mathematics, storage, and migration infrastructure required by supported models. Until M54B is explicitly started, do not retire paths piecemeal. The historical milestone descriptions below explain the current implementation and its earlier obligations; they must not cause a later agent to restore retired features after M54B. Any live test-data purge or reset requires separate explicit approval and validated targets; the approved plan is not that approval.
+The user-approved 2026-09-20 amendment in Section 35.3 supersedes earlier promises in this file and the design documents to maintain legacy support indefinitely. M54B removes legacy Binary and interval-v1 Numeric runtime workflows, preserve all existing v0.7 history, and refuse legacy-only or mixed databases without conversion, deletion, or partial loading. Keep shared mathematics, storage, and migration infrastructure required by supported models. Do not restore the retired runtime paths. The historical milestone descriptions below explain the current implementation and its earlier obligations; they must not cause a later agent to restore retired features after M54B. Any live test-data purge or reset requires separate explicit approval and validated targets; the approved plan is not that approval.
 
 The v0.1 baseline includes:
 
@@ -52,7 +52,7 @@ v0.2 adds:
 - Forecast Reviews that retain an unchanged Binary or Numeric forecast without creating a fake revision; and
 - type-aware backup, CSV export, migration, and private-build hardening.
 
-Milestones 13 through 20 in `docs/product-spec.md` are complete. Preserve the completed Binary and Numeric behavior rather than redesigning it incidentally.
+Milestones 13 through 20 in `docs/product-spec.md` are historical completed work. Preserve shared history guarantees, but their legacy model workflows have been retired by M54B.
 
 v0.3 adds:
 
@@ -93,7 +93,7 @@ v0.6 Milestone 45 closes the source release without a migration or product expan
 
 v0.7 Milestone 46 adds schema version 16 and a presentation-independent prospective-contract foundation. Every existing and currently creatable Prediction receives an explicit immutable legacy model/scoring identity; no legacy record receives a fabricated exact Deadline, effective Resolution time, quantile, trajectory, or new score. Pure domain values validate timezone-aware exact instants, `T > t0`, strictly monotonic pre-Deadline revisions, `C = min(R, T)`, and closed cohort dispatch. The schema reserves new-model exact Resolution facts and type-specific append-only effective-time correction chains, but no GUI or CLI workflow creates a new-model Prediction until its complete vertical slice. Preserve ADRs 0014 and 0015, the linked Rulebook, and this legacy/new boundary during Milestones 47 through 55.
 
-v0.7 prospectively changes new forecasting commitments while preserving every legacy cohort. Every new Binary or Numeric Prediction receives a durable model/scoring identity, a mandatory exact immutable Forecast Deadline, and separate effective-resolution and recorded-at instants. New Binary Predictions use duration-weighted Trajectory Brier with Binary-only neutral truncation after early resolution. New Numeric Predictions use the fixed q05/q25/q50/q75/q95 model, exact WIS, calibration-first feedback, and continuous-style or whole-number semantics. Every pre-v0.7 Binary and Numeric Prediction keeps its legacy editor, lifecycle, and scoring contract for life; never infer exact times, quantiles, trajectories, or new scores for it.
+v0.7 uses the two supported forecasting contracts below; M54B supersedes its initial legacy-compatibility promise. Every new Binary or Numeric Prediction receives a durable model/scoring identity, a mandatory exact immutable Forecast Deadline, and separate effective-resolution and recorded-at instants. New Binary Predictions use duration-weighted Trajectory Brier with Binary-only neutral truncation after early resolution. New Numeric Predictions use the fixed q05/q25/q50/q75/q95 model, exact WIS, calibration-first feedback, and continuous-style or whole-number semantics. Every archive containing a pre-v0.7 Prediction is refused without conversion, deletion, or partial loading; never infer exact times, quantiles, trajectories, or new scores for it.
 
 Do not implement other Later features unless the user explicitly changes the scope in `docs/product-spec.md`.
 
@@ -114,6 +114,8 @@ v0.7 Milestone 53 adds five-quantile Numeric aggregate calibration without a mig
 v0.7 Milestone 54 hardens four-cohort desktop/CLI parity without a migration. Startup and cohort-filtered archive, Dashboard, search, and aggregate reads reject unsupported or mismatched model/scoring identities rather than silently dropping records. Both launchers report unsupported database contracts clearly. Numeric CLI detail and mutation context expose the scoring identity, and Numeric prompts retain immutable unit, precision, and value-constraint context. Independent-connection tests cover all four cohorts, exact offset input, read-only retrieval, dynamic Saved Views, tag transactions, effective/superseded corrected text, repair, stale edits, and lock-at-commit rollback. No CLI metadata/correction command, synchronization subsystem, or score calculation was added. Preserve schema 18 and the CSV-3 guard until M55.
 
 M54A is the user-authorized pre-M55 Analytics presentation/documentation slice, extended by feedback to resolved Prediction Detail scorecards. The Trajectory Binary summary uses flat, top-aligned Score, Timing, and Updating groups rather than nested metric cards; narrow layouts stack without changing any statistic. Individual scorecards use grouped selectable facts and contextual help; Numeric draws the final scored 50%/90% intervals, median, and effective actual on a shared scale with exact text alongside it. `docs/analytics-guide.md` is the human-facing interpretation guide, with worked examples, cohort boundaries, tie/uncertainty cautions, and actionable review habits. Keep explanations there rather than adding a long tutorial inside Analytics. This slice adds no calculation, schema, cohort, or CLI behavior; M55 remains separately authorized work.
+
+M54B retires legacy runtime behavior under ADR 0019 without a new schema version or canonical rewrite. The application accepts supported v0.7-only archives and staged supported Binary schema-16/17 upgrades, but refuses legacy-only, mixed, missing-identity, unknown, or mismatched inputs before migration/repair/write. Tests and disposable tooling must use explicit supported contracts; historical raw fixtures exist only for refusal/migration-infrastructure tests. Shared exact math, storage, and historical SQL remain; legacy editors/calculators must not be reintroduced to make an old test pass. CSV format 3 stays guarded until M55. No live database purge is authorized. Earlier milestone descriptions in this file are historical, not a second runtime support contract.
 
 ## Technology Direction
 
@@ -147,7 +149,7 @@ M54A is the user-authorized pre-M55 Analytics presentation/documentation slice, 
 - The current forecast is derived from the latest valid eligible type-appropriate revision.
 - Creating a prediction and its first revision is atomic.
 - Opening or cancelling a revision form must not create a revision.
-- Numeric revisions require `lower <= median <= upper`, inclusive bounds, and whole-number confidence from 1% through 99%.
+- Numeric revisions contain exactly q05/q25/q50/q75/q95; arbitrary-confidence interval-v1 revisions are retired.
 - Numeric values use an exact base-ten representation at the Prediction's immutable unit and precision; canonical storage must not use binary floating-point.
 - Every new v0.7 Prediction has an immutable stored model identity and scoring-contract identity; application version and `metadata_version` are not substitutes.
 - Every new v0.7 Forecast Deadline is an exact immutable instant strictly after the first revision. New-model revisions are system-timestamped, strictly ordered, and rejected at or after that Deadline.
@@ -177,7 +179,7 @@ M54A is the user-authorized pre-M55 Analytics presentation/documentation slice, 
 - Never treat every revision as an independent resolved forecast.
 - Exclude unresolved and Invalid predictions from all scoring and calibration calculations.
 - Binary forecasts use Brier and binary calibration behavior.
-- Numeric forecasts use inclusive containment calibration, median absolute error, and proper interval score as specified in Section 30.
+- Numeric forecasts use five-quantile WIS and the continuous-style/whole-number calibration contract in Section 35; Section 30 describes retired behavior.
 - Unitless numeric containment calibration may combine units; raw numeric errors, widths, and interval scores must not be aggregated across unlike units.
 - Test scoring selection rules separately from chart rendering.
 - Binary Trajectory Brier applies only to its explicit v0.7 cohort, uses exact standing durations and the fixed initial-to-Deadline denominator, and uses 0.25 neutral truncation only after early effective resolution.
@@ -193,9 +195,9 @@ M54A is the user-authorized pre-M55 Analytics presentation/documentation slice, 
 
 ## UX Guardrails
 
-- Preserve the legacy Binary and Numeric editors for their existing cohorts: Binary uses Question and Probability, while Numeric interval-v1 uses Question, unit, precision, lower bound, median estimate, upper bound, and confidence.
+- Do not restore legacy editors or partial loading of unsupported archives. Only the current trajectory Binary and five-quantile Numeric workflows are supported.
 - New v0.7 Binary creation requires Question, Probability, and Forecast Deadline. New Numeric creation requires Question, unit, precision, value constraint, q05, q25, q50, q75, q95, and Forecast Deadline.
-- Rationale, Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and tags remain optional.
+- Rationale, Background, Resolution Criteria, Expected Resolution, and tags remain optional. Exact Forecast Deadline is required and immutable.
 - Do not force the user to enter boilerplate Resolution Criteria for self-evident questions.
 - Keep Question and the type-appropriate forecast values visually primary during creation.
 - Favor a calm desktop-journal interface over a dense trading or enterprise dashboard.

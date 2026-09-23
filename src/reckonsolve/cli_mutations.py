@@ -16,7 +16,6 @@ from reckonsolve.domain.forecast_contracts import EffectiveResolutionTime
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     FixedPrecisionValue,
-    NewNumericForecastRevision,
     NumericPrediction,
     PredictionDetail,
     PredictionStatus,
@@ -41,9 +40,7 @@ def revise_interactively(
     if prediction.status is not PredictionStatus.OPEN:
         raise ForecastRevisionNotAllowedError(prediction.status)
 
-    if isinstance(prediction, NumericPrediction) and isinstance(
-        prediction.current_revision, QuantileRevision
-    ):
+    if isinstance(prediction, NumericPrediction):
         values = ask_quantiles(
             session,
             QuantileDefinition(
@@ -55,19 +52,6 @@ def revise_interactively(
         revised = operations.revise_quantile_forecast(
             prediction_id,
             values,
-            rationale=rationale,
-            expected_revision_id=prediction.current_revision.revision_id,
-            expected_metadata_version=prediction.metadata_version,
-        )
-    elif isinstance(prediction, NumericPrediction):
-        values = _ask_numeric_revision(prediction, session)
-        rationale = _optional_line(session.ask("What changed? (optional, one line): "))
-        revised = operations.revise_numeric_forecast(
-            prediction_id,
-            values[0],
-            values[1],
-            values[2],
-            values[3],
             rationale=rationale,
             expected_revision_id=prediction.current_revision.revision_id,
             expected_metadata_version=prediction.metadata_version,
@@ -179,50 +163,43 @@ def resolve_interactively(
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise LifecycleTransitionNotAllowedError("resolved", prediction.status)
-    prospective = (
-        prediction.forecast_contract is not None
-        and not prediction.forecast_contract.is_legacy
-    )
-
     print(
         "Resolution records a terminal outcome. It cannot be reopened; factual "
         "corrections remain available through the desktop with an audit record.",
         file=session.output,
     )
     timing: dict[str, datetime | bool] = {}
-    if prospective:
-        print(
-            "Scoring uses when the outcome first became fixed and "
-            "ascertainable, not when you happened to record it. Forecasts at "
-            "or after that cutoff stay in history but do not score.",
-            file=session.output,
-        )
+    print(
+        "Scoring uses when the outcome first became fixed and "
+        "ascertainable, not when you happened to record it. Forecasts at "
+        "or after that cutoff stay in history but do not score.",
+        file=session.output,
+    )
     if isinstance(prediction, NumericPrediction):
         actual_value = _ask_exact_actual_value(prediction, session)
     else:
         outcome = _ask_binary_outcome(session)
-    if prospective:
-        while True:
-            raw = session.ask(
-                "When did the outcome become knowable? [now] or exact ISO "
-                "time with UTC offset: "
-            ).strip()
-            if not raw or raw.casefold() == "now":
-                timing = {"use_recorded_time": True}
-                break
-            try:
-                timing = {
-                    "effective_resolution_at": EffectiveResolutionTime(
-                        datetime.fromisoformat(raw)
-                    ).instant
-                }
-                break
-            except ValueError:
-                print(
-                    "Enter now or an exact time with an offset, such as "
-                    "2026-09-10T14:30:00-07:00.",
-                    file=session.errors,
-                )
+    while True:
+        raw = session.ask(
+            "When did the outcome become knowable? [now] or exact ISO "
+            "time with UTC offset: "
+        ).strip()
+        if not raw or raw.casefold() == "now":
+            timing = {"use_recorded_time": True}
+            break
+        try:
+            timing = {
+                "effective_resolution_at": EffectiveResolutionTime(
+                    datetime.fromisoformat(raw)
+                ).instant
+            }
+            break
+        except ValueError:
+            print(
+                "Enter now or an exact time with an offset, such as "
+                "2026-09-10T14:30:00-07:00.",
+                file=session.errors,
+            )
     resolution_notes = _optional_line(
         session.ask("Resolution notes (optional, one line): ")
     )
@@ -390,14 +367,7 @@ def _forecast_summary(prediction: PredictionDetail | NumericPrediction) -> str:
     if not isinstance(prediction, NumericPrediction):
         return f"{prediction.probability_percent}% Yes"
     revision = prediction.current_revision
-    if isinstance(revision, QuantileRevision):
-        return terminal_text(quantile_summary(revision.quantiles, prediction.unit))
-    return (
-        f"{revision.confidence_percent}% interval "
-        f"{revision.lower_bound} to {revision.upper_bound} "
-        f"{terminal_text(prediction.unit)}; median {revision.median_estimate} "
-        f"{terminal_text(prediction.unit)}"
-    )
+    return terminal_text(quantile_summary(revision.quantiles, prediction.unit))
 
 
 def _ask_changed_probability(
@@ -425,67 +395,6 @@ def _ask_changed_probability(
                 file=session.output,
             )
         return probability
-
-
-def _ask_numeric_revision(
-    prediction: NumericPrediction,
-    session: PromptSession,
-) -> tuple[str, str, str, int]:
-    current = prediction.current_revision
-    while True:
-        lower_bound = _ask_with_default(
-            session,
-            "Lower bound",
-            str(current.lower_bound),
-        )
-        median_estimate = _ask_with_default(
-            session,
-            "Median estimate",
-            str(current.median_estimate),
-        )
-        upper_bound = _ask_with_default(
-            session,
-            "Upper bound",
-            str(current.upper_bound),
-        )
-        confidence = _ask_confidence_with_default(
-            session,
-            current.confidence_percent,
-        )
-        try:
-            candidate = NewNumericForecastRevision(
-                lower_bound=FixedPrecisionValue.from_value(
-                    lower_bound,
-                    prediction.decimal_places,
-                    field="lower_bound",
-                ),
-                median_estimate=FixedPrecisionValue.from_value(
-                    median_estimate,
-                    prediction.decimal_places,
-                    field="median_estimate",
-                ),
-                upper_bound=FixedPrecisionValue.from_value(
-                    upper_bound,
-                    prediction.decimal_places,
-                    field="upper_bound",
-                ),
-                confidence_percent=confidence,
-            )
-        except PredictionValidationError as error:
-            session.explain_error(f"Invalid numeric forecast: {error}")
-            continue
-        if (
-            candidate.lower_bound == current.lower_bound
-            and candidate.median_estimate == current.median_estimate
-            and candidate.upper_bound == current.upper_bound
-            and candidate.confidence_percent == current.confidence_percent
-        ):
-            session.explain_error(
-                "The numeric forecast is unchanged. Change at least one value, "
-                "or cancel and use review or journal instead."
-            )
-            continue
-        return lower_bound, median_estimate, upper_bound, confidence
 
 
 def _ask_binary_outcome(session: PromptSession) -> BinaryOutcome:
@@ -523,32 +432,6 @@ def _ask_exact_actual_value(
             session.explain_error(f"Invalid actual value: {error}")
             continue
         return value
-
-
-def _ask_with_default(
-    session: PromptSession,
-    label: str,
-    default: str,
-) -> str:
-    value = session.ask(f"{label} [{default}]: ")
-    return value if value.strip() else default
-
-
-def _ask_confidence_with_default(
-    session: PromptSession,
-    default: int,
-) -> int:
-    while True:
-        value = session.ask(f"Confidence [{default}]: ").strip()
-        if not value:
-            return default
-        try:
-            confidence = int(value)
-        except ValueError:
-            confidence = 0
-        if 1 <= confidence <= 99:
-            return confidence
-        session.explain_error("Confidence must be a whole number from 1 to 99.")
 
 
 def _ask_required_line(

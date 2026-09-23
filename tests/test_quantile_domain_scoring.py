@@ -18,7 +18,6 @@ from reckonsolve.domain.forecast_contracts import (
     ForecastContractValidationError,
     ForecastDeadline,
     ResolutionTiming,
-    legacy_contract,
     prospective_contract,
 )
 from reckonsolve.domain.predictions import (
@@ -238,14 +237,17 @@ def test_timezone_equivalence_single_revision_and_improvement_signs():
     )
 
 
-def test_selection_rejects_legacy_cross_question_and_invalid_history():
+def test_selection_rejects_wrong_model_cross_question_and_invalid_history():
     history = revisions()
     timing = ResolutionTiming(
         EffectiveResolutionTime(T0 + timedelta(hours=3)), T0 + timedelta(hours=4)
     )
     with pytest.raises(ValueError, match="five-quantile"):
         select_final_revision(
-            legacy_contract(PredictionType.NUMERIC), DEFINITION, history, timing
+            prospective_contract(PredictionType.BINARY, CONTRACT.forecast_deadline),
+            DEFINITION,
+            history,
+            timing,
         )
     for bad in (
         (history[1],),

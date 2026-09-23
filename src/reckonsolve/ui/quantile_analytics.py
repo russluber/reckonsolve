@@ -376,7 +376,7 @@ class QuantileAnalyticsView(QWidget):
         )
         summary_help = (
             "Unscored: outcome fixed at or before the first forecast. "
-            "Invalid, unresolved, and legacy interval forecasts are excluded."
+            "Invalid and unresolved forecasts are excluded."
         )
         self.summary.setToolTip(summary_help)
         self.summary.setAccessibleDescription(summary_help)

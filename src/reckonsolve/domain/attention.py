@@ -35,10 +35,6 @@ class DashboardPrediction:
     needs_attention: bool = False
     ready_to_resolve: bool = False
     prediction_type: PredictionType = PredictionType.BINARY
-    numeric_lower_bound: FixedPrecisionValue | None = None
-    numeric_median_estimate: FixedPrecisionValue | None = None
-    numeric_upper_bound: FixedPrecisionValue | None = None
-    numeric_confidence_percent: int | None = None
     numeric_unit: str | None = None
     latest_review_at: datetime | None = None
     forecast_contract: ForecastContract | None = None

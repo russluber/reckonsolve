@@ -34,9 +34,6 @@ from PySide6.QtWidgets import (
 )
 
 from reckonsolve.analytics import (
-    AnalyticsSnapshot,
-    BinaryScorecard,
-    NumericScorecard,
     PredictionScorecard,
 )
 from reckonsolve.analytics.quantiles import QuantileScorecard
@@ -82,7 +79,6 @@ from reckonsolve.ui.components import (
 from reckonsolve.ui.effective_time_input import EffectiveTimeInput
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
-from reckonsolve.ui.numeric_history_chart import NumericHistoryChart
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.quantile_input import FiveQuantileInput, QuantileCDF
 from reckonsolve.ui.quantile_scorecard import QuantileScorecardPanel
@@ -125,20 +121,6 @@ class PredictionSnapshot(Protocol):
     deletion_allowed: bool
 
 
-class NumericRevisionSnapshot(Protocol):
-    """Read-only current Numeric ForecastRevision values for detail display."""
-
-    revision_id: int
-    prediction_id: int
-    lower_bound: object
-    median_estimate: object
-    upper_bound: object
-    confidence_percent: int
-    sequence: int
-    created_at: datetime
-    rationale: str | None
-
-
 class NumericPredictionSnapshot(Protocol):
     """Read-only Numeric Prediction data needed by the Detail screen."""
 
@@ -149,7 +131,7 @@ class NumericPredictionSnapshot(Protocol):
     status: PredictionStatus
     created_at: datetime
     updated_at: datetime
-    current_revision: NumericRevisionSnapshot | QuantileRevision
+    current_revision: QuantileRevision
     background: str | None
     resolution_criteria: str | None
     forecast_deadline: date | None
@@ -159,8 +141,8 @@ class NumericPredictionSnapshot(Protocol):
     resolution: NumericResolutionSnapshot | None
     invalidation: InvalidationSnapshot | None
     deletion_allowed: bool
-    forecast_contract: ForecastContract | None
-    value_constraint: NumericValueConstraint | None
+    forecast_contract: ForecastContract
+    value_constraint: NumericValueConstraint
 
 
 class NumericResolutionSnapshot(Protocol):
@@ -175,64 +157,6 @@ class NumericResolutionSnapshot(Protocol):
     scoring_revision_sequence: int
     resolution_notes: str | None
     postmortem: str | None
-
-
-class NumericForecastTimelineSnapshot(Protocol):
-    """One immutable Numeric ForecastRevision prepared for the timeline."""
-
-    revision_id: int
-    prediction_id: int
-    created_at: datetime
-    sequence: int
-    lower_bound: object
-    median_estimate: object
-    upper_bound: object
-    confidence_percent: int
-    previous_lower_bound: object | None
-    previous_median_estimate: object | None
-    previous_upper_bound: object | None
-    previous_confidence_percent: int | None
-    rationale: str | None
-
-
-class NumericJournalTimelineSnapshot(Protocol):
-    """A Numeric Journal entry with its exact interval-at-the-time context."""
-
-    entry_id: int
-    prediction_id: int
-    created_at: datetime
-    body: str
-    original_body: str
-    numeric_forecast_revision_id: int
-    forecast_revision_sequence: int
-    lower_bound: object
-    median_estimate: object
-    upper_bound: object
-    confidence_percent: int
-    current_correction_id: int | None
-    corrections: tuple[JournalCorrectionSnapshot, ...]
-
-
-class NumericForecastReviewTimelineSnapshot(Protocol):
-    """One Numeric Forecast Review with its retained interval context."""
-
-    review_id: int
-    prediction_id: int
-    created_at: datetime
-    numeric_forecast_revision_id: int
-    forecast_revision_sequence: int
-    lower_bound: object
-    median_estimate: object
-    upper_bound: object
-    confidence_percent: int
-    note: str | None
-
-
-NumericTimelineSnapshot = (
-    NumericForecastTimelineSnapshot
-    | NumericJournalTimelineSnapshot
-    | NumericForecastReviewTimelineSnapshot
-)
 
 
 class ResolutionSnapshot(Protocol):
@@ -524,22 +448,8 @@ class PredictionOperations(Protocol):
     def list_numeric_forecast_revisions(
         self,
         prediction_id: int,
-    ) -> tuple[NumericRevisionSnapshot, ...]:
+    ) -> tuple[QuantileRevision, ...]:
         """Return Numeric revisions in immutable sequence order."""
-
-    def revise_numeric_forecast(
-        self,
-        prediction_id: int,
-        lower_bound: object,
-        median_estimate: object,
-        upper_bound: object,
-        confidence_percent: int,
-        *,
-        rationale: str | None = None,
-        expected_revision_id: int,
-        expected_metadata_version: int,
-    ) -> NumericPredictionSnapshot:
-        """Append one eligible, changed Numeric ForecastRevision."""
 
     def add_numeric_journal_entry(
         self,
@@ -548,7 +458,7 @@ class PredictionOperations(Protocol):
         *,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> NumericJournalTimelineSnapshot:
+    ) -> QuantileTimelineEvent:
         """Append a Numeric Journal entry tied to the reviewed interval."""
 
     def add_numeric_forecast_review(
@@ -558,7 +468,7 @@ class PredictionOperations(Protocol):
         note: str | None = None,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> NumericForecastReviewTimelineSnapshot:
+    ) -> QuantileTimelineEvent:
         """Record deliberate retention of the current Numeric interval."""
 
     def correct_numeric_journal_entry(
@@ -568,13 +478,13 @@ class PredictionOperations(Protocol):
         body: str,
         *,
         expected_correction_id: int | None,
-    ) -> NumericJournalTimelineSnapshot:
+    ) -> QuantileTimelineEvent:
         """Append one transparent Numeric Journal correction."""
 
     def list_numeric_timeline(
         self,
         prediction_id: int,
-    ) -> tuple[NumericTimelineSnapshot, ...]:
+    ) -> tuple[QuantileTimelineEvent, ...]:
         """Return Numeric Forecast and Journal events in causal order."""
 
     def resolve_numeric_prediction(
@@ -642,9 +552,6 @@ class PredictionOperations(Protocol):
         prediction_type: PredictionType | None = None,
     ) -> PredictionBrowserSnapshot:
         """Return filtered prediction summaries and available tags."""
-
-    def get_analytics(self, *, tag: str | None = None) -> AnalyticsSnapshot:
-        """Return exactly-once scoring analytics for all or one tag."""
 
     def get_prediction_scorecard(
         self,
@@ -898,15 +805,6 @@ class NewPredictionScreen(QWidget):
         self.resolution_criteria_input.setTabChangesFocus(True)
         criteria_label.setBuddy(self.resolution_criteria_input)
 
-        self.forecast_deadline_toggle, self.forecast_deadline_input = (
-            _create_optional_date_controls(
-                self.more_details_content,
-                "Forecast deadline",
-                "initialForecastDeadlineToggle",
-                "initialForecastDeadlineInput",
-                None,
-            )
-        )
         self.expected_resolution_toggle, self.expected_resolution_input = (
             _create_optional_date_controls(
                 self.more_details_content,
@@ -933,11 +831,6 @@ class NewPredictionScreen(QWidget):
         more_details_layout.addWidget(self.background_input)
         more_details_layout.addWidget(criteria_label)
         more_details_layout.addWidget(self.resolution_criteria_input)
-        self.legacy_deadline_row = _date_input_row(
-            self.forecast_deadline_toggle,
-            self.forecast_deadline_input,
-        )
-        more_details_layout.addWidget(self.legacy_deadline_row)
         more_details_layout.addWidget(
             _date_input_row(
                 self.expected_resolution_toggle,
@@ -1049,14 +942,6 @@ class NewPredictionScreen(QWidget):
         self.setTabOrder(self.background_input, self.resolution_criteria_input)
         self.setTabOrder(
             self.resolution_criteria_input,
-            self.forecast_deadline_toggle,
-        )
-        self.setTabOrder(
-            self.forecast_deadline_toggle,
-            self.forecast_deadline_input,
-        )
-        self.setTabOrder(
-            self.forecast_deadline_input,
             self.expected_resolution_toggle,
         )
         self.setTabOrder(
@@ -1093,10 +978,6 @@ class NewPredictionScreen(QWidget):
                 "rationale": self.rationale_input.toPlainText(),
                 "background": self.background_input.toPlainText(),
                 "resolution_criteria": self.resolution_criteria_input.toPlainText(),
-                "forecast_deadline": _optional_date(
-                    self.forecast_deadline_toggle,
-                    self.forecast_deadline_input,
-                ),
                 "expected_resolution": _optional_date(
                     self.expected_resolution_toggle,
                     self.expected_resolution_input,
@@ -1146,8 +1027,6 @@ class NewPredictionScreen(QWidget):
         self.rationale_input.clear()
         self.background_input.clear()
         self.resolution_criteria_input.clear()
-        self.forecast_deadline_toggle.setChecked(False)
-        self.forecast_deadline_input.setDate(QDate.currentDate())
         self.expected_resolution_toggle.setChecked(False)
         self.expected_resolution_input.setDate(QDate.currentDate())
         self.tags_input.clear()
@@ -1167,7 +1046,6 @@ class NewPredictionScreen(QWidget):
         is_numeric = self._is_numeric_type()
         self.binary_forecast_fields.setHidden(is_numeric)
         self.numeric_forecast_fields.setHidden(not is_numeric)
-        self.legacy_deadline_row.hide()
         self.forecast_panel.supporting_label.setText(
             "Numeric forecasts need a Question, unit, precision, value constraint, "
             "five percentiles, and permanent exact Deadline."
@@ -1399,48 +1277,6 @@ class NumericPredictionDetailScreen(QWidget):
         self.resolution_scoring.setObjectName("numericResolutionScoringForecast")
         self.resolution_scoring.setTextFormat(Qt.TextFormat.PlainText)
         self.resolution_scoring.setWordWrap(True)
-        self.scorecard_section = QGroupBox("SCORECARD", self.resolution_section)
-        self.scorecard_section.setObjectName("numericPredictionScorecard")
-        apply_surface_role(self.scorecard_section, SurfaceRole.BASE)
-        scorecard_layout = QVBoxLayout(self.scorecard_section)
-        self.scorecard_interval = QLabel("", self.scorecard_section)
-        self.scorecard_interval.setObjectName("numericScorecardScoringInterval")
-        self.scorecard_interval.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_actual = QLabel("", self.scorecard_section)
-        self.scorecard_actual.setObjectName("numericScorecardActualValue")
-        self.scorecard_actual.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_containment = QLabel("", self.scorecard_section)
-        self.scorecard_containment.setObjectName("numericScorecardContainment")
-        self.scorecard_containment.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_median_error = QLabel("", self.scorecard_section)
-        self.scorecard_median_error.setObjectName("numericScorecardMedianAbsoluteError")
-        self.scorecard_median_error.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_width = QLabel("", self.scorecard_section)
-        self.scorecard_width.setObjectName("numericScorecardIntervalWidth")
-        self.scorecard_width.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_interval_score = QLabel("", self.scorecard_section)
-        self.scorecard_interval_score.setObjectName("numericScorecardIntervalScore")
-        self.scorecard_interval_score.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_guidance = QLabel(
-            "Lower median error and interval score are better.",
-            self.scorecard_section,
-        )
-        self.scorecard_guidance.setObjectName("numericScorecardGuidance")
-        self.scorecard_guidance.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_correction_notice = QLabel("", self.scorecard_section)
-        self.scorecard_correction_notice.setObjectName(
-            "numericScorecardCorrectionNotice"
-        )
-        self.scorecard_correction_notice.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_correction_notice.setWordWrap(True)
-        scorecard_layout.addWidget(self.scorecard_interval)
-        scorecard_layout.addWidget(self.scorecard_actual)
-        scorecard_layout.addWidget(self.scorecard_containment)
-        scorecard_layout.addWidget(self.scorecard_median_error)
-        scorecard_layout.addWidget(self.scorecard_width)
-        scorecard_layout.addWidget(self.scorecard_interval_score)
-        scorecard_layout.addWidget(self.scorecard_guidance)
-        scorecard_layout.addWidget(self.scorecard_correction_notice)
         self.resolution_notes = QLabel("", self.resolution_section)
         self.resolution_notes.setObjectName("numericResolutionNotes")
         self.resolution_notes.setTextFormat(Qt.TextFormat.PlainText)
@@ -1477,7 +1313,6 @@ class NumericPredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_actual)
         resolution_layout.addWidget(self.resolution_time)
         resolution_layout.addWidget(self.resolution_scoring)
-        resolution_layout.addWidget(self.scorecard_section)
         self.quantile_scorecard = QuantileScorecardPanel(self.resolution_section)
         self.quantile_scorecard.hide()
         self._quantile_score: QuantileScorecard | None = None
@@ -1492,7 +1327,7 @@ class NumericPredictionDetailScreen(QWidget):
         )
         resolution_layout.addWidget(self.resolution_history)
         self.resolution_section.setHidden(True)
-        self.scorecard_section.setHidden(True)
+        self.quantile_scorecard.setHidden(True)
         self.postmortem_completion.setHidden(True)
 
         self.invalidation_section = QGroupBox("INVALID", self.detail_content)
@@ -1564,7 +1399,6 @@ class NumericPredictionDetailScreen(QWidget):
             StatusTone.ERROR,
             accessible_name="Numeric interval history error",
         )
-        self.history_chart = NumericHistoryChart(self.detail_content)
         self.quantile_cdf = QuantileCDF(self.detail_content)
         self.quantile_cdf.hide()
         self.quantile_cdf_summary = QLabel(self.detail_content)
@@ -1593,16 +1427,6 @@ class NumericPredictionDetailScreen(QWidget):
         self.timeline_layout = QVBoxLayout(self.timeline_content)
         self.timeline_layout.setContentsMargins(0, 0, 0, 0)
         self.timeline_layout.setSpacing(8)
-
-        self.next_steps = QLabel(
-            "Numeric archive views, Dashboard support, and analytics arrive in "
-            "later v0.2 milestones.",
-            self.detail_content,
-        )
-        self.next_steps.setObjectName("numericPredictionNextSteps")
-        self.next_steps.setTextFormat(Qt.TextFormat.PlainText)
-        self.next_steps.setWordWrap(True)
-        self.next_steps.setHidden(True)
 
         summary_panel, summary_layout = _detail_panel(
             "numericPredictionSummaryPanel",
@@ -1675,7 +1499,6 @@ class NumericPredictionDetailScreen(QWidget):
         apply_text_role(history_label, TextRole.SECTION_TITLE)
         history_panel_layout.addWidget(history_label)
         history_panel_layout.addWidget(self.history_error)
-        history_panel_layout.addWidget(self.history_chart)
         history_panel_layout.addWidget(self.quantile_cdf)
         history_panel_layout.addWidget(self.quantile_cdf_summary)
 
@@ -1823,7 +1646,6 @@ class NumericPredictionDetailScreen(QWidget):
             self.status.clear()
             self.interval.clear()
             self.median.clear()
-            self.history_chart.clear()
             self.history_error.setHidden(True)
             self._clear_timeline()
             self.timeline_error.setHidden(True)
@@ -1838,7 +1660,7 @@ class NumericPredictionDetailScreen(QWidget):
             self._resolution_history = None
             self._invalidation_history = None
             self.resolution_section.setHidden(True)
-            self.scorecard_section.setHidden(True)
+            self.quantile_scorecard.setHidden(True)
             self.invalidation_section.setHidden(True)
             self.definition_history.setHidden(True)
             self.detail_content.setHidden(True)
@@ -1851,38 +1673,21 @@ class NumericPredictionDetailScreen(QWidget):
         self.tags.setHidden(not prediction.tags)
         self.status.setText(prediction.status.value.upper())
         apply_badge_role(self.status, _status_tone(prediction.status))
-        quantile = isinstance(revision, QuantileRevision)
-        if quantile:
-            q = revision.quantiles
-            self.interval.setText(f"90% interval: {q.q05} to {q.q95} {prediction.unit}")
-            self.median.setText(
-                f"Median: {q.q50} {prediction.unit}\n50% interval: {q.q25} to {q.q75} {prediction.unit}\nFive-quantile model · {prediction.value_constraint.value}"
-            )
-        else:
-            self.interval.setText(
-                f"{revision.confidence_percent}% interval: {revision.lower_bound} to {revision.upper_bound} {prediction.unit}"
-            )
-            self.median.setText(
-                f"Median estimate: {revision.median_estimate} {prediction.unit}\nLegacy interval model"
-            )
-        self.revise_forecast_button.setText(
-            "Revise Forecast" if quantile else "Revise Interval"
+        q = revision.quantiles
+        self.interval.setText(f"90% interval: {q.q05} to {q.q95} {prediction.unit}")
+        self.median.setText(
+            f"Median: {q.q50} {prediction.unit}\n50% interval: {q.q25} to {q.q75} {prediction.unit}\nFive-quantile model · {prediction.value_constraint.value}"
         )
-        self.review_forecast_button.setText(
-            "Keep forecast" if quantile else "Keep this interval"
-        )
+        self.revise_forecast_button.setText("Revise Forecast")
+        self.review_forecast_button.setText("Keep forecast")
         self.review_forecast_button.setAccessibleName(
             "Record a Review retaining all five current percentiles"
-            if quantile
-            else "Record a Review retaining this numeric interval"
         )
         self.review_forecast_button.setToolTip(
             self.review_forecast_button.accessibleName()
         )
         self.revise_forecast_button.setAccessibleName(
             "Revise all five numeric percentiles"
-            if quantile
-            else "Revise numeric interval"
         )
         self.unit.setText(prediction.unit)
         decimal_label = (
@@ -1913,8 +1718,6 @@ class NumericPredictionDetailScreen(QWidget):
         self.resolve_button.setEnabled(terminal_allowed)
         self.resolve_button.setToolTip(
             "Record the actual outcome and effective resolution time."
-            if quantile
-            else "Resolve this prediction."
         )
         self.mark_invalid_button.setEnabled(terminal_allowed)
         self.delete_button.setEnabled(
@@ -1949,7 +1752,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.forecast_deadline.setText(_format_date(prediction.forecast_deadline))
         self.forecast_deadline_row.setHidden(prediction.forecast_deadline is None)
         contract = getattr(prediction, "forecast_contract", None)
-        if contract and not contract.is_legacy:
+        if contract is not None:
             self.forecast_deadline.setText(
                 format_local_deadline(contract.forecast_deadline.instant)
                 + " (permanent)"
@@ -1974,7 +1777,7 @@ class NumericPredictionDetailScreen(QWidget):
             self.correct_resolution_button.setEnabled(False)
             self.resolution_history.setHidden(True)
             self.resolution_section.setHidden(True)
-            self.scorecard_section.setHidden(True)
+            self.quantile_scorecard.setHidden(True)
         else:
             try:
                 history = self._operations.get_numeric_resolution_history(
@@ -2001,23 +1804,15 @@ class NumericPredictionDetailScreen(QWidget):
                 f"Actual value: {effective.actual_value} {prediction.unit}"
             )
             self.resolution_time.setText(
-                f"Resolved {_format_local_timestamp(resolution.resolved_at)}"
+                f"Effective resolution: {format_local_deadline(effective.effective_resolution_at)}\n"
+                f"Recorded at: {format_local_deadline(resolution.resolved_at)}"
+            )
+            self.resolution_time.setToolTip(
+                f"Effective: {effective.effective_resolution_at.isoformat()}\nRecorded: {resolution.resolved_at.isoformat()}"
             )
             self.resolution_scoring.setText(
-                f"Scoring interval (revision {resolution.scoring_revision_sequence}): "
-                f"{_numeric_forecast_text(prediction.current_revision, prediction.unit)}"
+                "Scoring uses the last revision strictly before the earlier of effective resolution and the permanent Deadline."
             )
-            if isinstance(prediction.current_revision, QuantileRevision):
-                self.resolution_time.setText(
-                    f"Effective resolution: {format_local_deadline(effective.effective_resolution_at)}\n"
-                    f"Recorded at: {format_local_deadline(resolution.resolved_at)}"
-                )
-                self.resolution_time.setToolTip(
-                    f"Effective: {effective.effective_resolution_at.isoformat()}\nRecorded: {resolution.resolved_at.isoformat()}"
-                )
-                self.resolution_scoring.setText(
-                    "Scoring uses the last revision strictly before the earlier of effective resolution and the permanent Deadline."
-                )
             self.resolution_notes.setText(
                 ""
                 if not effective.resolution_notes
@@ -2080,50 +1875,16 @@ class NumericPredictionDetailScreen(QWidget):
         try:
             scorecard = self._operations.get_prediction_scorecard(prediction_id)
         except ApplicationError as error:
-            self.scorecard_section.setHidden(True)
+            self.quantile_scorecard.setHidden(True)
             self._show_error(f"Scorecard is unavailable. {error}")
             return
         if isinstance(scorecard, QuantileScorecard):
             self._quantile_score = scorecard
-            self.scorecard_section.hide()
+            self.quantile_scorecard.hide()
             self.quantile_scorecard.set_scorecard(scorecard)
             self.quantile_scorecard.show()
             return
-        if not isinstance(scorecard, NumericScorecard):
-            self.scorecard_section.setHidden(True)
-            return
-        self.scorecard_interval.setText(
-            f"Scored interval: {scorecard.confidence_percent}% "
-            f"{scorecard.lower_bound} to {scorecard.upper_bound} {scorecard.unit} "
-            f"(median {scorecard.median_estimate} {scorecard.unit})"
-        )
-        self.scorecard_actual.setText(
-            f"Effective actual: {scorecard.actual_value} {scorecard.unit}"
-        )
-        self.scorecard_containment.setText(
-            "Containment: Yes (inclusive)" if scorecard.contained else "Containment: No"
-        )
-        self.scorecard_median_error.setText(
-            "Median absolute error: "
-            f"{_format_score_decimal(scorecard.median_absolute_error)} "
-            f"{scorecard.unit}"
-        )
-        self.scorecard_width.setText(
-            f"Interval width: {_format_score_decimal(scorecard.interval_width)} "
-            f"{scorecard.unit}"
-        )
-        self.scorecard_interval_score.setText(
-            "Proper interval score: "
-            f"{_format_score_decimal(scorecard.interval_score)} {scorecard.unit}"
-        )
-        self.scorecard_correction_notice.setText(
-            "The effective actual value was corrected; original Resolution and "
-            "correction history remain below."
-            if scorecard.actual_value_corrected
-            else ""
-        )
-        self.scorecard_correction_notice.setHidden(not scorecard.actual_value_corrected)
-        self.scorecard_section.setHidden(False)
+        self.quantile_scorecard.hide()
 
     def _show_error(self, message: str) -> None:
         self.detail_error.setText(message)
@@ -2142,23 +1903,14 @@ class NumericPredictionDetailScreen(QWidget):
             )
             self.history_error.setHidden(False)
             return
-        quantile = bool(revisions and isinstance(revisions[0], QuantileRevision))
-        self.history_chart.setVisible(not quantile)
-        self.quantile_cdf.setVisible(quantile)
-        self.quantile_cdf_summary.setVisible(quantile)
-        self.numeric_history_label.setText(
-            "IMPLIED CENTRAL CDF" if quantile else "INTERVAL HISTORY"
+        self.quantile_cdf.show()
+        self.quantile_cdf_summary.show()
+        self.numeric_history_label.setText("IMPLIED CENTRAL CDF")
+        self.quantile_cdf.set_forecast(revisions[-1].quantiles, self._prediction.unit)
+        self.quantile_cdf_summary.setText(
+            self.quantile_cdf.accessibleDescription()
+            + "\nEvery earlier forecast remains in the timeline below its original timestamp."
         )
-        if quantile:
-            self.quantile_cdf.set_forecast(
-                revisions[-1].quantiles, self._prediction.unit
-            )
-            self.quantile_cdf_summary.setText(
-                self.quantile_cdf.accessibleDescription()
-                + "\nEvery earlier forecast remains in the timeline below its original timestamp."
-            )
-        else:
-            self.history_chart.set_revisions(revisions)
         self.history_error.setHidden(True)
 
     def _load_timeline(self, prediction_id: int) -> None:
@@ -2170,14 +1922,7 @@ class NumericPredictionDetailScreen(QWidget):
             return
         self._clear_timeline()
         for event in events:
-            if isinstance(event, QuantileTimelineEvent):
-                self.timeline_layout.addWidget(self._quantile_timeline_row(event))
-            elif hasattr(event, "review_id"):
-                self.timeline_layout.addWidget(self._review_timeline_row(event))
-            elif hasattr(event, "revision_id"):
-                self.timeline_layout.addWidget(self._forecast_timeline_row(event))
-            else:
-                self.timeline_layout.addWidget(self._journal_timeline_row(event))
+            self.timeline_layout.addWidget(self._quantile_timeline_row(event))
         if not events:
             empty = QLabel("No Numeric ForecastRevisions have been recorded.")
             empty.setObjectName("numericTimelineEmptyState")
@@ -2265,141 +2010,6 @@ class NumericPredictionDetailScreen(QWidget):
                 widget.setParent(None)
                 widget.deleteLater()
 
-    def _forecast_timeline_row(self, event: NumericForecastTimelineSnapshot) -> QWidget:
-        row = QWidget(self.timeline_content)
-        row.setObjectName(f"numericTimelineForecast{event.revision_id}")
-        apply_surface_role(row, SurfaceRole.BASE)
-        layout = QVBoxLayout(row)
-        layout.setContentsMargins(
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-        )
-        timestamp = QLabel(_format_local_timestamp(event.created_at), row)
-        timestamp.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(timestamp, TextRole.SECONDARY)
-        values = QLabel(
-            f"FORECAST  {event.confidence_percent}% interval: "
-            f"{event.lower_bound} to {event.upper_bound} {self._prediction.unit if self._prediction else ''}; "
-            f"Median: {event.median_estimate}",
-            row,
-        )
-        values.setObjectName(f"numericForecastValues{event.revision_id}")
-        values.setTextFormat(Qt.TextFormat.PlainText)
-        values.setWordWrap(True)
-        apply_text_role(values, TextRole.LABEL)
-        _make_selectable(values)
-        layout.addWidget(timestamp)
-        layout.addWidget(values)
-        if event.rationale:
-            rationale = QLabel(event.rationale, row)
-            rationale.setObjectName(f"numericForecastRationale{event.revision_id}")
-            rationale.setTextFormat(Qt.TextFormat.PlainText)
-            rationale.setWordWrap(True)
-            _make_selectable(rationale)
-            layout.addWidget(rationale)
-        return row
-
-    def _journal_timeline_row(self, event: NumericJournalTimelineSnapshot) -> QWidget:
-        row = QWidget(self.timeline_content)
-        row.setObjectName(f"numericTimelineJournal{event.entry_id}")
-        apply_surface_role(row, SurfaceRole.BASE)
-        layout = QVBoxLayout(row)
-        layout.setContentsMargins(
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-        )
-        timestamp = QLabel(_format_local_timestamp(event.created_at), row)
-        timestamp.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(timestamp, TextRole.SECONDARY)
-        heading = QLabel("JOURNAL", row)
-        heading.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(heading, TextRole.LABEL)
-        body = QLabel(event.body, row)
-        body.setObjectName(f"numericJournalBody{event.entry_id}")
-        body.setTextFormat(Qt.TextFormat.PlainText)
-        body.setWordWrap(True)
-        _make_selectable(body)
-        context = QLabel(
-            f"Forecast at the time: {event.confidence_percent}% interval: "
-            f"{event.lower_bound} to {event.upper_bound} {self._prediction.unit if self._prediction else ''}; "
-            f"Median: {event.median_estimate}",
-            row,
-        )
-        context.setTextFormat(Qt.TextFormat.PlainText)
-        context.setWordWrap(True)
-        apply_text_role(context, TextRole.SECONDARY)
-        _make_selectable(context)
-        layout.addWidget(timestamp)
-        layout.addWidget(heading)
-        layout.addWidget(body)
-        layout.addWidget(context)
-        if event.current_correction_id is not None:
-            edited = QLabel(
-                f"Edited {_format_local_timestamp(event.corrections[-1].corrected_at)}",
-                row,
-            )
-            edited.setTextFormat(Qt.TextFormat.PlainText)
-            apply_text_role(edited, TextRole.SECONDARY)
-            layout.addWidget(edited)
-            layout.addWidget(_journal_edit_history_widget(event, row))
-        correct = QPushButton("Correct Entry", row)
-        correct.setObjectName(f"correctNumericJournalEntryButton{event.entry_id}")
-        apply_action_role(correct, ActionRole.QUIET)
-        apply_lucide_icon(correct, LucideIcon.PENCIL, size=16)
-        correct.clicked.connect(
-            lambda _checked=False, current=event: self.open_correct_journal_entry(
-                current
-            )
-        )
-        layout.addWidget(correct)
-        return row
-
-    def _review_timeline_row(
-        self,
-        event: NumericForecastReviewTimelineSnapshot,
-    ) -> QWidget:
-        row = QWidget(self.timeline_content)
-        row.setObjectName(f"numericTimelineReview{event.review_id}")
-        apply_surface_role(row, SurfaceRole.BASE)
-        layout = QVBoxLayout(row)
-        layout.setContentsMargins(
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-        )
-        timestamp = QLabel(_format_local_timestamp(event.created_at), row)
-        timestamp.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(timestamp, TextRole.SECONDARY)
-        heading = QLabel("REVIEW  INTERVAL RETAINED", row)
-        heading.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(heading, TextRole.LABEL)
-        unit = self._prediction.unit if self._prediction else ""
-        context = QLabel(
-            f"{event.confidence_percent}% interval: {event.lower_bound} to "
-            f"{event.upper_bound} {unit}; Median: {event.median_estimate} {unit}",
-            row,
-        )
-        context.setTextFormat(Qt.TextFormat.PlainText)
-        context.setWordWrap(True)
-        apply_text_role(context, TextRole.SECONDARY)
-        _make_selectable(context)
-        layout.addWidget(timestamp)
-        layout.addWidget(heading)
-        layout.addWidget(context)
-        if event.note:
-            note = QLabel(event.note, row)
-            note.setObjectName(f"numericReviewNote{event.review_id}")
-            note.setTextFormat(Qt.TextFormat.PlainText)
-            note.setWordWrap(True)
-            _make_selectable(note)
-            layout.addWidget(note)
-        return row
-
     def open_revise_forecast(self) -> None:
         if self._prediction is None:
             return
@@ -2409,12 +2019,7 @@ class NumericPredictionDetailScreen(QWidget):
             or self._prediction.status is not PredictionStatus.OPEN
         ):
             return
-        dialog_type = (
-            ReviseQuantileForecastDialog
-            if isinstance(self._prediction.current_revision, QuantileRevision)
-            else ReviseNumericForecastDialog
-        )
-        dialog = dialog_type(self._operations, self._prediction, self)
+        dialog = ReviseQuantileForecastDialog(self._operations, self._prediction, self)
         dialog.revision_saved.connect(self.show_prediction)
         dialog.open()
 
@@ -2546,7 +2151,7 @@ class NumericPredictionDetailScreen(QWidget):
             return
         self.show_prediction(latest)
 
-    def open_correct_journal_entry(self, entry: NumericJournalTimelineSnapshot) -> None:
+    def open_correct_journal_entry(self, entry: QuantileTimelineEvent) -> None:
         dialog = CorrectNumericJournalEntryDialog(self._operations, entry, self)
         dialog.correction_saved.connect(lambda _entry: self.refresh())
         dialog.open()
@@ -2750,11 +2355,7 @@ class EditPredictionDetailsDialog(_StyledDialog):
                 "Numeric definition (fixed after creation)\n"
                 f"Unit: {prediction.unit}\n"
                 f"Precision: {prediction.decimal_places} {decimal_label}"
-                + (
-                    f"\nValue constraint: {prediction.value_constraint.value}"
-                    if isinstance(prediction.current_revision, QuantileRevision)
-                    else ""
-                )
+                f"\nValue constraint: {prediction.value_constraint.value}"
             )
         else:
             self.numeric_definition_context.setHidden(True)
@@ -2785,14 +2386,6 @@ class EditPredictionDetailsDialog(_StyledDialog):
         self.resolution_criteria_input.setTabChangesFocus(True)
         criteria_label.setBuddy(self.resolution_criteria_input)
 
-        self.forecast_deadline_toggle, self.forecast_deadline_input = (
-            self._create_optional_date_input(
-                "Forecast deadline",
-                "editForecastDeadlineToggle",
-                "editForecastDeadlineInput",
-                prediction.forecast_deadline,
-            )
-        )
         self.expected_resolution_toggle, self.expected_resolution_input = (
             self._create_optional_date_input(
                 "Expected resolution",
@@ -2828,25 +2421,17 @@ class EditPredictionDetailsDialog(_StyledDialog):
         cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
         cancel_button.setObjectName("cancelPredictionDetailsButton")
 
-        forecast_deadline_row = _date_input_row(
-            self.forecast_deadline_toggle,
-            self.forecast_deadline_input,
-        )
         contract = getattr(prediction, "forecast_contract", None)
         self.exact_deadline_context = QLabel(self)
         self.exact_deadline_context.setWordWrap(True)
         self.exact_deadline_context.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        if contract is not None and not contract.is_legacy:
-            forecast_deadline_row.hide()
-            self.forecast_deadline_toggle.setChecked(False)
-            self.exact_deadline_context.setText(
-                "Forecast Deadline (permanent): "
-                + format_local_deadline(contract.forecast_deadline.instant)
-            )
-        else:
-            self.exact_deadline_context.hide()
+        assert contract is not None and contract.forecast_deadline is not None
+        self.exact_deadline_context.setText(
+            "Forecast Deadline (permanent): "
+            + format_local_deadline(contract.forecast_deadline.instant)
+        )
         expected_resolution_row = _date_input_row(
             self.expected_resolution_toggle,
             self.expected_resolution_input,
@@ -2862,7 +2447,6 @@ class EditPredictionDetailsDialog(_StyledDialog):
         layout.addWidget(self.background_input)
         layout.addWidget(criteria_label)
         layout.addWidget(self.resolution_criteria_input)
-        layout.addWidget(forecast_deadline_row)
         layout.addWidget(self.exact_deadline_context)
         layout.addWidget(expected_resolution_row)
         layout.addWidget(tags_label)
@@ -2876,14 +2460,6 @@ class EditPredictionDetailsDialog(_StyledDialog):
         self.setTabOrder(self.background_input, self.resolution_criteria_input)
         self.setTabOrder(
             self.resolution_criteria_input,
-            self.forecast_deadline_toggle,
-        )
-        self.setTabOrder(
-            self.forecast_deadline_toggle,
-            self.forecast_deadline_input,
-        )
-        self.setTabOrder(
-            self.forecast_deadline_input,
             self.expected_resolution_toggle,
         )
         self.setTabOrder(
@@ -2924,10 +2500,7 @@ class EditPredictionDetailsDialog(_StyledDialog):
             question=self.question_input.text(),
             background=self.background_input.toPlainText(),
             resolution_criteria=self.resolution_criteria_input.toPlainText(),
-            forecast_deadline=_optional_date(
-                self.forecast_deadline_toggle,
-                self.forecast_deadline_input,
-            ),
+            forecast_deadline=None,
             expected_resolution=_optional_date(
                 self.expected_resolution_toggle,
                 self.expected_resolution_input,
@@ -2941,18 +2514,7 @@ class EditPredictionDetailsDialog(_StyledDialog):
         self,
         error: MeaningChangeConfirmationRequired,
     ) -> bool:
-        semantic_definition_changed = any(
-            field in {"question", "resolution_criteria"}
-            for field in error.changed_fields
-        )
-        deadline_changed = "forecast_deadline" in error.changed_fields
-
-        if semantic_definition_changed and deadline_changed:
-            title = "Confirm definition and deadline changes"
-        elif deadline_changed:
-            title = "Confirm forecast deadline change"
-        else:
-            title = "Confirm definition change"
+        title = "Confirm definition change"
         answer = QMessageBox.warning(
             self,
             title,
@@ -3099,7 +2661,7 @@ class ReviseForecastDialog(_StyledDialog):
         layout.addWidget(current_heading)
         layout.addWidget(self.current_probability)
         contract = getattr(prediction, "forecast_contract", None)
-        if contract is not None and not contract.is_legacy:
+        if contract is not None:
             deadline_note = QLabel(
                 "Permanent Deadline: "
                 + format_local_deadline(contract.forecast_deadline.instant),
@@ -3244,149 +2806,6 @@ class ReviseQuantileForecastDialog(_StyledDialog):
         self.accept()
 
 
-class ReviseNumericForecastDialog(_StyledDialog):
-    """Collect a changed numeric interval and append one immutable revision."""
-
-    revision_saved = Signal(object)
-
-    def __init__(
-        self,
-        operations: PredictionOperations,
-        prediction: NumericPredictionSnapshot,
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setObjectName("reviseNumericForecastDialog")
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.setWindowTitle("Revise Numeric Forecast")
-        self.setModal(True)
-        self.resize(560, 520)
-        self._operations = operations
-        self._prediction_id = prediction.prediction_id
-        self._expected_revision_id = prediction.current_revision.revision_id
-        self._expected_metadata_version = prediction.metadata_version
-
-        title = QLabel("Revise Numeric Forecast", self)
-        title.setObjectName("reviseNumericForecastTitle")
-        current = QLabel(
-            _numeric_forecast_text(prediction.current_revision, prediction.unit),
-            self,
-        )
-        current.setObjectName("reviseNumericCurrentForecast")
-        current.setTextFormat(Qt.TextFormat.PlainText)
-        current.setWordWrap(True)
-
-        lower_label = QLabel("Lower bound", self)
-        self.lower_bound_input = QLineEdit(
-            str(prediction.current_revision.lower_bound), self
-        )
-        self.lower_bound_input.setObjectName("numericRevisionLowerBoundInput")
-        lower_label.setBuddy(self.lower_bound_input)
-        median_label = QLabel("Median estimate", self)
-        self.median_estimate_input = QLineEdit(
-            str(prediction.current_revision.median_estimate), self
-        )
-        self.median_estimate_input.setObjectName("numericRevisionMedianEstimateInput")
-        median_label.setBuddy(self.median_estimate_input)
-        upper_label = QLabel("Upper bound", self)
-        self.upper_bound_input = QLineEdit(
-            str(prediction.current_revision.upper_bound), self
-        )
-        self.upper_bound_input.setObjectName("numericRevisionUpperBoundInput")
-        upper_label.setBuddy(self.upper_bound_input)
-        confidence_label = QLabel("Confidence", self)
-        self.confidence_input = QSpinBox(self)
-        self.confidence_input.setObjectName("numericRevisionConfidenceInput")
-        self.confidence_input.setRange(1, 99)
-        self.confidence_input.setSingleStep(5)
-        self.confidence_input.setSuffix("%")
-        self.confidence_input.setValue(prediction.current_revision.confidence_percent)
-        confidence_label.setBuddy(self.confidence_input)
-
-        rationale_label = QLabel("What changed? (optional)", self)
-        self.rationale_input = QPlainTextEdit(self)
-        self.rationale_input.setObjectName("numericRevisionRationaleInput")
-        self.rationale_input.setAccessibleName("What changed")
-        self.rationale_input.setMaximumHeight(100)
-        self.rationale_input.setTabChangesFocus(True)
-        rationale_label.setBuddy(self.rationale_input)
-        helper = QLabel(
-            "This explanation stays attached to the new interval. To record a "
-            "thought without changing it, add a Journal entry.",
-            self,
-        )
-        helper.setObjectName("numericRevisionRationaleHelper")
-        helper.setTextFormat(Qt.TextFormat.PlainText)
-        helper.setWordWrap(True)
-
-        self.form_error = QLabel("", self)
-        self.form_error.setObjectName("reviseNumericForecastError")
-        self.form_error.setTextFormat(Qt.TextFormat.PlainText)
-        self.form_error.setWordWrap(True)
-        self.form_error.setHidden(True)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save
-            | QDialogButtonBox.StandardButton.Cancel,
-            self,
-        )
-        save = buttons.button(QDialogButtonBox.StandardButton.Save)
-        save.setObjectName("saveNumericForecastRevisionButton")
-        save.setText("Save Revision")
-        apply_lucide_icon(save, LucideIcon.SAVE)
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setObjectName(
-            "cancelNumericForecastRevisionButton"
-        )
-        layout = QVBoxLayout(self)
-        layout.addWidget(title)
-        layout.addWidget(QLabel("Current forecast", self))
-        layout.addWidget(current)
-        layout.addSpacing(8)
-        for label, input_widget in (
-            (lower_label, self.lower_bound_input),
-            (median_label, self.median_estimate_input),
-            (upper_label, self.upper_bound_input),
-            (confidence_label, self.confidence_input),
-        ):
-            layout.addWidget(label)
-            layout.addWidget(input_widget)
-        layout.addWidget(rationale_label)
-        layout.addWidget(self.rationale_input)
-        layout.addWidget(helper)
-        layout.addWidget(self.form_error)
-        layout.addWidget(buttons)
-        buttons.accepted.connect(self.submit)
-        buttons.rejected.connect(self.reject)
-        self.lower_bound_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
-        self.lower_bound_input.selectAll()
-
-    def submit(self) -> None:
-        self._hide_error()
-        try:
-            prediction = self._operations.revise_numeric_forecast(
-                self._prediction_id,
-                self.lower_bound_input.text(),
-                self.median_estimate_input.text(),
-                self.upper_bound_input.text(),
-                self.confidence_input.value(),
-                rationale=self.rationale_input.toPlainText(),
-                expected_revision_id=self._expected_revision_id,
-                expected_metadata_version=self._expected_metadata_version,
-            )
-        except ApplicationError as error:
-            self._show_error(str(error))
-            return
-        self.revision_saved.emit(prediction)
-        self.accept()
-
-    def _show_error(self, message: str) -> None:
-        self.form_error.setText(message)
-        self.form_error.setHidden(False)
-
-    def _hide_error(self) -> None:
-        self.form_error.clear()
-        self.form_error.setHidden(True)
-
-
 class AddNumericJournalEntryDialog(_StyledDialog):
     """Append reasoning while preserving the current numeric interval."""
 
@@ -3497,25 +2916,14 @@ class ResolveNumericPredictionDialog(_StyledDialog):
         self._prediction_id = prediction.prediction_id
         self._expected_revision_id = prediction.current_revision.revision_id
         self._expected_metadata_version = prediction.metadata_version
-        self.effective_time = (
-            EffectiveTimeInput(self)
-            if isinstance(prediction.current_revision, QuantileRevision)
-            else None
-        )
+        self.effective_time = EffectiveTimeInput(self)
 
         title = QLabel("Resolve Numeric Prediction", self)
         explanation = QLabel(
-            "Resolution records the realized quantity and captures the current "
-            "interval for scoring. The terminal decision cannot be reopened; an "
-            "honest mistake in its facts can later be corrected with visible "
-            "history.",
+            "Resolution is a one-way terminal decision. WIS uses the last forecast strictly before the earlier of the effective outcome time and Deadline, not necessarily the latest displayed forecast. Earlier facts and later corrections remain in history.",
             self,
         )
         explanation.setObjectName("resolveNumericPredictionExplanation")
-        if self.effective_time is not None:
-            explanation.setText(
-                "Resolution is a one-way terminal decision. WIS uses the last forecast strictly before the earlier of the effective outcome time and Deadline, not necessarily the latest displayed forecast. Earlier facts and later corrections remain in history."
-            )
         explanation.setTextFormat(Qt.TextFormat.PlainText)
         explanation.setWordWrap(True)
         reviewed = QLabel(
@@ -3934,24 +3342,16 @@ class CorrectNumericResolutionDialog(_EffectiveTimeDialog):
         self._decimal_places = prediction.decimal_places
         self._expected_correction_id = history.current_correction_id
         self._current = history.effective
-        self.effective_time = (
-            EffectiveTimeInput(self, self._current.effective_resolution_at)
-            if isinstance(prediction.current_revision, QuantileRevision)
-            else None
+        self.effective_time = EffectiveTimeInput(
+            self, self._current.effective_resolution_at
         )
 
         title = QLabel("Correct Numeric Resolution", self)
         explanation = QLabel(
-            "This appends a transparent correction. The original Resolution, "
-            "resolution time, scoring interval, and every earlier correction "
-            "remain in history.",
+            "This appends a transparent correction. Original actual value, effective time, recorded-at, and all forecast history remain intact. Correcting effective time can change which forecast is scored; recorded-at cannot change.",
             self,
         )
         explanation.setObjectName("numericResolutionCorrectionExplanation")
-        if self.effective_time is not None:
-            explanation.setText(
-                "This appends a transparent correction. Original actual value, effective time, recorded-at, and all forecast history remain intact. Correcting effective time can change which forecast is scored; recorded-at cannot change."
-            )
         explanation.setTextFormat(Qt.TextFormat.PlainText)
         explanation.setWordWrap(True)
 
@@ -4219,7 +3619,7 @@ class CorrectNumericJournalEntryDialog(_StyledDialog):
     def __init__(
         self,
         operations: PredictionOperations,
-        entry: NumericJournalTimelineSnapshot,
+        entry: QuantileTimelineEvent,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -4321,11 +3721,7 @@ class ForecastReviewDialog(_StyledDialog):
             numeric = prediction
             revision = numeric.current_revision
             self._expected_revision_id = revision.revision_id
-            action_text = (
-                "Keep current forecast"
-                if isinstance(revision, QuantileRevision)
-                else "Keep this interval"
-            )
+            action_text = "Keep current forecast"
             context_text = _numeric_forecast_text(revision, numeric.unit)
         else:
             binary = prediction
@@ -4333,7 +3729,7 @@ class ForecastReviewDialog(_StyledDialog):
             action_text = f"Still at {binary.probability_percent}%"
             context_text = f"{binary.probability_percent}%"
             contract = getattr(binary, "forecast_contract", None)
-            if contract is not None and not contract.is_legacy:
+            if contract is not None:
                 context_text += "\nPermanent Deadline: " + format_local_deadline(
                     contract.forecast_deadline.instant
                 )
@@ -4725,7 +4121,7 @@ class ResolvePredictionDialog(_EffectiveTimeDialog):
 
         contract = getattr(prediction, "forecast_contract", None)
         self.effective_time = None
-        if contract is not None and not contract.is_legacy:
+        if contract is not None:
             self.effective_time = EffectiveTimeInput(self)
             explanation.setText(
                 "Record Yes/No and when the outcome became fixed and knowable. Scoring uses that effective time; recorded-at is automatic. Resolution is final, with audited factual corrections available later."
@@ -5962,39 +5358,24 @@ class PredictionDetailScreen(QWidget):
 
     def _show_optional_metadata(self, prediction: PredictionSnapshot) -> None:
         contract = getattr(prediction, "forecast_contract", None)
-        prospective = contract is not None and not contract.is_legacy
-        self.forecast_type.setText(
-            "BINARY · TRAJECTORY" if prospective else "BINARY · LEGACY"
-        )
+        assert contract is not None and contract.forecast_deadline is not None
+        self.forecast_type.setText("BINARY · TRAJECTORY")
         self.contract_context.setText(
             "Trajectory Binary: each standing probability belongs to the initial-to-Deadline "
             "commitment. Scoring uses when the outcome became knowable. "
             "This is probability history, not a score plot."
-            if prospective
-            else "Legacy Binary: final captured probability Brier scoring. "
-            "This is probability history, not a score plot."
         )
         self.forecast_deadline.setText(
             format_local_deadline(contract.forecast_deadline.instant) + " (permanent)"
-            if prospective
-            else _format_date(prediction.forecast_deadline)
         )
-        self.forecast_deadline_row.setHidden(
-            not prospective and prediction.forecast_deadline is None
-        )
+        self.forecast_deadline_row.show()
         self.expected_resolution.setText(_format_date(prediction.expected_resolution))
         self.expected_resolution_row.setHidden(prediction.expected_resolution is None)
         self.background.setText(prediction.background or "")
         self.background_section.setHidden(not prediction.background)
         self.resolution_criteria.setText(prediction.resolution_criteria or "")
         self.resolution_criteria_section.setHidden(not prediction.resolution_criteria)
-        self.metadata_panel.setHidden(
-            not prospective
-            and prediction.forecast_deadline is None
-            and prediction.expected_resolution is None
-            and not prediction.background
-            and not prediction.resolution_criteria
-        )
+        self.metadata_panel.show()
 
     def _show_terminal_information(self, prediction: PredictionSnapshot) -> None:
         """Render latest effective facts plus inspectable append-only history."""
@@ -6149,27 +5530,7 @@ class PredictionDetailScreen(QWidget):
                 content.setHidden(True)
                 self.trajectory_diagnostics.setHidden(False)
             return
-        if not isinstance(scorecard, BinaryScorecard):
-            self.scorecard_section.setHidden(True)
-            return
-        self.scorecard_forecast.setText(
-            f"Scored Yes probability: {scorecard.probability_percent}%"
-        )
-        self.scorecard_guidance.setText("Brier score: lower is better.")
-        self.scorecard_outcome.setText(
-            f"Effective outcome: {scorecard.outcome.value.capitalize()}"
-        )
-        self.scorecard_brier.setText(
-            f"Brier score: {_format_brier_score(scorecard.brier_score)}"
-        )
-        self.scorecard_correction_notice.setText(
-            "The effective outcome was corrected; original Resolution and correction "
-            "history remain below."
-            if scorecard.outcome_corrected
-            else ""
-        )
-        self.scorecard_correction_notice.setHidden(not scorecard.outcome_corrected)
-        self.scorecard_section.setHidden(False)
+        self.scorecard_section.setHidden(True)
 
     def _load_definition_history(self, prediction_id: int) -> None:
         try:
@@ -7088,9 +6449,7 @@ def _forecast_review_widget(
 
 
 def _journal_edit_history_widget(
-    entry: JournalTimelineSnapshot
-    | NumericJournalTimelineSnapshot
-    | QuantileTimelineEvent,
+    entry: JournalTimelineSnapshot | QuantileTimelineEvent,
     parent: QWidget,
 ) -> QGroupBox:
     prior_version_count = len(entry.corrections)
@@ -7190,33 +6549,13 @@ def _format_date(value: date | None) -> str:
     return "" if value is None else value.strftime("%b %d, %Y")
 
 
-def _format_brier_score(value: float) -> str:
-    """Present the finite per-Prediction Binary score without padding."""
-
-    return f"{value:.4f}".rstrip("0").rstrip(".")
-
-
-def _format_score_decimal(value: Decimal) -> str:
-    """Present a derived Decimal metric without inventing fine precision."""
-
-    if value == value.to_integral():
-        return format(value.quantize(Decimal(1)), "f")
-    return format(value.quantize(Decimal("0.001")), "f").rstrip("0").rstrip(".")
-
-
 def _numeric_forecast_text(
-    revision: NumericRevisionSnapshot | QuantileRevision,
+    revision: QuantileRevision,
     unit: str,
 ) -> str:
     """Format one Numeric ForecastRevision for plain-language UI context."""
 
-    if isinstance(revision, QuantileRevision):
-        return quantile_summary(revision.quantiles, unit)
-
-    return (
-        f"{revision.confidence_percent}% interval: {revision.lower_bound} to "
-        f"{revision.upper_bound} {unit}; Median: {revision.median_estimate} {unit}"
-    )
+    return quantile_summary(revision.quantiles, unit)
 
 
 def _history_value(value: str | date | None) -> str:

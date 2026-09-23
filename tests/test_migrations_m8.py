@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS, Migration
 from reckonsolve.data.settings import SettingsRepository
@@ -14,28 +13,26 @@ class FixedClock:
         return datetime(2026, 8, 20, 18, 30, tzinfo=UTC)
 
 
-def test_v8_upgrade_preserves_data_and_starts_without_a_backup_time(tmp_path) -> None:
+def test_v8_upgrade_of_empty_archive_preserves_schema_path(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
-    old_database = Database.open(path, migrations=MIGRATIONS[:7])
-    created = PredictionOperations(
-        old_database, FixedClock()
-    )._create_legacy_prediction(
-        "Will this v7 prediction survive the backup-setting migration?",
-        64,
-    )
-    SettingsRepository(old_database).set_stale_threshold_days(21)
-    old_database.close()
-
+    old = Database.open(path, migrations=MIGRATIONS[:7])
+    SettingsRepository(old).set_stale_threshold_days(21)
+    with old.transaction() as connection:
+        connection.execute("CREATE TABLE sentinel(value TEXT NOT NULL)")
+        connection.execute("INSERT INTO sentinel VALUES ('preserved')")
+    old.close()
     upgraded = Database.open(path, migrations=MIGRATIONS[:8])
-
     assert upgraded.schema_version == 8
-    reopened = PredictionOperations(upgraded, FixedClock()).get_prediction(
-        created.prediction_id
-    )
-    assert reopened.question == created.question
-    settings = SettingsRepository(upgraded)
-    assert settings.get_stale_threshold_days() == 21
-    assert settings.get_last_successful_backup_at() is None
+    with upgraded.transaction() as connection:
+        assert (
+            connection.execute("SELECT value FROM sentinel").fetchone()[0]
+            == "preserved"
+        )
+        assert tuple(
+            connection.execute(
+                "SELECT stale_threshold_days, last_successful_backup_at FROM app_settings"
+            ).fetchone()
+        ) == (21, None)
     upgraded.close()
 
 

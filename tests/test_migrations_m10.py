@@ -3,10 +3,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS, Migration
-from reckonsolve.domain.predictions import JournalTimelineEvent
 
 
 class FixedClock:
@@ -14,46 +12,23 @@ class FixedClock:
         return datetime(2026, 8, 21, 19, 30, tzinfo=UTC)
 
 
-def test_v10_upgrade_preserves_binary_journal_and_correction_history(tmp_path) -> None:
+def test_v10_upgrade_of_empty_archive_preserves_schema_path(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
-    old_database = Database.open(path, migrations=MIGRATIONS[:9])
-    old_operations = PredictionOperations(old_database, FixedClock(), UTC)
-    created = old_operations._create_legacy_prediction("Will the journal migrate?", 60)
-    entry = old_operations.add_journal_entry(
-        created.prediction_id,
-        "Original observation.",
-        expected_revision_id=created.current_revision_id,
-        expected_metadata_version=created.metadata_version,
-    )
-    old_operations.correct_journal_entry(
-        created.prediction_id,
-        entry.entry_id,
-        "Corrected observation.",
-        expected_correction_id=None,
-    )
-    old_database.close()
-
+    old = Database.open(path, migrations=MIGRATIONS[:9])
+    with old.transaction() as connection:
+        connection.execute("CREATE TABLE sentinel(value TEXT NOT NULL)")
+        connection.execute("INSERT INTO sentinel VALUES ('preserved')")
+    old.close()
     upgraded = Database.open(path, migrations=MIGRATIONS[:10])
-    operations = PredictionOperations(upgraded, FixedClock(), UTC)
-    timeline = operations.list_timeline(created.prediction_id)
-    journal = next(
-        event for event in timeline if isinstance(event, JournalTimelineEvent)
-    )
-
     assert upgraded.schema_version == 10
-    assert journal.body == "Corrected observation."
-    assert journal.original_body == "Original observation."
-    assert len(journal.corrections) == 1
     with upgraded.transaction() as connection:
-        anchors = connection.execute(
-            """
-            SELECT forecast_revision_id, numeric_forecast_revision_id
-            FROM journal_entries WHERE id = ?
-            """,
-            (entry.entry_id,),
-        ).fetchone()
-    assert anchors[0] == created.current_revision_id
-    assert anchors[1] is None
+        assert (
+            connection.execute("SELECT value FROM sentinel").fetchone()[0]
+            == "preserved"
+        )
+        assert "numeric_forecast_revision_id" in {
+            row[1] for row in connection.execute("PRAGMA table_info(journal_entries)")
+        }
     upgraded.close()
 
 

@@ -35,7 +35,6 @@ class CreationDetails:
     rationale: str | None = None
     background: str | None = None
     resolution_criteria: str | None = None
-    forecast_deadline: date | None = None
     expected_resolution: date | None = None
     tags: tuple[str, ...] = ()
 
@@ -94,7 +93,7 @@ def _create_binary(
         file=session.output,
     )
     deadline = _ask_exact_deadline(session)
-    details = _ask_creation_details(session, legacy_deadline=False)
+    details = _ask_creation_details(session)
     return operations.create_prediction(
         question,
         probability,
@@ -140,7 +139,7 @@ def _create_numeric(
         session, QuantileDefinition(unit, decimal_places, constraint)
     )
     deadline = _ask_exact_deadline(session)
-    details = _ask_creation_details(session, legacy_deadline=False)
+    details = _ask_creation_details(session)
     return operations.create_numeric_prediction(
         question,
         unit,
@@ -209,8 +208,6 @@ def _ask_exact_deadline(session: PromptSession) -> datetime:
 
 def _ask_creation_details(
     session: PromptSession,
-    *,
-    legacy_deadline: bool = True,
 ) -> CreationDetails:
     if not _ask_yes_no(session, "Add optional details? [y/N]: ", default=False):
         return CreationDetails()
@@ -219,14 +216,6 @@ def _ask_creation_details(
     background = _optional_line(session.ask("Background (optional, one line): "))
     resolution_criteria = _optional_line(
         session.ask("Resolution Criteria (optional, one line): ")
-    )
-    forecast_deadline = (
-        _ask_optional_date(
-            session,
-            "Forecast Deadline (YYYY-MM-DD, optional): ",
-        )
-        if legacy_deadline
-        else None
     )
     expected_resolution = _ask_optional_date(
         session,
@@ -238,7 +227,6 @@ def _ask_creation_details(
         rationale=rationale,
         background=background,
         resolution_criteria=resolution_criteria,
-        forecast_deadline=forecast_deadline,
         expected_resolution=expected_resolution,
         tags=tags,
     )

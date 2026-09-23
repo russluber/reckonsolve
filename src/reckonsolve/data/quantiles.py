@@ -351,9 +351,7 @@ class QuantilePredictionRepository:
                     "The recorded time cannot precede the anchored forecast.",
                     field="created_at",
                 )
-            status = contract_status(
-                current.status, None, now.date(), current.forecast_contract, now
-            )
+            status = contract_status(current.status, current.forecast_contract, now)
             if review and status is not PredictionStatus.OPEN:
                 raise ForecastReviewDisallowedError(status)
             if not review and status not in (
@@ -437,9 +435,7 @@ class QuantilePredictionRepository:
             ):
                 raise LifecycleContextChangedError
             now = self._clock.now()
-            status = contract_status(
-                current.status, None, now.date(), current.forecast_contract, now
-            )
+            status = contract_status(current.status, current.forecast_contract, now)
             if delete:
                 if status is not PredictionStatus.OPEN:
                     raise PredictionDeletionDisallowedError(status.value)

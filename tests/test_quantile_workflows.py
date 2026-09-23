@@ -326,7 +326,7 @@ def test_quantile_dialogs_preserve_anchors_and_cancel_without_writes(qtbot, app_
     assert len(ops.list_numeric_forecast_revisions(first.prediction_id)) == 1
 
 
-def test_cli_quantiles_create_revise_review_and_legacy_dispatch(app_ops):
+def test_cli_quantiles_create_revise_review(app_ops):
     from reckonsolve.cli_creation import PromptSession
     from reckonsolve.cli_mutations import review_interactively, revise_interactively
 
@@ -358,20 +358,6 @@ def test_cli_quantiles_create_revise_review_and_legacy_dispatch(app_ops):
         ops, 1, PromptSession(StringIO("No change\n"), output, StringIO())
     )
     assert len(ops.list_numeric_forecast_revisions(1)) == 2
-    legacy = ops._create_legacy_numeric_prediction(
-        "Legacy days", "days", 0, 1, 3, 5, 80
-    )
-    revise_interactively(
-        ops,
-        legacy.prediction_id,
-        PromptSession(StringIO("\n\n6\n\nLegacy change\n"), output, StringIO()),
-    )
-    assert (
-        ops.get_numeric_prediction(
-            legacy.prediction_id
-        ).current_revision.confidence_percent
-        == 80
-    )
 
 
 @pytest.mark.parametrize("width", [760, 1600])

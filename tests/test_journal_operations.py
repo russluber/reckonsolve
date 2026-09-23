@@ -1,6 +1,6 @@
 import sqlite3
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -46,9 +46,8 @@ CORRECTED = datetime(2026, 8, 14, 21, 15, tzinfo=UTC)
 
 
 def _create(database: Database, **kwargs):
-    return PredictionOperations(
-        database, FixedClock(CREATED)
-    )._create_legacy_prediction(
+    kwargs.setdefault("forecast_deadline", CREATED + timedelta(days=30))
+    return PredictionOperations(database, FixedClock(CREATED)).create_prediction(
         "Will it happen?",
         60,
         **kwargs,
@@ -115,7 +114,7 @@ def test_locked_prediction_accepts_journal_but_terminal_predictions_reject_new(
     tmp_path,
 ) -> None:
     locked_database = Database.open(tmp_path / "locked.sqlite3")
-    created = _create(locked_database, forecast_deadline=date(2026, 8, 12))
+    created = _create(locked_database, forecast_deadline=CREATED + timedelta(hours=1))
     locked_operations = PredictionOperations(locked_database, FixedClock(JOURNALED))
     assert (
         locked_operations.get_prediction(created.prediction_id).status
@@ -132,6 +131,7 @@ def test_locked_prediction_accepts_journal_but_terminal_predictions_reject_new(
             terminal_operations.resolve_prediction(
                 detail.prediction_id,
                 BinaryOutcome.YES,
+                use_recorded_time=True,
                 expected_revision_id=detail.current_revision_id,
                 expected_metadata_version=detail.metadata_version,
             )
@@ -224,6 +224,7 @@ def test_corrections_append_versions_keep_anchor_and_allow_terminal_state(
         terminal_operations.resolve_prediction(
             detail.prediction_id,
             BinaryOutcome.YES,
+            use_recorded_time=True,
             expected_revision_id=detail.current_revision_id,
             expected_metadata_version=detail.metadata_version,
         )
@@ -334,6 +335,7 @@ def test_timeline_uses_revision_anchor_and_ids_for_causal_order(
     operations = PredictionOperations(database, FixedClock(CREATED))
     current = _create(database)
     first_entry = _add(operations, current, "First note")
+    operations = PredictionOperations(database, FixedClock(JOURNALED))
     current = operations.revise_forecast(
         current.prediction_id,
         40,

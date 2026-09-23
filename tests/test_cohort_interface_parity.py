@@ -1,4 +1,4 @@
-"""M54 mixed-cohort parity through independent desktop and CLI connections."""
+"""Supported-model parity through independent desktop and CLI connections."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
@@ -21,7 +21,7 @@ from reckonsolve.identity import DEVELOPMENT_APPLICATION
 START = datetime(2026, 9, 13, 4, 5, 6, 123456, tzinfo=UTC)
 DEADLINE = START + timedelta(hours=2)
 VALUES = {5: -10, 25: -5, 50: 0, 75: 5, 95: 10}
-COHORTS = tuple(ForecastCohort)
+COHORTS = (ForecastCohort.TRAJECTORY_BINARY, ForecastCohort.QUANTILE_NUMERIC)
 
 
 @dataclass
@@ -52,14 +52,8 @@ def mixed(tmp_path, monkeypatch):
 def create(ops, cohort):
     common = {"tags": ("parity",), "rationale": "original evidence"}
     question = f"Archive subject {cohort.value}?"
-    if cohort is ForecastCohort.LEGACY_BINARY:
-        return ops._create_legacy_prediction(question, 40, **common)
     if cohort is ForecastCohort.TRAJECTORY_BINARY:
         return ops.create_prediction(question, 40, forecast_deadline=DEADLINE, **common)
-    if cohort is ForecastCohort.LEGACY_NUMERIC:
-        return ops._create_legacy_numeric_prediction(
-            question, "units", 0, -10, 0, 10, 80, **common
-        )
     return ops.create_numeric_prediction(
         question,
         "units",
@@ -120,8 +114,6 @@ def test_cli_mutations_read_back_through_existing_desktop_connection(mixed, coho
     revision_input = (
         "55\nchanged evidence\n"
         if not isinstance(prediction, NumericPrediction)
-        else "-9\n0\n11\n85\nchanged evidence\n"
-        if cohort is ForecastCohort.LEGACY_NUMERIC
         else "-9\n11\n0\n-4\n6\nchanged evidence\n"
     )
     code, _, errors = command("revise", identifier, input_text=revision_input)
@@ -147,11 +139,7 @@ def test_cli_mutations_read_back_through_existing_desktop_connection(mixed, coho
     # A Windows ISO offset must retain the exact same UTC instant and microseconds.
     effective = clock.instant + timedelta(minutes=1)
     clock.instant = effective + timedelta(minutes=2)
-    timing = (
-        ""
-        if prediction.forecast_contract.is_legacy
-        else effective.astimezone(timezone(timedelta(hours=-7))).isoformat() + "\n"
-    )
+    timing = effective.astimezone(timezone(timedelta(hours=-7))).isoformat() + "\n"
     outcome = "yes" if not isinstance(prediction, NumericPrediction) else "2"
     code, _, errors = command(
         "resolve",
@@ -165,8 +153,7 @@ def test_cli_mutations_read_back_through_existing_desktop_connection(mixed, coho
         else ops.get_numeric_resolution_history(prediction.prediction_id)
     )
     assert history.original.resolved_at == clock.instant
-    if not prediction.forecast_contract.is_legacy:
-        assert history.original.effective_resolution_at == effective
+    assert history.original.effective_resolution_at == effective
     before = canonical_dump(db)
     code, output, errors = command("show", identifier)
     assert code == 0, errors
@@ -182,9 +169,8 @@ def test_cli_mutations_read_back_through_existing_desktop_connection(mixed, coho
         "originalterminal",
     ):
         assert note in output
-    if not prediction.forecast_contract.is_legacy:
-        assert DEADLINE.astimezone().isoformat(sep=" ") in output
-        assert effective.astimezone().isoformat(sep=" ") in output
+    assert DEADLINE.astimezone().isoformat(sep=" ") in output
+    assert effective.astimezone().isoformat(sep=" ") in output
     assert canonical_dump(db) == before
 
 
@@ -206,7 +192,7 @@ def test_mixed_retrieval_saved_tags_and_repair_remain_dynamic_and_read_only(mixe
         for prediction in predictions:
             assert prediction.question in output
     assert canonical_dump(db) == before
-    assert len(ops.get_dashboard().open_predictions) == 4
+    assert len(ops.get_dashboard().open_predictions) == 2
 
     # A stable tag rename updates a saved configuration, not stored result membership.
     tag = ops.list_tags()[0]
@@ -227,7 +213,7 @@ def test_mixed_retrieval_saved_tags_and_repair_remain_dynamic_and_read_only(mixe
     ops.merge_tags(
         ops.preview_tag_merge((tags["renamed"].tag_id,), tags["merge target"].tag_id)
     )
-    assert len(ops.search_predictions("Archive", tags=("merge target",)).hits) == 5
+    assert len(ops.search_predictions("Archive", tags=("merge target",)).hits) == 3
     before = canonical_dump(db)
     hits = ops.search_predictions("Archive")
     ops.repair_search_index()
@@ -235,7 +221,7 @@ def test_mixed_retrieval_saved_tags_and_repair_remain_dynamic_and_read_only(mixe
     assert canonical_dump(db) == before
     ops.delete_tag(ops.preview_tag_delete(tags["merge target"].tag_id))
     assert not ops.list_tags()
-    assert len(ops.search_predictions("Archive").hits) == 5
+    assert len(ops.search_predictions("Archive").hits) == 3
 
 
 @pytest.mark.parametrize("cohort", COHORTS)
@@ -253,10 +239,6 @@ def test_stale_cli_review_does_not_overwrite_concurrent_gui_revision(mixed, coho
                 if not isinstance(prediction, NumericPrediction):
                     ops.revise_forecast(
                         prediction.prediction_id, 70, **context(prediction)
-                    )
-                elif cohort is ForecastCohort.LEGACY_NUMERIC:
-                    ops.revise_numeric_forecast(
-                        prediction.prediction_id, -9, 0, 11, 85, **context(prediction)
                     )
                 else:
                     ops.revise_quantile_forecast(
@@ -394,7 +376,7 @@ def test_public_cli_creation_exact_offset_and_cancel_without_partial_rows(
     assert "offset" in errors
     prediction = ops.get_prediction_for_navigation(1)
     assert prediction.forecast_contract.forecast_deadline.instant == DEADLINE
-    assert not prediction.forecast_contract.is_legacy
+    assert prediction.forecast_contract.forecast_deadline is not None
     assert prediction.question == question
     before = canonical_dump(db)
     code, _, _ = command("create", forecast_type, input_text=fields)
@@ -425,9 +407,7 @@ def test_gui_corrections_update_cli_effective_and_superseded_retrieval(mixed, co
     code, _, errors = command(
         "resolve",
         identifier,
-        input_text=("2\n" if numeric else "yes\n")
-        + ("now\n" if not prediction.forecast_contract.is_legacy else "")
-        + "oldterminalword\n\ny\n",
+        input_text=("2\n" if numeric else "yes\n") + "now\n" + "oldterminalword\n\ny\n",
     )
     assert code == 0, errors
     original = ops.get_prediction_scorecard(prediction.prediction_id)
@@ -435,11 +415,7 @@ def test_gui_corrections_update_cli_effective_and_superseded_retrieval(mixed, co
         ops.correct_numeric_resolution if numeric else ops.correct_binary_resolution
     )
     clock.instant += timedelta(minutes=1)
-    timing = (
-        {"effective_resolution_at": START + timedelta(seconds=30)}
-        if not prediction.forecast_contract.is_legacy
-        else {}
-    )
+    timing = {"effective_resolution_at": START + timedelta(seconds=30)}
     correction(
         prediction.prediction_id,
         3 if numeric else BinaryOutcome.NO,

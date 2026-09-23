@@ -10,7 +10,6 @@ from datetime import date
 from reckonsolve.clock import parse_utc
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
-    FixedPrecisionValue,
     PredictionStatus,
     PredictionType,
 )
@@ -323,12 +322,6 @@ def _select_predictions(
             prediction.forecast_deadline,
             prediction.expected_resolution,
             current_revision.probability_percent,
-            NULL AS numeric_lower_scaled,
-            NULL AS numeric_median_scaled,
-            NULL AS numeric_upper_scaled,
-            NULL AS numeric_confidence_percent,
-            NULL AS numeric_unit,
-            NULL AS numeric_precision,
             current_revision.created_at AS latest_revision_at,
             (SELECT MAX(review.created_at)
              FROM forecast_reviews AS review
@@ -376,8 +369,7 @@ def _select_predictions(
                 )
                 FROM resolutions AS resolution
                 WHERE resolution.prediction_id = prediction.id
-            ) AS binary_outcome,
-            NULL AS numeric_actual_scaled
+            ) AS binary_outcome
         FROM predictions AS prediction
         JOIN forecast_revisions AS current_revision
             ON current_revision.id = (
@@ -388,81 +380,6 @@ def _select_predictions(
                 LIMIT 1
             )
         WHERE prediction.prediction_type = 'binary'
-        UNION ALL
-        SELECT
-            prediction.id AS prediction_id,
-            prediction.question,
-            prediction.prediction_type,
-            prediction.status,
-            prediction.created_at,
-            prediction.forecast_deadline,
-            prediction.expected_resolution,
-            NULL AS probability_percent,
-            current_revision.lower_scaled AS numeric_lower_scaled,
-            current_revision.median_scaled AS numeric_median_scaled,
-            current_revision.upper_scaled AS numeric_upper_scaled,
-            current_revision.confidence_percent AS numeric_confidence_percent,
-            prediction.numeric_unit,
-            prediction.numeric_precision,
-            current_revision.created_at AS latest_revision_at,
-            (SELECT MAX(review.created_at)
-             FROM forecast_reviews AS review
-             WHERE review.prediction_id = prediction.id) AS latest_review_at,
-            COALESCE(
-                (SELECT resolution.resolved_at
-                 FROM numeric_resolutions AS resolution
-                 WHERE resolution.prediction_id = prediction.id),
-                (SELECT invalidation.invalidated_at
-                 FROM prediction_invalidations AS invalidation
-                 WHERE invalidation.prediction_id = prediction.id)
-            ) AS terminal_decision_at,
-            CASE
-                WHEN prediction.status = 'resolved'
-                    AND NOT EXISTS (
-                        SELECT 1 FROM postmortem_completions AS completion
-                        WHERE completion.prediction_id = prediction.id
-                    )
-                    AND (
-                        SELECT COALESCE(
-                            (
-                                SELECT correction.new_postmortem
-                                FROM numeric_resolution_corrections AS correction
-                                WHERE correction.numeric_resolution_id = resolution.id
-                                ORDER BY correction.sequence DESC
-                                LIMIT 1
-                            ),
-                            resolution.postmortem
-                        )
-                        FROM numeric_resolutions AS resolution
-                        WHERE resolution.prediction_id = prediction.id
-                    ) IS NULL
-                THEN 1 ELSE 0
-            END AS needs_postmortem,
-            NULL AS binary_outcome,
-            (
-                SELECT COALESCE(
-                    (
-                        SELECT correction.new_actual_scaled
-                        FROM numeric_resolution_corrections AS correction
-                        WHERE correction.numeric_resolution_id = resolution.id
-                        ORDER BY correction.sequence DESC
-                        LIMIT 1
-                    ),
-                    resolution.actual_scaled
-                )
-                FROM numeric_resolutions AS resolution
-                WHERE resolution.prediction_id = prediction.id
-            ) AS numeric_actual_scaled
-        FROM predictions AS prediction
-        JOIN numeric_forecast_revisions AS current_revision
-            ON current_revision.id = (
-                SELECT candidate.id
-                FROM numeric_forecast_revisions AS candidate
-                WHERE candidate.prediction_id = prediction.id
-                ORDER BY candidate.sequence DESC
-                LIMIT 1
-            )
-        WHERE prediction.prediction_type = 'numeric'
         """
     ).fetchall()
     tag_rows = connection.execute(
@@ -487,9 +404,6 @@ def _select_predictions(
         if prediction_id not in wanted_ids:
             continue
         prediction_type = PredictionType(str(row["prediction_type"]))
-        decimal_places = (
-            None if row["numeric_precision"] is None else int(row["numeric_precision"])
-        )
         predictions[prediction_id] = SearchPrediction(
             forecast_contract=select_supported_contract(connection, prediction_id),
             prediction_id=prediction_id,
@@ -525,46 +439,10 @@ def _select_predictions(
                 if row["probability_percent"] is None
                 else int(row["probability_percent"])
             ),
-            numeric_lower_bound=(
-                None
-                if decimal_places is None
-                else FixedPrecisionValue(
-                    int(row["numeric_lower_scaled"]), decimal_places
-                )
-            ),
-            numeric_median_estimate=(
-                None
-                if decimal_places is None
-                else FixedPrecisionValue(
-                    int(row["numeric_median_scaled"]), decimal_places
-                )
-            ),
-            numeric_upper_bound=(
-                None
-                if decimal_places is None
-                else FixedPrecisionValue(
-                    int(row["numeric_upper_scaled"]), decimal_places
-                )
-            ),
-            numeric_confidence_percent=(
-                None
-                if row["numeric_confidence_percent"] is None
-                else int(row["numeric_confidence_percent"])
-            ),
-            numeric_unit=(
-                None if row["numeric_unit"] is None else str(row["numeric_unit"])
-            ),
             binary_outcome=(
                 None
                 if row["binary_outcome"] is None
                 else BinaryOutcome(str(row["binary_outcome"]))
-            ),
-            numeric_actual_value=(
-                None
-                if decimal_places is None or row["numeric_actual_scaled"] is None
-                else FixedPrecisionValue(
-                    int(row["numeric_actual_scaled"]), decimal_places
-                )
             ),
         )
     for item in read_quantile_archive(connection):

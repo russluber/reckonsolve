@@ -46,15 +46,11 @@ from reckonsolve.domain.browser import (
 from reckonsolve.domain.predictions import (
     BinaryResolutionHistory,
     DefinitionChange,
-    FixedPrecisionValue,
     ForecastReviewTimelineEvent,
     ForecastTimelineEvent,
     InvalidationHistory,
     JournalCorrection,
     JournalTimelineEvent,
-    NumericForecastReviewTimelineEvent,
-    NumericForecastTimelineEvent,
-    NumericJournalTimelineEvent,
     NumericPrediction,
     NumericResolutionHistory,
     PostmortemCompletion,
@@ -1047,13 +1043,7 @@ def _search_prediction_summary(prediction: SearchPrediction) -> str:
                 prediction.numeric_quantiles, prediction.numeric_unit or ""
             )
         )
-    return _numeric_forecast_summary(
-        prediction.numeric_lower_bound,
-        prediction.numeric_median_estimate,
-        prediction.numeric_upper_bound,
-        prediction.numeric_confidence_percent,
-        prediction.numeric_unit,
-    )
+    raise ValueError("A Numeric result requires all five quantiles.")
 
 
 def _run_show(
@@ -1110,7 +1100,6 @@ def _run_show(
             operations.get_prediction_scorecard(prediction_id)
             if prediction.resolution is not None
             and prediction.forecast_contract is not None
-            and not prediction.forecast_contract.is_legacy
             else None,
         )
     print(rendered, file=output)
@@ -1130,20 +1119,9 @@ def _run_create(
         PromptSession(input_stream, output, errors),
     )
     print(file=output)
-    if isinstance(created, NumericPrediction) and isinstance(
-        created.current_revision, QuantileRevision
-    ):
+    if isinstance(created, NumericPrediction):
         summary = terminal_text(
             quantile_summary(created.current_revision.quantiles, created.unit)
-        )
-        type_label = "Numeric"
-    elif isinstance(created, NumericPrediction):
-        summary = _numeric_forecast_summary(
-            created.current_revision.lower_bound,
-            created.current_revision.median_estimate,
-            created.current_revision.upper_bound,
-            created.current_revision.confidence_percent,
-            created.unit,
         )
         type_label = "Numeric"
     else:
@@ -1187,13 +1165,7 @@ def _browser_forecast_summary(prediction: PredictionBrowserItem) -> str:
         from reckonsolve.forecast_display import binary_contract_summary
 
         return f"{prediction.probability_percent}% Yes | {binary_contract_summary(prediction.forecast_contract)}"
-    return _numeric_forecast_summary(
-        prediction.numeric_lower_bound,
-        prediction.numeric_median_estimate,
-        prediction.numeric_upper_bound,
-        prediction.numeric_confidence_percent,
-        prediction.numeric_unit,
-    )
+    raise ValueError("A Numeric result requires all five quantiles.")
 
 
 def _format_binary_detail(
@@ -1270,12 +1242,7 @@ def _format_binary_detail(
 
 def _format_numeric_detail(
     prediction: NumericPrediction,
-    timeline: tuple[
-        NumericForecastTimelineEvent
-        | NumericJournalTimelineEvent
-        | NumericForecastReviewTimelineEvent,
-        ...,
-    ],
+    timeline: tuple[QuantileTimelineEvent, ...],
     definition_changes: tuple[DefinitionChange, ...],
     indicators: AttentionIndicators,
     resolution_history: NumericResolutionHistory | None,
@@ -1287,15 +1254,7 @@ def _format_numeric_detail(
     _append_field(
         lines,
         "Current forecast",
-        quantile_summary(prediction.current_revision.quantiles, prediction.unit)
-        if isinstance(prediction.current_revision, QuantileRevision)
-        else _numeric_forecast_summary(
-            prediction.current_revision.lower_bound,
-            prediction.current_revision.median_estimate,
-            prediction.current_revision.upper_bound,
-            prediction.current_revision.confidence_percent,
-            prediction.unit,
-        ),
+        quantile_summary(prediction.current_revision.quantiles, prediction.unit),
     )
     _append_field(lines, "Unit", prediction.unit)
     _append_field(lines, "Decimal precision", str(prediction.decimal_places))
@@ -1458,12 +1417,7 @@ def _append_binary_terminal(
 def _append_numeric_terminal(
     lines: list[str],
     prediction: NumericPrediction,
-    timeline: tuple[
-        NumericForecastTimelineEvent
-        | NumericJournalTimelineEvent
-        | NumericForecastReviewTimelineEvent,
-        ...,
-    ],
+    timeline: tuple[QuantileTimelineEvent, ...],
     resolution_history: NumericResolutionHistory | None,
     invalidation_history: InvalidationHistory | None,
 ) -> None:
@@ -1494,38 +1448,12 @@ def _append_numeric_terminal(
                 "Effective resolution time",
                 _format_local_timestamp(resolution.effective_resolution_at),
             )
-        scoring_revision = next(
-            (
-                event
-                for event in timeline
-                if isinstance(event, NumericForecastTimelineEvent)
-                and event.revision_id == resolution.scoring_revision_id
-            ),
-            None,
+        _append_field(
+            lines,
+            "Recorded revision context (not scoring authority)",
+            f"Revision {resolution.scoring_revision_sequence}, "
+            f"ID {resolution.scoring_revision_id}",
         )
-        if scoring_revision is not None:
-            scoring_text = _numeric_forecast_summary(
-                scoring_revision.lower_bound,
-                scoring_revision.median_estimate,
-                scoring_revision.upper_bound,
-                scoring_revision.confidence_percent,
-                prediction.unit,
-            )
-            _append_field(
-                lines,
-                "Scoring forecast",
-                f"{scoring_text} (revision {resolution.scoring_revision_sequence}, "
-                f"ID {resolution.scoring_revision_id})",
-            )
-        else:
-            _append_field(
-                lines,
-                "Recorded revision context (not scoring authority)"
-                if resolution.effective_resolution_at is not None
-                else "Scoring revision",
-                f"Revision {resolution.scoring_revision_sequence}, "
-                f"ID {resolution.scoring_revision_id}",
-            )
         if resolution.resolution_notes is not None:
             _append_field(
                 lines,
@@ -1880,11 +1808,7 @@ def _append_binary_timeline_event(lines: list[str], event: TimelineEvent) -> Non
 
 def _append_numeric_timeline_event(
     lines: list[str],
-    event: (
-        NumericForecastTimelineEvent
-        | NumericJournalTimelineEvent
-        | NumericForecastReviewTimelineEvent
-    ),
+    event: QuantileTimelineEvent,
     unit: str,
 ) -> None:
     if isinstance(event, QuantileTimelineEvent):
@@ -1910,80 +1834,6 @@ def _append_numeric_timeline_event(
                 lines, event.created_at, event.original_text or "", event.corrections
             )
         return
-    if isinstance(event, NumericForecastTimelineEvent):
-        lines.append(
-            f"{_format_local_timestamp(event.created_at)} | FORECAST | "
-            f"Revision {event.sequence} (ID {event.revision_id})"
-        )
-        if event.previous_lower_bound is not None:
-            previous = _numeric_forecast_summary(
-                event.previous_lower_bound,
-                event.previous_median_estimate,
-                event.previous_upper_bound,
-                event.previous_confidence_percent,
-                unit,
-            )
-            _append_field(lines, "Before", previous, indent="  ")
-        _append_field(
-            lines,
-            "Forecast",
-            _numeric_forecast_summary(
-                event.lower_bound,
-                event.median_estimate,
-                event.upper_bound,
-                event.confidence_percent,
-                unit,
-            ),
-            indent="  ",
-        )
-        if event.rationale is not None:
-            _append_field(lines, "Rationale", event.rationale, indent="  ")
-        return
-    if isinstance(event, NumericJournalTimelineEvent):
-        lines.append(
-            f"{_format_local_timestamp(event.created_at)} | JOURNAL | "
-            f"Entry {event.entry_id}"
-        )
-        _append_field(lines, "Body", event.body, indent="  ")
-        _append_field(
-            lines,
-            "Forecast at the time",
-            _numeric_forecast_summary(
-                event.lower_bound,
-                event.median_estimate,
-                event.upper_bound,
-                event.confidence_percent,
-                unit,
-            )
-            + f" (revision {event.forecast_revision_sequence}, "
-            f"ID {event.numeric_forecast_revision_id})",
-            indent="  ",
-        )
-        _append_correction_history(
-            lines, event.created_at, event.original_body, event.corrections
-        )
-        return
-    if isinstance(event, NumericForecastReviewTimelineEvent):
-        lines.append(
-            f"{_format_local_timestamp(event.created_at)} | REVIEW | "
-            f"Review {event.review_id}"
-        )
-        _append_field(
-            lines,
-            "Retained forecast",
-            _numeric_forecast_summary(
-                event.lower_bound,
-                event.median_estimate,
-                event.upper_bound,
-                event.confidence_percent,
-                unit,
-            )
-            + f" (revision {event.forecast_revision_sequence}, "
-            f"ID {event.numeric_forecast_revision_id})",
-            indent="  ",
-        )
-        if event.note is not None:
-            _append_field(lines, "Note", event.note, indent="  ")
 
 
 def _append_correction_history(
@@ -2013,28 +1863,6 @@ def _append_correction_history(
             f"[{_format_local_timestamp(correction.corrected_at)}] {correction.body}",
             indent="  ",
         )
-
-
-def _numeric_forecast_summary(
-    lower_bound: FixedPrecisionValue | None,
-    median_estimate: FixedPrecisionValue | None,
-    upper_bound: FixedPrecisionValue | None,
-    confidence_percent: int | None,
-    unit: str | None,
-) -> str:
-    if (
-        lower_bound is None
-        or median_estimate is None
-        or upper_bound is None
-        or confidence_percent is None
-        or unit is None
-    ):
-        raise ValueError("Numeric forecast data is incomplete.")
-    safe_unit = terminal_text(unit)
-    return (
-        f"{confidence_percent}% interval {lower_bound} to {upper_bound} {safe_unit}; "
-        f"median {median_estimate} {safe_unit}"
-    )
 
 
 def _append_field(

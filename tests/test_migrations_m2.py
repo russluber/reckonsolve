@@ -1,6 +1,7 @@
 import sqlite3
 
 import pytest
+from supported_fixtures import insert_binary_contract
 
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS
@@ -43,6 +44,11 @@ def test_forecast_revision_constraints_protect_integrity(tmp_path) -> None:
             """,
             ("2026-08-12T19:30:00.000000Z", "2026-08-12T19:30:00.000000Z"),
         ).lastrowid
+        insert_binary_contract(connection, prediction_id, "2026-08-12T19:30:00.000000Z")
+        connection.execute(
+            "INSERT INTO forecast_revisions (prediction_id, probability_percent, created_at, sequence) VALUES (?, 50, ?, 1)",
+            (prediction_id, "2026-08-12T19:30:00.000000Z"),
+        )
 
     assert prediction_id is not None
     for invalid_probability in (-1, 101, 37.5):
@@ -103,6 +109,7 @@ def test_saved_revision_cannot_be_updated_but_parent_deletion_can_cascade(
             """,
             ("2026-08-12T19:30:00.000000Z", "2026-08-12T19:30:00.000000Z"),
         ).lastrowid
+        insert_binary_contract(connection, prediction_id, "2026-08-12T19:30:00.000000Z")
         connection.execute(
             """
             INSERT INTO forecast_revisions (
@@ -139,6 +146,7 @@ def test_revision_sequence_is_unique_within_each_prediction(tmp_path) -> None:
             """,
             (timestamp, timestamp),
         ).lastrowid
+        insert_binary_contract(connection, prediction_id, timestamp)
         connection.execute(
             """
             INSERT INTO forecast_revisions (

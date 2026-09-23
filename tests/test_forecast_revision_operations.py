@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any
 
 import pytest
+from supported_fixtures import create_binary
 
 from reckonsolve.application.errors import (
     ConcurrentForecastUpdateError,
@@ -40,9 +41,8 @@ REVISED = datetime(2026, 8, 13, 20, 45, 12, 3456, tzinfo=UTC)
 
 
 def _create(database: Database, probability: int = 60):
-    return PredictionOperations(
-        database, FixedClock(CREATED)
-    )._create_legacy_prediction(
+    return create_binary(
+        PredictionOperations(database, FixedClock(CREATED)),
         "Will it happen?",
         probability,
     )
@@ -69,13 +69,14 @@ def test_complete_creation_persists_every_optional_value_without_history(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(CREATED))
 
-    created = operations._create_legacy_prediction(
+    created = create_binary(
+        operations,
         "  Will it happen?  ",
         37,
         rationale="  Initial reasons  ",
         background="  Background  ",
         resolution_criteria="  Official result  ",
-        forecast_deadline=date(2026, 8, 12),
+        forecast_deadline=CREATED + timedelta(hours=1),
         expected_resolution=date(2026, 8, 1),
         tags=(" Science ", "science", "Personal"),
     )
@@ -87,7 +88,9 @@ def test_complete_creation_persists_every_optional_value_without_history(
     assert created.current_rationale == "Initial reasons"
     assert created.background == "Background"
     assert created.resolution_criteria == "Official result"
-    assert created.forecast_deadline == date(2026, 8, 12)
+    assert created.forecast_contract.forecast_deadline.instant == CREATED + timedelta(
+        hours=1
+    )
     assert created.expected_resolution == date(2026, 8, 1)
     assert created.tags == ("Personal", "Science")
     assert created.status is PredictionStatus.OPEN
@@ -104,7 +107,8 @@ def test_complete_creation_uses_one_instant_for_all_system_timestamps(tmp_path) 
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     clock = CountingClock(CREATED)
 
-    detail = PredictionOperations(database, clock)._create_legacy_prediction(
+    detail = create_binary(
+        PredictionOperations(database, clock),
         "One instant?",
         50,
         rationale="Because",
@@ -112,7 +116,7 @@ def test_complete_creation_uses_one_instant_for_all_system_timestamps(tmp_path) 
         tags=("Time",),
     )
 
-    assert clock.calls == 1
+    assert clock.calls == 2  # preflight and the authoritative transaction timestamp
     assert detail.created_at == CREATED
     assert detail.updated_at == CREATED
     with database.transaction() as connection:
@@ -123,7 +127,7 @@ def test_complete_creation_uses_one_instant_for_all_system_timestamps(tmp_path) 
     database.close()
 
 
-def test_past_initial_deadline_is_rejected_but_today_is_valid_in_local_time(
+def test_exact_future_deadline_is_valid_in_local_time_but_past_is_rejected(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
@@ -131,16 +135,18 @@ def test_past_initial_deadline_is_rejected_but_today_is_valid_in_local_time(
     instant = datetime(2026, 8, 13, 2, tzinfo=UTC)  # Aug 12 locally
     operations = PredictionOperations(database, FixedClock(instant), pacific)
 
-    today = operations._create_legacy_prediction(
-        "Deadline is inclusive?",
+    today = create_binary(
+        operations,
+        "Exact future Deadline?",
         50,
-        forecast_deadline=date(2026, 8, 12),
+        forecast_deadline=datetime(2026, 8, 12, 23, 59, tzinfo=pacific),
     )
     with pytest.raises(ValidationError) as error_info:
-        operations._create_legacy_prediction(
+        create_binary(
+            operations,
             "Already locked?",
             50,
-            forecast_deadline=date(2026, 8, 11),
+            forecast_deadline=instant - timedelta(microseconds=1),
         )
 
     assert today.status is PredictionStatus.OPEN
@@ -173,7 +179,8 @@ def test_creation_rolls_back_prediction_revision_tags_and_history_on_tag_failure
         )
 
     with pytest.raises(sqlite3.IntegrityError, match="forced tag failure"):
-        PredictionOperations(database, FixedClock(CREATED))._create_legacy_prediction(
+        create_binary(
+            PredictionOperations(database, FixedClock(CREATED)),
             "Roll back all initial state?",
             60,
             rationale="Reasons",
@@ -213,7 +220,8 @@ def test_creation_rolls_back_initial_tags_when_revision_insert_fails(tmp_path) -
         )
 
     with pytest.raises(sqlite3.IntegrityError, match="forced revision failure"):
-        PredictionOperations(database, FixedClock(CREATED))._create_legacy_prediction(
+        create_binary(
+            PredictionOperations(database, FixedClock(CREATED)),
             "Roll back tags too?",
             60,
             rationale="Reasons",
@@ -254,7 +262,7 @@ def test_revision_appends_in_sequence_and_never_changes_prediction_metadata(
         database, FixedClock(REVISED)
     ).list_forecast_revisions(created.prediction_id)
 
-    assert clock.calls == 1
+    assert clock.calls == 2  # rechecked after acquiring the write transaction
     assert revised.probability_percent == 40
     assert revised.current_revision_sequence == 2
     assert revised.current_revision_id != created.current_revision_id
@@ -326,9 +334,11 @@ def test_nonconsecutive_repeated_probability_and_endpoints_are_valid(tmp_path) -
     operations = PredictionOperations(database, FixedClock(REVISED))
     current = _create(database, 60)
 
-    current = _revise(operations, current, 0)
-    current = _revise(operations, current, 100)
-    current = _revise(operations, current, 60)
+    for offset, probability in enumerate((0, 100, 60)):
+        operations = PredictionOperations(
+            database, FixedClock(REVISED + timedelta(seconds=offset))
+        )
+        current = _revise(operations, current, probability)
 
     assert current.probability_percent == 60
     assert [
@@ -363,17 +373,20 @@ def test_revision_validation_is_expected_and_writes_nothing(
     database.close()
 
 
-def test_deadline_day_accepts_revision_and_next_local_day_rejects(tmp_path) -> None:
+def test_revision_before_exact_deadline_succeeds_and_at_deadline_rejects(
+    tmp_path,
+) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     pacific = timezone(-timedelta(hours=7))
-    created = PredictionOperations(
-        database,
-        FixedClock(datetime(2026, 8, 13, 2, tzinfo=UTC)),
-        pacific,
-    )._create_legacy_prediction(
-        "Inclusive deadline?",
+    created = create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(datetime(2026, 8, 13, 2, tzinfo=UTC)),
+            pacific,
+        ),
+        "Exact deadline?",
         60,
-        forecast_deadline=date(2026, 8, 12),
+        forecast_deadline=datetime(2026, 8, 13, 0, tzinfo=pacific),
     )
     on_deadline = PredictionOperations(
         database,
@@ -384,7 +397,7 @@ def test_deadline_day_accepts_revision_and_next_local_day_rejects(tmp_path) -> N
 
     next_day = PredictionOperations(
         database,
-        FixedClock(datetime(2026, 8, 13, 8, tzinfo=UTC)),
+        FixedClock(datetime(2026, 8, 13, 7, tzinfo=UTC)),
         pacific,
     )
     with pytest.raises(ForecastRevisionNotAllowedError) as error_info:
@@ -411,6 +424,7 @@ def test_terminal_states_reject_revisions(
         terminal_operations.resolve_prediction(
             created.prediction_id,
             BinaryOutcome.YES,
+            use_recorded_time=True,
             expected_revision_id=created.current_revision_id,
             expected_metadata_version=created.metadata_version,
         )

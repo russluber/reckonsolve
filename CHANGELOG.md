@@ -14,9 +14,16 @@ All notable changes to Reckonsolve are documented here.
 
 - Timeline reads now interleave anchored Journals and Forecast Reviews by original time for both forecast types, preserving causal order and clock-regression safeguards. Desktop timestamps and Deadline entry display through minutes without reducing stored event precision.
 
+### Changed
+
+- M54B removes pre-v0.7 Binary and interval-v1 Numeric runtime workflows, legacy analytics/scorecards, interval-only chart/editor/domain paths, and test-only legacy creation factories. Trajectory Binary and five-quantile Numeric are the two supported models.
+- Databases or backups containing retired predictions are refused as a whole before migration or search repair, including mixed archives. Missing, unknown, or mismatched identities are also refused. No conversion, deletion, or partial loading occurs.
+- Supported v0.7 history stays on schema 18 without a new migration or canonical rewrite. Shared exact mathematics and historical migration/storage infrastructure are retained; supported schema-16/17 Binary upgrades, backup/restart, and disposable tooling use current contracts.
+- README and the Analytics guide now describe the two-model support boundary. SQLite backup remains the complete recovery artifact.
+
 ### Development limitations
 
-- New trajectory Binary resolution/scoring is reserved for M48. Legacy resolution and Numeric interval workflows remain available.
+- M55 export-format and release hardening remain pending; v0.7 is not released.
 - CSV format 3 refuses databases containing prospective-model records until the M55 format upgrade. Complete SQLite backup remains available.
 
 ## 0.6.0 - 2026-09-05

@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.errors import ValidationError
 from reckonsolve.application.predictions import PredictionOperations
@@ -23,11 +24,16 @@ class FixedClock:
 
 
 def _create(database: Database, question: str, age_days: int, **details):
-    return PredictionOperations(
-        database,
-        FixedClock(NOW - timedelta(days=age_days)),
-        UTC,
-    )._create_legacy_prediction(question, 60, **details)
+    return create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(NOW - timedelta(days=age_days)),
+            UTC,
+        ),
+        question,
+        60,
+        **details,
+    )
 
 
 def test_dashboard_derives_overlapping_buckets_and_excludes_terminal(tmp_path) -> None:
@@ -38,7 +44,7 @@ def test_dashboard_derives_overlapping_buckets_and_excludes_terminal(tmp_path) -
         database,
         "Locked, stale, and ready",
         20,
-        forecast_deadline=date(2026, 8, 2),
+        forecast_deadline=datetime(2026, 8, 2, 12, tzinfo=UTC),
         expected_resolution=date(2026, 8, 3),
     )
     ready = _create(
@@ -51,6 +57,7 @@ def test_dashboard_derives_overlapping_buckets_and_excludes_terminal(tmp_path) -
     PredictionOperations(database, FixedClock(NOW), UTC).resolve_prediction(
         terminal.prediction_id,
         BinaryOutcome.YES,
+        use_recorded_time=True,
         expected_revision_id=terminal.current_revision_id,
         expected_metadata_version=terminal.metadata_version,
     )
@@ -120,11 +127,12 @@ def test_expected_resolution_is_inclusive_in_computer_local_date(tmp_path) -> No
 def test_ready_to_resolve_uses_computer_local_date_boundary(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     pacific = timezone(timedelta(hours=-7))
-    created = PredictionOperations(
-        database,
-        FixedClock(datetime(2026, 8, 19, 18, 30, tzinfo=UTC)),
-        pacific,
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(datetime(2026, 8, 19, 18, 30, tzinfo=UTC)),
+            pacific,
+        ),
         "Ready after the Pacific expected date",
         60,
         expected_resolution=date(2026, 8, 19),
@@ -250,36 +258,31 @@ def test_dashboard_includes_type_aware_numeric_rows_and_attention_buckets(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    numeric = PredictionOperations(
-        database,
-        FixedClock(NOW - timedelta(days=20)),
-        UTC,
-    )._create_legacy_numeric_prediction(
+    numeric = create_numeric(
+        PredictionOperations(
+            database,
+            FixedClock(NOW - timedelta(days=20)),
+            UTC,
+        ),
         "How many Numeric days remain?",
         "days",
         1,
-        "2.0",
-        "4.0",
-        "8.0",
-        80,
-        forecast_deadline=(NOW - timedelta(days=20)).date(),
+        {5: "2.0", 25: "3.0", 50: "4.0", 75: "6.0", 95: "8.0"},
+        forecast_deadline=NOW - timedelta(days=19),
         expected_resolution=(NOW - timedelta(days=19)).date(),
     )
     binary = _create(database, "Fresh Binary companion", 1)
-    resolved_numeric = PredictionOperations(
-        database, FixedClock(NOW), UTC
-    )._create_legacy_numeric_prediction(
+    resolved_numeric = create_numeric(
+        PredictionOperations(database, FixedClock(NOW), UTC),
         "How many terminal Numeric days?",
         "days",
         0,
-        1,
-        2,
-        3,
-        80,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
     )
     PredictionOperations(database, FixedClock(NOW), UTC).resolve_numeric_prediction(
         resolved_numeric.prediction_id,
         2,
+        use_recorded_time=True,
         expected_revision_id=resolved_numeric.current_revision.revision_id,
         expected_metadata_version=resolved_numeric.metadata_version,
     )
@@ -293,10 +296,7 @@ def test_dashboard_includes_type_aware_numeric_rows_and_attention_buckets(
     )
     assert numeric_row.prediction_type is PredictionType.NUMERIC
     assert numeric_row.probability_percent is None
-    assert str(numeric_row.numeric_lower_bound) == "2.0"
-    assert str(numeric_row.numeric_median_estimate) == "4.0"
-    assert str(numeric_row.numeric_upper_bound) == "8.0"
-    assert numeric_row.numeric_confidence_percent == 80
+    assert numeric_row.numeric_quantiles == numeric.current_revision.quantiles
     assert numeric_row.numeric_unit == "days"
     assert numeric_row.needs_attention
     assert numeric_row.ready_to_resolve

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from io import StringIO
 
 import pytest
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.errors import (
     ConcurrentPredictionUpdateError,
@@ -48,14 +49,13 @@ def _tag_id(operations: PredictionOperations, name: str) -> int:
 def test_global_tag_rename_retains_identity_relationships_and_history(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations._create_legacy_prediction(
+    prediction = create_binary(
+        operations,
         "Will the first task finish?",
         55,
         tags=("Work",),
     )
-    operations._create_legacy_prediction(
-        "Will the personal task finish?", 45, tags=("Personal",)
-    )
+    create_binary(operations, "Will the personal task finish?", 45, tags=("Personal",))
     saved = operations.create_saved_view(
         "Work view",
         _saved_view_configuration(("Work",)),
@@ -108,22 +108,18 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
     operations = PredictionOperations(database, FixedClock(), UTC)
-    first = operations._create_legacy_prediction(
-        "Will alpha finish?", 50, tags=("Source A", "Target")
+    first = create_binary(
+        operations, "Will alpha finish?", 50, tags=("Source A", "Target")
     )
-    second = operations._create_legacy_numeric_prediction(
+    second = create_numeric(
+        operations,
         "How many items will beta finish?",
         "items",
         0,
-        1,
-        2,
-        3,
-        80,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
         tags=("Source B",),
     )
-    target_only = operations._create_legacy_prediction(
-        "Will gamma finish?", 50, tags=("Target",)
-    )
+    target_only = create_binary(operations, "Will gamma finish?", 50, tags=("Target",))
     operations.create_saved_view(
         "Merged work",
         _saved_view_configuration(("Source A", "Source B", "Target")),
@@ -196,7 +192,8 @@ def test_tag_delete_removes_current_relationships_and_rejects_stale_metadata(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations._create_legacy_prediction(
+    prediction = create_binary(
+        operations,
         "Will this task finish?",
         60,
         tags=("Delete Me", "Keep"),
@@ -238,7 +235,8 @@ def test_tag_management_context_and_transaction_failure_leave_state_unchanged(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations._create_legacy_prediction(
+    prediction = create_binary(
+        operations,
         "Will rollback preserve this?",
         50,
         tags=("Source", "Target"),
@@ -284,8 +282,8 @@ def test_tag_management_context_and_transaction_failure_leave_state_unchanged(
 def test_tag_library_filter_includes_retained_unassociated_tags(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    prediction = operations._create_legacy_prediction(
-        "Will this temporary label be retained?", 50, tags=("Temporary",)
+    prediction = create_binary(
+        operations, "Will this temporary label be retained?", 50, tags=("Temporary",)
     )
     operations.update_metadata(
         prediction.prediction_id,

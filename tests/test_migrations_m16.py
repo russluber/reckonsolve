@@ -1,6 +1,6 @@
 import sqlite3
-from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -8,11 +8,8 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import (
     ForecastContractIntegrityError,
-    select_forecast_contract,
 )
 from reckonsolve.data.migrations import MIGRATIONS, Migration
-from reckonsolve.domain.forecast_contracts import ForecastCohort, legacy_contract
-from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
 
 STAMP = datetime(2026, 9, 9, 18, tzinfo=UTC)
 
@@ -25,109 +22,17 @@ class FixedClock:
         return self.instant
 
 
-def test_v16_upgrade_preserves_v15_behavior_and_marks_every_record_legacy(
-    tmp_path,
-) -> None:
-    path = tmp_path / "reckonsolve.sqlite3"
-    v15 = Database.open(path, migrations=MIGRATIONS[:15])
-    operations = PredictionOperations(v15, FixedClock(), UTC)
-    binary = operations._create_legacy_prediction(
-        "Will the legacy Binary forecast survive?",
-        65,
-        forecast_deadline=date(2026, 9, 12),
-        tags=("migration",),
-    )
-    binary = operations.resolve_prediction(
-        binary.prediction_id,
-        BinaryOutcome.YES,
-        resolution_notes="Preserve this outcome",
-        expected_revision_id=binary.current_revision_id,
-        expected_metadata_version=binary.metadata_version,
-    )
-    numeric = operations._create_legacy_numeric_prediction(
-        "What legacy Numeric value will survive?",
-        "days",
-        1,
-        "1.0",
-        "2.0",
-        "3.0",
-        80,
-        forecast_deadline=date(2026, 9, 13),
-        tags=("migration",),
-    )
-    numeric = operations.resolve_numeric_prediction(
-        numeric.prediction_id,
-        "2.5",
-        expected_revision_id=numeric.current_revision.revision_id,
-        expected_metadata_version=numeric.metadata_version,
-    )
-    before_binary = operations.get_prediction(binary.prediction_id)
-    before_numeric = operations.get_numeric_prediction(numeric.prediction_id)
-    before_analytics = operations.get_forecast_analytics()
-    v15.close()
-
-    upgraded = Database.open(path, migrations=MIGRATIONS[:16])
-    recovered = PredictionOperations(upgraded, FixedClock(), UTC)
-
-    assert upgraded.schema_version == 16
-    assert recovered.get_prediction(binary.prediction_id) == replace(
-        before_binary,
-        forecast_contract=legacy_contract(PredictionType.BINARY),
-    )
-    assert recovered.get_numeric_prediction(numeric.prediction_id) == replace(
-        before_numeric, forecast_contract=legacy_contract(PredictionType.NUMERIC)
-    )
-    assert recovered.get_forecast_analytics() == before_analytics
-    with upgraded.transaction() as connection:
-        binary_contract = select_forecast_contract(connection, binary.prediction_id)
-        numeric_contract = select_forecast_contract(connection, numeric.prediction_id)
-        exact_times = connection.execute(
-            """
-            SELECT
-                (SELECT effective_resolution_at FROM resolutions
-                 WHERE prediction_id = ?) AS binary_effective,
-                (SELECT effective_resolution_at FROM numeric_resolutions
-                 WHERE prediction_id = ?) AS numeric_effective
-            """,
-            (binary.prediction_id, numeric.prediction_id),
-        ).fetchone()
-        prospective_history_counts = tuple(
-            connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-            for table in (
-                "binary_trajectory_resolution_corrections",
-                "numeric_quantile_resolution_corrections",
-            )
-        )
-
-    assert binary_contract.cohort is ForecastCohort.LEGACY_BINARY
-    assert numeric_contract.cohort is ForecastCohort.LEGACY_NUMERIC
-    assert binary_contract.forecast_deadline is None
-    assert numeric_contract.forecast_deadline is None
-    assert tuple(exact_times) == (None, None)
-    assert prospective_history_counts == (0, 0)
-    upgraded.close()
-
-
-def test_current_creation_stays_legacy_until_complete_vertical_flows_exist(
-    tmp_path,
-) -> None:
-    database = Database.open(tmp_path / "reckonsolve.sqlite3")
-    operations = PredictionOperations(database, FixedClock(), UTC)
-    binary = operations._create_legacy_prediction(
-        "Will creation remain legacy for M46?", 50
-    )
-    numeric = operations._create_legacy_numeric_prediction(
-        "How many legacy units remain?", "units", 0, "1", "2", "3", 80
-    )
-
+def test_empty_v15_upgrades_without_fabricating_forecast_history(tmp_path):
+    path = tmp_path / "empty.sqlite3"
+    Database.open(path, migrations=MIGRATIONS[:15]).close()
+    database = Database.open(path)
+    assert database.schema_version == 18
     with database.transaction() as connection:
         assert (
-            select_forecast_contract(connection, binary.prediction_id).cohort
-            is ForecastCohort.LEGACY_BINARY
-        )
-        assert (
-            select_forecast_contract(connection, numeric.prediction_id).cohort
-            is ForecastCohort.LEGACY_NUMERIC
+            connection.execute(
+                "SELECT count(*) FROM prediction_forecast_contracts"
+            ).fetchone()[0]
+            == 0
         )
     database.close()
 
@@ -137,8 +42,10 @@ def test_v16_contract_constraints_reject_rewrite_mismatch_and_fake_deadline(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    created = operations._create_legacy_prediction(
-        "Will contract constraints hold?", 55
+    created = operations.create_prediction(
+        "Will contract constraints hold?",
+        55,
+        forecast_deadline=STAMP + timedelta(days=1),
     )
 
     with database.transaction() as connection:
@@ -327,7 +234,9 @@ def test_failing_v16_migration_rolls_back_all_foundation_schema(tmp_path) -> Non
 def test_schema16_reopen_rejects_prediction_without_contract(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(path)
-    with database.transaction() as connection:
+    database.close()
+    # Simulate a corrupting external writer; supported transactions refuse this.
+    with sqlite3.connect(path) as connection:
         connection.execute(
             """
             INSERT INTO predictions (
@@ -339,7 +248,5 @@ def test_schema16_reopen_rejects_prediction_without_contract(tmp_path) -> None:
             )
             """
         )
-    database.close()
-
     with pytest.raises(ForecastContractIntegrityError, match="missing"):
         Database.open(path)

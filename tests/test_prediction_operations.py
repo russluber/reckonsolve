@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from supported_fixtures import create_binary
 
 from reckonsolve.application.errors import ApplicationError, ValidationError
 from reckonsolve.application.predictions import PredictionOperations
@@ -38,7 +39,7 @@ def test_create_prediction_persists_initial_revision_and_returns_detail(
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW))
 
-    detail = operations._create_legacy_prediction("  Will the test pass?  ", 37)
+    detail = create_binary(operations, "  Will the test pass?  ", 37)
 
     assert detail.prediction_id > 0
     assert detail.question == "Will the test pass?"
@@ -84,9 +85,11 @@ def test_creation_reads_clock_once_for_all_initial_timestamps(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     clock = CountingClock(NOW)
 
-    PredictionOperations(database, clock)._create_legacy_prediction("One instant?", 50)
+    create_binary(PredictionOperations(database, clock), "One instant?", 50)
 
-    assert clock.calls == 1
+    assert (
+        clock.calls == 2
+    )  # initial validation and timestamp sampled inside the write transaction
     database.close()
 
 
@@ -95,9 +98,8 @@ def test_nonzero_microseconds_persist_and_reopen(tmp_path) -> None:
     instant = datetime(2026, 8, 12, 23, 59, 59, 999999, tzinfo=UTC)
     first_database = Database.open(database_path)
 
-    created = PredictionOperations(
-        first_database, FixedClock(instant)
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(first_database, FixedClock(instant)),
         "Are precise instants reopenable?",
         50,
     )
@@ -121,9 +123,7 @@ def test_create_prediction_persists_absolute_probability_endpoints(
     operations = PredictionOperations(database, FixedClock(NOW))
 
     assert (
-        operations._create_legacy_prediction(
-            "Endpoint forecast?", probability
-        ).probability_percent
+        create_binary(operations, "Endpoint forecast?", probability).probability_percent
         == probability
     )
     database.close()
@@ -136,7 +136,7 @@ def test_validation_errors_are_expected_application_errors_and_write_nothing(
     operations = PredictionOperations(database, FixedClock(NOW))
 
     with pytest.raises(ApplicationError) as error_info:
-        operations._create_legacy_prediction("   ", 50)
+        create_binary(operations, "   ", 50)
 
     assert isinstance(error_info.value, ValidationError)
     assert error_info.value.field == "question"
@@ -156,7 +156,7 @@ def test_nul_question_is_an_expected_application_error(tmp_path) -> None:
     operations = PredictionOperations(database, FixedClock(NOW))
 
     with pytest.raises(ValidationError) as error_info:
-        operations._create_legacy_prediction("Will this\x00 persist?", 50)
+        create_binary(operations, "Will this\x00 persist?", 50)
 
     assert error_info.value.field == "question"
     database.close()
@@ -177,7 +177,7 @@ def test_initial_revision_failure_rolls_back_prediction(tmp_path) -> None:
     operations = PredictionOperations(database, FixedClock(NOW))
 
     with pytest.raises(sqlite3.IntegrityError, match="forced test failure"):
-        operations._create_legacy_prediction("Will roll back?", 60)
+        create_binary(operations, "Will roll back?", 60)
 
     with database.transaction() as connection:
         counts = connection.execute(
@@ -203,9 +203,8 @@ def test_latest_prediction_is_none_for_an_empty_database(tmp_path) -> None:
 def test_prediction_and_current_revision_survive_reopen(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     first_database = Database.open(database_path)
-    created = PredictionOperations(
-        first_database, FixedClock(NOW)
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(first_database, FixedClock(NOW)),
         "Will it survive restart?",
         60,
     )
@@ -223,11 +222,16 @@ def test_prediction_and_current_revision_survive_reopen(tmp_path) -> None:
 def test_creating_another_prediction_preserves_both_histories(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     first_instant = NOW - timedelta(hours=1)
-    first = PredictionOperations(
-        database,
-        FixedClock(first_instant),
-    )._create_legacy_prediction("Will the first prediction remain?", 25)
-    second = PredictionOperations(database, FixedClock(NOW))._create_legacy_prediction(
+    first = create_binary(
+        PredictionOperations(
+            database,
+            FixedClock(first_instant),
+        ),
+        "Will the first prediction remain?",
+        25,
+    )
+    second = create_binary(
+        PredictionOperations(database, FixedClock(NOW)),
         "Will the newest prediction be displayed?",
         75,
     )
@@ -260,7 +264,7 @@ def test_creating_another_prediction_preserves_both_histories(tmp_path) -> None:
 def test_current_probability_is_derived_from_latest_revision_sequence(tmp_path) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(NOW))
-    created = operations._create_legacy_prediction("Will belief change?", 40)
+    created = create_binary(operations, "Will belief change?", 40)
     deliberately_earlier = NOW - timedelta(days=1)
     with database.transaction() as connection:
         connection.execute(

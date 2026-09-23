@@ -1,7 +1,6 @@
 import sqlite3
 from pathlib import Path
 from typing import cast
-from zipfile import ZipFile
 
 import pytest
 from PySide6.QtCore import QDate, Qt
@@ -11,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QGroupBox,
     QLabel,
@@ -22,9 +22,9 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QSpinBox,
-    QTableWidget,
     QWidget,
 )
+from supported_fixtures import create_binary, create_numeric
 
 import reckonsolve.app
 from reckonsolve.app import APPLICATION_NAME, ApplicationRuntime, create_runtime
@@ -32,17 +32,10 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS, MigrationError
-from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
 from reckonsolve.domain.browser import ArchiveQuery
-from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
 from reckonsolve.domain.saved_views import SavedViewConfiguration
 from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
-from reckonsolve.ui.analytics_charts import (
-    BrierTrendChart,
-    CalibrationChart,
-    ContainmentCalibrationChart,
-)
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.tag_filter_picker import TagFilterPicker
@@ -114,7 +107,8 @@ def test_presentation_use_does_not_rewrite_current_schema_data(
     database_path = tmp_path / "reckonsolve.sqlite3"
     database = Database.open(database_path)
     operations = PredictionOperations(database)
-    binary = operations._create_legacy_prediction(
+    binary = create_binary(
+        operations,
         "Will the v0.5 Binary record remain byte-for-byte logical history?",
         60,
         rationale="Preserve the original rationale.",
@@ -133,14 +127,12 @@ def test_presentation_use_does_not_rewrite_current_schema_data(
         expected_revision_id=binary.current_revision_id,
         expected_metadata_version=binary.metadata_version,
     )
-    numeric = operations._create_legacy_numeric_prediction(
+    numeric = create_numeric(
+        operations,
         "How many days will the v0.5 Numeric record retain?",
         "days",
         1,
-        "1.0",
-        "2.0",
-        "4.0",
-        80,
+        {5: "1.0", 25: "1.0", 50: "2.0", 75: "4.0", 95: "4.0"},
         rationale="Preserve the Numeric rationale.",
         tags=("Compatibility", "Numeric"),
     )
@@ -238,7 +230,8 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
     runtime = create_runtime(database_path=source_path)
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    created = operations._create_legacy_prediction(
+    created = create_binary(
+        operations,
         "Will Settings create complete data artifacts?",
         65,
         rationale="The export should retain this.",
@@ -263,9 +256,9 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
     )
 
     assert backup_path.is_file()
-    assert export_path.is_file()
+    assert not export_path.exists()
     assert (
-        "Exported 16 CSV files"
+        "CSV format 3 cannot represent"
         in runtime.window.findChild(
             QLabel,
             "dataManagementStatus",
@@ -279,11 +272,6 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
         == created.question
     )
     recovered.close()
-    with ZipFile(export_path) as archive:
-        assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
-        assert b"Settings create complete data artifacts" in archive.read(
-            "predictions.csv"
-        )
 
     reopened = create_runtime(database_path=source_path)
     qtbot.addWidget(reopened.window)
@@ -347,12 +335,14 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
     first = create_runtime(database_path=path)
     qtbot.addWidget(first.window)
     operations = PredictionOperations(first.database)
-    operations._create_legacy_prediction(
+    create_binary(
+        operations,
         "Will the open archive item survive?",
         35,
         tags=("Durability",),
     )
-    invalid = operations._create_legacy_prediction(
+    invalid = create_binary(
+        operations,
         "Will the Invalid archive item survive?",
         65,
         tags=("Durability", "Review"),
@@ -413,176 +403,6 @@ def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
     second.close()
 
 
-def test_analytics_score_resolved_predictions_and_filters_after_restart(
-    qtbot,
-    tmp_path,
-) -> None:
-    path = tmp_path / "reckonsolve.sqlite3"
-    first = create_runtime(database_path=path)
-    qtbot.addWidget(first.window)
-    operations = PredictionOperations(first.database)
-    work = operations._create_legacy_prediction(
-        "Will the scored Work event occur?",
-        70,
-        tags=("Work",),
-    )
-    operations.resolve_prediction(
-        work.prediction_id,
-        BinaryOutcome.YES,
-        expected_revision_id=work.current_revision_id,
-        expected_metadata_version=work.metadata_version,
-    )
-    personal = operations._create_legacy_prediction(
-        "Will the scored Personal event occur?",
-        20,
-        tags=("Personal",),
-    )
-    operations.resolve_prediction(
-        personal.prediction_id,
-        BinaryOutcome.NO,
-        expected_revision_id=personal.current_revision_id,
-        expected_metadata_version=personal.metadata_version,
-    )
-    invalid = operations._create_legacy_prediction("Exclude this Invalid event?", 100)
-    operations.invalidate_prediction(
-        invalid.prediction_id,
-        expected_revision_id=invalid.current_revision_id,
-        expected_metadata_version=invalid.metadata_version,
-    )
-    first.close()
-
-    second = create_runtime(database_path=path)
-    qtbot.addWidget(second.window)
-    second.window.show()
-    second.window.navigate_to("Analytics")
-    count = second.window.findChild(QLabel, "analyticsScoredCount")
-    mean = second.window.findChild(QLabel, "analyticsMeanBrier")
-    calibration = second.window.findChild(CalibrationChart, "calibrationChart")
-    trend = second.window.findChild(BrierTrendChart, "brierTrendChart")
-    table = second.window.findChild(QTableWidget, "calibrationBinTable")
-    tag_filter = second.window.findChild(QComboBox, "analyticsTagFilter")
-    assert count is not None
-    assert mean is not None
-    assert calibration is not None
-    assert trend is not None
-    assert table is not None
-    assert tag_filter is not None
-    assert count.text() == "2"
-    assert mean.text() == "0.065"
-    assert sum(item.count for item in calibration.bins) == 2
-    assert len(trend.points) == 2
-    assert table.item(2, 1).text() == "1"
-    assert table.item(7, 1).text() == "1"
-
-    tag_filter.setCurrentIndex(tag_filter.findData("Work"))
-
-    assert count.text() == "1"
-    assert mean.text() == "0.090"
-    assert sum(item.count for item in calibration.bins) == 1
-    assert len(trend.points) == 1
-    second.close()
-
-
-def test_numeric_analytics_filter_type_tag_and_unit_after_restart(
-    qtbot,
-    tmp_path,
-) -> None:
-    path = tmp_path / "reckonsolve.sqlite3"
-    first = create_runtime(database_path=path)
-    qtbot.addWidget(first.window)
-    operations = PredictionOperations(first.database)
-    days = operations._create_legacy_numeric_prediction(
-        "How many days will this take?",
-        "days",
-        0,
-        3,
-        7,
-        21,
-        80,
-        tags=("Work",),
-    )
-    operations.resolve_numeric_prediction(
-        days.prediction_id,
-        21,
-        expected_revision_id=days.current_revision.revision_id,
-        expected_metadata_version=days.metadata_version,
-    )
-    dollars = operations._create_legacy_numeric_prediction(
-        "How many USD will this cost?",
-        "USD",
-        0,
-        100,
-        150,
-        200,
-        80,
-        tags=("Money",),
-    )
-    operations.resolve_numeric_prediction(
-        dollars.prediction_id,
-        250,
-        expected_revision_id=dollars.current_revision.revision_id,
-        expected_metadata_version=dollars.metadata_version,
-    )
-    first.close()
-
-    second = create_runtime(database_path=path)
-    qtbot.addWidget(second.window)
-    second.window.show()
-    second.window.navigate_to("Analytics")
-    numeric_count = second.window.findChild(QLabel, "numericAnalyticsScoredCount")
-    containment = second.window.findChild(QLabel, "numericAnalyticsContainment")
-    raw_scope = second.window.findChild(QLabel, "numericAnalyticsRawScope")
-    chart = second.window.findChild(
-        ContainmentCalibrationChart,
-        "containmentCalibrationChart",
-    )
-    table = second.window.findChild(QTableWidget, "containmentCalibrationBinTable")
-    type_filter = second.window.findChild(QComboBox, "analyticsTypeFilter")
-    tag_filter = second.window.findChild(QComboBox, "analyticsTagFilter")
-    unit_filter = second.window.findChild(QComboBox, "analyticsUnitFilter")
-    assert numeric_count is not None
-    assert containment is not None
-    assert raw_scope is not None
-    assert chart is not None
-    assert table is not None
-    assert type_filter is not None
-    assert tag_filter is not None
-    assert unit_filter is not None
-    assert numeric_count.text() == "2"
-    assert containment.text() == "1 of 2 (50%)"
-    assert raw_scope.text() == "Select Numeric and one unit for magnitude scores."
-    assert sum(item.count for item in chart.bins) == 2
-    assert table.item(8, 1).text() == "2"
-    assert table.item(8, 3).text() == "50%"
-
-    type_filter.setCurrentIndex(type_filter.findData(PredictionType.NUMERIC))
-    days_index = unit_filter.findData("days")
-    assert unit_filter.isEnabled()
-    assert days_index >= 0
-    unit_filter.setCurrentIndex(days_index)
-    assert unit_filter.currentData() == "days"
-    analytics_error = second.window.findChild(QLabel, "analyticsError")
-    assert analytics_error is not None
-    assert analytics_error.isHidden(), analytics_error.text()
-
-    median_error = second.window.findChild(QLabel, "numericMeanMedianAbsoluteError")
-    width = second.window.findChild(QLabel, "numericMeanIntervalWidth")
-    interval_score = second.window.findChild(QLabel, "numericMeanIntervalScore")
-    assert median_error is not None
-    assert width is not None
-    assert interval_score is not None
-    assert numeric_count.text() == "1"
-    assert median_error.text() == "14 days"
-    assert width.text() == "18 days"
-    assert interval_score.text() == "18 days"
-
-    unit_filter.setCurrentIndex(0)
-    tag_filter.setCurrentIndex(tag_filter.findData("Money"))
-    assert numeric_count.text() == "1"
-    assert containment.text() == "0 of 1 (0%)"
-    second.close()
-
-
 def test_resolve_through_ui_survives_restart_with_scoring_context(
     qtbot,
     tmp_path,
@@ -600,8 +420,8 @@ def test_resolve_through_ui_survives_restart_with_scoring_context(
     assert create is not None
     question.setText("Will the M7 resolution survive restart?")
     probability.setValue(42)
-    PredictionOperations(first.database)._create_legacy_prediction(
-        question.text(), probability.value()
+    create_binary(
+        PredictionOperations(first.database), question.text(), probability.value()
     )
     first.window.navigate_to("Prediction Detail")
 
@@ -818,19 +638,17 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     qtbot,
     tmp_path,
 ) -> None:
-    """M15's visible flows preserve interval history across a real UI session."""
+    """Numeric revision and Journal correction retain exact quantile history."""
 
     runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    created = operations._create_legacy_numeric_prediction(
+    created = create_numeric(
+        operations,
         "How many pages will the second draft contain?",
         "pages",
         0,
-        "100",
-        "160",
-        "240",
-        80,
+        {5: "100", 25: "100", 50: "160", 75: "240", 95: "240"},
     )
     runtime.window.show()
     runtime.window._prediction_detail_host.show_numeric_prediction(created)
@@ -839,12 +657,14 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     revise = runtime.window.findChild(QPushButton, "reviseNumericForecastButton")
     assert revise is not None
     qtbot.mouseClick(revise, Qt.MouseButton.LeftButton)
-    dialog = runtime.window.findChild(QDialog, "reviseNumericForecastDialog")
+    dialog = runtime.window.findChild(QDialog, "reviseQuantileForecastDialog")
     assert dialog is not None
-    lower = dialog.findChild(QLineEdit, "numericRevisionLowerBoundInput")
-    median = dialog.findChild(QLineEdit, "numericRevisionMedianEstimateInput")
-    upper = dialog.findChild(QLineEdit, "numericRevisionUpperBoundInput")
-    save_revision = dialog.findChild(QPushButton, "saveNumericForecastRevisionButton")
+    lower = dialog.findChild(QLineEdit, "quantile05Input")
+    median = dialog.findChild(QLineEdit, "quantile50Input")
+    upper = dialog.findChild(QLineEdit, "quantile95Input")
+    save_revision = dialog.findChild(QDialogButtonBox).button(
+        QDialogButtonBox.StandardButton.Save
+    )
     assert lower is not None
     assert median is not None
     assert upper is not None
@@ -852,6 +672,8 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     lower.setText("120")
     median.setText("180")
     upper.setText("300")
+    dialog.findChild(QLineEdit, "quantile25Input").setText("140")
+    dialog.findChild(QLineEdit, "quantile75Input").setText("240")
     qtbot.mouseClick(save_revision, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: dialog.isHidden())
 
@@ -870,10 +692,8 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     qtbot.mouseClick(save_journal, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: journal_dialog.isHidden())
 
-    correct = runtime.window.findChild(
-        QPushButton,
-        "correctNumericJournalEntryButton1",
-    )
+    journal_row = runtime.window.findChild(QWidget, "numericTimelineJournal1")
+    correct = journal_row.findChild(QPushButton)
     assert correct is not None
     qtbot.mouseClick(correct, Qt.MouseButton.LeftButton)
     correction_dialog = runtime.window.findChild(
@@ -897,15 +717,15 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
 
     revisions = operations.list_numeric_forecast_revisions(created.prediction_id)
     timeline = operations.list_numeric_timeline(created.prediction_id)
-    chart = runtime.window.findChild(QWidget, "numericHistoryChart")
+    chart = runtime.window._prediction_detail_host._numeric_detail.quantile_cdf
     assert len(revisions) == 2
     assert len(timeline) == 3
     assert chart is not None
-    assert len(chart.samples) == 2
-    assert chart.samples[-1].median_estimate == 180.0
-    assert (
-        runtime.window.findChild(QLabel, "numericJournalBody1").text()
-        == "The outline expanded after the chapter plan review."
+    assert str(chart.quantiles.q50) == "180"
+    journal_row = runtime.window.findChild(QWidget, "numericTimelineJournal1")
+    assert any(
+        "The outline expanded after the chapter plan review." in label.text()
+        for label in journal_row.findChildren(QLabel)
     )
     runtime.close()
 
@@ -917,15 +737,13 @@ def test_dashboard_and_browser_open_type_aware_numeric_predictions(
     runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    operations._create_legacy_prediction("Will the Binary row remain clear?", 60)
-    numeric = operations._create_legacy_numeric_prediction(
+    create_binary(operations, "Will the Binary row remain clear?", 60)
+    numeric = create_numeric(
+        operations,
         "How many Numeric days?",
         "days",
         1,
-        "2.0",
-        "4.0",
-        "8.0",
-        80,
+        {5: "2.0", 25: "2.0", 50: "4.0", 75: "8.0", 95: "8.0"},
     )
     runtime.window.show()
 
@@ -936,8 +754,8 @@ def test_dashboard_and_browser_open_type_aware_numeric_predictions(
         f"dashboardOpenPrediction{numeric.prediction_id}",
     )
     assert dashboard_row is not None
-    assert "NUMERIC" in dashboard_row.text()
-    assert "80% interval: 2.0–8.0 days; median: 4.0 days" in dashboard_row.text()
+    assert "Five-quantile forecast" in dashboard_row.text()
+    assert "90% interval: 2.0 to 8.0 days; median: 4.0 days" in dashboard_row.text()
     qtbot.mouseClick(dashboard_row, Qt.MouseButton.LeftButton)
     assert runtime.window.current_screen_name == "Prediction Detail"
     assert runtime.window.findChild(QLabel, "numericPredictionQuestion").text() == (
@@ -951,7 +769,7 @@ def test_dashboard_and_browser_open_type_aware_numeric_predictions(
     assert results is not None
     type_filter.setCurrentIndex(type_filter.findData("numeric"))
     assert results.count() == 1
-    assert "NUMERIC" in str(
+    assert "Five-quantile" in str(
         results.item(0).data(Qt.ItemDataRole.AccessibleDescriptionRole)
     )
     results.itemActivated.emit(results.item(0))
@@ -970,14 +788,12 @@ def test_numeric_resolution_ui_persists_exact_terminal_information(
     runtime = create_runtime(database_path=path)
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    created = operations._create_legacy_numeric_prediction(
+    created = create_numeric(
+        operations,
         "What will the signed quantity be?",
         "units",
         1,
-        "1.0",
-        "4.0",
-        "8.0",
-        80,
+        {5: "1.0", 25: "1.0", 50: "4.0", 75: "8.0", 95: "8.0"},
     )
     runtime.window.show()
     runtime.window._prediction_detail_host.show_numeric_prediction(created)
@@ -1036,7 +852,7 @@ def test_numeric_resolution_ui_persists_exact_terminal_information(
         == "Actual value: -2.5 units"
     )
     assert (
-        "revision 1"
+        "strictly before"
         in reopened.window.findChild(QLabel, "numericResolutionScoringForecast").text()
     )
     reopened.close()
@@ -1050,8 +866,12 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
     runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    invalid_candidate = operations._create_legacy_numeric_prediction(
-        "How many invalid units?", "units", 0, 1, 2, 3, 80
+    invalid_candidate = create_numeric(
+        operations,
+        "How many invalid units?",
+        "units",
+        0,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
     )
     runtime.window.show()
     runtime.window._prediction_detail_host.show_numeric_prediction(invalid_candidate)
@@ -1078,8 +898,12 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
         "INVALID"
     )
 
-    disposable = operations._create_legacy_numeric_prediction(
-        "Delete this Numeric test record", "items", 0, 1, 2, 3, 80
+    disposable = create_numeric(
+        operations,
+        "Delete this Numeric test record",
+        "items",
+        0,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
     )
     runtime.window._prediction_detail_host.show_numeric_prediction(disposable)
     delete = runtime.window.findChild(QPushButton, "deleteNumericPredictionButton")
@@ -1131,8 +955,8 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert question_input is not None
     assert create_button is not None
     question_input.setText("Will the M3 workflow persist?")
-    PredictionOperations(first_runtime.database)._create_legacy_prediction(
-        question_input.text(), 50
+    create_binary(
+        PredictionOperations(first_runtime.database), question_input.text(), 50
     )
     first_runtime.window.navigate_to("Prediction Detail")
 
@@ -1149,8 +973,8 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     edited_question = dialog.findChild(QLineEdit, "editQuestionInput")
     background = dialog.findChild(QPlainTextEdit, "editBackgroundInput")
     criteria = dialog.findChild(QPlainTextEdit, "editResolutionCriteriaInput")
-    deadline_toggle = dialog.findChild(QCheckBox, "editForecastDeadlineToggle")
-    deadline = dialog.findChild(QDateEdit, "editForecastDeadlineInput")
+    assert dialog.findChild(QCheckBox, "editForecastDeadlineToggle") is None
+    assert dialog.findChild(QDateEdit, "editForecastDeadlineInput") is None
     expected_toggle = dialog.findChild(QCheckBox, "editExpectedResolutionToggle")
     expected = dialog.findChild(QDateEdit, "editExpectedResolutionInput")
     tags = dialog.findChild(QLineEdit, "editTagsInput")
@@ -1161,8 +985,6 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
             edited_question,
             background,
             criteria,
-            deadline_toggle,
-            deadline,
             expected_toggle,
             expected,
             tags,
@@ -1172,8 +994,6 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     edited_question.setText("Will the M3 workflow persist after restart?")
     background.setPlainText("End-to-end metadata context.")
     criteria.setPlainText("Yes if the same details reopen from SQLite.")
-    deadline_toggle.setChecked(True)
-    deadline.setDate(QDate(2099, 12, 30))
     expected_toggle.setChecked(True)
     expected.setDate(QDate(2099, 12, 31))
     tags.setText("m3, persistence")
@@ -1236,7 +1056,13 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert reopened_background.text() == "End-to-end metadata context."
     assert reopened_criteria.text() == ("Yes if the same details reopen from SQLite.")
     assert reopened_tags.text() == "#m3  #persistence"
-    assert "2099" in reopened_deadline.text()
+    assert "(permanent)" in reopened_deadline.text()
+    assert (
+        "2099-01-01"
+        in PredictionOperations(second_runtime.database)
+        .get_latest_prediction()
+        .forecast_contract.forecast_deadline.instant.isoformat()
+    )
     assert "2099" in reopened_expected.text()
     assert not history.isHidden()
     assert not history.isChecked()
@@ -1271,14 +1097,6 @@ def test_complete_creation_and_forecast_revision_survive_restart(
         QPlainTextEdit,
         "initialResolutionCriteriaInput",
     )
-    deadline_toggle = first_runtime.window.findChild(
-        QCheckBox,
-        "initialForecastDeadlineToggle",
-    )
-    deadline = first_runtime.window.findChild(
-        QDateEdit,
-        "initialForecastDeadlineInput",
-    )
     expected_toggle = first_runtime.window.findChild(
         QCheckBox,
         "initialExpectedResolutionToggle",
@@ -1301,8 +1119,6 @@ def test_complete_creation_and_forecast_revision_survive_restart(
             rationale,
             background,
             criteria,
-            deadline_toggle,
-            deadline,
             expected_toggle,
             expected,
             tags,
@@ -1316,8 +1132,6 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     rationale.setPlainText("This is the initial evidence.")
     background.setPlainText("A complete creation workflow.")
     criteria.setPlainText("Yes if all values and revisions reopen from SQLite.")
-    deadline_toggle.setChecked(True)
-    deadline.setDate(QDate(2099, 12, 30))
     expected_toggle.setChecked(True)
     expected.setDate(QDate(2099, 12, 31))
     tags.setText("m4, persistence")

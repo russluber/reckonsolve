@@ -53,7 +53,6 @@ from .database import Database
 from .forecast_contracts import (
     binary_contract_columns,
     binary_corrections_relation,
-    insert_legacy_contract_if_supported,
     insert_prospective_contract,
     map_binary_contract,
     numeric_corrections_relation,
@@ -141,16 +140,15 @@ class PredictionRepository:
         new_prediction: NewPrediction,
         created_at: datetime,
         *,
-        contract: ForecastContract | None = None,
-        clock: Clock | None = None,
+        contract: ForecastContract,
+        clock: Clock,
     ) -> PredictionDetail:
         """Insert a prediction and sequence-one revision in one transaction."""
 
         timestamp = format_utc(created_at)
         with self._database.transaction() as connection:
-            if contract is not None and clock is not None:
-                created_at = as_utc(clock.now())
-                timestamp = format_utc(created_at)
+            created_at = as_utc(clock.now())
+            timestamp = format_utc(created_at)
             prediction_cursor = connection.execute(
                 """
                 INSERT INTO predictions (
@@ -200,16 +198,9 @@ class PredictionRepository:
                     new_prediction.rationale,
                 ),
             )
-            if contract is None:
-                insert_legacy_contract_if_supported(
-                    connection,
-                    prediction_id,
-                    PredictionType.BINARY,
-                )
-            else:
-                assert contract.forecast_deadline is not None
-                ForecastingWindow(created_at, contract.forecast_deadline)
-                insert_prospective_contract(connection, prediction_id, contract)
+            assert contract.forecast_deadline is not None
+            ForecastingWindow(created_at, contract.forecast_deadline)
+            insert_prospective_contract(connection, prediction_id, contract)
             row = _select_prediction_detail(connection, prediction_id)
             if row is None:
                 raise sqlite3.DatabaseError(
@@ -244,11 +235,7 @@ class PredictionRepository:
                 row,
                 select_tags(connection, prediction_id),
             )
-            if (
-                current.forecast_contract
-                and not current.forecast_contract.is_legacy
-                and clock is not None
-            ):
+            if clock is not None:
                 created_at = as_utc(clock.now())
                 timestamp = format_utc(created_at)
             if (
@@ -258,26 +245,22 @@ class PredictionRepository:
                 raise ForecastContextChangedError
 
             effective_status = contract_status(
-                current.status,
-                current.forecast_deadline,
-                current_date,
-                current.forecast_contract,
-                created_at,
+                current.status, current.forecast_contract, created_at
             )
             if effective_status is not PredictionStatus.OPEN:
                 raise ForecastRevisionDisallowedError(effective_status)
             if current.probability_percent == new_revision.probability_percent:
                 raise ForecastRevisionUnchangedError
 
-            if current.forecast_contract and not current.forecast_contract.is_legacy:
-                assert current.forecast_contract.forecast_deadline is not None
-                assert current.latest_revision_at is not None
-                ForecastingWindow(
-                    current.created_at, current.forecast_contract.forecast_deadline
-                ).validate_revision(
-                    previous_revision_at=current.latest_revision_at,
-                    proposed_revision_at=created_at,
-                )
+            assert current.forecast_contract is not None
+            assert current.forecast_contract.forecast_deadline is not None
+            assert current.latest_revision_at is not None
+            ForecastingWindow(
+                current.created_at, current.forecast_contract.forecast_deadline
+            ).validate_revision(
+                previous_revision_at=current.latest_revision_at,
+                proposed_revision_at=created_at,
+            )
 
             revision_cursor = connection.execute(
                 """
@@ -415,11 +398,7 @@ class PredictionRepository:
             if row is None:
                 return None
             current = _map_prediction_detail(row)
-            if (
-                current.forecast_contract
-                and not current.forecast_contract.is_legacy
-                and clock is not None
-            ):
+            if clock is not None:
                 created_at = as_utc(clock.now())
             if (
                 current.current_revision_id != expected_revision_id
@@ -427,11 +406,7 @@ class PredictionRepository:
             ):
                 raise ForecastReviewContextChangedError
             effective_status = contract_status(
-                current.status,
-                current.forecast_deadline,
-                current_date,
-                current.forecast_contract,
-                created_at,
+                current.status, current.forecast_contract, created_at
             )
             if effective_status is not PredictionStatus.OPEN:
                 raise ForecastReviewDisallowedError(effective_status)
@@ -554,36 +529,23 @@ class PredictionRepository:
             if current.status is not PredictionStatus.OPEN:
                 raise LifecycleTransitionDisallowedError(current.status)
 
-            contract = select_supported_contract(connection, prediction_id)
-            prospective = contract is not None and not contract.is_legacy
-            extra_columns = ""
-            extra_values: tuple[str, ...] = ()
-            if prospective:
-                if clock is not None:
-                    resolved_at = as_utc(clock.now())
-                timing = ResolutionTiming(
-                    EffectiveResolutionTime(
-                        resolved_at
-                        if use_recorded_time
-                        else resolution.effective_resolution_at
-                    ),
-                    resolved_at,
-                )
-                extra_columns = ", effective_resolution_at"
-                extra_values = (format_utc(timing.effective.instant),)
-            elif resolution.effective_resolution_at is not None:
-                raise ValueError("Legacy Resolution cannot have an effective time.")
+            if clock is not None:
+                resolved_at = as_utc(clock.now())
+            timing = ResolutionTiming(
+                EffectiveResolutionTime(
+                    resolved_at
+                    if use_recorded_time
+                    else resolution.effective_resolution_at
+                ),
+                resolved_at,
+            )
             cursor = connection.execute(
-                f"""
+                """
                 INSERT INTO resolutions (
-                    prediction_id,
-                    outcome,
-                    resolved_at,
-                    scoring_revision_id,
-                    resolution_notes,
-                    postmortem {extra_columns}
+                    prediction_id, outcome, resolved_at, scoring_revision_id,
+                    resolution_notes, postmortem, effective_resolution_at
                 )
-                VALUES (?, ?, ?, ?, ?, ? {", ?" if prospective else ""})
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     prediction_id,
@@ -592,7 +554,7 @@ class PredictionRepository:
                     current.current_revision_id,
                     resolution.resolution_notes,
                     resolution.postmortem,
-                    *extra_values,
+                    format_utc(timing.effective.instant),
                 ),
             )
             if cursor.lastrowid is None:
@@ -689,8 +651,6 @@ class PredictionRepository:
                 raise LifecycleContextChangedError
             effective_status = contract_status(
                 current.status,
-                current.forecast_deadline,
-                current_date,
                 current.forecast_contract,
                 as_utc(clock.now()) if clock is not None else now,
             )
@@ -870,12 +830,6 @@ class PredictionRepository:
                     prediction.forecast_deadline,
                     prediction.expected_resolution,
                     current_revision.probability_percent,
-                    NULL AS numeric_lower_scaled,
-                    NULL AS numeric_median_scaled,
-                    NULL AS numeric_upper_scaled,
-                    NULL AS numeric_confidence_percent,
-                    NULL AS numeric_unit,
-                    NULL AS numeric_precision,
                     current_revision.created_at AS latest_revision_at,
                     (SELECT MAX(review.created_at)
                      FROM forecast_reviews AS review
@@ -891,36 +845,6 @@ class PredictionRepository:
                     )
                 WHERE prediction.status = 'open'
                     AND prediction.prediction_type = 'binary'
-                UNION ALL
-                SELECT
-                    prediction.id AS prediction_id,
-                    prediction.question,
-                    prediction.prediction_type,
-                    prediction.status,
-                    prediction.forecast_deadline,
-                    prediction.expected_resolution,
-                    NULL AS probability_percent,
-                    current_revision.lower_scaled AS numeric_lower_scaled,
-                    current_revision.median_scaled AS numeric_median_scaled,
-                    current_revision.upper_scaled AS numeric_upper_scaled,
-                    current_revision.confidence_percent AS numeric_confidence_percent,
-                    prediction.numeric_unit,
-                    prediction.numeric_precision,
-                    current_revision.created_at AS latest_revision_at,
-                    (SELECT MAX(review.created_at)
-                     FROM forecast_reviews AS review
-                     WHERE review.prediction_id = prediction.id) AS latest_review_at
-                FROM predictions AS prediction
-                JOIN numeric_forecast_revisions AS current_revision
-                    ON current_revision.id = (
-                        SELECT candidate.id
-                        FROM numeric_forecast_revisions AS candidate
-                        WHERE candidate.prediction_id = prediction.id
-                        ORDER BY candidate.sequence DESC
-                        LIMIT 1
-                    )
-                WHERE prediction.status = 'open'
-                    AND prediction.prediction_type = 'numeric'
                 ORDER BY prediction.id
                 """
             ).fetchall()
@@ -1094,12 +1018,6 @@ class PredictionRepository:
                     prediction.forecast_deadline,
                     prediction.expected_resolution,
                     current_revision.probability_percent,
-                    NULL AS numeric_lower_scaled,
-                    NULL AS numeric_median_scaled,
-                    NULL AS numeric_upper_scaled,
-                    NULL AS numeric_confidence_percent,
-                    NULL AS numeric_unit,
-                    NULL AS numeric_precision,
                     current_revision.created_at AS latest_revision_at,
                     (SELECT MAX(review.created_at)
                      FROM forecast_reviews AS review
@@ -1144,66 +1062,6 @@ class PredictionRepository:
                         LIMIT 1
                     )
                 WHERE prediction.prediction_type = 'binary'
-                UNION ALL
-                SELECT
-                    prediction.id AS prediction_id,
-                    prediction.question,
-                    prediction.prediction_type,
-                    prediction.status,
-                    prediction.created_at,
-                    prediction.forecast_deadline,
-                    prediction.expected_resolution,
-                    NULL AS probability_percent,
-                    current_revision.lower_scaled AS numeric_lower_scaled,
-                    current_revision.median_scaled AS numeric_median_scaled,
-                    current_revision.upper_scaled AS numeric_upper_scaled,
-                    current_revision.confidence_percent AS numeric_confidence_percent,
-                    prediction.numeric_unit,
-                    prediction.numeric_precision,
-                    current_revision.created_at AS latest_revision_at,
-                    (SELECT MAX(review.created_at)
-                     FROM forecast_reviews AS review
-                     WHERE review.prediction_id = prediction.id) AS latest_review_at,
-                    COALESCE(
-                        (SELECT resolution.resolved_at
-                         FROM numeric_resolutions AS resolution
-                         WHERE resolution.prediction_id = prediction.id),
-                        (SELECT invalidation.invalidated_at
-                         FROM prediction_invalidations AS invalidation
-                         WHERE invalidation.prediction_id = prediction.id)
-                    ) AS terminal_decision_at,
-                    CASE
-                        WHEN prediction.status = 'resolved'
-                            AND NOT EXISTS (
-                                SELECT 1 FROM postmortem_completions AS completion
-                                WHERE completion.prediction_id = prediction.id
-                            )
-                            AND (
-                                SELECT COALESCE(
-                                    (
-                                        SELECT correction.new_postmortem
-                                        FROM numeric_resolution_corrections AS correction
-                                        WHERE correction.numeric_resolution_id = resolution.id
-                                        ORDER BY correction.sequence DESC
-                                        LIMIT 1
-                                    ),
-                                    resolution.postmortem
-                                )
-                                FROM numeric_resolutions AS resolution
-                                WHERE resolution.prediction_id = prediction.id
-                            ) IS NULL
-                        THEN 1 ELSE 0
-                    END AS needs_postmortem
-                FROM predictions AS prediction
-                JOIN numeric_forecast_revisions AS current_revision
-                    ON current_revision.id = (
-                        SELECT candidate.id
-                        FROM numeric_forecast_revisions AS candidate
-                        WHERE candidate.prediction_id = prediction.id
-                        ORDER BY candidate.sequence DESC
-                        LIMIT 1
-                    )
-                WHERE prediction.prediction_type = 'numeric'
                 ORDER BY 5 DESC, 1 DESC
                 """
             ).fetchall()
@@ -1296,12 +1154,7 @@ class PredictionRepository:
             if not metadata_would_change(current, update):
                 return False
 
-            contract = select_supported_contract(connection, prediction_id)
-            if (
-                contract
-                and not contract.is_legacy
-                and update.forecast_deadline is not None
-            ):
+            if update.forecast_deadline is not None:
                 raise ValueError("Forecast Deadline is immutable.")
 
             definition_fields = changed_definition_fields(current, update)
@@ -1565,16 +1418,10 @@ def _map_prediction_detail(
 def _map_dashboard_prediction(row: sqlite3.Row) -> DashboardPrediction:
     """Map one type-aware nonterminal summary from the shared read query."""
 
-    prediction_type = PredictionType(row["prediction_type"])
-    numeric_values = _map_numeric_summary_values(row, prediction_type)
     return DashboardPrediction(
         prediction_id=int(row["prediction_id"]),
         question=str(row["question"]),
-        probability_percent=(
-            None
-            if prediction_type is PredictionType.NUMERIC
-            else int(row["probability_percent"])
-        ),
+        probability_percent=int(row["probability_percent"]),
         status=PredictionStatus(row["status"]),
         latest_revision_at=parse_utc(str(row["latest_revision_at"])),
         latest_review_at=(
@@ -1584,8 +1431,7 @@ def _map_dashboard_prediction(row: sqlite3.Row) -> DashboardPrediction:
         ),
         forecast_deadline=_parse_date(row["forecast_deadline"]),
         expected_resolution=_parse_date(row["expected_resolution"]),
-        prediction_type=prediction_type,
-        **numeric_values,
+        prediction_type=PredictionType.BINARY,
     )
 
 
@@ -1633,16 +1479,10 @@ def _map_browser_prediction(
 ) -> PredictionBrowserItem:
     """Map one type-aware archive summary from the shared read query."""
 
-    prediction_type = PredictionType(row["prediction_type"])
-    numeric_values = _map_numeric_summary_values(row, prediction_type)
     return PredictionBrowserItem(
         prediction_id=int(row["prediction_id"]),
         question=str(row["question"]),
-        probability_percent=(
-            None
-            if prediction_type is PredictionType.NUMERIC
-            else int(row["probability_percent"])
-        ),
+        probability_percent=int(row["probability_percent"]),
         status=PredictionStatus(row["status"]),
         created_at=parse_utc(str(row["created_at"])),
         latest_revision_at=parse_utc(str(row["latest_revision_at"])),
@@ -1660,36 +1500,8 @@ def _map_browser_prediction(
         ),
         needs_postmortem=bool(row["needs_postmortem"]),
         tags=tags,
-        prediction_type=prediction_type,
-        **numeric_values,
+        prediction_type=PredictionType.BINARY,
     )
-
-
-def _map_numeric_summary_values(
-    row: sqlite3.Row,
-    prediction_type: PredictionType,
-) -> dict[str, FixedPrecisionValue | int | str | None]:
-    """Return populated Numeric summary fields only for Numeric rows."""
-
-    if prediction_type is PredictionType.BINARY:
-        return {}
-    decimal_places = int(row["numeric_precision"])
-    return {
-        "numeric_lower_bound": FixedPrecisionValue(
-            int(row["numeric_lower_scaled"]),
-            decimal_places,
-        ),
-        "numeric_median_estimate": FixedPrecisionValue(
-            int(row["numeric_median_scaled"]),
-            decimal_places,
-        ),
-        "numeric_upper_bound": FixedPrecisionValue(
-            int(row["numeric_upper_scaled"]),
-            decimal_places,
-        ),
-        "numeric_confidence_percent": int(row["numeric_confidence_percent"]),
-        "numeric_unit": str(row["numeric_unit"]),
-    }
 
 
 def _map_forecast_revision(row: sqlite3.Row) -> ForecastRevision:

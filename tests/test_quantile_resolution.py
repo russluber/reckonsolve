@@ -389,12 +389,9 @@ def test_search_failure_rolls_back_terminal_write(active, monkeypatch, correct):
     db.check_search_index()
 
 
-def test_corrected_postmortem_skip_backup_restart_and_legacy_separation(
-    active, tmp_path
-):
+def test_corrected_postmortem_skip_backup_restart(active, tmp_path):
     db, clock, ops = active
     p = create(ops)
-    legacy = ops._create_legacy_numeric_prediction("Legacy?", "units", 0, 0, 5, 10, 80)
     clock.instant += timedelta(hours=2)
     ops.resolve_numeric_prediction(
         p.prediction_id,
@@ -403,7 +400,6 @@ def test_corrected_postmortem_skip_backup_restart_and_legacy_separation(
         postmortem="Original reflection",
         **context(p),
     )
-    ops.resolve_numeric_prediction(legacy.prediction_id, 5, **context(legacy))
     history = ops.correct_numeric_resolution(
         p.prediction_id,
         10,
@@ -433,8 +429,7 @@ def test_corrected_postmortem_skip_backup_restart_and_legacy_separation(
     ]
     assert not ops.search_predictions("Original reflection").hits
     card = ops.get_prediction_scorecard(p.prediction_id)
-    # Existing raw interval analytics receive only the actual legacy observation.
-    assert len(ops._analytics_repository.get_numeric_source().observations) == 1
+    assert len(ops._analytics_repository.get_forecast_sources()[1].records) == 1
     path = tmp_path / "backup.sqlite3"
     ops.create_backup(path)
     db.close()
@@ -446,12 +441,9 @@ def test_corrected_postmortem_skip_backup_restart_and_legacy_separation(
             assert recovered.get_numeric_resolution_history(
                 p.prediction_id
             ).postmortem_completion
-            assert (
-                recovered.get_numeric_prediction(
-                    legacy.prediction_id
-                ).resolution.effective_resolution_at
-                is None
-            )
+            assert recovered.get_numeric_prediction(
+                p.prediction_id
+            ).resolution.effective_resolution_at == START + timedelta(hours=2)
             restored.check_search_index()
         finally:
             restored.close()

@@ -18,7 +18,7 @@ Quick navigation: [Binary calibration](#4-binary-calibration-read-the-table-firs
 [Numeric calibration and ties](#6-five-quantile-numeric-calibration),
 [uncertainty bars](#7-what-95-wilson-means),
 [WIS and updates](#8-numeric-scores-and-updating-what-you-can-compare),
-[legacy forecasts](#9-older-predictions-the-legacy-sections),
+[older databases](#9-older-databases-and-retired-models),
 [individual scorecards](#what-can-i-see-for-one-prediction).
 
 **The purpose is to improve your next forecast, not to make every chart look perfect.**
@@ -97,12 +97,8 @@ The app does not automatically recommend or modify probabilities or percentiles.
 |---|---|---|
 | Trajectory Binary forecasts | New v0.7 Yes/No predictions | Time-weighted Brier, plus separate final-probability calibration |
 | Five-quantile Numeric | New v0.7 quantity predictions | Five-percentile calibration, interval outcomes, and update direction |
-| Legacy Binary | Older Yes/No predictions | Final Brier and final-probability calibration |
-| Legacy Numeric | Older single-interval predictions | Confidence versus containment, plus unit-specific errors and interval scores |
 
-Older predictions keep their original rules. Updating the app does not convert
-their history into new-model forecasts. Within five-quantile Numeric, continuous-style
-and whole-number predictions also have separate calibration displays.
+Only these two forecast models are supported. An archive containing older models is refused as a whole, never converted or partly displayed (Section 9). Continuous-style and whole-number Numeric predictions have separate calibration displays.
 
 **Filters:** Forecast type and Tag select the relevant resolved observations.
 Numeric unit is an exact unit-label filter, not a conversion tool. Choose Numeric
@@ -131,7 +127,6 @@ It is not weighted by the number of revisions or by how long the prediction ran.
 | Observed Yes | Yes outcomes divided by resolved predictions in that bin |
 | Numeric percentile frequencies and outcome balances | One scored forecast/outcome per eligible prediction in that measurement group and current filters |
 | Numeric better/equal/worse percentages | Eligible revised pairs only; unrevised forecasts are listed separately |
-| Legacy update means | Revised-and-resolved pairs only; legacy raw Numeric means also require the selected exact unit |
 
 For example, one Binary prediction has Forecast Weight 20% and another has 100%.
 **Average Forecast Weight is 60%**, even if one lasted an hour and the other a
@@ -181,7 +176,6 @@ calibration evaluates patterns across forecasts.
 The trajectory section calls this **final-probability calibration**, not trajectory
 calibration. It uses one last standing probability strictly before the earlier of
 the effective resolution time and Deadline. It does not plot every revision.
-Legacy Binary uses its captured final scoring probability instead.
 
 | Column | Meaning |
 |---|---|
@@ -210,9 +204,7 @@ as feedback about your skill. Empty bins have no meaningful mean or observed rat
 
 The Trajectory Binary plot uses separate diamonds, with **no line between bins**.
 Empty bins stay empty: the app has no observation to draw there. The diagonal is
-only a reference, not an interpolated forecast. The legacy Binary plot retains
-its older visual connectors; they are not estimates at every probability.
-A bin with one prediction necessarily observes either 0% or 100%; that does not
+only a reference, not an interpolated forecast. A bin with one prediction necessarily observes either 0% or 100%; that does not
 prove catastrophic miscalibration. The Binary table's counts matter enormously;
 this chart does not provide the Numeric chart's Wilson uncertainty bars.
 
@@ -717,8 +709,7 @@ captions or values for their short definitions.
 Both new-model scorecards identify excluded later revisions and corrected scoring
 facts when applicable. If the outcome was fixed at or before the initial forecast,
 they say **Not scored** with a reason instead of inventing a score. Open, Locked,
-and Invalid predictions have no resolved-outcome scorecard. Older predictions
-keep their legacy scorecards rather than receiving Trajectory Brier or WIS.
+and Invalid predictions have no resolved-outcome scorecard. Older models are not loaded or converted into these scorecards.
 
 **How to use the individual numbers:** For Binary, compare the actual trajectory
 with holding the initial forecast and then read the revisions that changed it.
@@ -728,44 +719,13 @@ whether width or missed outcomes account for the loss, then inspect the reasonin
 An endpoint miss in one resolved question is a case to learn from, not proof that
 all future intervals should change.
 
-## 9. Older predictions: the legacy sections
+## 9. Older databases and retired models
 
-### Legacy Binary
+M54B retires the pre-v0.7 Binary and single-interval Numeric models. They no longer have editors, scorecards, or Analytics sections in this source version.
 
-Mean Brier uses one captured final probability per resolved prediction. Its
-calibration table works as described in Section 4, but never mixes with trajectory
-Binary. **Brier performance over time** plots cumulative mean Brier against
-resolution time. It is not calibration and not a rolling recent-performance chart.
-Later points share most of their data with earlier points; the curve becomes less
-responsive as the archive grows. A falling line can reflect easier questions as
-well as better forecasts.
+An archive containing any retired prediction is refused before it is changed—even if it also contains supported v0.7 predictions. The app does not convert forecasts, invent missing quantiles or exact times, erase history, or display only the supported subset. Keep the original database or backup and use a compatible earlier version to inspect it. A backup is not a conversion mechanism.
 
-Initial-versus-final feedback compares revised-and-resolved pairs; positive
-initial-minus-final improvement means the final probability scored better. Its
-pair count may be smaller than the headline resolved count.
-
-### Legacy Numeric
-
-Each prediction has one chosen-confidence interval and a median. The containment
-chart groups those confidence percentages into bins, comparing **Mean Confidence**
-with **Observed Containment**. It is not the five-percentile chart.
-
-For example, intervals with mean confidence 80% that contain only 50% of outcomes
-may be too narrow or badly located; inspect whether misses are predominantly above
-or below them. A point below the containment diagonal means fewer hits than stated
-confidence, not the same directional quantity bias as a q75 calibration point.
-
-Select Numeric and one exact unit to see legacy magnitude summaries:
-
-- **Median absolute error:** Distance between median and actual, ignoring direction.
-- **Interval width:** Upper minus lower. Narrower alone is not necessarily better.
-- **Interval score:** Width plus missed-outcome penalties, reflecting stated confidence.
-
-Legacy update feedback also compares confidence, containment, and (for a selected
-unit) magnitude metrics between initial and final forecasts. Better containment
-alone could come from much wider intervals or changed confidence. Read these
-together, not as independent victories. Even with the same unit, question scales
-and difficulty can differ; the legacy unit filter is not a promise of comparability.
+An archive containing only supported v0.7 predictions retains its existing revisions, times, corrections, and scores. Retiring old models does not change the mathematical meaning of either current model.
 
 ## 10. A short diagnostic checklist
 

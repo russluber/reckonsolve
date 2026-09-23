@@ -1744,20 +1744,7 @@ def _forecast_value_summary(prediction: PredictionBrowserItem) -> str:
         return "Five-quantile forecast: " + quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""
         )
-    if (
-        prediction.numeric_lower_bound is None
-        or prediction.numeric_median_estimate is None
-        or prediction.numeric_upper_bound is None
-        or prediction.numeric_confidence_percent is None
-        or prediction.numeric_unit is None
-    ):
-        raise ValueError("A Numeric browser row requires complete interval data.")
-    return (
-        f"Current interval · {prediction.numeric_confidence_percent}%: "
-        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
-        f"{prediction.numeric_unit}; median "
-        f"{prediction.numeric_median_estimate} {prediction.numeric_unit}"
-    )
+    raise ValueError("A Numeric row requires all five exact quantiles and its unit.")
 
 
 def _search_value_summary(prediction: SearchPrediction) -> str:
@@ -1782,20 +1769,7 @@ def _search_value_summary(prediction: SearchPrediction) -> str:
         return "Five-quantile forecast: " + quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""
         )
-    if (
-        prediction.numeric_lower_bound is None
-        or prediction.numeric_median_estimate is None
-        or prediction.numeric_upper_bound is None
-        or prediction.numeric_confidence_percent is None
-        or prediction.numeric_unit is None
-    ):
-        raise ValueError("A Numeric search result requires complete interval data.")
-    return (
-        f"Current interval · {prediction.numeric_confidence_percent}%: "
-        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
-        f"{prediction.numeric_unit}; median {prediction.numeric_median_estimate} "
-        f"{prediction.numeric_unit}"
-    )
+    raise ValueError("A Numeric row requires all five exact quantiles and its unit.")
 
 
 def _forecast_summary(prediction: PredictionBrowserItem) -> str:
@@ -1809,20 +1783,7 @@ def _forecast_summary(prediction: PredictionBrowserItem) -> str:
         return "Five-quantile forecast: " + quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""
         )
-    if (
-        prediction.numeric_lower_bound is None
-        or prediction.numeric_median_estimate is None
-        or prediction.numeric_upper_bound is None
-        or prediction.numeric_confidence_percent is None
-        or prediction.numeric_unit is None
-    ):
-        raise ValueError("A Numeric browser row requires complete interval data.")
-    return (
-        f"NUMERIC  {prediction.numeric_confidence_percent}% interval: "
-        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
-        f"{prediction.numeric_unit}; median: "
-        f"{prediction.numeric_median_estimate} {prediction.numeric_unit}"
-    )
+    raise ValueError("A Numeric row requires all five exact quantiles and its unit.")
 
 
 def _search_prediction_summary(prediction: SearchPrediction) -> str:
@@ -1853,20 +1814,7 @@ def _search_prediction_summary(prediction: SearchPrediction) -> str:
         return "Five-quantile forecast: " + quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""
         )
-    if (
-        prediction.numeric_lower_bound is None
-        or prediction.numeric_median_estimate is None
-        or prediction.numeric_upper_bound is None
-        or prediction.numeric_confidence_percent is None
-        or prediction.numeric_unit is None
-    ):
-        raise ValueError("A Numeric search result requires complete interval data.")
-    return (
-        f"NUMERIC  {prediction.numeric_confidence_percent}% interval: "
-        f"{prediction.numeric_lower_bound}–{prediction.numeric_upper_bound} "
-        f"{prediction.numeric_unit}; median: {prediction.numeric_median_estimate} "
-        f"{prediction.numeric_unit}  |  {status}"
-    )
+    raise ValueError("A Numeric row requires all five exact quantiles and its unit.")
 
 
 def _snippet_html(text: str, spans: tuple[tuple[int, int], ...]) -> str:

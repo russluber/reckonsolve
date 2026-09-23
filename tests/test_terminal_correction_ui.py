@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
 )
+from supported_fixtures import create_binary, create_numeric
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
@@ -48,9 +49,8 @@ def test_binary_correction_and_later_postmortem_survive_restart(
     database,
     monkeypatch,
 ) -> None:
-    created = PredictionOperations(
-        database, FixedClock(CREATED), UTC
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database, FixedClock(CREATED), UTC),
         "Will the launch succeed?",
         80,
     )
@@ -64,6 +64,7 @@ def test_binary_correction_and_later_postmortem_survive_restart(
         resolution_notes="Preliminary report",
         expected_revision_id=created.current_revision_id,
         expected_metadata_version=created.metadata_version,
+        use_recorded_time=True,
     )
     assert resolved.resolution is not None
     scoring_revision_id = resolved.resolution.scoring_revision_id
@@ -136,15 +137,22 @@ def test_binary_correction_and_later_postmortem_survive_restart(
     assert first_history.corrections[0].correction_reason == (
         "I read a preliminary status as final."
     )
-    assert operations.get_analytics().mean_brier == pytest.approx(0.64)
-    assert _child(window, QLabel, "predictionScorecardForecast").text() == (
-        "Scored Yes probability: 80%"
+    scorecard = operations.get_prediction_scorecard(created.prediction_id)
+    assert float(scorecard.final_brier) == pytest.approx(0.64)
+    assert (
+        operations.get_forecast_analytics().trajectory_binary.mean_trajectory_brier
+        == scorecard.trajectory_brier
+    )
+    assert (
+        _child(window, QLabel, "predictionScorecardForecast")
+        .text()
+        .startswith("Final eligible forecast: 80%")
     )
     assert _child(window, QLabel, "predictionScorecardOutcome").text() == (
         "Effective outcome: No"
     )
     assert _child(window, QLabel, "predictionScorecardBrier").text() == (
-        "Brier score: 0.64"
+        f"Trajectory Brier: {float(scorecard.trajectory_brier):.4f}"
     )
     assert not _child(window, QGroupBox, "predictionScorecard").isHidden()
     assert not _child(
@@ -236,16 +244,12 @@ def test_numeric_actual_correction_is_exact_and_score_affecting(
     database,
     monkeypatch,
 ) -> None:
-    created = PredictionOperations(
-        database, FixedClock(CREATED), UTC
-    )._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(database, FixedClock(CREATED), UTC),
         "How many hours will this take?",
         "hours",
         2,
-        "1.00",
-        "2.00",
-        "3.00",
-        80,
+        {5: "1.00", 25: "1.00", 50: "2.00", 75: "3.00", 95: "3.00"},
     )
     PredictionOperations(
         database, FixedClock(RESOLVED), UTC
@@ -254,6 +258,7 @@ def test_numeric_actual_correction_is_exact_and_score_affecting(
         "2.00",
         expected_revision_id=created.current_revision.revision_id,
         expected_metadata_version=created.metadata_version,
+        use_recorded_time=True,
     )
     operations = PredictionOperations(database, FixedClock(CORRECTED), UTC)
     window = MainWindow(operations)
@@ -290,31 +295,17 @@ def test_numeric_actual_correction_is_exact_and_score_affecting(
     assert str(history.original.actual_value) == "2.00"
     assert str(history.effective.actual_value) == "4.25"
     assert history.corrections[0].changed_fields == ("actual_value",)
-    assert operations.get_forecast_analytics().numeric.scored_prediction_count == 1
-    assert _child(window, QLabel, "numericScorecardScoringInterval").text() == (
-        "Scored interval: 80% 1.00 to 3.00 hours (median 2.00 hours)"
+    assert (
+        operations.get_forecast_analytics().quantile_numeric.scored_prediction_count
+        == 1
     )
-    assert _child(window, QLabel, "numericScorecardActualValue").text() == (
-        "Effective actual: 4.25 hours"
-    )
-    assert _child(window, QLabel, "numericScorecardContainment").text() == (
-        "Containment: No"
-    )
-    assert _child(window, QLabel, "numericScorecardMedianAbsoluteError").text() == (
-        "Median absolute error: 2.25 hours"
-    )
-    assert _child(window, QLabel, "numericScorecardIntervalWidth").text() == (
-        "Interval width: 2 hours"
-    )
-    assert _child(window, QLabel, "numericScorecardIntervalScore").text() == (
-        "Proper interval score: 14.5 hours"
-    )
-    assert not _child(window, QGroupBox, "numericPredictionScorecard").isHidden()
-    assert not _child(
-        window,
-        QLabel,
-        "numericScorecardCorrectionNotice",
-    ).isHidden()
+    assert _child(window, QLabel, "scoredActual").text() == "4.25 hours"
+    assert _child(window, QLabel, "scoredMedian").text() == "2.00 hours"
+    assert _child(window, QLabel, "individualMedianError").text() == "2.25 hours"
+    assert _child(window, QGroupBox, "numericWISDetails").isVisible()
+    scorecard = operations.get_prediction_scorecard(created.prediction_id)
+    assert scorecard.scoring_facts_corrected
+    assert scorecard.final_revision_id == created.current_revision.revision_id
 
 
 def test_numeric_invalid_reason_can_be_corrected_and_cleared(
@@ -322,16 +313,12 @@ def test_numeric_invalid_reason_can_be_corrected_and_cleared(
     database,
     monkeypatch,
 ) -> None:
-    created = PredictionOperations(
-        database, FixedClock(CREATED), UTC
-    )._create_legacy_numeric_prediction(
+    created = create_numeric(
+        PredictionOperations(database, FixedClock(CREATED), UTC),
         "How many units?",
         "units",
         0,
-        1,
-        2,
-        3,
-        80,
+        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
     )
     PredictionOperations(
         database, FixedClock(RESOLVED), UTC
@@ -386,9 +373,8 @@ def test_stale_resolution_dialog_keeps_competing_history_and_appends_nothing(
     database,
     monkeypatch,
 ) -> None:
-    created = PredictionOperations(
-        database, FixedClock(CREATED), UTC
-    )._create_legacy_prediction(
+    created = create_binary(
+        PredictionOperations(database, FixedClock(CREATED), UTC),
         "Will the source be corrected?",
         60,
     )
@@ -398,6 +384,7 @@ def test_stale_resolution_dialog_keeps_competing_history_and_appends_nothing(
         resolution_notes="Original source",
         expected_revision_id=created.current_revision_id,
         expected_metadata_version=created.metadata_version,
+        use_recorded_time=True,
     )
     first = PredictionOperations(database, FixedClock(CORRECTED), UTC)
     window = MainWindow(first)

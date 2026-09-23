@@ -77,3 +77,4 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0016: Validate active commit times under transaction](0016-validate-active-commit-times-under-transaction.md) — Accepted 2026-09-10
 - [0017: Derive trajectory scores from immutable history and effective terminal facts](0017-derive-trajectory-scores-from-terminal-facts.md) — Accepted 2026-09-10
 - [0018: Store complete five-quantile revisions with explicit shared-history anchors](0018-five-quantile-revisions-and-shared-anchors.md) — Accepted 2026-09-11
+- [0019: Retire legacy runtime without rebuilding supported history](0019-retire-legacy-runtime-without-rebuilding-history.md) — Accepted 2026-09-20

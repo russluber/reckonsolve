@@ -44,7 +44,7 @@ def _context(prediction) -> dict[str, int]:
     }
 
 
-def test_equal_prediction_mean_filters_and_legacy_boundary(active) -> None:
+def test_equal_prediction_mean_filters_and_type_boundary(active) -> None:
     clock, operations = active
     long_wrong = operations.create_prediction(
         "Long and wrong?",
@@ -57,9 +57,6 @@ def test_equal_prediction_mean_filters_and_legacy_boundary(active) -> None:
         100,
         forecast_deadline=START + timedelta(hours=2),
         tags=("Shared", "Short"),
-    )
-    legacy = operations._create_legacy_prediction(
-        "Legacy stays separate?", 50, tags=("Shared",)
     )
     clock.instant = START + timedelta(days=101)
     operations.resolve_prediction(
@@ -74,12 +71,6 @@ def test_equal_prediction_mean_filters_and_legacy_boundary(active) -> None:
         effective_resolution_at=START + timedelta(hours=2),
         **_context(short_right),
     )
-    operations.resolve_prediction(
-        legacy.prediction_id,
-        BinaryOutcome.YES,
-        **_context(legacy),
-    )
-
     snapshot = operations.get_forecast_analytics()
     trajectory = snapshot.trajectory_binary
     assert trajectory.scored_prediction_count == 2
@@ -90,14 +81,11 @@ def test_equal_prediction_mean_filters_and_legacy_boundary(active) -> None:
     assert trajectory.final_calibration_bins[0].count == 1
     assert trajectory.final_calibration_bins[0].observed_yes_percent == 100
     assert trajectory.final_calibration_bins[9].count == 1
-    assert snapshot.binary.scored_prediction_count == 1
-    assert snapshot.binary.mean_brier == pytest.approx(0.25)
     assert set(snapshot.available_tags) == {"Long", "Shared", "Short"}
 
     filtered = operations.get_forecast_analytics(tag="long")
     assert filtered.trajectory_binary.scored_prediction_count == 1
     assert filtered.trajectory_binary.mean_trajectory_brier == 1
-    assert filtered.binary.scored_prediction_count == 0
     numeric_only = operations.get_forecast_analytics(
         prediction_type=PredictionType.NUMERIC
     )
@@ -204,7 +192,7 @@ def test_trajectory_analytics_screen_keeps_score_and_calibration_distinct(
     calibration = screen.findChild(QWidget, "trajectoryCalibrationSection")
     legacy = screen.findChild(ContentPanel, "analyticsBrierSummary")
     assert not calibration.isHidden()
-    assert legacy.title_label.text() == "Legacy Binary Forecast — Final Brier"
+    assert legacy is None
     assert (
         "no interpolation"
         in screen.trajectory_calibration_chart.accessibleDescription()
@@ -268,13 +256,6 @@ def test_analytics_card_titles_and_on_demand_help(active, qtbot):
         "Analytics View",
         "Trajectory Binary Forecast",
         "Trajectory Binary Final-Probability Calibration",
-        "Legacy Binary Forecast — Final Brier",
-        "Legacy Numeric Forecast — Interval-v1",
-        "Legacy Binary Calibration / Reliability",
-        "Legacy Cumulative Mean Final Brier by Resolution Time",
-        "Legacy Numeric Containment Calibration",
-        "Legacy Binary Retrospective Update Feedback",
-        "Legacy Numeric Retrospective Update Feedback",
         "Five-Quantile Numeric Forecast",
         "Five-Quantile Updates — Initial versus Final",
         "Continuous-Style Calibration",
@@ -288,12 +269,6 @@ def test_analytics_card_titles_and_on_demand_help(active, qtbot):
         assert panel.title_label.toolTip()
         assert panel.accessibleDescription() == panel.title_label.toolTip()
     assert screen.findChild(QLabel, "analyticsIntroduction").isHidden()
-    assert (
-        screen.binary_update_guidance.text() == "No revised pairs match these filters."
-    )
-    assert (
-        screen.numeric_update_guidance.text() == "No revised pairs match these filters."
-    )
     assert (
         screen.quantile_content.summary.text() == "0 eligible · 0 resolved · 0 unscored"
     )
@@ -377,17 +352,13 @@ def test_compact_trajectory_summary_geometry_and_unchanged_values(
         70,
         forecast_deadline=START + timedelta(hours=2),
     )
-    legacy = operations._create_legacy_prediction("Legacy comparison", 60)
     clock.instant += timedelta(hours=2)
-    for item in (prediction, legacy):
-        operations.resolve_prediction(
-            item.prediction_id,
-            BinaryOutcome.YES,
-            **(
-                {"effective_resolution_at": clock.instant} if item is prediction else {}
-            ),
-            **_context(item),
-        )
+    operations.resolve_prediction(
+        prediction.prediction_id,
+        BinaryOutcome.YES,
+        effective_resolution_at=clock.instant,
+        **_context(prediction),
+    )
     before = operations.get_forecast_analytics()
     original_font = qapp.font()
     original_palette = qapp.palette()

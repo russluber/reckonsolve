@@ -4,11 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS, Migration
 from reckonsolve.data.search_index import SearchIndexUnavailableError
-from reckonsolve.domain.search import SearchSourceKind
 
 STAMP = datetime(2026, 8, 27, 18, tzinfo=UTC)
 
@@ -21,30 +19,26 @@ class FixedClock:
         return self.instant
 
 
-def test_v14_upgrade_preserves_v13_data_and_builds_search_projection(tmp_path) -> None:
+def test_v14_upgrade_of_empty_archive_preserves_schema_path(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     old = Database.open(path, migrations=MIGRATIONS[:13])
-    created = PredictionOperations(old, FixedClock(), UTC)._create_legacy_prediction(
-        "Will the migration preserve this launch forecast?",
-        65,
-        rationale="The launch permit was approved.",
-        tags=("Spaceflight",),
-    )
+    with old.transaction() as connection:
+        connection.execute("CREATE TABLE sentinel(value TEXT NOT NULL)")
+        connection.execute("INSERT INTO sentinel VALUES ('preserved')")
     old.close()
-
     upgraded = Database.open(path, migrations=MIGRATIONS[:14])
-    operations = PredictionOperations(upgraded, FixedClock(), UTC)
-
     assert upgraded.schema_version == 14
-    results = operations.search_predictions("launch permit")
-    assert [hit.prediction.prediction_id for hit in results.hits] == [
-        created.prediction_id
-    ]
-    assert results.hits[0].best_match.document.source_kind in {
-        SearchSourceKind.QUESTION,
-        SearchSourceKind.FORECAST_RATIONALE,
-    }
-    upgraded.check_search_index()
+    with upgraded.transaction() as connection:
+        assert (
+            connection.execute("SELECT value FROM sentinel").fetchone()[0]
+            == "preserved"
+        )
+        assert (
+            connection.execute(
+                "SELECT document_count FROM search_index_state"
+            ).fetchone()[0]
+            == 0
+        )
     upgraded.close()
 
 

@@ -1,6 +1,7 @@
 import sqlite3
 
 import pytest
+from supported_fixtures import insert_binary_contract
 
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS, Migration
@@ -29,37 +30,26 @@ def _insert_v3_prediction(database: Database) -> tuple[int, int]:
             (prediction_id, TIMESTAMP),
         ).lastrowid
         assert revision_id is not None
+        insert_binary_contract(connection, prediction_id, TIMESTAMP)
     return prediction_id, revision_id
 
 
-def test_migration_four_preserves_v3_predictions_and_revisions(tmp_path) -> None:
-    database_path = tmp_path / "reckonsolve.sqlite3"
-    v3 = Database.open(database_path, migrations=MIGRATIONS[:3])
-    prediction_id, revision_id = _insert_v3_prediction(v3)
-    v3.close()
-
-    upgraded = Database.open(database_path, migrations=MIGRATIONS[:4])
-
+def test_migration_four_upgrades_empty_v3_schema(tmp_path) -> None:
+    path = tmp_path / "reckonsolve.sqlite3"
+    Database.open(path, migrations=MIGRATIONS[:3]).close()
+    upgraded = Database.open(path, migrations=MIGRATIONS[:4])
     assert upgraded.schema_version == 4
     with upgraded.transaction() as connection:
-        prediction = connection.execute(
-            "SELECT question, background, metadata_version FROM predictions"
-        ).fetchone()
-        revision = connection.execute(
-            """
-            SELECT id, prediction_id, probability_percent, sequence, rationale
-            FROM forecast_revisions
-            """
-        ).fetchone()
-    assert tuple(prediction) == ("Preserved?", "Context", 1)
-    assert tuple(revision) == (revision_id, prediction_id, 60, 1, None)
+        assert "rationale" in {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(forecast_revisions)")
+        }
     upgraded.close()
 
 
 def test_failing_migration_four_rolls_back_the_entire_v3_upgrade(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     v3 = Database.open(database_path, migrations=MIGRATIONS[:3])
-    _insert_v3_prediction(v3)
     v3.close()
     failing_v4 = Migration(
         version=4,

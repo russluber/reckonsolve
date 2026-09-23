@@ -135,10 +135,6 @@ class SearchPrediction:
     terminal_decision_at: datetime | None = None
     needs_postmortem: bool = False
     probability_percent: int | None = None
-    numeric_lower_bound: FixedPrecisionValue | None = None
-    numeric_median_estimate: FixedPrecisionValue | None = None
-    numeric_upper_bound: FixedPrecisionValue | None = None
-    numeric_confidence_percent: int | None = None
     numeric_unit: str | None = None
     binary_outcome: BinaryOutcome | None = None
     numeric_actual_value: FixedPrecisionValue | None = None

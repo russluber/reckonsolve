@@ -1,11 +1,5 @@
 """Domain values and rules for Reckonsolve."""
 
-from .analytics import (
-    AnalyticsSource,
-    NumericAnalyticsSource,
-    NumericScoringObservation,
-    ScoringObservation,
-)
 from .attention import (
     DEFAULT_STALE_THRESHOLD_DAYS,
     MAX_STALE_THRESHOLD_DAYS,
@@ -96,7 +90,6 @@ __all__ = [
     "MAX_STALE_THRESHOLD_DAYS",
     "MIN_METADATA_DATE",
     "MIN_STALE_THRESHOLD_DAYS",
-    "AnalyticsSource",
     "ArchiveAttention",
     "ArchiveDateMeaning",
     "ArchiveQuery",
@@ -125,8 +118,6 @@ __all__ = [
     "NewJournalEntry",
     "NewPrediction",
     "NewResolution",
-    "NumericAnalyticsSource",
-    "NumericScoringObservation",
     "ParsedSearchText",
     "Prediction",
     "PredictionBrowserItem",
@@ -142,7 +133,6 @@ __all__ = [
     "SavedViewConfiguration",
     "SavedViewTag",
     "SavedViewValidationError",
-    "ScoringObservation",
     "SearchClause",
     "SearchDocument",
     "SearchFragmentHit",

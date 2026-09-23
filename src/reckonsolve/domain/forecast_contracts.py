@@ -1,10 +1,10 @@
 """Prospective forecast-model identities and exact-time rules."""
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
-from .predictions import PredictionStatus, PredictionType, display_status
+from .predictions import PredictionStatus, PredictionType
 
 
 class ForecastContractValidationError(ValueError):
@@ -34,32 +34,18 @@ class ScoringContract(StrEnum):
 
 
 class ForecastCohort(StrEnum):
-    """Closed dispatch set for legacy and prospective forecast behavior."""
+    """Closed dispatch set for the two supported forecast models."""
 
-    LEGACY_BINARY = "legacy-binary"
     TRAJECTORY_BINARY = "trajectory-binary"
-    LEGACY_NUMERIC = "legacy-numeric"
     QUANTILE_NUMERIC = "quantile-numeric"
 
 
 _CONTRACTS = {
-    ForecastCohort.LEGACY_BINARY: (
-        PredictionType.BINARY,
-        ForecastModel.BINARY_FINAL_V1,
-        ScoringContract.BINARY_FINAL_BRIER_V1,
-        False,
-    ),
     ForecastCohort.TRAJECTORY_BINARY: (
         PredictionType.BINARY,
         ForecastModel.BINARY_TRAJECTORY_V1,
         ScoringContract.BINARY_TRAJECTORY_BRIER_V1,
         True,
-    ),
-    ForecastCohort.LEGACY_NUMERIC: (
-        PredictionType.NUMERIC,
-        ForecastModel.NUMERIC_INTERVAL_V1,
-        ScoringContract.NUMERIC_INTERVAL_SCORE_V1,
-        False,
     ),
     ForecastCohort.QUANTILE_NUMERIC: (
         PredictionType.NUMERIC,
@@ -107,11 +93,6 @@ class ForecastContract:
                 "This forecast model requires an exact Forecast Deadline.",
                 field="forecast_deadline",
             )
-        if not requires_deadline and self.forecast_deadline is not None:
-            raise ForecastContractValidationError(
-                "Legacy forecast models do not have a prospective exact Deadline.",
-                field="forecast_deadline",
-            )
 
     @property
     def cohort(self) -> ForecastCohort:
@@ -129,28 +110,6 @@ class ForecastContract:
             "Forecast model and scoring contract identities do not match.",
             field="scoring_contract",
         )
-
-    @property
-    def is_legacy(self) -> bool:
-        return self.cohort in {
-            ForecastCohort.LEGACY_BINARY,
-            ForecastCohort.LEGACY_NUMERIC,
-        }
-
-
-def legacy_contract(prediction_type: PredictionType) -> ForecastContract:
-    """Return the explicit legacy contract for a creation-era forecast type."""
-
-    if prediction_type is PredictionType.BINARY:
-        cohort = ForecastCohort.LEGACY_BINARY
-    elif prediction_type is PredictionType.NUMERIC:
-        cohort = ForecastCohort.LEGACY_NUMERIC
-    else:
-        raise ForecastContractValidationError(
-            "Prediction type is not recognized.", field="prediction_type"
-        )
-    stored_type, model, scoring, _ = _CONTRACTS[cohort]
-    return ForecastContract(stored_type, model, scoring)
 
 
 def prospective_contract(
@@ -284,17 +243,13 @@ class ResolutionTiming:
 def dispatch_forecast_contract[T](
     contract: ForecastContract,
     *,
-    legacy_binary: T,
     trajectory_binary: T,
-    legacy_numeric: T,
     quantile_numeric: T,
 ) -> T:
     """Select behavior only from an already validated durable model identity."""
 
     choices = {
-        ForecastCohort.LEGACY_BINARY: legacy_binary,
         ForecastCohort.TRAJECTORY_BINARY: trajectory_binary,
-        ForecastCohort.LEGACY_NUMERIC: legacy_numeric,
         ForecastCohort.QUANTILE_NUMERIC: quantile_numeric,
     }
     return choices[contract.cohort]
@@ -302,14 +257,14 @@ def dispatch_forecast_contract[T](
 
 def contract_status(
     status: PredictionStatus,
-    legacy_deadline: date | None,
-    current_date: date,
     contract: ForecastContract | None,
     now: datetime | None,
 ) -> PredictionStatus:
     """Apply the stored cohort's cutoff to a nonterminal Prediction."""
-    if contract is None or contract.is_legacy:
-        return display_status(status, legacy_deadline, current_date)
+    if contract is None:
+        raise ForecastContractValidationError(
+            "A supported forecast contract is required.", field="forecast_model"
+        )
     if now is None:
         raise ForecastContractValidationError(
             "An exact current time is required.", field="created_at"

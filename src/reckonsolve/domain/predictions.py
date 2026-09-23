@@ -190,71 +190,6 @@ class NewForecastRevision:
 
 
 @dataclass(frozen=True, slots=True)
-class NewNumericForecastRevision:
-    """Validated input for one central numeric prediction interval."""
-
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    rationale: str | None = None
-
-    def __post_init__(self) -> None:
-        _validate_numeric_interval(
-            self.lower_bound,
-            self.median_estimate,
-            self.upper_bound,
-            self.confidence_percent,
-        )
-        object.__setattr__(
-            self, "rationale", _optional_text(self.rationale, "rationale")
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class NewNumericPrediction:
-    """Validated enduring numeric definition and sequence-one revision."""
-
-    question: str
-    unit: str
-    decimal_places: int
-    initial_revision: NewNumericForecastRevision
-    background: str | None = None
-    resolution_criteria: str | None = None
-    forecast_deadline: date | None = None
-    expected_resolution: date | None = None
-    tags: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "question", _required_text(self.question, "question"))
-        object.__setattr__(self, "unit", _required_unit(self.unit))
-        _validate_decimal_places(self.decimal_places)
-        if not isinstance(self.initial_revision, NewNumericForecastRevision):
-            raise PredictionValidationError(
-                "An initial numeric forecast is required.",
-                field="initial_revision",
-            )
-        if self.initial_revision.lower_bound.decimal_places != self.decimal_places:
-            raise PredictionValidationError(
-                "Numeric forecast values must match the Prediction precision.",
-                field="decimal_places",
-            )
-        object.__setattr__(
-            self,
-            "background",
-            _optional_text(self.background, "background"),
-        )
-        object.__setattr__(
-            self,
-            "resolution_criteria",
-            _optional_text(self.resolution_criteria, "resolution_criteria"),
-        )
-        _validate_date_only(self.forecast_deadline, "forecast_deadline")
-        _validate_date_only(self.expected_resolution, "expected_resolution")
-        object.__setattr__(self, "tags", _normalize_tags(self.tags))
-
-
-@dataclass(frozen=True, slots=True)
 class NewJournalEntry:
     """Validated reasoning that leaves the current forecast unchanged."""
 
@@ -448,29 +383,6 @@ class ForecastRevision:
 
 
 @dataclass(frozen=True, slots=True)
-class NumericForecastRevision:
-    """One immutable central numeric prediction interval."""
-
-    revision_id: int
-    prediction_id: int
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    sequence: int
-    created_at: datetime
-    rationale: str | None = None
-
-    def __post_init__(self) -> None:
-        _validate_numeric_interval(
-            self.lower_bound,
-            self.median_estimate,
-            self.upper_bound,
-            self.confidence_percent,
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class NumericPrediction:
     """Current numeric state derived from its latest immutable revision."""
 
@@ -481,7 +393,7 @@ class NumericPrediction:
     status: PredictionStatus
     created_at: datetime
     updated_at: datetime
-    current_revision: "NumericForecastRevision | QuantileRevision"
+    current_revision: "QuantileRevision"
     background: str | None = None
     resolution_criteria: str | None = None
     forecast_deadline: date | None = None
@@ -552,67 +464,6 @@ type TimelineEvent = (
 
 
 @dataclass(frozen=True, slots=True)
-class NumericForecastTimelineEvent:
-    """One immutable Numeric ForecastRevision prepared for history display."""
-
-    revision_id: int
-    prediction_id: int
-    created_at: datetime
-    sequence: int
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    previous_lower_bound: FixedPrecisionValue | None
-    previous_median_estimate: FixedPrecisionValue | None
-    previous_upper_bound: FixedPrecisionValue | None
-    previous_confidence_percent: int | None
-    rationale: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class NumericJournalTimelineEvent:
-    """One Numeric Journal event anchored to its exact interval revision."""
-
-    entry_id: int
-    prediction_id: int
-    created_at: datetime
-    body: str
-    original_body: str
-    numeric_forecast_revision_id: int
-    forecast_revision_sequence: int
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    current_correction_id: int | None = None
-    corrections: tuple[JournalCorrection, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class NumericForecastReviewTimelineEvent:
-    """One immutable Review anchored to an exact Numeric revision."""
-
-    review_id: int
-    prediction_id: int
-    created_at: datetime
-    numeric_forecast_revision_id: int
-    forecast_revision_sequence: int
-    lower_bound: FixedPrecisionValue
-    median_estimate: FixedPrecisionValue
-    upper_bound: FixedPrecisionValue
-    confidence_percent: int
-    note: str | None = None
-
-
-type NumericTimelineEvent = (
-    NumericForecastTimelineEvent
-    | NumericJournalTimelineEvent
-    | NumericForecastReviewTimelineEvent
-)
-
-
-@dataclass(frozen=True, slots=True)
 class Resolution:
     """One immutable terminal outcome and its captured scoring forecast."""
 
@@ -632,7 +483,7 @@ class Resolution:
 class NumericResolution:
     """One realized quantity and captured revision context.
 
-    The anchor is scoring authority only for legacy intervals. Five-quantile
+    The anchor records the revision displayed at recording time. Five-quantile
     scoring selects from complete history using effective time and Deadline.
     """
 
@@ -1023,22 +874,6 @@ def metadata_would_change(
     }
 
 
-def display_status(
-    persisted_status: PredictionStatus,
-    forecast_deadline: date | None,
-    current_date: date,
-) -> PredictionStatus:
-    """Derive Locked after an inclusive date-only forecast deadline."""
-
-    if (
-        persisted_status is PredictionStatus.OPEN
-        and forecast_deadline is not None
-        and current_date > forecast_deadline
-    ):
-        return PredictionStatus.LOCKED
-    return persisted_status
-
-
 def _validate_decimal_places(value: object) -> None:
     if isinstance(value, bool) or not isinstance(value, int):
         raise PredictionValidationError(
@@ -1049,47 +884,6 @@ def _validate_decimal_places(value: object) -> None:
         raise PredictionValidationError(
             "Decimal precision must be between 0 and 6.",
             field="decimal_places",
-        )
-
-
-def _validate_numeric_interval(
-    lower_bound: object,
-    median_estimate: object,
-    upper_bound: object,
-    confidence_percent: object,
-) -> None:
-    values = (lower_bound, median_estimate, upper_bound)
-    if any(not isinstance(value, FixedPrecisionValue) for value in values):
-        raise PredictionValidationError(
-            "Lower bound, median, and upper bound must be exact numeric values.",
-            field="interval",
-        )
-    lower = lower_bound
-    median = median_estimate
-    upper = upper_bound
-    assert isinstance(lower, FixedPrecisionValue)
-    assert isinstance(median, FixedPrecisionValue)
-    assert isinstance(upper, FixedPrecisionValue)
-    decimal_places = lower.decimal_places
-    if any(value.decimal_places != decimal_places for value in (median, upper)):
-        raise PredictionValidationError(
-            "Lower bound, median, and upper bound must use one precision.",
-            field="interval",
-        )
-    if not lower.scaled_value <= median.scaled_value <= upper.scaled_value:
-        raise PredictionValidationError(
-            "Numeric forecasts require lower bound <= median <= upper bound.",
-            field="interval",
-        )
-    if isinstance(confidence_percent, bool) or not isinstance(confidence_percent, int):
-        raise PredictionValidationError(
-            "Confidence must be a whole percentage from 1 to 99.",
-            field="confidence_percent",
-        )
-    if not 1 <= confidence_percent <= 99:
-        raise PredictionValidationError(
-            "Confidence must be between 1 and 99.",
-            field="confidence_percent",
         )
 
 

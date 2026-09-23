@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
+from supported_fixtures import create_binary
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
@@ -21,63 +22,20 @@ class FixedClock:
         return self.instant
 
 
-def test_v13_upgrade_preserves_v12_terminal_data_and_adds_empty_histories(
-    tmp_path,
-) -> None:
+def test_v13_upgrade_of_empty_archive_preserves_schema_path(tmp_path) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
     old = Database.open(path, migrations=MIGRATIONS[:12])
-    operations = PredictionOperations(old, FixedClock(), UTC)
-    binary = operations._create_legacy_prediction("Will Binary Resolution survive?", 65)
-    resolved_binary = operations.resolve_prediction(
-        binary.prediction_id,
-        BinaryOutcome.YES,
-        resolution_notes="Preserve Binary provenance",
-        expected_revision_id=binary.current_revision_id,
-        expected_metadata_version=binary.metadata_version,
-    )
-    numeric = operations._create_legacy_numeric_prediction(
-        "What Numeric value will survive?",
-        "units",
-        2,
-        "1.00",
-        "2.00",
-        "3.00",
-        80,
-    )
-    resolved_numeric = operations.resolve_numeric_prediction(
-        numeric.prediction_id,
-        "2.50",
-        expected_revision_id=numeric.current_revision.revision_id,
-        expected_metadata_version=numeric.metadata_version,
-    )
-    invalid = operations._create_legacy_prediction("Will Invalidation survive?", 40)
-    invalidated = operations.invalidate_prediction(
-        invalid.prediction_id,
-        reason="Preserve this reason",
-        expected_revision_id=invalid.current_revision_id,
-        expected_metadata_version=invalid.metadata_version,
-    )
+    with old.transaction() as connection:
+        connection.execute("CREATE TABLE sentinel(value TEXT NOT NULL)")
+        connection.execute("INSERT INTO sentinel VALUES ('preserved')")
     old.close()
-
     upgraded = Database.open(path, migrations=MIGRATIONS[:13])
-    recovered = PredictionOperations(upgraded, FixedClock(), UTC)
-
     assert upgraded.schema_version == 13
-    binary_history = recovered.get_binary_resolution_history(
-        resolved_binary.prediction_id
-    )
-    numeric_history = recovered.get_numeric_resolution_history(
-        resolved_numeric.prediction_id
-    )
-    invalidation_history = recovered.get_invalidation_history(invalidated.prediction_id)
-    assert binary_history.original.outcome is BinaryOutcome.YES
-    assert binary_history.original.resolution_notes == "Preserve Binary provenance"
-    assert binary_history.corrections == ()
-    assert str(numeric_history.original.actual_value) == "2.50"
-    assert numeric_history.corrections == ()
-    assert invalidation_history.original.reason == "Preserve this reason"
-    assert invalidation_history.corrections == ()
     with upgraded.transaction() as connection:
+        assert (
+            connection.execute("SELECT value FROM sentinel").fetchone()[0]
+            == "preserved"
+        )
         for table in (
             "resolution_corrections",
             "numeric_resolution_corrections",
@@ -125,11 +83,12 @@ def test_binary_correction_table_rejects_rewrite_gaps_and_stale_snapshots(
 ) -> None:
     database = Database.open(tmp_path / "reckonsolve.sqlite3")
     operations = PredictionOperations(database, FixedClock(), UTC)
-    created = operations._create_legacy_prediction("Will constraints hold?", 60)
+    created = create_binary(operations, "Will constraints hold?", 60)
     resolved = operations.resolve_prediction(
         created.prediction_id,
         BinaryOutcome.NO,
         resolution_notes="Original",
+        use_recorded_time=True,
         expected_revision_id=created.current_revision_id,
         expected_metadata_version=created.metadata_version,
     )
@@ -139,15 +98,15 @@ def test_binary_correction_table_rejects_rewrite_gaps_and_stale_snapshots(
         correction_id = int(
             connection.execute(
                 """
-                INSERT INTO resolution_corrections (
+                INSERT INTO binary_trajectory_resolution_corrections (
                     prediction_id, resolution_id, sequence,
                     old_outcome, new_outcome,
                     old_resolution_notes, new_resolution_notes,
                     old_postmortem, new_postmortem,
                     outcome_changed, resolution_notes_changed,
-                    postmortem_changed, correction_reason, corrected_at
+                    postmortem_changed, correction_reason, old_effective_resolution_at, new_effective_resolution_at, effective_time_changed, corrected_at
                 ) VALUES (?, ?, 1, 'no', 'yes', 'Original', 'Corrected',
-                          NULL, NULL, 1, 1, 0, 'Certified outcome', ?)
+                          NULL, NULL, 1, 1, 0, 'Certified outcome', '2026-08-26T18:00:00.000000Z', '2026-08-26T18:00:00.000000Z', 0, ?)
                 """,
                 (created.prediction_id, resolution_id, STAMP_TEXT),
             ).lastrowid
@@ -158,7 +117,7 @@ def test_binary_correction_table_rejects_rewrite_gaps_and_stale_snapshots(
         database.transaction() as connection,
     ):
         connection.execute(
-            "UPDATE resolution_corrections SET new_outcome = 'no' WHERE id = ?",
+            "UPDATE binary_trajectory_resolution_corrections SET new_outcome = 'no' WHERE id = ?",
             (correction_id,),
         )
     with (
@@ -166,7 +125,7 @@ def test_binary_correction_table_rejects_rewrite_gaps_and_stale_snapshots(
         database.transaction() as connection,
     ):
         connection.execute(
-            "DELETE FROM resolution_corrections WHERE id = ?",
+            "DELETE FROM binary_trajectory_resolution_corrections WHERE id = ?",
             (correction_id,),
         )
     with (
@@ -175,33 +134,35 @@ def test_binary_correction_table_rejects_rewrite_gaps_and_stale_snapshots(
     ):
         connection.execute(
             """
-            INSERT INTO resolution_corrections (
+            INSERT INTO binary_trajectory_resolution_corrections (
                 prediction_id, resolution_id, sequence,
                 old_outcome, new_outcome,
                 old_resolution_notes, new_resolution_notes,
                 old_postmortem, new_postmortem,
                 outcome_changed, resolution_notes_changed,
-                postmortem_changed, correction_reason, corrected_at
+                postmortem_changed, correction_reason, old_effective_resolution_at, new_effective_resolution_at, effective_time_changed, corrected_at
             ) VALUES (?, ?, 2, 'no', 'yes', 'Original', 'Another',
-                      NULL, NULL, 1, 1, 0, 'Stale snapshot', ?)
+                      NULL, NULL, 1, 1, 0, 'Stale snapshot', '2026-08-26T18:00:00.000000Z', '2026-08-26T18:00:00.000000Z', 0, ?)
             """,
             (created.prediction_id, resolution_id, STAMP_TEXT),
         )
     with (
-        pytest.raises(sqlite3.IntegrityError, match="contiguous"),
+        pytest.raises(
+            sqlite3.IntegrityError, match="invalid trajectory resolution correction"
+        ),
         database.transaction() as connection,
     ):
         connection.execute(
             """
-            INSERT INTO resolution_corrections (
+            INSERT INTO binary_trajectory_resolution_corrections (
                 prediction_id, resolution_id, sequence,
                 old_outcome, new_outcome,
                 old_resolution_notes, new_resolution_notes,
                 old_postmortem, new_postmortem,
                 outcome_changed, resolution_notes_changed,
-                postmortem_changed, correction_reason, corrected_at
+                postmortem_changed, correction_reason, old_effective_resolution_at, new_effective_resolution_at, effective_time_changed, corrected_at
             ) VALUES (?, ?, 3, 'yes', 'yes', 'Corrected', 'Next',
-                      NULL, NULL, 0, 1, 0, NULL, ?)
+                      NULL, NULL, 0, 1, 0, NULL, '2026-08-26T18:00:00.000000Z', '2026-08-26T18:00:00.000000Z', 0, ?)
             """,
             (created.prediction_id, resolution_id, STAMP_TEXT),
         )
@@ -213,7 +174,7 @@ def test_binary_correction_table_rejects_rewrite_gaps_and_stale_snapshots(
         )
         assert (
             connection.execute(
-                "SELECT 1 FROM resolution_corrections WHERE id = ?",
+                "SELECT 1 FROM binary_trajectory_resolution_corrections WHERE id = ?",
                 (correction_id,),
             ).fetchone()
             is None
