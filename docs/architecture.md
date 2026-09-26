@@ -1,9 +1,9 @@
 # Reckonsolve Architecture
 
-Status: v0.7 implementation complete and manually accepted through M55
-Last reviewed: 2026-09-23
+Status: v0.7 implementation complete and manually accepted through M55; Section 25 is a v0.8 plan, not implemented architecture
+Last reviewed: 2026-09-26
 
-This document describes how Reckonsolve is structured from the binary v0.1 baseline through the v0.7 source version. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+This document describes the implemented structure from the binary v0.1 baseline through the v0.7 source version and the prospective v0.8 One-Shot boundaries in Section 25. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
 **Current support boundary (M54B):** only trajectory Binary and five-quantile Numeric are executable models. Retired-only or mixed archives, and missing/unknown/mismatched contracts, fail before migration, repair, or ordinary transaction work. No conversion, deletion, or partial loading occurs. Schema 18 and all supported v0.7 history remain intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the support matrix and why no DDL cleanup is required.
 
@@ -1013,3 +1013,92 @@ Pre-contract, retired-only, mixed, missing/mismatched, or future-schema inputs
 are refused before migration/repair/write. Frozen smoke now validates CSV-4,
 both current models, backup/restart, and a byte-preserving refusal of a disposable
 unsupported archive. No new schema or production dependency is introduced.
+
+## 25. Planned evolution into v0.8: One-Shot Predictions
+
+This section is prospective. [Product-spec Section
+36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan)
+owns the behavior and M56–M60 sequencing. The current executable system remains the two
+v0.7 Deadline-based cohorts. No One-Shot path should be exposed merely because schema or
+pure scoring support lands in an earlier milestone.
+
+### Contract and dependency boundary
+
+One-Shot is an explicit creation mode for the existing Binary and Numeric forecast
+types. Add two closed, durable model/scoring pairs that dispatch independently from the
+trajectory Binary and deadline-based five-quantile Numeric pairs. Do not reuse the
+retired `binary-final-v1` identity or make it pass the M54B compatibility gate. Reuse
+the existing probability and exact five-quantile value validation, Brier and WIS
+arithmetic, tag and note operations, and visual components where they have the same
+meaning. Keep one-shot commitment, pending-answer lifecycle, corrections, score
+selection, and aggregate dispatch in domain/application/analytics layers; Qt and CLI
+only collect and present values.
+
+The one-shot score consumes one effective forecast and one effective answer. It does not
+use a Deadline, `min(R, T)`, durations, the v0.7 `R <= t0` exclusion, or initial/final
+revision comparison. Optional user-reported final-forecast and answer-reveal times are
+documentary, stored as reported wall-clock values rather than exact UTC events. The
+system-generated app entry and correction instants remain canonical audit facts. Detail
+must distinguish those system facts from reported times without requiring a
+phone-versus-app source classification.
+
+### Planned persistence and transaction shape
+
+M56 plans schema 19. Preserve every supported schema-18 canonical fact, identifier,
+timestamp, and relationship through a versioned, immediate migration with foreign-key
+and forced-rollback checks. The
+current contract table's closed pair and Deadline checks require a new versioned
+definition; never edit an applied migration or use a legacy pair as a shortcut. Original
+Binary and five-quantile forecast rows may use the current type-appropriate immutable
+revision storage, with exactly one One-Shot forecast statement. Store optional reported
+wall times separately from the canonical revision and terminal timestamps. The
+implementation ADR at M56 should choose a concrete layout that lets original values, one
+optional original answer, and every subsequent correction be replayed unambiguously
+without updating the original forecast or Resolution.
+
+One transaction creates the Prediction, identity, definition, tags, original forecast,
+and optional original answer. A forecast-only creation is pending until a later Add
+answer transaction. A Correct transcription operation appends a full before/after audit
+fact for any score-affecting forecast or answer change and for corrected reported times,
+retaining original values and the app correction instant. It is not routed through
+ordinary revise/review operations and does not reset freshness. Current effective values
+are derived in one consistent read snapshot; scores are never persisted. Existing
+protected Definition history continues to guard Question and Resolution Criteria
+clarifications, while material target changes lead to Invalid/new-Prediction guidance.
+
+All migration, normal read/write, backup, and repair entry points must validate the
+expanded closed support matrix without relaxing M54B refusal of retired, missing,
+unknown, or mismatched identities. Search projection remains rebuildable derived state.
+Format-4 CSV cannot silently omit One-Shot facts: it rejects populated One-Shot archives
+until M60 adds format 5 with original/effective values, reported/system times, complete
+corrections, and a dictionary. SQLite online backup continues to copy the complete
+database.
+
+### Presentation, retrieval, and analytics
+
+New Prediction still defaults to its current Deadline-based form. A One-Shot action
+opens a tailored Binary/Numeric form that can save with an answer or without one, never
+previews a score before Save, and asks for optional documentary times and an optional
+visible How I will check field. Unanswered Detail presents Waiting for answer and Add
+answer. It retains Journal, metadata, tags, terminal notes, Postmortem, correction and
+Definition history, and search; revise/review and Deadline controls are absent. The CLI
+offers interactive one-shot creation, optional immediate answer, later Resolution, and
+complete read-only history through the same application operations. Existing
+desktop-only correction scope remains the v0.8 boundary unless separately expanded.
+
+Shared archive, Dashboard, search, and Saved View reads carry the stored One-Shot
+identity and no fabricated Deadline. An explicit mode filter is dynamic Saved View
+criteria, not stored membership. One-shot correction text follows the existing
+effective/superseded provenance rules; numeric values and scores are structured facts
+rather than FTS prose. Needs Attention from updating never applies, while optional
+Expected Resolution may still inform Ready to Resolve.
+
+Individual Binary Brier and Numeric exact WIS reuse pure calculations without importing
+SQLite or Qt. One-Shot Analytics takes one consistent snapshot, produces one observation
+per eligible Resolved Prediction, and stays separate from both v0.7 aggregate cohorts.
+Its Binary mean Brier and reliability view use the existing bin convention; Numeric
+continuous and whole-number groups reuse five-quantile and interval calibration. Never
+pool raw WIS across questions or infer a trajectory. Chart code displays aggregate
+results and text alternatives but never selects eligible observations. Automated
+coverage uses only disposable databases and includes post-answer correction, same-minute
+and missing reported times, GUI/CLI parity, and packaged resource/restart checks.

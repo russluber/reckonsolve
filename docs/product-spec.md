@@ -1,8 +1,8 @@
 # Reckonsolve — A Personal Forecasting Journal
 
-## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7 Product Specifications
+## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7/v0.8 Product Specifications
 
-Status: v0.7.0 implementation and manual acceptance complete; source release publication is a separate repository step
+Status: v0.7.0 implementation and manual acceptance complete; v0.8.0 One-Shot plan in Section 36 is not implemented; source release publication is a separate repository step
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -23,7 +23,7 @@ Build a local-first personal forecasting journal that lets one person:
 
 The product is not merely a database of current probabilities. Its defining value is an honest historical record of what the user believed, why they believed it, and how those beliefs changed.
 
-The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback. v0.5 makes the growing journal reliably retrievable and manageable through explainable full-text search, richer archive controls, dynamic Saved Views, and deliberate tag-library maintenance. v0.6 gives the completed desktop application a coherent, responsive, accessible visual system and application shell without changing the forecasting model or canonical data. v0.7 makes the forecasting commitment itself more rigorous: every new forecast uses an immutable exact forecasting window, Binary forecasts receive duration-weighted trajectory scoring, and new Numeric forecasts use one fixed five-quantile distribution with WIS and calibration-first feedback.
+The v0.1 baseline is successful when it is useful enough to replace the user's old Predlog CLI for day-to-day binary forecasting. v0.2 extends that honest historical workflow to one central numeric prediction interval per revision and adds explicit Forecast Reviews without weakening binary behavior. v0.3 adds a command-line companion that operates on the same canonical local data through the same application rules as the desktop interface. v0.4 closes the learning loop with historically honest terminal-record corrections, later Postmortems, individual scorecards, and initial-versus-final update feedback. v0.5 makes the growing journal reliably retrievable and manageable through explainable full-text search, richer archive controls, dynamic Saved Views, and deliberate tag-library maintenance. v0.6 gives the completed desktop application a coherent, responsive, accessible visual system and application shell without changing the forecasting model or canonical data. v0.7 makes the forecasting commitment itself more rigorous: every new forecast in that release uses an immutable exact forecasting window, Binary forecasts receive duration-weighted trajectory scoring, and Numeric forecasts use one fixed five-quantile distribution with WIS and calibration-first feedback. The planned v0.8 addition lets the user record a single Binary or five-quantile forecast made before checking an already-existing answer, including a forecast first written in an external note and entered into Reckonsolve later.
 
 ---
 
@@ -3877,7 +3877,313 @@ v0.7 is not complete unless all of the following are true:
 
 ---
 
-## 36. Instruction to coding agents
+## 36. Planned v0.8.0 One-Shot Prediction contract and milestone plan
+
+Status: product and implementation plan for review; no v0.8 milestone is implemented or
+authorized by this documentation change. Milestone work requires separate explicit
+authorization. The current application remains the completed v0.7.0 contract in Section
+35.
+
+This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durable
+scoring contracts, a versioned SQLite migration, creation and Detail workflows, GUI/CLI
+operations, separate analytics, and a new relational export format. It adds a mode
+within the existing Binary and Numeric Prediction types; it does not replace their v0.7
+deadline-based workflows or add a third forecast type. The [v0.8 One-Shot Rulebook
+addendum](reckonsolve-one-shot-rulebook-v0.8.md) supplies user-facing guidance. This
+section governs behavior if the addendum or older sections appear to conflict.
+
+### 36.1 Purpose, admission, and boundaries
+
+A **One-Shot Prediction** is one final probabilistic judgment made before the user
+checks an answer that already exists and can ordinarily be revealed soon by a specified
+observation, measurement, or lookup. It may ask a Binary Yes/No question or forecast one
+Numeric quantity. The user may work through drafts privately; only the final values they
+settled on before checking are the One-Shot forecast. Examples include estimating a
+tree's height before measuring it or assigning a probability that the tree exceeds a
+stated height threshold before checking the measurement.
+
+The answer's physical state may predate the forecast. For this mode, *reveal* means the
+user first checked the previously unknown answer using the chosen source or method; it
+does not mean the quantity first came into existence. This is a deliberately different
+contract from Section 35's `R = earliest fixed and ascertainable` rule and `R <= t0`
+exclusion. Those exact-time rules continue to govern deadline-based Predictions only.
+One-Shot is for observational uncertainty, not goals, controllable results, general
+future-event forecasts, or a way to avoid a Deadline on an ongoing question. “Soon” is
+guidance, not a hard elapsed-time or scoring limit.
+
+The source and measurement convention should be considered before looking. **How I will
+check the answer** is visible, optional, and gently encouraged in creation; the
+application does not require boilerplate for a simple question. A material post-answer
+change to the target, threshold, unit, measurement method, source of truth, or answer
+convention does not become a transcription correction. Resolve against the original
+meaning when possible; otherwise preserve the record as Invalid and create a new
+Prediction. One-Shot records remain subject to the Rulebook's observational and
+non-intervention principles.
+
+### 36.2 Durable model, recorded history, and time
+
+Each One-Shot Prediction has one immutable mode/model and scoring-contract identity,
+separate from both deadline-based cohorts and the retired legacy identities. The Binary
+forecast is one whole-number Yes probability from 0% through 100%. The Numeric forecast
+uses the same exact fixed unit, precision, continuous-style or whole-number constraint,
+and ordered q05/q25/q50/q75/q95 values as the supported v0.7 Numeric representation. It
+has **no Forecast Deadline** and no ordinary revision or Forecast Review operation.
+Draft changes before the user commits the original forecast are not revisions. The first
+canonical forecast statement and all initial details are saved atomically.
+
+Reckonsolve records its own immutable entry instant automatically. It must never present
+a later transcription from a phone note as though Reckonsolve itself had recorded the
+forecast before the answer. The form asks when the user finalized the forecast and when
+they checked the answer; both reported times may be approximate or left blank. An
+optional note may describe when the user started thinking. Preserve a reported date and
+wall-clock minute as entered, visibly labeled as user-reported, rather than converting
+it into a falsely exact UTC event instant. An explicit offset, if supplied, remains
+documentary context. These times are not revision timestamps, eligibility cutoffs, score
+inputs, or proof of an external commitment. Equal minute-level times are allowed; the
+application never invents seconds to order them. The user is responsible for entering
+only a forecast settled before they checked the answer; choosing One-Shot makes that
+meaning clear without a mandatory evidence upload, precise clock time, or separate
+attestation questionnaire.
+
+The answer and its app-recorded entry instant remain distinct from the optionally
+reported reveal time. A One-Shot entered after the answer is known may save its initial
+forecast and answer in one transaction; a One-Shot entered before checking may save
+without an answer and add it later. The first path does not create a fictitious in-app
+forecasting interval or backdate the canonical entry instant. The second path uses the
+app's actual entry time for its audit trail but does not gain deadline-based updating or
+trajectory scoring. Neither path requires an exact elapsed duration, and the existence
+or absence of reported times cannot alone make an otherwise valid One-Shot score or fail
+to score.
+
+The original forecast statement, original answer when present, original reported
+metadata, and system entry instants remain recoverable. **Correct transcription** is
+an append-only, timestamped before/after correction of a copied forecast value,
+answer, or reported time. It changes the effective displayed fact and recomputes its
+one-shot score. It never updates or deletes the original statement, creates a forecast
+revision, or claims that the user made a new forecast before reveal. A correction note
+is optional; the
+before/after values, correction action, and app time are mandatory audit facts. Question
+and Resolution Criteria clarifications retain protected Definition history; a material
+target change follows the Invalid/new-Prediction rule. Corrections of optional prose
+keep the existing transparent text-history discipline. Both entry and correction
+transactions are atomic and reject stale context.
+
+### 36.3 Creation, Detail, and lifecycle
+
+New Prediction continues to open on the current Deadline-based form. A prominent
+**One-Shot** action opens a tailored screen using the existing Binary or Numeric input
+controls. Required fields are Question and the type-appropriate forecast values, plus
+unit, precision, and value constraint for Numeric. The answer is optional at creation.
+Optional rationale, Background, Expected Resolution, tags, reported times, and other
+established supporting metadata remain available without obscuring the forecast.
+Resolution Criteria appears as the visible, optional **How I will check the answer**
+field; it retains the existing protected-definition behavior. A form with an answer
+shows no Brier, WIS, or score-driven suggestion before Save. Cancel and validation
+failures create no partial forecast or answer. Successful creation with an answer goes
+directly to Resolved Detail. Creation without an answer goes to **Waiting for answer**
+Detail.
+
+Waiting for answer is a One-Shot presentation of the existing nonterminal state, not a
+new canonical lifecycle state. It offers **Add answer**, permits ordinary Journal and
+metadata work under established safeguards, and allows Invalidate. It never offers
+Revise, Forecast Review, a Deadline editor, or Needs Attention based on forecast
+staleness. Optional Expected Resolution can still support Ready to Resolve planning, but
+does not score or lock the Prediction. Once answered, it is Resolved and retains the
+existing Postmortem, Skip Postmortem, terminal correction, and guarded
+deletion/invalidation behavior where applicable. One-Shot Detail keeps Question,
+forecast, tags, selectable notes, original/effective facts, correction and Definition
+history, Journal history, terminal facts, scorecard, and reflection. Its language omits
+probability history as an updating path, initial-versus-final comparisons, trajectory
+timing, and “keep current forecast” actions.
+
+The one-shot correction action is available after Save, including after Resolution, so a
+user can correct a copied value or measured answer. The current scorecard uses the
+latest effective corrected forecast and answer, while Detail and CLI `show` keep the
+original and every correction inspectable. A correction is an audited repair to the
+transcription, not an unmarked edit to history or an opportunity to add a new
+retrospective forecast.
+
+### 36.4 Individual scores and separate analytics
+
+Every eligible Resolved One-Shot contributes at most one observation. Binary uses
+ordinary `Brier = (p - y)^2` for its one effective probability and Yes/No answer. It has
+no standing durations, neutral truncation, Trajectory Brier, hold-initial
+counterfactual, or Updating Gain. Numeric uses the existing exact five-quantile WIS
+formula on its one effective distribution and actual value. It has no cutoff-based
+revision selection, Numeric trajectory score, Initial/Final/Delta WIS, or updating
+direction. Missing answers and Invalid Predictions have no score. User-reported times
+and the later app-entry time never enter either score. No reported-time comparison
+substitutes for the user's declaration that the forecast preceded checking the answer.
+
+Analytics adds a **separate combined One-Shot view** regardless of whether the answer
+was entered with the forecast or later. Its Binary section shows resolved count, mean
+ordinary Brier, and the established probability calibration presentation. Its Numeric
+section reuses the five elicited-level and 50%/90% interval calibration rules, with
+continuous-style and whole-number results separate, count and uncertainty visible, and
+exact-unit filtering retained. One-Shot Numeric WIS is a per-Prediction score, not a
+cross-question mean; raw WIS is never pooled merely because unit labels match. One-Shot
+and deadline-based records never share a score mean or calibration denominator.
+Individual Detail and export distinguish app-recorded times from optional user-reported
+times; no phone-versus-app aggregate split, source selector, or filter is required.
+Analytics should briefly note that externally transcribed results rely on the user's
+record and that selectively entering exercises can bias apparent calibration; this is
+interpretation guidance, not a proof or attestation flow.
+
+### 36.5 Retrieval, interfaces, compatibility, and portability
+
+Dashboard, Predictions, search, Saved Views, tags, and Detail include supported One-Shot
+records rather than silently omitting them. Rows show Binary/Numeric type, One-Shot
+mode, current effective forecast, Waiting for answer or terminal state, and relevant
+attention labels without a fabricated Deadline. An explicit mode filter lets users find
+One-Shot or Deadline-based Predictions and may be saved dynamically; date filters do not
+invent a Forecast Deadline for One-Shot. Search keeps grouped text provenance and
+indexes effective text and transparent superseded corrections under existing repair
+rules, not numeric values or scores as prose.
+
+The CLI offers interactive One-Shot Binary and Numeric creation with an optional answer
+in the same command, later `resolve`, and type-aware `list`, `search`, and `show`. The
+CLI and desktop share application operations, canonical validation, atomic transactions,
+and scoring. `revise` and `review` reject One-Shot clearly; Journal and ordinary
+supported lifecycle commands remain model-aware. As with the existing desktop-only
+terminal-correction workflow, desktop **Correct transcription** and CLI read-only
+correction history are sufficient for v0.8; no new CLI correction or metadata command is
+implied. Both launchers enforce the closed supported contract set before any migration
+or derived repair.
+
+Plan schema version **19** to add One-Shot model/scoring pairs, optional reported-time
+facts, and append-only forecast/answer transcription corrections while preserving every
+supported schema-18 row and all earlier canonical history. Do not reuse the retired
+`binary-final-v1` identity or make old legacy archives loadable. Existing valid
+v0.7-only archives must upgrade without changing their Deadline, revision, resolution,
+score, tag, search, or Saved View meaning. Legacy-only, mixed-with-legacy, unknown, and
+mismatched archives continue to fail without mutation. SQLite backup remains the
+complete recovery artifact. Relational CSV advances to **format 5** to export One-Shot
+identity, original/effective values, reported versus app times, correction chain, and
+data dictionary; it remains analytical, not restorable. Until that export exists,
+format-4 export must refuse an archive containing One-Shot records rather than omit
+them.
+
+No mobile app, synchronization, note import, attachment system, proof of phone-note
+authorship, web service, new forecast type, or new production dependency is part of this
+contract. v0.7 release notes and historical Rulebook promises remain descriptions of
+v0.7; this section prospectively adds the One-Shot exception without reconstructing an
+older Prediction.
+
+### 36.6 Proposed implementation milestones
+
+These milestones are a plan, not authorization to implement. Work on one milestone or
+one coherent vertical slice only after the user explicitly authorizes it.
+
+#### Milestone 56: One-Shot contract, exact values, and schema foundation
+
+- Define the two new closed One-Shot model/scoring pairs and pure one-probability
+  Brier/five-quantile WIS dispatch without changing Section 35's cohort math.
+- Add schema 19 with atomic original forecast, optional answer, documentary times,
+  and append-only correction storage; preserve current revision tables and
+  supported history. Record an ADR for the chosen storage/correction layout.
+- Extend startup and transaction-time compatibility gates before any normal write or
+  search repair. Test schema-18-to-19 upgrade, staged supported archives, forced
+  rollback, legacy refusal, unknown pair refusal, and byte-preserving failures on
+  disposable databases.
+- Add pure tests proving that absent, approximate, equal-minute, or retroactively
+  entered documentary times cannot change One-Shot score selection; no public One-Shot
+  creation entry point is exposed yet.
+
+#### Milestone 57: Complete One-Shot creation, answer, and individual feedback
+
+- Add the One-Shot action and tailored Binary/Numeric New Prediction screen while
+  leaving Deadline-based creation the default. Implement both save-with-answer and
+  save-then-Add-answer paths through shared atomic application operations.
+- Add matching interactive CLI creation and later Resolution, Waiting for answer Detail,
+  individual Binary/WIS scorecards, optional notes/metadata, and clear rejection of
+  One-Shot revise/review.
+- Implement desktop Correct transcription for forecast, answer, and reported-time errors
+  with append-only visible history; preserve original facts, recompute the effective
+  individual score, and show corrections in CLI `show`.
+- Verify cancellation, missing/approximate times, same-minute reported events, input
+  precision, whole-number ties, stale edits, rollback, post-resolution correction, and
+  no pre-save score feedback.
+
+#### Milestone 58: Retrieval, history, and cross-interface integration
+
+- Include One-Shot consistently in Dashboard, Predictions, search, tag transactions,
+  dynamic Saved Views, mode filtering, causal timeline, Postmortem and Journal history,
+  and context-preserving Detail navigation.
+- Preserve existing date-filter meanings and omit fake Deadlines and updating attention.
+  Search and repair derive from canonical original/effective text without inventing
+  history or score observations.
+- Verify desktop/CLI read parity, corrected versus superseded context, backup/restart,
+  independent connections, and stable/development isolation.
+
+#### Milestone 59: Separate One-Shot calibration
+
+- Add one combined One-Shot Analytics view with separate Binary and Numeric sections.
+  Reuse pure individual scorers and established Binary bins and five-quantile
+  continuous/whole-number calibration semantics, but keep cohort denominators and means
+  separate from deadline-based analytics.
+- Show counts, uncertainty and the external-entry/selective-capture interpretation
+  caution. Do not add trajectory, revision-improvement, or raw cross-question WIS
+  aggregates.
+- Test exactly-once observation selection, corrected outcomes/forecasts, unresolved and
+  Invalid exclusion, filters, sparse groups, and GUI text alternatives independently of
+  chart rendering.
+
+#### Milestone 60: v0.8 portability, release validation, and documentation
+
+- Advance relational CSV to format 5 with complete One-Shot facts and a data dictionary;
+  verify guarded format-4 behavior until replacement and preserve complete SQLite
+  backup/recovery.
+- Exercise schema upgrades, compatibility refusal, repair, restart, export, GUI/CLI
+  parity, and representative Binary/Numeric One-Shot paths in disposable source and
+  relocated private-build checks.
+- Run the full automated suite, lint/format checks, and the human Windows
+  layout/accessibility review. Update README, architecture, analytics guide, command
+  help, version metadata, release checklist, and v0.8 release notes when the behavior is
+  implemented.
+- Close v0.8.0 as a source release only after manual acceptance. GitHub publication
+  remains a separate user-owned step.
+
+### 36.7 v0.8 acceptance criteria
+
+1. Default New Prediction still creates the current deadline-based contract; the
+   One-Shot action opens its tailored Binary/Numeric form and never stores a fabricated
+   Deadline.
+2. One-Shot forecast and optional answer save atomically; cancel, invalid input, lock
+   contention, or stale context leaves no partial or rewritten history.
+3. The app distinguishes its own entry time from optional user-reported forecast and
+   reveal times. Approximate, missing, or equal-minute reported times do not gate or
+   alter one-shot scoring.
+4. A saved one-shot forecast has no ordinary revision or Review operation; Waiting for
+   answer offers Add answer, and Resolved/Invalid behavior retains established
+   historical safeguards.
+5. Correcting a transcription preserves the original and every correction, changes the
+   effective score deterministically, and cannot silently redefine the question.
+6. Binary individual and aggregate scores use one ordinary Brier observation; Numeric
+   individual score uses one exact five-quantile WIS and aggregate calibration never
+   pools raw WIS. Neither mode enters deadline-based aggregates.
+7. GUI and CLI create, answer, retrieve, and show the same one-shot record. Search,
+   Saved Views, tags, Dashboard, Postmortems, backup, and format-5 CSV include it
+   without data loss or unsupported-cohort omission.
+8. Supported v0.7 history and scores survive schema-19 upgrade unchanged; retired or
+   malformed archives remain safely refused. Tests and private-build review use only
+   disposable databases.
+
+### 36.8 Explicitly outside v0.8
+
+- General deadline-free ongoing forecasting, multiple committed One-Shot revisions,
+  Forecast Reviews, or time-weighted One-Shot scores.
+- Verified external timestamping, evidence attachments, automatic import from phone
+  notes, mobile or cloud clients, sync, and social sharing.
+- Automatic policing of whether the user had seen the answer, mandatory proof, or
+  mandatory measurement prose.
+- Reinstating retired Binary-final or interval-v1 runtime models, converting them to
+  One-Shot, or merging their aggregates with supported cohorts.
+- Numeric trajectory scoring, pooled raw WIS, extra quantiles, additional forecast
+  types, or a universal skill score.
+
+---
+
+## 37. Instruction to coding agents
 
 Before implementing a milestone:
 
@@ -3891,4 +4197,5 @@ Before implementing a milestone:
 
 The guiding rule is:
 
-> Let the user change their mind freely, but never let the application rewrite the fact that they used to think something else.
+> Let the user change their mind freely, but never let the application rewrite the fact
+> that they used to think something else.
