@@ -6,7 +6,7 @@ Reckonsolve is a local-first personal forecasting journal for Windows. Record pr
 
 **Compatibility:** This source supports trajectory Binary and five-quantile Numeric forecasts only. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
 
-Supported v0.7 history is preserved on schema 18; supported Binary-only schema-16/17 archives can upgrade. The retirement requires no new schema migration. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [technical decision](docs/decisions/0019-retire-legacy-runtime-without-rebuilding-history.md).
+Supported v0.7 history upgrades unchanged to schema 19, including supported Binary-only schema-16/17 archives. M56 adds the internal v0.8 One-Shot storage and scoring foundation; its GUI/CLI workflows are not available yet. Complete SQLite backup includes the new facts, while CSV format 4 refuses archives containing internal One-Shot records. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
 
 ## Current features
 

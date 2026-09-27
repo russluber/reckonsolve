@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from .forecast_contracts import check_forecast_contract_integrity
 from .m48_migration import M48_STATEMENTS
 from .m50_migration import build_m50_statements
+from .m56_migration import build_m56_statements
 
 
 class MigrationError(RuntimeError):
@@ -3374,6 +3375,21 @@ MIGRATIONS += (
 )
 
 
+MIGRATIONS += (
+    Migration(
+        version=19,
+        name="add One-Shot contracts and transcription history",
+        statements=build_m56_statements(
+            tuple(
+                statement
+                for migration in MIGRATIONS
+                for statement in migration.statements
+            )
+        ),
+    ),
+)
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
     migrations: Sequence[Migration] = MIGRATIONS,
@@ -3405,6 +3421,7 @@ def apply_migrations(
         ).fetchall()
         if foreign_key_violations:
             raise MigrationError("A migration introduced a foreign-key violation.")
+        check_forecast_contract_integrity(connection)
         connection.execute("COMMIT")
     except BaseException:
         if connection.in_transaction:

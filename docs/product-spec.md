@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7/v0.8 Product Specifications
 
-Status: v0.7.0 implementation and manual acceptance complete; v0.8.0 One-Shot plan in Section 36 is not implemented; source release publication is a separate repository step
+Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56 internal One-Shot foundation implemented; M57–M60 remain planned; source release publication is a separate repository step
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -3879,10 +3879,10 @@ v0.7 is not complete unless all of the following are true:
 
 ## 36. Planned v0.8.0 One-Shot Prediction contract and milestone plan
 
-Status: product and implementation plan for review; no v0.8 milestone is implemented or
-authorized by this documentation change. Milestone work requires separate explicit
-authorization. The current application remains the completed v0.7.0 contract in Section
-35.
+Status: M56 is implemented following explicit user authorization. Schema 19 and the
+internal One-Shot contract, storage, and pure scoring foundation are available; public
+GUI/CLI workflows remain the deadline-based contract in Section 35. M57–M60 remain
+planned and require separate explicit authorization.
 
 This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durable
 scoring contracts, a versioned SQLite migration, creation and Detail workflows, GUI/CLI
@@ -4071,10 +4071,16 @@ older Prediction.
 
 ### 36.6 Proposed implementation milestones
 
-These milestones are a plan, not authorization to implement. Work on one milestone or
-one coherent vertical slice only after the user explicitly authorizes it.
+M56 is implemented under its separate authorization. The remaining milestones are a
+plan, not authorization to implement. Work on one milestone or one coherent vertical
+slice only after the user explicitly authorizes it.
 
 #### Milestone 56: One-Shot contract, exact values, and schema foundation
+
+Status: implemented. [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md)
+records the original-row reuse, documentary-time storage, append-only snapshots,
+and temporary guard against exposing incomplete One-Shot workflows. No public
+One-Shot creation entry point is available in this milestone.
 
 - Define the two new closed One-Shot model/scoring pairs and pure one-probability
   Brier/five-quantile WIS dispatch without changing Section 35's cohort math.

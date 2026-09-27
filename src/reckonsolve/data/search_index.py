@@ -12,7 +12,7 @@ from reckonsolve.domain.search import (
     normalize_search_literal,
 )
 
-from .forecast_contracts import quantile_tables_exist
+from .forecast_contracts import check_forecast_contract_integrity, quantile_tables_exist
 
 SEARCH_PROJECTION_VERSION = 1
 
@@ -61,6 +61,7 @@ def initialize_search_index(connection: sqlite3.Connection) -> bool:
 
     connection.execute("BEGIN IMMEDIATE")
     try:
+        check_forecast_contract_integrity(connection)
         state = connection.execute(
             """
             SELECT projection_version, document_count
@@ -102,6 +103,7 @@ def initialize_search_index(connection: sqlite3.Connection) -> bool:
 def refresh_pending_search_documents(connection: sqlite3.Connection) -> None:
     """Replace all dirty Prediction projections inside the caller's transaction."""
 
+    check_forecast_contract_integrity(connection)
     rows = connection.execute(
         "SELECT prediction_id FROM search_dirty_predictions ORDER BY prediction_id"
     ).fetchall()
@@ -121,6 +123,7 @@ def refresh_pending_search_documents(connection: sqlite3.Connection) -> None:
 def rebuild_search_index(connection: sqlite3.Connection) -> None:
     """Discard and deterministically reproduce every derived document."""
 
+    check_forecast_contract_integrity(connection)
     connection.execute("DELETE FROM prediction_search")
     prediction_rows = connection.execute(
         "SELECT id FROM predictions ORDER BY id"

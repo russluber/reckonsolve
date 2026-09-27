@@ -12,6 +12,8 @@ from reckonsolve.domain.forecast_contracts import (
 )
 from reckonsolve.domain.predictions import PredictionType
 
+from .one_shot_facts import read_one_shot
+
 
 class ForecastContractIntegrityError(RuntimeError):
     """Raised when persisted model identity is missing, unknown, or inconsistent."""
@@ -92,6 +94,29 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
         if quantiles_available
         else "1"
     )
+    one_shot_available = (
+        connection.execute(
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'one_shot_forecast_times'"
+        ).fetchone()
+        is not None
+    )
+    one_shot_invalid = "1"
+    if one_shot_available:
+        one_shot_invalid = """prediction.forecast_deadline IS NOT NULL
+            OR NOT EXISTS (SELECT 1 FROM one_shot_forecast_times WHERE prediction_id = prediction.id)
+            OR EXISTS (SELECT 1 FROM forecast_reviews WHERE prediction_id = prediction.id)
+            OR EXISTS (SELECT 1 FROM numeric_forecast_revisions WHERE prediction_id = prediction.id)
+            OR (prediction.prediction_type = 'binary' AND
+                ((SELECT COUNT(*) FROM forecast_revisions WHERE prediction_id = prediction.id) != 1
+                 OR binary_initial.created_at IS NOT prediction.created_at))
+            OR (prediction.prediction_type = 'numeric' AND
+                ((SELECT COUNT(*) FROM numeric_quantile_revisions WHERE prediction_id = prediction.id) != 1
+                 OR quantile_initial.created_at IS NOT prediction.created_at
+                 OR quantile_definition.prediction_id IS NULL))
+            OR ((prediction.status = 'resolved') != EXISTS
+                (SELECT 1 FROM one_shot_answer_times WHERE prediction_id = prediction.id))
+            OR EXISTS (SELECT 1 FROM resolutions WHERE prediction_id = prediction.id AND effective_resolution_at IS NOT NULL)
+            OR EXISTS (SELECT 1 FROM numeric_resolutions WHERE prediction_id = prediction.id AND effective_resolution_at IS NOT NULL)"""
     row = connection.execute(
         f"""
         SELECT prediction.id
@@ -111,16 +136,19 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
             OR contract.scoring_contract IS NULL
             OR (contract.forecast_model, contract.scoring_contract) NOT IN (
                 ('binary-trajectory-v1', 'binary-trajectory-brier-v1'),
-                ('numeric-quantiles-5-v2', 'numeric-wis-v1')
+                ('numeric-quantiles-5-v2', 'numeric-wis-v1'),
+                ('binary-one-shot-v1', 'binary-one-shot-brier-v1'),
+                ('numeric-one-shot-5-v1', 'numeric-one-shot-wis-v1')
             )
-            OR contract.forecast_deadline_at IS NULL
+            OR ((contract.forecast_model IN ('binary-trajectory-v1', 'numeric-quantiles-5-v2'))
+                != (contract.forecast_deadline_at IS NOT NULL))
             OR (
                 prediction.prediction_type = 'binary'
-                AND contract.forecast_model != 'binary-trajectory-v1'
+                AND contract.forecast_model NOT IN ('binary-trajectory-v1', 'binary-one-shot-v1')
             )
             OR (
                 prediction.prediction_type = 'numeric'
-                AND contract.forecast_model != 'numeric-quantiles-5-v2'
+                AND contract.forecast_model NOT IN ('numeric-quantiles-5-v2', 'numeric-one-shot-5-v1')
             )
             OR (
                 contract.forecast_model = 'binary-trajectory-v1'
@@ -135,12 +163,56 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
                     {quantile_invalid}
                 )
             )
+            OR (contract.forecast_model IN ('binary-one-shot-v1', 'numeric-one-shot-5-v1')
+                AND ({one_shot_invalid}))
         LIMIT 1
         """
     ).fetchone()
     if row is not None:
         raise ForecastContractIntegrityError(
             f"Prediction {int(row[0])} has a missing or inconsistent forecast contract."
+        )
+    if one_shot_available:
+        stray = connection.execute(
+            """SELECT f.prediction_id FROM one_shot_forecast_times f
+            LEFT JOIN prediction_forecast_contracts c ON c.prediction_id = f.prediction_id
+            WHERE c.forecast_model IS NULL OR c.forecast_model NOT IN
+                ('binary-one-shot-v1', 'numeric-one-shot-5-v1') LIMIT 1"""
+        ).fetchone()
+        if stray is not None:
+            raise ForecastContractIntegrityError(
+                f"Prediction {stray[0]} has One-Shot facts with an inconsistent contract."
+            )
+        for (identifier,) in connection.execute(
+            "SELECT prediction_id FROM prediction_forecast_contracts WHERE forecast_model IN "
+            "('binary-one-shot-v1', 'numeric-one-shot-5-v1')"
+        ).fetchall():
+            try:
+                read_one_shot(
+                    connection,
+                    identifier,
+                    select_forecast_contract(connection, identifier),
+                )
+            except (ValueError, TypeError, IndexError) as error:
+                raise ForecastContractIntegrityError(
+                    f"Prediction {identifier} has inconsistent One-Shot history."
+                ) from error
+
+
+def require_deadline_workflows(connection: sqlite3.Connection) -> None:
+    """Until M57/M58, refuse unsupported UI/read paths instead of partial loading."""
+    if (
+        _contract_table_exists(connection)
+        and connection.execute(
+            "SELECT 1 FROM prediction_forecast_contracts WHERE forecast_model IN "
+            "('binary-one-shot-v1', 'numeric-one-shot-5-v1') LIMIT 1"
+        ).fetchone()
+        is not None
+    ):
+        raise ForecastContractIntegrityError(
+            "This build contains the One-Shot storage foundation only. "
+            "One-Shot workflows and archive integration are not available yet. "
+            "No conversion or deletion occurred."
         )
 
 

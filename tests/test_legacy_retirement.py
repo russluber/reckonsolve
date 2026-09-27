@@ -333,7 +333,7 @@ def test_supported_pending_migration_failure_preserves_canonical_database(tmp_pa
     migrations = (
         *MIGRATIONS,
         Migration(
-            19,
+            len(MIGRATIONS) + 1,
             "forced failure",
             (
                 "CREATE TABLE never_committed (id INTEGER)",

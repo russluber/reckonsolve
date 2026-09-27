@@ -18,6 +18,8 @@ from reckonsolve.domain.predictions import (
     ForecastRevision,
 )
 
+from .scoring import exact_brier_score
+
 
 @dataclass(frozen=True, slots=True)
 class StandingSegment:
@@ -57,9 +59,7 @@ def _microseconds(duration: timedelta) -> int:
 
 
 def _loss(probability: int, outcome: BinaryOutcome) -> Fraction:
-    if not 0 <= probability <= 100:
-        raise ValueError("Binary probability must be between 0 and 100.")
-    return (Fraction(probability, 100) - int(outcome is BinaryOutcome.YES)) ** 2
+    return exact_brier_score(probability, outcome)
 
 
 def trajectory_scorecard(

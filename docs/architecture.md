@@ -1,11 +1,11 @@
 # Reckonsolve Architecture
 
-Status: v0.7 implementation complete and manually accepted through M55; Section 25 is a v0.8 plan, not implemented architecture
+Status: v0.7 complete through M55; v0.8 M56 internal foundation implemented; M57–M60 planned
 Last reviewed: 2026-09-26
 
-This document describes the implemented structure from the binary v0.1 baseline through the v0.7 source version and the prospective v0.8 One-Shot boundaries in Section 25. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+This document describes the implemented structure from the binary v0.1 baseline through v0.7 and the v0.8 M56 internal foundation, with remaining One-Shot work identified in Section 25. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
-**Current support boundary (M54B):** only trajectory Binary and five-quantile Numeric are executable models. Retired-only or mixed archives, and missing/unknown/mismatched contracts, fail before migration, repair, or ordinary transaction work. No conversion, deletion, or partial loading occurs. Schema 18 and all supported v0.7 history remain intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the support matrix and why no DDL cleanup is required.
+**Current support boundary:** public workflows remain trajectory Binary and five-quantile Numeric. M56 adds two internal One-Shot contracts on schema 19, described in Section 25 and [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md). Retired-only or mixed archives, and missing/unknown/mismatched contracts, still fail before migration, repair, or ordinary transaction work. No conversion, deletion, or partial loading occurs. Supported v0.7 history remains intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the earlier retirement boundary.
 
 **Reading historical sections:** Sections 2–23 and the M46–M54A subsections record the system's evolution. Their legacy editors, calculations, compatibility promises, and old creation paths are superseded by M54B below; they are not instructions to restore those paths. Historical migration SQL remains unchanged as storage infrastructure, not runtime compatibility. Live database cleanup requires separate authorization.
 
@@ -24,9 +24,9 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutabl
 | UI | The six existing screen routes remain functional over one centralized palette-aware visual foundation, while the M40 shell distinguishes one creation action, three permanent primary destinations, one bottom utility, and contextual Prediction Detail; the sidebar has complete expanded and icon-only compact modes, and Detail return preserves the originating primary context without refreshing the Predictions query; M41 gives Dashboard and Settings the shared page/panel/message grammar and routes only disposable success acknowledgments through one non-reflowing shell overlay; M42 gives creation, both Detail variants, their timelines, and focused dialogs the same hierarchy while preserving every workflow; M42A gives Numeric Detail the shared Edit Details dialog with immutable unit and precision shown as context; M43 gives Predictions stable grouped controls, readable detailed filters, type-aware structured rows, direct row activation, and consistently styled tag management; M44 gives Analytics the same page/panel/message hierarchy, keeps its filter frame stable above responsive scrollable results, and adds guarded global navigation shortcuts plus visible shortcut reference, logical focus order, and stronger accessible descriptions; selected navigation and action icons remain local, palette-aware Lucide SVGs rendered through QtSvg while visible or accessible names remain authoritative |
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; each identity keeps `presentation.ini` beside its database; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
-| Schema | Version 18 is retained without rewriting canonical rows or historical SQL. Fixed quantile revisions/definitions, shared history anchors, exact times, and correction chains remain. Old empty tables/triggers are retained where part of the established storage graph; they provide no supported legacy workflow |
-| Domain and application operations | Two supported contracts only: exact-Deadline trajectory Binary and five-quantile Numeric creation, revisions, Reviews, effective-time Resolution, and append-only corrections. No legacy creation factories, mutation dispatch, or interval-only domain records |
-| Analytics | One supported snapshot contains trajectory Binary and five-quantile Numeric sources. Exact individual scorers drive aggregates; Binary receives equal per-Prediction votes, Numeric continuous/whole-number calibration stays separate, and raw WIS is never pooled. No legacy calculators or UI sections remain |
+| Schema | Version 19 expands the immutable contract table and adds One-Shot reported times and correction snapshots; all supported schema-18 canonical facts remain unchanged. Historical SQL is unchanged and retired tables provide no supported legacy workflow |
+| Domain and application operations | Public operations retain exact-Deadline trajectory Binary and five-quantile Numeric workflows. M56 adds two distinct One-Shot contracts and an internal repository for original forecasts, optional answers, and transcription corrections; public One-Shot operations remain M57 work. Retired workflows remain absent |
+| Analytics | Public aggregate snapshots retain trajectory Binary and five-quantile Numeric sources. M56 adds pure individual One-Shot Brier/WIS without time selection; its separate aggregates remain M59 work. Binary receives equal per-Prediction votes, Numeric continuous/whole-number calibration stays separate, and raw WIS is never pooled. No legacy calculators or UI sections remain |
 | Automated tests | Disposable supported-model workflows, byte-preserving whole-database refusal, supported schema-16/17 upgrades and rollback, history/anchor ownership, backup/restart, search/Saved Views/tags, independent connections, and GUI/CLI parity. Empty historical schemas exercise migration DDL; populated retired schemas test refusal |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and relocated-smoke validated across local styles/icons, safe shell defaults, expanded/compact navigation, primary screens, both Detail types, keyboard navigation, responsive sizes, the v0.5 data boundary, search, backup, and GUI restart; original icon artwork, installer, signing, installer-created shortcuts, uninstall, updates, and public distribution remain deferred |
 
@@ -1014,18 +1014,18 @@ are refused before migration/repair/write. Frozen smoke now validates CSV-4,
 both current models, backup/restart, and a byte-preserving refusal of a disposable
 unsupported archive. No new schema or production dependency is introduced.
 
-## 25. Planned evolution into v0.8: One-Shot Predictions
+## 25. Evolution into v0.8: One-Shot Predictions
 
-This section is prospective. [Product-spec Section
+M56's internal foundation is implemented. [Product-spec Section
 36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan)
-owns the behavior and M56–M60 sequencing. The current executable system remains the two
-v0.7 Deadline-based cohorts. No One-Shot path should be exposed merely because schema or
-pure scoring support lands in an earlier milestone.
+owns the behavior and M56–M60 sequencing. Public workflows remain the two v0.7
+Deadline-based cohorts. M57–M60 own the remaining interface, retrieval, aggregate,
+and release work.
 
 ### Contract and dependency boundary
 
 One-Shot is an explicit creation mode for the existing Binary and Numeric forecast
-types. Add two closed, durable model/scoring pairs that dispatch independently from the
+types. M56 adds two closed, durable model/scoring pairs that dispatch independently from the
 trajectory Binary and deadline-based five-quantile Numeric pairs. Do not reuse the
 retired `binary-final-v1` identity or make it pass the M54B compatibility gate. Reuse
 the existing probability and exact five-quantile value validation, Brier and WIS
@@ -1042,19 +1042,31 @@ system-generated app entry and correction instants remain canonical audit facts.
 must distinguish those system facts from reported times without requiring a
 phone-versus-app source classification.
 
-### Planned persistence and transaction shape
+### Implemented M56 persistence and transaction shape
 
-M56 plans schema 19. Preserve every supported schema-18 canonical fact, identifier,
-timestamp, and relationship through a versioned, immediate migration with foreign-key
-and forced-rollback checks. The
-current contract table's closed pair and Deadline checks require a new versioned
-definition; never edit an applied migration or use a legacy pair as a shortcut. Original
-Binary and five-quantile forecast rows may use the current type-appropriate immutable
-revision storage, with exactly one One-Shot forecast statement. Store optional reported
-wall times separately from the canonical revision and terminal timestamps. The
-implementation ADR at M56 should choose a concrete layout that lets original values, one
-optional original answer, and every subsequent correction be replayed unambiguously
-without updating the original forecast or Resolution.
+Schema 19 rebuilds the contract table with its expanded closed pairs and Deadline
+checks, preserving every supported prior row. Other existing forecast and answer rows
+stay in place. The upgrade uses the immediate migration transaction with foreign keys
+enabled, compatibility checks before DDL and commit, and forced-failure rollback tests.
+Historical migration SQL remains unchanged.
+
+`domain/one_shot.py` validates complete Binary or Numeric snapshots and reported wall
+minutes. `analytics/one_shot.py` dispatches pure exact Brier/WIS without reading time
+metadata. `data/one_shot.py` provides internal atomic creation, later answering, and
+transcription correction. `data/one_shot_facts.py` independently validates the original
+and complete correction replay; it does not own transactions or depend on Qt.
+
+Original forecasts reuse sequence one in the existing type-specific revision tables;
+original answers reuse the type-specific Resolution tables with null effective time.
+Separate `one_shot_forecast_times` and `one_shot_answer_times` retain the optional
+wall-clock minute, approximate flag, and documentary offset. `one_shot_corrections`
+stores full relational before/after snapshots with per-Prediction sequence, app time,
+and optional note. SQL enforces original immutability, single-forecast cardinality,
+no Reviews, current-before snapshots, and exact ordered/integral Numeric quantities.
+Read-only original/effective views handle a forecast corrected before its answer is
+added; an earlier blank answer cannot hide the later original answer.
+[ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md) records the
+layout and alternatives.
 
 One transaction creates the Prediction, identity, definition, tags, original forecast,
 and optional original answer. A forecast-only creation is pending until a later Add
@@ -1074,7 +1086,15 @@ until M60 adds format 5 with original/effective values, reported/system times, c
 corrections, and a dictionary. SQLite online backup continues to copy the complete
 database.
 
-### Presentation, retrieval, and analytics
+Ordinary `Database.transaction()` paths temporarily reject an archive containing
+internal One-Shot records, preventing premature partial archive loads or use of the
+deadline workflows. The internal repository opts in with `allow_one_shot=True` while
+retaining both compatibility checks. No public application/GUI/CLI factory is exposed.
+Backup validates and preserves the full foundation record. The existing search
+projector is not yet the M58 One-Shot correction-text/retrieval implementation; its
+repair entry points now recheck canonical compatibility before derived writes.
+
+### Planned presentation, retrieval, and aggregate analytics
 
 New Prediction still defaults to its current Deadline-based form. A One-Shot action
 opens a tailored Binary/Numeric form that can save with an answer or without one, never

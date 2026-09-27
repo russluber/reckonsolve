@@ -227,6 +227,9 @@ def test_actual_annotation_only_for_crowded_or_coincident_labels(qtbot):
         )
         assert text == ("7.5 (actual)" if annotated else "7.5")
     tied = ScoredIntervalsChart(make_card(actual=5), panel)
+    # The full role label requires an explicit usable width; a hidden child
+    # otherwise starts at Qt's platform-dependent default size and may elide it.
+    tied.resize(1000, tied.height())
     for _, labels in tied.label_layout():
         text = next(
             text for text, _, anchor in labels if anchor == tied.marker_positions()[5]

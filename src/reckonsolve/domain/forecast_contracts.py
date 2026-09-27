@@ -22,6 +22,8 @@ class ForecastModel(StrEnum):
     BINARY_TRAJECTORY_V1 = "binary-trajectory-v1"
     NUMERIC_INTERVAL_V1 = "numeric-interval-v1"
     NUMERIC_QUANTILES_5_V2 = "numeric-quantiles-5-v2"
+    BINARY_ONE_SHOT_V1 = "binary-one-shot-v1"
+    NUMERIC_ONE_SHOT_5_V1 = "numeric-one-shot-5-v1"
 
 
 class ScoringContract(StrEnum):
@@ -31,16 +33,32 @@ class ScoringContract(StrEnum):
     BINARY_TRAJECTORY_BRIER_V1 = "binary-trajectory-brier-v1"
     NUMERIC_INTERVAL_SCORE_V1 = "numeric-interval-score-v1"
     NUMERIC_WIS_V1 = "numeric-wis-v1"
+    BINARY_ONE_SHOT_BRIER_V1 = "binary-one-shot-brier-v1"
+    NUMERIC_ONE_SHOT_WIS_V1 = "numeric-one-shot-wis-v1"
 
 
 class ForecastCohort(StrEnum):
-    """Closed dispatch set for the two supported forecast models."""
+    """Closed dispatch set; One-Shot workflows are staged after the foundation."""
 
     TRAJECTORY_BINARY = "trajectory-binary"
     QUANTILE_NUMERIC = "quantile-numeric"
+    ONE_SHOT_BINARY = "one-shot-binary"
+    ONE_SHOT_NUMERIC = "one-shot-numeric"
 
 
 _CONTRACTS = {
+    ForecastCohort.ONE_SHOT_BINARY: (
+        PredictionType.BINARY,
+        ForecastModel.BINARY_ONE_SHOT_V1,
+        ScoringContract.BINARY_ONE_SHOT_BRIER_V1,
+        False,
+    ),
+    ForecastCohort.ONE_SHOT_NUMERIC: (
+        PredictionType.NUMERIC,
+        ForecastModel.NUMERIC_ONE_SHOT_5_V1,
+        ScoringContract.NUMERIC_ONE_SHOT_WIS_V1,
+        False,
+    ),
     ForecastCohort.TRAJECTORY_BINARY: (
         PredictionType.BINARY,
         ForecastModel.BINARY_TRAJECTORY_V1,
@@ -93,6 +111,11 @@ class ForecastContract:
                 "This forecast model requires an exact Forecast Deadline.",
                 field="forecast_deadline",
             )
+        if not requires_deadline and self.forecast_deadline is not None:
+            raise ForecastContractValidationError(
+                "One-Shot Predictions cannot have a Forecast Deadline.",
+                field="forecast_deadline",
+            )
 
     @property
     def cohort(self) -> ForecastCohort:
@@ -132,6 +155,17 @@ def prospective_contract(
         )
     stored_type, model, scoring, _ = _CONTRACTS[cohort]
     return ForecastContract(stored_type, model, scoring, forecast_deadline)
+
+
+def one_shot_contract(prediction_type: PredictionType) -> ForecastContract:
+    """The distinct, deadline-free contract; never the retired final model."""
+    for cohort in (ForecastCohort.ONE_SHOT_BINARY, ForecastCohort.ONE_SHOT_NUMERIC):
+        stored_type, model, scoring, _ = _CONTRACTS[cohort]
+        if prediction_type is stored_type:
+            return ForecastContract(stored_type, model, scoring)
+    raise ForecastContractValidationError(
+        "Prediction type is not recognized.", field="prediction_type"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,14 +279,24 @@ def dispatch_forecast_contract[T](
     *,
     trajectory_binary: T,
     quantile_numeric: T,
+    one_shot_binary: T | None = None,
+    one_shot_numeric: T | None = None,
 ) -> T:
     """Select behavior only from an already validated durable model identity."""
 
     choices = {
         ForecastCohort.TRAJECTORY_BINARY: trajectory_binary,
         ForecastCohort.QUANTILE_NUMERIC: quantile_numeric,
+        ForecastCohort.ONE_SHOT_BINARY: one_shot_binary,
+        ForecastCohort.ONE_SHOT_NUMERIC: one_shot_numeric,
     }
-    return choices[contract.cohort]
+    choice = choices[contract.cohort]
+    if choice is None:
+        raise ForecastContractValidationError(
+            "This operation does not support the One-Shot contract yet.",
+            field="forecast_model",
+        )
+    return choice
 
 
 def contract_status(
@@ -265,6 +309,11 @@ def contract_status(
         raise ForecastContractValidationError(
             "A supported forecast contract is required.", field="forecast_model"
         )
+    if contract.cohort in (
+        ForecastCohort.ONE_SHOT_BINARY,
+        ForecastCohort.ONE_SHOT_NUMERIC,
+    ):
+        return status
     if now is None:
         raise ForecastContractValidationError(
             "An exact current time is required.", field="created_at"

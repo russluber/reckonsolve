@@ -26,7 +26,7 @@ def test_empty_v15_upgrades_without_fabricating_forecast_history(tmp_path):
     path = tmp_path / "empty.sqlite3"
     Database.open(path, migrations=MIGRATIONS[:15]).close()
     database = Database.open(path)
-    assert database.schema_version == 18
+    assert database.schema_version == len(MIGRATIONS)
     with database.transaction() as connection:
         assert (
             connection.execute(

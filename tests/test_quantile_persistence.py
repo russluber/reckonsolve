@@ -518,5 +518,5 @@ def test_schema18_preserves_trajectory_rows_and_rolls_back_failure(
     finally:
         upgraded.close()
     reopened = Database.open(path)
-    assert reopened.schema_version == 18
+    assert reopened.schema_version == len(MIGRATIONS)
     reopened.close()
