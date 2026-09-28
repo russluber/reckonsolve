@@ -30,6 +30,7 @@ from reckonsolve.cli_mutations import (
     review_interactively,
     revise_interactively,
 )
+from reckonsolve.cli_one_shot import create_one_shot
 from reckonsolve.cli_text import terminal_text
 from reckonsolve.cli_transfer import backup_interactively, export_csv_interactively
 from reckonsolve.data.database import Database
@@ -43,6 +44,7 @@ from reckonsolve.domain.browser import (
     ArchiveTagMatchMode,
     PredictionBrowserItem,
 )
+from reckonsolve.domain.one_shot import OneShotDetail
 from reckonsolve.domain.predictions import (
     BinaryResolutionHistory,
     DefinitionChange,
@@ -73,12 +75,16 @@ from reckonsolve.domain.search import (
     build_search_snippet,
     search_source_label,
 )
-from reckonsolve.forecast_display import trajectory_diagnostics
+from reckonsolve.forecast_display import (
+    lifecycle_label,
+    trajectory_diagnostics,
+)
 from reckonsolve.identity import (
     DEVELOPMENT_APPLICATION,
     STABLE_APPLICATION,
     ApplicationIdentity,
 )
+from reckonsolve.one_shot_display import detail_lines
 from reckonsolve.paths import ApplicationDataPathError, resolve_database_path
 from reckonsolve.quantile_display import quantile_scorecard_lines
 
@@ -185,6 +191,7 @@ def run(
                 input_stream,
                 output,
                 errors,
+                one_shot=arguments.one_shot,
             )
         if arguments.command == "revise":
             revise_interactively(
@@ -404,13 +411,20 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
     )
     create_types.add_parser(
         "numeric",
-        help="Create a Numeric interval Prediction.",
+        help="Create a Numeric five-quantile Prediction.",
         description=(
-            "Prompt for a Question, unit, fixed precision, central interval, median, "
-            "and confidence, then optionally collect initial details before one "
+            "Prompt for a Question, unit, fixed precision, value constraint, "
+            "and q05/q25/q50/q75/q95, then collect initial details before one "
             "atomic save."
         ),
     )
+
+    for type_parser in create_types.choices.values():
+        type_parser.add_argument(
+            "--one-shot",
+            action="store_true",
+            help="Record a final guess made before checking an already-existing answer, with an optional answer now.",
+        )
 
     revise_parser = commands.add_parser(
         "revise",
@@ -1011,7 +1025,13 @@ def _format_search_hit_header(hit: PredictionSearchHit) -> str:
     prediction = hit.prediction
     return (
         f"#{prediction.prediction_id} | {prediction.prediction_type.value.upper()} | "
-        f"{prediction.status.value.upper()} | {_search_prediction_summary(prediction)}"
+        f"{lifecycle_label(prediction.status, prediction.forecast_contract).upper()} | "
+        + (
+            "One-Shot | "
+            if prediction.forecast_contract and prediction.forecast_contract.is_one_shot
+            else ""
+        )
+        + _search_prediction_summary(prediction)
     )
 
 
@@ -1052,6 +1072,16 @@ def _run_show(
     output: TextIO,
 ) -> int:
     prediction = operations.get_prediction_for_navigation(prediction_id)
+    if isinstance(prediction, OneShotDetail):
+        print(
+            terminal_text(
+                "\n".join(
+                    detail_lines(prediction, operations.one_shots.score(prediction))
+                )
+            ),
+            file=output,
+        )
+        return 0
     indicators = AttentionIndicators.from_snapshot(operations.get_dashboard())
     definition_changes = operations.list_definition_changes(prediction_id)
     if isinstance(prediction, NumericPrediction):
@@ -1112,7 +1142,14 @@ def _run_create(
     input_stream: TextIO,
     output: TextIO,
     errors: TextIO,
+    *,
+    one_shot: bool = False,
 ) -> int:
+    if one_shot:
+        create_one_shot(
+            operations, prediction_type, PromptSession(input_stream, output, errors)
+        )
+        return 0
     created = create_interactively(
         operations,
         prediction_type,
@@ -1142,8 +1179,14 @@ def _format_prediction_list(
         lines.append(
             f"#{prediction.prediction_id} | "
             f"{prediction.prediction_type.value.upper()} | "
-            f"{prediction.status.value.upper()} | "
-            f"{_browser_forecast_summary(prediction)}"
+            f"{lifecycle_label(prediction.status, prediction.forecast_contract).upper()} | "
+            + (
+                "One-Shot | "
+                if prediction.forecast_contract
+                and prediction.forecast_contract.is_one_shot
+                else ""
+            )
+            + _browser_forecast_summary(prediction)
         )
         _append_field(lines, "Question", prediction.question, indent="  ")
         if prediction.tags:

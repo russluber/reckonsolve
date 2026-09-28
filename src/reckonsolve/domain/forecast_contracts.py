@@ -118,6 +118,13 @@ class ForecastContract:
             )
 
     @property
+    def is_one_shot(self) -> bool:
+        return self.cohort in (
+            ForecastCohort.ONE_SHOT_BINARY,
+            ForecastCohort.ONE_SHOT_NUMERIC,
+        )
+
+    @property
     def cohort(self) -> ForecastCohort:
         """Return the only behavior cohort matching all stored identities."""
 

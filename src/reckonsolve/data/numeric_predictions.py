@@ -19,7 +19,7 @@ class NumericPredictionRepository:
     def get_prediction(self, prediction_id: int) -> NumericPrediction | None:
         with self._database.transaction() as connection:
             exists = connection.execute(
-                "SELECT 1 FROM predictions WHERE id = ? AND prediction_type = 'numeric'",
+                "SELECT 1 FROM predictions WHERE id = ? AND prediction_type = 'numeric' AND id IN (SELECT prediction_id FROM prediction_forecast_contracts WHERE forecast_model = 'numeric-quantiles-5-v2')",
                 (prediction_id,),
             ).fetchone()
             return (
@@ -32,6 +32,7 @@ class NumericPredictionRepository:
         with self._database.transaction() as connection:
             row = connection.execute(
                 """SELECT id FROM predictions WHERE prediction_type = 'numeric'
+                AND id IN (SELECT prediction_id FROM prediction_forecast_contracts WHERE forecast_model = 'numeric-quantiles-5-v2')
                 ORDER BY created_at DESC, id DESC LIMIT 1"""
             ).fetchone()
             return (

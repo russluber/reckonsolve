@@ -1,4 +1,4 @@
-"""Internal M56 persistence foundation; GUI/CLI operations arrive in M57.
+"""Atomic One-Shot persistence shared by desktop and CLI operations.
 
 All writes use the same immediate transaction and immutable source rows as the
 deadline workflows. No original value or system timestamp is overwritten.
@@ -6,14 +6,19 @@ deadline workflows. No original value or system timestamp is overwritten.
 
 import sqlite3
 from dataclasses import replace
+from datetime import date
 
-from reckonsolve.clock import Clock, as_utc, format_utc
+from reckonsolve.clock import Clock, as_utc, format_utc, parse_utc
 from reckonsolve.domain.one_shot import (
     NewOneShotPrediction,
+    OneShotDetail,
+    OneShotJournal,
     OneShotValues,
 )
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
+    JournalCorrection,
+    NewJournalEntry,
     PredictionStatus,
     PredictionValidationError,
     _optional_text,
@@ -23,25 +28,179 @@ from .database import Database
 from .forecast_contracts import select_forecast_contract
 from .m56_migration import SNAPSHOT_FIELDS
 from .one_shot_facts import OneShotRecord, _reported_columns, _snapshot, read_one_shot
-from .predictions import ForecastContextChangedError, replace_tags
+from .predictions import (
+    ForecastContextChangedError,
+    _map_definition_change,
+    replace_tags,
+    select_tags,
+)
+from .terminal_history import _select_invalidation_history
 
 
 class OneShotRepository:
-    """Internal, tested storage operations, deliberately absent from public entry points."""
+    """Immutable originals and explicit transcription repairs."""
 
     def __init__(self, database: Database, clock: Clock) -> None:
         self.database, self.clock = database, clock
 
     def get(self, prediction_id: int) -> OneShotRecord:
-        with self.database.transaction(allow_one_shot=True) as connection:
+        with self.database.transaction() as connection:
             return read_one_shot(
                 connection,
                 prediction_id,
                 select_forecast_contract(connection, prediction_id),
             )
 
+    def find_detail(self, prediction_id: int) -> OneShotDetail | None:
+        with self.database.transaction() as connection:
+            row = connection.execute(
+                "SELECT * FROM predictions WHERE id = ?", (prediction_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            contract = select_forecast_contract(connection, prediction_id)
+            if not contract.is_one_shot:
+                return None
+            return self._detail(
+                connection, read_one_shot(connection, prediction_id, contract)
+            )
+
+    @staticmethod
+    def _detail(connection: sqlite3.Connection, record: OneShotRecord) -> OneShotDetail:
+        identifier = record.prediction_id
+        row = connection.execute(
+            "SELECT * FROM predictions WHERE id = ?", (identifier,)
+        ).fetchone()
+        table = (
+            "forecast_revisions"
+            if record.definition is None
+            else "numeric_quantile_revisions"
+        )
+        rationale = connection.execute(
+            f"SELECT rationale FROM {table} WHERE prediction_id = ?", (identifier,)
+        ).fetchone()[0]
+        changes = tuple(
+            _map_definition_change(r)
+            for r in connection.execute(
+                "SELECT * FROM prediction_definition_changes WHERE prediction_id = ? ORDER BY id",
+                (identifier,),
+            )
+        )
+        untouched = (
+            record.status is PredictionStatus.OPEN
+            and record.metadata_version == 1
+            and not record.corrections
+            and not changes
+        )
+        untouched = (
+            untouched
+            and connection.execute(
+                "SELECT 1 FROM journal_entries WHERE prediction_id = ?", (identifier,)
+            ).fetchone()
+            is None
+        )
+        journals = tuple(
+            OneShotJournal(
+                r["id"],
+                parse_utc(r["created_at"]),
+                r["body"],
+                tuple(
+                    JournalCorrection(c["id"], c["body"], parse_utc(c["corrected_at"]))
+                    for c in connection.execute(
+                        "SELECT * FROM journal_entry_corrections WHERE journal_entry_id = ? ORDER BY sequence",
+                        (r["id"],),
+                    )
+                ),
+            )
+            for r in connection.execute(
+                "SELECT * FROM journal_entries WHERE prediction_id = ? ORDER BY id",
+                (identifier,),
+            )
+        )
+        return OneShotDetail(
+            record,
+            row["question"],
+            rationale,
+            row["background"],
+            row["resolution_criteria"],
+            date.fromisoformat(row["expected_resolution"])
+            if row["expected_resolution"]
+            else None,
+            select_tags(connection, identifier),
+            parse_utc(row["updated_at"]),
+            bool(untouched),
+            changes,
+            journals,
+            _select_invalidation_history(connection, identifier),
+        )
+
+    def add_journal(self, expected: OneShotRecord, body: str) -> OneShotDetail:
+        entry = NewJournalEntry(body)
+        with self.database.transaction() as connection:
+            current = self._current(connection, expected)
+            if current.status is not PredictionStatus.OPEN:
+                raise ValueError(
+                    "New Journal entries are allowed only while waiting for an answer."
+                )
+            table, anchor = (
+                ("forecast_revisions", "forecast_revision_id")
+                if current.definition is None
+                else ("numeric_quantile_revisions", "quantile_revision_id")
+            )
+            connection.execute(
+                f"INSERT INTO journal_entries (prediction_id, {anchor}, body, created_at) SELECT ?, id, ?, ? FROM {table} WHERE prediction_id = ?",
+                (
+                    current.prediction_id,
+                    entry.body,
+                    format_utc(as_utc(self.clock.now())),
+                    current.prediction_id,
+                ),
+            )
+
+            return self._detail(connection, current)
+
+    def invalidate_or_delete(
+        self,
+        expected: OneShotRecord,
+        *,
+        delete: bool = False,
+        reason: str | None = None,
+    ) -> OneShotDetail | None:
+        reason = _optional_text(reason, "reason")
+        with self.database.transaction() as connection:
+            current = self._current(connection, expected)
+            if current.status is not PredictionStatus.OPEN:
+                raise ValueError(
+                    "Only a One-Shot waiting for an answer can be invalidated or deleted."
+                )
+            if delete:
+                if not self._detail(connection, current).deletion_allowed:
+                    raise ValueError(
+                        "This One-Shot has history. Mark it Invalid to preserve it."
+                    )
+                connection.execute(
+                    "DELETE FROM predictions WHERE id = ?", (current.prediction_id,)
+                )
+                return None
+            else:
+                connection.execute(
+                    "INSERT INTO prediction_invalidations (prediction_id, invalidated_at, reason) VALUES (?, ?, ?)",
+                    (
+                        current.prediction_id,
+                        format_utc(as_utc(self.clock.now())),
+                        reason,
+                    ),
+                )
+            return self._detail(
+                connection,
+                read_one_shot(connection, current.prediction_id, current.contract),
+            )
+
     def create_prediction(self, request: NewOneShotPrediction) -> OneShotRecord:
-        with self.database.transaction(allow_one_shot=True) as connection:
+        return self.create_detail(request).record
+
+    def create_detail(self, request: NewOneShotPrediction) -> OneShotDetail:
+        with self.database.transaction() as connection:
             timestamp = format_utc(as_utc(self.clock.now()))
             definition = request.definition
             identifier = connection.execute(
@@ -106,13 +265,20 @@ class OneShotRepository:
             )
             if request.values.answer is not None:
                 self._insert_answer(connection, identifier, request.values, timestamp)
-            return read_one_shot(connection, identifier, request.contract)
+            return self._detail(
+                connection, read_one_shot(connection, identifier, request.contract)
+            )
 
     def add_answer(
         self, expected: OneShotRecord, values: OneShotValues
     ) -> OneShotRecord:
+        return self.add_answer_detail(expected, values).record
+
+    def add_answer_detail(
+        self, expected: OneShotRecord, values: OneShotValues
+    ) -> OneShotDetail:
         values.validate_contract(expected.contract, expected.definition)
-        with self.database.transaction(allow_one_shot=True) as connection:
+        with self.database.transaction() as connection:
             current = self._current(connection, expected)
             if (
                 current.status is not PredictionStatus.OPEN
@@ -141,14 +307,22 @@ class OneShotRepository:
                 values,
                 format_utc(as_utc(self.clock.now())),
             )
-            return read_one_shot(connection, current.prediction_id, current.contract)
+            return self._detail(
+                connection,
+                read_one_shot(connection, current.prediction_id, current.contract),
+            )
 
     def correct(
         self, expected: OneShotRecord, values: OneShotValues, *, note: str | None = None
     ) -> OneShotRecord:
+        return self.correct_detail(expected, values, note=note).record
+
+    def correct_detail(
+        self, expected: OneShotRecord, values: OneShotValues, *, note: str | None = None
+    ) -> OneShotDetail:
         values.validate_contract(expected.contract, expected.definition)
         note = _optional_text(note, "note")
-        with self.database.transaction(allow_one_shot=True) as connection:
+        with self.database.transaction() as connection:
             current = self._current(connection, expected)
             if values == current.effective:
                 raise PredictionValidationError(
@@ -172,12 +346,28 @@ class OneShotRepository:
                     *_snapshot(values),
                 ),
             )
-            return read_one_shot(connection, current.prediction_id, current.contract)
+            connection.execute(
+                "INSERT OR IGNORE INTO search_dirty_predictions (prediction_id) VALUES (?)",
+                (current.prediction_id,),
+            )
+            return self._detail(
+                connection,
+                read_one_shot(connection, current.prediction_id, current.contract),
+            )
 
     @staticmethod
     def _current(
         connection: sqlite3.Connection, expected: OneShotRecord
     ) -> OneShotRecord:
+        if (
+            connection.execute(
+                "SELECT 1 FROM predictions WHERE id = ?", (expected.prediction_id,)
+            ).fetchone()
+            is None
+        ):
+            raise ForecastContextChangedError(
+                "This One-Shot was deleted. Reload before saving."
+            )
         current = read_one_shot(
             connection,
             expected.prediction_id,

@@ -6,7 +6,10 @@ import pytest
 
 from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS, Migration
-from reckonsolve.data.search_index import SearchIndexUnavailableError
+from reckonsolve.data.search_index import (
+    SEARCH_PROJECTION_VERSION,
+    SearchIndexUnavailableError,
+)
 
 STAMP = datetime(2026, 8, 27, 18, tzinfo=UTC)
 
@@ -99,7 +102,7 @@ def test_v14_creates_versioned_projection_and_update_triggers(tmp_path) -> None:
             ).fetchall()
         }
 
-    assert tuple(state) == (1, 0)
+    assert tuple(state) == (SEARCH_PROJECTION_VERSION, 0)
     assert objects == {
         "prediction_search",
         "prediction_search_vocabulary",

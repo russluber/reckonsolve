@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7/v0.8 Product Specifications
 
-Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56 internal One-Shot foundation implemented; M57–M60 remain planned; source release publication is a separate repository step
+Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56 foundation and M57 individual One-Shot workflows implemented; M57 awaits manual acceptance; M58–M60 remain planned; source release publication is a separate repository step
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -3879,10 +3879,11 @@ v0.7 is not complete unless all of the following are true:
 
 ## 36. Planned v0.8.0 One-Shot Prediction contract and milestone plan
 
-Status: M56 is implemented following explicit user authorization. Schema 19 and the
-internal One-Shot contract, storage, and pure scoring foundation are available; public
-GUI/CLI workflows remain the deadline-based contract in Section 35. M57–M60 remain
-planned and require separate explicit authorization.
+Status: M56 and M57 are implemented following explicit user authorization. Schema 19
+supports individual One-Shot creation, later answering, transcription correction, and
+post-save Brier/WIS in the desktop and CLI. M57 awaits manual acceptance. M58–M60
+remain planned and require separate explicit authorization. The deadline-based
+contract in Section 35 remains the default.
 
 This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durable
 scoring contracts, a versioned SQLite migration, creation and Detail workflows, GUI/CLI
@@ -3911,8 +3912,8 @@ One-Shot is for observational uncertainty, not goals, controllable results, gene
 future-event forecasts, or a way to avoid a Deadline on an ongoing question. “Soon” is
 guidance, not a hard elapsed-time or scoring limit.
 
-The source and measurement convention should be considered before looking. **How I will
-check the answer** is visible, optional, and gently encouraged in creation; the
+The source and measurement convention should be considered before looking. **Background**
+is visible and optional, and encourages recording the context and checking method; the
 application does not require boilerplate for a simple question. A material post-answer
 change to the target, threshold, unit, measurement method, source of truth, or answer
 convention does not become a transcription correction. Resolve against the original
@@ -3963,7 +3964,7 @@ one-shot score. It never updates or deletes the original statement, creates a fo
 revision, or claims that the user made a new forecast before reveal. A correction note
 is optional; the
 before/after values, correction action, and app time are mandatory audit facts. Question
-and Resolution Criteria clarifications retain protected Definition history; a material
+and previously saved Resolution Criteria clarifications retain protected Definition history; a material
 target change follows the Invalid/new-Prediction rule. Corrections of optional prose
 keep the existing transparent text-history discipline. Both entry and correction
 transactions are atomic and reject stale context.
@@ -3974,10 +3975,41 @@ New Prediction continues to open on the current Deadline-based form. A prominent
 **One-Shot** action opens a tailored screen using the existing Binary or Numeric input
 controls. Required fields are Question and the type-appropriate forecast values, plus
 unit, precision, and value constraint for Numeric. The answer is optional at creation.
-Optional rationale, Background, Expected Resolution, tags, reported times, and other
-established supporting metadata remain available without obscuring the forecast.
-Resolution Criteria appears as the visible, optional **How I will check the answer**
-field; it retains the existing protected-definition behavior. A form with an answer
+Optional rationale, Background, tags, reported times, and other established supporting
+metadata remain available without obscuring the forecast. Following the user's M57
+interface review, Background, Rationale, and Tags are visible in that order within the
+Forecast card, immediately after the forecast's reported-time controls and above Include
+the answer now, with no More details expander. Background holds both context and the
+checking method; no separate How I will check the answer / Resolution Criteria field is
+offered for new One-Shots. It uses the existing Background metadata field and editing
+rules, without duplicating its text into Resolution Criteria. The Question placeholder
+is What did you predict? Background asks for context and how the answer will be checked,
+while Rationale asks what led to the prediction. Advice to choose the source or measurement
+convention before looking belongs in the Rulebook, not in the form placeholder.
+Expected Resolution is not offered in One-Shot creation or editing, including
+the CLI; any value already stored is preserved as historical metadata.
+Both creation modes use the same page background and card placement, with reciprocal
+top-right One-Shot / With Deadline switches. Switching modes retains unsaved drafts.
+Deadline-based New Prediction also supplies optional Background and Resolution Criteria
+placeholders explaining context and how the question will be settled. These prompts are
+placeholder text only and are never saved as user content.
+Reported times use separate date and time controls: a calendar date picker defaults to
+today when enabled, beside one segmented hh:mm AM/PM time field. Type hours, Tab,
+minutes, Tab, then A or P; Shift+Tab goes backward and Up/Down adjusts the selected
+section. Clicking a section permits replacing it. Valid one- or two-digit entries stay
+in the section until Tab, so typing 7, Tab, 30, Tab, P produces 7:30 PM without skipping
+minutes. An entry above the section's maximum is bounded and advances to the next
+section (for example, hour 13 becomes 12 and selects minutes); the field never stores
+an invalid hour/minute. The 12-hour format maps 12 AM to midnight and 12 PM to noon.
+Time defaults to the current local minute when first enabled. An
+Approximate time choice and optional explicit offset context remain available. Reported
+times start unset until Record date and time is checked, and remain documentary wall
+times, including during repeated or nonexistent local hours.
+Date controls leave room for the complete displayed date, including the four-digit year.
+Shared date/time and dropdown styling keeps the arrow inside the rounded field outline.
+Any previously saved Resolution Criteria remains available in Detail and metadata
+editing with its established protected Definition history; no existing text is deleted
+or combined with Background. A form with an answer
 shows no Brier, WIS, or score-driven suggestion before Save. Cancel and validation
 failures create no partial forecast or answer. Successful creation with an answer goes
 directly to Resolved Detail. Creation without an answer goes to **Waiting for answer**
@@ -3987,8 +4019,8 @@ Waiting for answer is a One-Shot presentation of the existing nonterminal state,
 new canonical lifecycle state. It offers **Add answer**, permits ordinary Journal and
 metadata work under established safeguards, and allows Invalidate. It never offers
 Revise, Forecast Review, a Deadline editor, or Needs Attention based on forecast
-staleness. Optional Expected Resolution can still support Ready to Resolve planning, but
-does not score or lock the Prediction. Once answered, it is Resolved and retains the
+staleness. One-Shot does not use Expected Resolution or Ready to Resolve planning.
+Once answered, it is Resolved and retains the
 existing Postmortem, Skip Postmortem, terminal correction, and guarded
 deletion/invalidation behavior where applicable. One-Shot Detail keeps Question,
 forecast, tags, selectable notes, original/effective facts, correction and Definition
@@ -4071,7 +4103,7 @@ older Prediction.
 
 ### 36.6 Proposed implementation milestones
 
-M56 is implemented under its separate authorization. The remaining milestones are a
+M56 and M57 are implemented under their separate authorizations. The remaining milestones are a
 plan, not authorization to implement. Work on one milestone or one coherent vertical
 slice only after the user explicitly authorizes it.
 
@@ -4096,6 +4128,14 @@ One-Shot creation entry point is available in this milestone.
   creation entry point is exposed yet.
 
 #### Milestone 57: Complete One-Shot creation, answer, and individual feedback
+
+Status: implemented; manual desktop acceptance pending. The CLI uses
+`create binary --one-shot` / `create numeric --one-shot`, and dispatches `resolve`
+to Add answer. Basic effective archive rows and terminal-text projection allow
+records to reopen without the M56 foundation-only guard. Full retrieval, mode
+filtering, matched-source navigation, Journal corrections, and Postmortem queue/Skip
+integration remain M58; aggregate One-Shot Analytics remains M59. Schema 19 and the
+format-4 CSV refusal are unchanged.
 
 - Add the One-Shot action and tailored Binary/Numeric New Prediction screen while
   leaving Deadline-based creation the default. Implement both save-with-answer and

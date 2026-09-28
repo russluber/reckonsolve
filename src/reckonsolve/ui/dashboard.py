@@ -41,6 +41,7 @@ from reckonsolve.domain.transfer import (
     CsvExportResult,
     DataManagementStatus,
 )
+from reckonsolve.forecast_display import lifecycle_label
 from reckonsolve.ui.components import (
     ContentPanel,
     EmptyStateLabel,
@@ -511,7 +512,9 @@ class DashboardScreen(QWidget):
 
     @staticmethod
     def _row_text(prediction: DashboardPrediction) -> str:
-        badges = [prediction.status.value.upper()]
+        badges = [
+            lifecycle_label(prediction.status, prediction.forecast_contract).upper()
+        ]
         if prediction.needs_attention:
             badges.append("NEEDS ATTENTION")
         if prediction.ready_to_resolve:
@@ -526,7 +529,9 @@ class DashboardScreen(QWidget):
 
     @staticmethod
     def _row_description(prediction: DashboardPrediction) -> str:
-        classifications = [prediction.status.value]
+        classifications = [
+            lifecycle_label(prediction.status, prediction.forecast_contract)
+        ]
         if prediction.needs_attention:
             classifications.append("needs attention")
         if prediction.ready_to_resolve:
@@ -547,7 +552,12 @@ class DashboardScreen(QWidget):
             else StatusTone.ACCENT
         )
         badges: list[tuple[str, StatusTone]] = [
-            (prediction.status.value.upper(), lifecycle_tone)
+            (
+                lifecycle_label(
+                    prediction.status, prediction.forecast_contract
+                ).upper(),
+                lifecycle_tone,
+            )
         ]
         if prediction.needs_attention:
             badges.append(("NEEDS ATTENTION", StatusTone.WARNING))
@@ -984,6 +994,15 @@ def _postmortem_outcome_summary(prediction: NeedsPostmortemPrediction) -> str:
 def _forecast_summary(prediction: DashboardPrediction) -> str:
     """Return an unambiguous compact current-forecast summary for a row."""
 
+    if prediction.forecast_contract and prediction.forecast_contract.is_one_shot:
+        value = (
+            quantile_summary(
+                prediction.numeric_quantiles, prediction.numeric_unit or ""
+            )
+            if prediction.numeric_quantiles
+            else f"{prediction.probability_percent}% Yes"
+        )
+        return f"{prediction.prediction_type.value.upper()} · One-Shot · {value}"
     if prediction.prediction_type is PredictionType.BINARY:
         if prediction.probability_percent is None:
             raise ValueError("A Binary Dashboard row requires a probability.")

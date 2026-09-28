@@ -46,6 +46,7 @@ from reckonsolve.application.errors import (
 from reckonsolve.domain.attention import DashboardSnapshot
 from reckonsolve.domain.browser import PredictionBrowserSnapshot
 from reckonsolve.domain.forecast_contracts import ForecastContract
+from reckonsolve.domain.one_shot import OneShotDetail
 from reckonsolve.domain.predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
@@ -71,6 +72,12 @@ from reckonsolve.domain.quantiles import (
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
 from reckonsolve.forecast_display import format_local_deadline
 from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
+from reckonsolve.one_shot_display import (
+    forecast_text,
+    score_lines,
+    status_text,
+    values_lines,
+)
 from reckonsolve.ui.components import (
     ContentPanel,
     EmptyStateLabel,
@@ -80,6 +87,7 @@ from reckonsolve.ui.components import (
 from reckonsolve.ui.effective_time_input import EffectiveTimeInput
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.one_shot import OneShotEditDialog, text_label
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.quantile_input import FiveQuantileInput, QuantileCDF
 from reckonsolve.ui.quantile_scorecard import QuantileScorecardPanel
@@ -571,6 +579,7 @@ class NewPredictionScreen(QWidget):
     """Collect the minimum information needed for a binary prediction."""
 
     prediction_created = Signal(object)
+    one_shot_requested = Signal()
 
     def __init__(
         self,
@@ -592,6 +601,14 @@ class NewPredictionScreen(QWidget):
         header.title_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
+        self.one_shot_button = QPushButton("One-Shot", self)
+        self.one_shot_button.setObjectName("newOneShotButton")
+        apply_action_role(self.one_shot_button, ActionRole.SECONDARY)
+        self.one_shot_button.setToolTip(
+            "Record a final guess made before checking an already-existing answer."
+        )
+        self.one_shot_button.clicked.connect(self.one_shot_requested)
+        header.add_action(self.one_shot_button)
 
         question_label = QLabel("Question", self)
         question_label.setObjectName("questionLabel")
@@ -789,6 +806,9 @@ class NewPredictionScreen(QWidget):
         self.background_input = QPlainTextEdit(self.more_details_content)
         self.background_input.setObjectName("initialBackgroundInput")
         self.background_input.setAccessibleName("Background")
+        self.background_input.setPlaceholderText(
+            "What context or prior events help explain this question?"
+        )
         self.background_input.setMaximumHeight(100)
         self.background_input.setTabChangesFocus(True)
         background_label.setBuddy(self.background_input)
@@ -801,6 +821,9 @@ class NewPredictionScreen(QWidget):
         self.resolution_criteria_input = QPlainTextEdit(self.more_details_content)
         self.resolution_criteria_input.setObjectName("initialResolutionCriteriaInput")
         self.resolution_criteria_input.setAccessibleName("Resolution criteria")
+        self.resolution_criteria_input.setPlaceholderText(
+            "What result will settle this question, and which source will you use to check it?"
+        )
         self.resolution_criteria_input.setMaximumHeight(100)
         self.resolution_criteria_input.setTabChangesFocus(True)
         criteria_label.setBuddy(self.resolution_criteria_input)
@@ -2196,6 +2219,307 @@ class NumericPredictionDetailScreen(QWidget):
         dialog.open()
 
 
+class OneShotDetailScreen(QWidget):
+    """One saved guess with a separate original and correction history."""
+
+    def __init__(self, operations, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._operations = operations
+        self._prediction: OneShotDetail | None = None
+        self._dialog = None
+        self.scroll = QScrollArea(self)
+        self.scroll.setWidgetResizable(True)
+        self.content = QWidget(self)
+        self.content_layout = QVBoxLayout(self.content)
+        self.content_layout.setSpacing(int(Spacing.SECTION))
+        self.scroll.setWidget(self.content)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.scroll)
+
+    def show_prediction(self, detail: OneShotDetail | None) -> None:
+        self._prediction = detail
+        _clear_widget_layout(self.content_layout)
+        if detail is None:
+            self.content_layout.addWidget(text_label("The One-Shot was deleted.", self))
+            return
+        record = detail.record
+        unit = record.definition.unit if record.definition else ""
+        header = PageHeader("One-Shot Detail", parent=self)
+        self.content_layout.addWidget(header)
+        self.question = text_label(detail.question, self)
+        apply_text_role(self.question, TextRole.PAGE_TITLE)
+        self.content_layout.addWidget(self.question)
+        self.content_layout.addWidget(
+            text_label(
+                f"{record.contract.prediction_type.value.capitalize()} · One-Shot · {status_text(detail)}",
+                self,
+            )
+        )
+        self.forecast = text_label(forecast_text(record.effective, unit), self)
+        apply_text_role(self.forecast, TextRole.FORECAST)
+        self.content_layout.addWidget(self.forecast)
+        if detail.tags:
+            self.content_layout.addWidget(
+                text_label("  ".join(f"#{t}" for t in detail.tags), self)
+            )
+        action_panel = QWidget(self)
+        actions = QGridLayout(action_panel)
+        actions.setContentsMargins(0, 0, 0, 0)
+        self.answer_button = QPushButton("Add answer", action_panel)
+        self.answer_button.setVisible(detail.status is PredictionStatus.OPEN)
+        apply_action_role(self.answer_button, ActionRole.PRIMARY)
+        self.answer_button.clicked.connect(lambda: self.open_values(correction=False))
+        self.correct_button = QPushButton("Correct transcription", action_panel)
+        self.correct_button.clicked.connect(lambda: self.open_values(correction=True))
+        self.edit_button = QPushButton("Edit details", action_panel)
+        self.edit_button.clicked.connect(self.open_metadata)
+        self.journal_button = QPushButton("Add Journal entry", action_panel)
+        self.journal_button.setVisible(detail.status is PredictionStatus.OPEN)
+        self.journal_button.clicked.connect(self.open_journal)
+        self.invalid_button = QPushButton("Mark Invalid", action_panel)
+        self.invalid_button.setVisible(detail.status is PredictionStatus.OPEN)
+        self.invalid_button.clicked.connect(self.invalidate)
+        self.delete_button = QPushButton("Delete", action_panel)
+        self.delete_button.setVisible(detail.deletion_allowed)
+        self.delete_button.clicked.connect(self.delete)
+        visible_actions = [self.correct_button, self.edit_button]
+        if detail.status is PredictionStatus.OPEN:
+            visible_actions.insert(0, self.answer_button)
+            visible_actions.extend((self.journal_button, self.invalid_button))
+        if detail.deletion_allowed:
+            visible_actions.append(self.delete_button)
+        for i, button in enumerate(visible_actions):
+            if button is not self.answer_button:
+                apply_action_role(
+                    button,
+                    ActionRole.DESTRUCTIVE
+                    if button in (self.invalid_button, self.delete_button)
+                    else ActionRole.SECONDARY,
+                )
+            actions.addWidget(button, i // 2, i % 2)
+        self.content_layout.addWidget(action_panel)
+        self.error = text_label("", self)
+        apply_message_role(
+            self.error, StatusTone.ERROR, accessible_name="One-Shot Detail error"
+        )
+        self.error.hide()
+        self.content_layout.addWidget(self.error)
+        facts = ContentPanel("Recorded facts", parent=self)
+        facts.body_layout.addWidget(
+            text_label("\n".join(values_lines(record.effective, unit)[1:]), self)
+        )
+        facts.body_layout.addWidget(
+            text_label(
+                f"Entered in Reckonsolve: {record.recorded_at.astimezone().isoformat(sep=' ')}",
+                self,
+            )
+        )
+        if record.answer_recorded_at:
+            facts.body_layout.addWidget(
+                text_label(
+                    f"Answer entered in Reckonsolve: {record.answer_recorded_at.astimezone().isoformat(sep=' ')}",
+                    self,
+                )
+            )
+        if record.definition:
+            facts.body_layout.addWidget(
+                text_label(
+                    f"Unit: {unit} · Decimal places: {record.definition.decimal_places} · {record.definition.value_constraint.value}",
+                    self,
+                )
+            )
+        self.content_layout.addWidget(facts)
+        self.scorecard = ContentPanel("Scorecard", parent=self)
+        self.content_layout.addWidget(self.scorecard)
+        lines = score_lines(self._operations.one_shots.score(detail), unit)
+        if lines:
+            self.scorecard.body_layout.addWidget(text_label(lines[0], self))
+            if len(lines) > 1:
+                breakdown = _collapsible_history_group(
+                    "Score breakdown", "oneShotScoreBreakdown", self
+                )
+                _, body = _history_content(breakdown)
+                breakdown.show()
+                body.addWidget(text_label("\n".join(lines[1:]), self))
+                self.scorecard.body_layout.addWidget(breakdown)
+            if record.corrections:
+                self.scorecard.body_layout.addWidget(
+                    text_label(
+                        "Uses the latest corrected forecast and answer. Original facts remain below.",
+                        self,
+                    )
+                )
+        else:
+            self.scorecard.hide()
+        for title, value in (
+            ("Rationale", detail.rationale),
+            ("Background", detail.background),
+            ("How I will check the answer", detail.resolution_criteria),
+            ("Expected resolution", detail.expected_resolution),
+        ):
+            if value:
+                panel = ContentPanel(title, parent=self)
+                panel.body_layout.addWidget(text_label(str(value), self))
+                self.content_layout.addWidget(panel)
+        history = _collapsible_history_group(
+            "Original facts and transcription corrections",
+            "oneShotCorrectionHistory",
+            self,
+        )
+        _, history_layout = _history_content(history)
+        history.show()
+        history_layout.addWidget(
+            text_label(
+                "Original saved facts\n"
+                + "\n".join(values_lines(record.original, unit)),
+                self,
+            )
+        )
+        for correction in record.corrections:
+            history_layout.addWidget(
+                text_label(
+                    f"Correction {correction.sequence} · {correction.corrected_at.astimezone().isoformat(sep=' ')}\nBefore\n"
+                    + "\n".join(values_lines(correction.before, unit))
+                    + "\nAfter\n"
+                    + "\n".join(values_lines(correction.after, unit))
+                    + (f"\nNote: {correction.note}" if correction.note else ""),
+                    self,
+                )
+            )
+        self.content_layout.addWidget(history)
+        if detail.definition_changes:
+            definitions = _collapsible_history_group(
+                "Definition history", "oneShotDefinitionHistory", self
+            )
+            _, body = _history_content(definitions)
+            definitions.show()
+            for change in detail.definition_changes:
+                body.addWidget(_definition_change_widget(change, self))
+            self.content_layout.addWidget(definitions)
+        if detail.journals:
+            journals = ContentPanel("Journal", parent=self)
+            for entry in detail.journals:
+                journals.body_layout.addWidget(
+                    text_label(
+                        f"{entry.created_at.astimezone().isoformat(sep=' ')}\n{entry.body}",
+                        self,
+                    )
+                )
+                if entry.corrections:
+                    journals.body_layout.addWidget(
+                        text_label(
+                            "Original: "
+                            + entry.original_body
+                            + "\n"
+                            + "\n".join(
+                                f"{c.corrected_at.astimezone().isoformat()}: {c.body}"
+                                for c in entry.corrections
+                            ),
+                            self,
+                        )
+                    )
+            self.content_layout.addWidget(journals)
+        if detail.invalidation_history:
+            invalid = detail.invalidation_history
+            self.content_layout.addWidget(
+                text_label(
+                    f"Invalidated: {invalid.original.invalidated_at.astimezone().isoformat()}\nReason: {invalid.effective.reason or 'Not supplied'}",
+                    self,
+                )
+            )
+        self.content_layout.addStretch()
+
+    def refresh(self) -> None:
+        if self._prediction is not None:
+            try:
+                self.show_prediction(
+                    self._operations.one_shots.get(self._prediction.prediction_id)
+                )
+            except ApplicationError as error:
+                self.error.setText(str(error))
+                self.error.show()
+
+    def open_values(self, *, correction: bool) -> None:
+        self._dialog = OneShotEditDialog(
+            self._operations, self._prediction, correction=correction, parent=self
+        )
+        self._dialog.saved.connect(self.show_prediction)
+        self._dialog.open()
+
+    def open_metadata(self) -> None:
+        self._dialog = EditPredictionDetailsDialog(
+            self._operations, self._prediction, self
+        )
+        self._dialog.metadata_saved.connect(self.show_prediction)
+        self._dialog.open()
+
+    def open_journal(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        body, accepted = QInputDialog.getMultiLineText(
+            self,
+            "Add Journal entry",
+            "Reasoning or evidence (does not change your forecast)",
+        )
+        if accepted:
+            try:
+                self.show_prediction(
+                    self._operations.one_shots.add_journal(self._prediction, body)
+                )
+            except ApplicationError as error:
+                self.error.setText(str(error))
+                self.error.show()
+
+    def invalidate(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        reason, accepted = QInputDialog.getMultiLineText(
+            self,
+            "Mark Invalid",
+            "Optional reason. This preserves the prediction and excludes it from scoring.",
+        )
+        if (
+            accepted
+            and QMessageBox.warning(
+                self,
+                "Mark Invalid",
+                "Preserve this One-Shot as Invalid? This terminal decision cannot be undone.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            == QMessageBox.StandardButton.Yes
+        ):
+            try:
+                self.show_prediction(
+                    self._operations.one_shots.invalidate(
+                        self._prediction, reason=reason
+                    )
+                )
+            except ApplicationError as error:
+                self.error.setText(str(error))
+                self.error.show()
+
+    def delete(self) -> None:
+        if (
+            QMessageBox.warning(
+                self,
+                "Delete One-Shot",
+                "Permanently delete this untouched One-Shot?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        try:
+            self._operations.one_shots.delete(self._prediction, confirmed=True)
+            self.show_prediction(None)
+        except ApplicationError as error:
+            self.error.setText(str(error))
+            self.error.show()
+
+
 class PredictionDetailHost(QWidget):
     """Keep one primary Detail navigation slot while selecting forecast type."""
 
@@ -2211,11 +2535,13 @@ class PredictionDetailHost(QWidget):
         self._operations = operations
         self._binary_detail = binary_detail
         self._numeric_detail = numeric_detail
+        self._one_shot_detail = OneShotDetailScreen(operations)
         self._current_type: PredictionType | None = None
 
         self._stack = QStackedWidget(self)
         self._stack.addWidget(binary_detail)
         self._stack.addWidget(numeric_detail)
+        self._stack.addWidget(self._one_shot_detail)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -2224,6 +2550,10 @@ class PredictionDetailHost(QWidget):
     def show_prediction(self, prediction: PredictionSnapshot | None) -> None:
         """Select and present the existing Binary detail screen."""
 
+        if isinstance(prediction, OneShotDetail):
+            self._one_shot_detail.show_prediction(prediction)
+            self._stack.setCurrentWidget(self._one_shot_detail)
+            return
         self._current_type = PredictionType.BINARY
         self._binary_detail.show_prediction(prediction)
         self._stack.setCurrentWidget(self._binary_detail)
@@ -2241,6 +2571,12 @@ class PredictionDetailHost(QWidget):
     def show_latest_prediction(self) -> None:
         """Present the latest persisted forecast type after app restart."""
 
+        latest = getattr(self._operations, "get_latest_for_navigation", None)
+        if latest is not None:
+            prediction = latest()
+            if isinstance(prediction, OneShotDetail):
+                self.show_prediction(prediction)
+                return
         binary = self._operations.get_latest_prediction()
         get_latest_numeric = getattr(
             self._operations,
@@ -2265,6 +2601,9 @@ class PredictionDetailHost(QWidget):
     def refresh(self) -> None:
         """Refresh the selected detail type, or select the latest at first visit."""
 
+        if self._stack.currentWidget() is self._one_shot_detail:
+            self._one_shot_detail.refresh()
+            return
         if self._current_type is PredictionType.BINARY:
             self._binary_detail.refresh()
         elif self._current_type is PredictionType.NUMERIC:
@@ -2275,6 +2614,8 @@ class PredictionDetailHost(QWidget):
     def focus_search_match(self, document: SearchDocument) -> None:
         """Delegate matched-source navigation to the currently selected Detail."""
 
+        if self._stack.currentWidget() is self._one_shot_detail:
+            return
         if self._current_type is PredictionType.NUMERIC:
             self._numeric_detail.focus_search_match(document)
         elif self._current_type is PredictionType.BINARY:
@@ -2430,15 +2771,35 @@ class EditPredictionDetailsDialog(_StyledDialog):
         self.exact_deadline_context.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        assert contract is not None and contract.forecast_deadline is not None
-        self.exact_deadline_context.setText(
-            "Forecast Deadline (permanent): "
-            + format_local_deadline(contract.forecast_deadline.instant)
-        )
+        assert contract is not None
+        if contract.is_one_shot:
+            self.exact_deadline_context.hide()
+            self.question_input.setPlaceholderText("What did you predict?")
+            self.background_input.setPlaceholderText(
+                "What is the context, and how will you check the answer?"
+            )
+            # Earlier One-Shots may already contain separate criteria. Retain
+            # those facts and their existing protected editing/history behavior.
+            criteria_label.setVisible(bool(prediction.resolution_criteria))
+            self.resolution_criteria_input.setVisible(
+                bool(prediction.resolution_criteria)
+            )
+            if isinstance(prediction, OneShotDetail) and prediction.record.definition:
+                definition = prediction.record.definition
+                self.numeric_definition_context.setText(
+                    f"Numeric definition (fixed after creation)\nUnit: {definition.unit}\nDecimal places: {definition.decimal_places}\nValue constraint: {definition.value_constraint.value}"
+                )
+                self.numeric_definition_context.show()
+        else:
+            self.exact_deadline_context.setText(
+                "Forecast Deadline (permanent): "
+                + format_local_deadline(contract.forecast_deadline.instant)
+            )
         expected_resolution_row = _date_input_row(
             self.expected_resolution_toggle,
             self.expected_resolution_input,
         )
+        expected_resolution_row.setVisible(not contract.is_one_shot)
 
         layout = QVBoxLayout(self)
         layout.addWidget(title)

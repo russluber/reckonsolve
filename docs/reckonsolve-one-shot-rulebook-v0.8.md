@@ -1,6 +1,8 @@
 # Reckonsolve One-Shot Rulebook Addendum (planned v0.8)
 
-Status: planned guidance; the One-Shot workflow is not implemented in v0.7. This
+Status: v0.8 guidance; M57 individual workflows are implemented and await manual
+acceptance. Retrieval/reflection integration and aggregate Analytics are still staged
+in M58–M59. This is not part of the v0.7 release. This
 addendum applies only to the new One-Shot mode described in [product-spec Section
 36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan).
 The [v0.7 Forecasting Rulebook](reckonsolve-forecasting-rulebook-v0.7.md) remains the
@@ -34,8 +36,11 @@ into an observational forecast.
 Consider which tree, person, object, record, or result you mean and how you will check
 it. For a measured quantity, consider the unit, measurement method, endpoints, and
 rounding that could change the answer. For Yes/No, make the threshold and source clear.
-The One-Shot screen offers **How I will check the answer** as visible optional guidance.
-Use it when ambiguity matters; simple questions need no required prose.
+The One-Shot screen offers **Background** for context and how you will check the answer,
+and **Rationale** records the clues, assumptions, or comparisons that led to your forecast.
+
+Good practice: choose the source or measurement convention before looking. Use Background
+when ambiguity matters; simple questions need no required prose.
 
 The height of a tree can exist before you forecast it. For One-Shot, the reveal is when
 you check the previously unknown answer by your chosen method. It is not the instant the

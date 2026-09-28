@@ -84,7 +84,10 @@ class AnalyticsRepository:
             ):
                 return None
             contract = select_supported_contract(connection, prediction_id)
-            if contract is None:
+            if (
+                contract is None
+                or contract.cohort is not ForecastCohort.TRAJECTORY_BINARY
+            ):
                 return None
             history = _select_binary_resolution_history(connection, prediction_id)
             assert history is not None

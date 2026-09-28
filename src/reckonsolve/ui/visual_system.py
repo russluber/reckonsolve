@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
+from importlib.resources import files
+from pathlib import Path
 
 from PySide6.QtCore import QEvent
 from PySide6.QtGui import QColor, QFont, QPalette
@@ -250,6 +252,13 @@ def build_stylesheet(palette: QPalette) -> str:
     compact = int(Spacing.COMPACT)
     control = int(Spacing.CONTROL)
     ordinary = int(Spacing.ORDINARY)
+    dropdown_arrow = Path(
+        str(
+            files("reckonsolve.ui.assets").joinpath(
+                f"dropdown-arrow-{'dark' if color.is_dark else 'light'}.svg"
+            )
+        )
+    ).as_posix()
 
     return f"""
 QMainWindow#mainWindow,
@@ -386,6 +395,42 @@ QComboBox:disabled {{
     background-color: {color.disabled_surface};
     color: {color.disabled_text};
     border-color: {color.border};
+}}
+
+/* Windows 11 places the two native spin buttons side by side. Reserve room
+   for both, so the embedded text editor cannot intercept the up button. */
+QSpinBox,
+QDoubleSpinBox {{
+    padding-right: {2 * int(Spacing.PAGE)}px;
+}}
+
+/* Keep native dropdown bevels inside the rounded input outline. */
+QComboBox,
+QDateTimeEdit {{
+    padding-right: {int(Spacing.PAGE)}px;
+}}
+QComboBox::drop-down,
+QDateTimeEdit::drop-down {{
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: {int(Spacing.PAGE)}px;
+    border: none;
+    border-top-right-radius: {control_radius}px;
+    border-bottom-right-radius: {control_radius}px;
+    background-color: transparent;
+}}
+QDateEdit {{
+    min-width: 7em;
+}}
+QTimeEdit {{
+    min-width: 6em;
+    padding-right: {control}px;
+}}
+QComboBox::down-arrow,
+QDateTimeEdit::down-arrow {{
+    image: url("{dropdown_arrow}");
+    width: 12px;
+    height: 12px;
 }}
 
 QPushButton {{

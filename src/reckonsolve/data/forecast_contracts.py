@@ -199,23 +199,6 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
                 ) from error
 
 
-def require_deadline_workflows(connection: sqlite3.Connection) -> None:
-    """Until M57/M58, refuse unsupported UI/read paths instead of partial loading."""
-    if (
-        _contract_table_exists(connection)
-        and connection.execute(
-            "SELECT 1 FROM prediction_forecast_contracts WHERE forecast_model IN "
-            "('binary-one-shot-v1', 'numeric-one-shot-5-v1') LIMIT 1"
-        ).fetchone()
-        is not None
-    ):
-        raise ForecastContractIntegrityError(
-            "This build contains the One-Shot storage foundation only. "
-            "One-Shot workflows and archive integration are not available yet. "
-            "No conversion or deletion occurred."
-        )
-
-
 def select_forecast_contract(
     connection: sqlite3.Connection,
     prediction_id: int,

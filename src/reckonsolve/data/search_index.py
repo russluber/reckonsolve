@@ -14,7 +14,7 @@ from reckonsolve.domain.search import (
 
 from .forecast_contracts import check_forecast_contract_integrity, quantile_tables_exist
 
-SEARCH_PROJECTION_VERSION = 1
+SEARCH_PROJECTION_VERSION = 2
 
 
 class SearchIndexError(sqlite3.DatabaseError):
@@ -450,6 +450,54 @@ def _append_definition_history_documents(
 
 
 def _append_resolution_documents(connection, prediction_id: int, add) -> None:
+    # One-Shot terminal prose follows its transcription snapshot chain, not
+    # the deadline-based terminal correction tables.
+    has_one_shot = connection.execute(
+        "SELECT 1 FROM sqlite_schema WHERE name = 'one_shot_forecast_times'"
+    ).fetchone()
+    if (
+        has_one_shot
+        and connection.execute(
+            "SELECT 1 FROM one_shot_forecast_times WHERE prediction_id = ?",
+            (prediction_id,),
+        ).fetchone()
+    ):
+        for table in ("resolutions", "numeric_resolutions"):
+            original = connection.execute(
+                f"SELECT * FROM {table} WHERE prediction_id = ?", (prediction_id,)
+            ).fetchone()
+            if original is None:
+                continue
+            versions = [
+                (
+                    None,
+                    0,
+                    original["resolution_notes"],
+                    original["postmortem"],
+                    original["resolved_at"],
+                )
+            ]
+            versions.extend(
+                (
+                    row["id"],
+                    row["sequence"],
+                    row["new_resolution_notes"],
+                    row["new_postmortem"],
+                    row["corrected_at"],
+                )
+                for row in connection.execute(
+                    "SELECT * FROM one_shot_corrections WHERE prediction_id = ? AND (new_outcome IS NOT NULL OR new_actual_scaled IS NOT NULL) ORDER BY sequence",
+                    (prediction_id,),
+                )
+            )
+            for kind, index in (
+                (SearchSourceKind.RESOLUTION_NOTES, 2),
+                (SearchSourceKind.POSTMORTEM, 3),
+            ):
+                _append_terminal_field_versions(
+                    add, kind, original["id"], versions, value_index=index
+                )
+        return
     for resolution_table, correction_table, parent_column, actual_flag in (
         (
             "resolutions",

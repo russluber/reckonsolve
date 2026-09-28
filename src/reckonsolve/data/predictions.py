@@ -20,6 +20,7 @@ from reckonsolve.domain.forecast_contracts import (
     ResolutionTiming,
     contract_status,
 )
+from reckonsolve.domain.one_shot import OneShotDetail
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     DefinitionChange,
@@ -56,8 +57,10 @@ from .forecast_contracts import (
     insert_prospective_contract,
     map_binary_contract,
     numeric_corrections_relation,
+    select_forecast_contract,
     select_supported_contract,
 )
+from .one_shot_archive import read_archive as read_one_shot_archive
 from .quantile_archive import read_archive as read_quantile_archive
 
 
@@ -801,6 +804,7 @@ class PredictionRepository:
             row = connection.execute(
                 f"""
                 {_prediction_detail_select(connection)}
+                WHERE prediction.id IN (SELECT prediction_id FROM prediction_forecast_contracts WHERE forecast_model = 'binary-trajectory-v1')
                 ORDER BY prediction.created_at DESC, prediction.id DESC
                 LIMIT 1
                 """
@@ -857,11 +861,14 @@ class PredictionRepository:
                     ),
                 )
                 for row in rows
+                if not select_supported_contract(
+                    connection, int(row["prediction_id"])
+                ).is_one_shot
             ) + tuple(
                 DashboardPrediction(
                     prediction_id=item.prediction_id,
                     question=item.question,
-                    probability_percent=None,
+                    probability_percent=item.probability_percent,
                     status=item.status,
                     latest_revision_at=item.latest_revision_at,
                     latest_review_at=item.latest_review_at,
@@ -871,7 +878,10 @@ class PredictionRepository:
                     forecast_contract=item.forecast_contract,
                     numeric_quantiles=item.numeric_quantiles,
                 )
-                for item in read_quantile_archive(connection)
+                for item in (
+                    *read_quantile_archive(connection),
+                    *read_one_shot_archive(connection),
+                )
                 if item.status is PredictionStatus.OPEN
             )
 
@@ -918,6 +928,7 @@ class PredictionRepository:
                     ON resolution.prediction_id = prediction.id
                 WHERE prediction.status = 'resolved'
                     AND prediction.prediction_type = 'binary'
+                    AND prediction.id IN (SELECT prediction_id FROM prediction_forecast_contracts WHERE forecast_model = 'binary-trajectory-v1')
                     AND NOT EXISTS (
                         SELECT 1
                         FROM postmortem_completions AS completion
@@ -976,6 +987,7 @@ class PredictionRepository:
                     ON resolution.prediction_id = prediction.id
                 WHERE prediction.status = 'resolved'
                     AND prediction.prediction_type = 'numeric'
+                    AND prediction.id IN (SELECT prediction_id FROM prediction_forecast_contracts WHERE forecast_model = 'numeric-quantiles-5-v2')
                     AND NOT EXISTS (
                         SELECT 1
                         FROM postmortem_completions AS completion
@@ -1081,7 +1093,9 @@ class PredictionRepository:
                 )
                 for row in rows
             }
-            quantile_items = read_quantile_archive(connection)
+            quantile_items = read_quantile_archive(connection) + read_one_shot_archive(
+                connection
+            )
 
         tags_by_prediction: dict[int, list[str]] = {}
         available_tags: list[str] = []
@@ -1105,6 +1119,7 @@ class PredictionRepository:
                     forecast_contract=contracts[int(row["prediction_id"])],
                 )
                 for row in rows
+                if not contracts[int(row["prediction_id"])].is_one_shot
             )
             + quantile_items,
             available_tags=tuple(available_tags),
@@ -1115,6 +1130,11 @@ class PredictionRepository:
 
         with self._database.transaction() as connection:
             row = _select_prediction_detail(connection, prediction_id)
+            if (
+                row is not None
+                and select_forecast_contract(connection, prediction_id).is_one_shot
+            ):
+                return None
             detail = (
                 None
                 if row is None
@@ -1131,7 +1151,7 @@ class PredictionRepository:
         prediction_id: int,
         update: PredictionMetadataUpdate,
         *,
-        expected: PredictionDetail | NumericPrediction,
+        expected: PredictionDetail | NumericPrediction | OneShotDetail,
         expected_metadata_version: int,
         changed_at: datetime,
     ) -> bool | None:
@@ -1703,7 +1723,7 @@ def _map_editable_metadata(
 
 def _same_editable_metadata(
     left: _EditableMetadata,
-    right: PredictionDetail | NumericPrediction,
+    right: PredictionDetail | NumericPrediction | OneShotDetail,
 ) -> bool:
     scalar_fields = (
         "question",

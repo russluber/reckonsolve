@@ -108,7 +108,7 @@ def test_create_correct_backup_and_restart_retains_every_fact(
     )
     if not numeric:
         assert score == Fraction(16, 25)
-    with database.transaction(allow_one_shot=True) as c:
+    with database.transaction() as c:
         revision_table = (
             "numeric_quantile_revisions" if numeric else "forecast_revisions"
         )
@@ -236,7 +236,7 @@ def test_creation_failure_rolls_back_parent_contract_tags_and_answer(storage, nu
 def test_invalid_exclusion_and_guarded_pending_answer(storage):
     database, _, repo = storage
     pending = repo.create_prediction(request(answered=False))
-    with database.transaction(allow_one_shot=True) as c:
+    with database.transaction() as c:
         c.execute(
             "INSERT INTO prediction_invalidations (prediction_id, invalidated_at) VALUES (?, ?)",
             (pending.prediction_id, format_utc(NOW)),
@@ -275,7 +275,7 @@ def test_sql_guards_reject_revisions_reviews_rewrites_and_deadlines(storage, num
     for command in commands:
         with (
             pytest.raises(sqlite3.IntegrityError),
-            database.transaction(allow_one_shot=True) as c,
+            database.transaction() as c,
         ):
             c.execute(command)
         assert repo.get(record.prediction_id) == record
@@ -294,7 +294,7 @@ def test_correction_chain_constraints_and_failure_rollback(storage):
     for command in commands:
         with (
             pytest.raises(sqlite3.IntegrityError),
-            database.transaction(allow_one_shot=True) as c,
+            database.transaction() as c,
         ):
             c.execute(command)
     clock.instant -= timedelta(minutes=2)
@@ -307,7 +307,7 @@ def test_missing_reported_metadata_is_rejected_before_commit(storage):
     database, _, _ = storage
     with (
         pytest.raises(ForecastContractIntegrityError),
-        database.transaction(allow_one_shot=True) as c,
+        database.transaction() as c,
     ):
         c.execute(
             "INSERT INTO predictions (question, status, prediction_type, created_at, updated_at) VALUES ('Broken', 'open', 'binary', ?, ?)",
@@ -324,9 +324,7 @@ def test_missing_reported_metadata_is_rejected_before_commit(storage):
         assert c.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] == 0
 
 
-def test_format_four_refuses_and_unimplemented_workflows_fail_explicitly(
-    storage, tmp_path
-):
+def test_format_four_refuses_while_public_archive_includes_one_shots(storage, tmp_path):
     database, clock, repo = storage
     repo.create_prediction(request())
     destination = tmp_path / "existing.zip"
@@ -334,8 +332,10 @@ def test_format_four_refuses_and_unimplemented_workflows_fail_explicitly(
     with pytest.raises(ValueError, match="format 4"):
         DataTransferRepository(database).export_csv_bundle(destination, exported_at=NOW)
     assert destination.read_bytes() == b"keep this artifact"
-    with pytest.raises(ForecastContractIntegrityError, match="foundation only"):
-        PredictionOperations(database, clock, UTC).browse_predictions()
+    assert (
+        len(PredictionOperations(database, clock, UTC).browse_predictions().predictions)
+        == 1
+    )
 
 
 def canonical_snapshot(connection):
@@ -504,10 +504,10 @@ def test_independent_connections_reject_stale_values_and_bounded_lock(storage):
         with pytest.raises(ForecastContextChangedError):
             repo.correct(original, replace(original.effective, probability_percent=80))
         current = repo.get(original.prediction_id)
-        with database.transaction(allow_one_shot=True) as c:
+        with database.transaction() as c:
             c.execute("PRAGMA busy_timeout = 1")
         with (
-            second_db.transaction(allow_one_shot=True),
+            second_db.transaction(),
             pytest.raises(sqlite3.OperationalError, match="locked"),
         ):
             repo.add_answer(
@@ -524,7 +524,7 @@ def test_sql_rejects_broken_correction_sequence_and_stale_before_snapshot(storag
     corrected = repo.correct(
         original, replace(original.effective, probability_percent=70)
     )
-    with database.transaction(allow_one_shot=True) as c:
+    with database.transaction() as c:
         row = dict(c.execute("SELECT * FROM one_shot_corrections").fetchone())
     for changes in (
         {"sequence": 3},
@@ -543,7 +543,7 @@ def test_sql_rejects_broken_correction_sequence_and_stale_before_snapshot(storag
         )
         with (
             pytest.raises(sqlite3.IntegrityError),
-            database.transaction(allow_one_shot=True) as c,
+            database.transaction() as c,
         ):
             c.execute(
                 f"INSERT INTO one_shot_corrections ({', '.join(proposed)}) VALUES ({', '.join('?' for _ in proposed)})",

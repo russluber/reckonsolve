@@ -41,6 +41,7 @@ from reckonsolve.ui.icons import (
     refresh_lucide_icons,
 )
 from reckonsolve.ui.notifications import NotificationHost
+from reckonsolve.ui.one_shot import OneShotCreationScreen
 from reckonsolve.ui.prediction_browser import PredictionBrowserScreen
 from reckonsolve.ui.presentation_settings import (
     MINIMUM_WINDOW_SIZE,
@@ -202,6 +203,19 @@ class MainWindow(QMainWindow):
         self._screen_stack.setObjectName("screenStack")
 
         self._new_prediction_screen = NewPredictionScreen(operations)
+        self._one_shot_creation_screen = OneShotCreationScreen(operations)
+        self._creation_stack = QStackedWidget(self)
+        self._creation_stack.addWidget(self._new_prediction_screen)
+        self._creation_stack.addWidget(self._one_shot_creation_screen)
+        self._new_prediction_screen.one_shot_requested.connect(
+            lambda: self._creation_stack.setCurrentIndex(1)
+        )
+        self._one_shot_creation_screen.cancelled.connect(
+            lambda: self._creation_stack.setCurrentIndex(0)
+        )
+        self._one_shot_creation_screen.prediction_created.connect(
+            self._show_created_prediction
+        )
         self._prediction_detail_screen = PredictionDetailScreen(operations)
         self._numeric_prediction_detail_screen = NumericPredictionDetailScreen(
             operations
@@ -240,7 +254,7 @@ class MainWindow(QMainWindow):
 
         screens = {
             "Dashboard": self._dashboard_screen,
-            "New Prediction": self._new_prediction_screen,
+            "New Prediction": self._creation_stack,
             "Prediction Detail": detail_container,
             "Predictions": self._prediction_browser_screen,
             "Analytics": self._analytics_screen,
@@ -445,6 +459,8 @@ class MainWindow(QMainWindow):
     def navigate_to(self, screen_name: str) -> None:
         """Navigate to a named screen while preserving contextual semantics."""
 
+        if screen_name == "New Prediction":
+            self._creation_stack.setCurrentIndex(0)
         if screen_name not in self.screen_names:
             message = f"Unknown Reckonsolve screen: {screen_name!r}"
             raise ValueError(message)

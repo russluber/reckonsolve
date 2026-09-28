@@ -11,8 +11,10 @@ from reckonsolve.application.errors import (
 )
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli_creation import CliInputCancelled, PromptSession, ask_quantiles
+from reckonsolve.cli_one_shot import mutate_one_shot
 from reckonsolve.cli_text import terminal_text
 from reckonsolve.domain.forecast_contracts import EffectiveResolutionTime
+from reckonsolve.domain.one_shot import OneShotDetail
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     FixedPrecisionValue,
@@ -36,6 +38,8 @@ def revise_interactively(
     """Append one type-appropriate revision after reviewing current context."""
 
     prediction = operations.get_prediction_for_navigation(prediction_id)
+    if isinstance(prediction, OneShotDetail):
+        return mutate_one_shot("revise", operations, prediction, session)
     _print_reviewed_context(prediction, session)
     if prediction.status is not PredictionStatus.OPEN:
         raise ForecastRevisionNotAllowedError(prediction.status)
@@ -83,6 +87,8 @@ def journal_interactively(
     """Append one Journal entry anchored to the reviewed current revision."""
 
     prediction = operations.get_prediction_for_navigation(prediction_id)
+    if isinstance(prediction, OneShotDetail):
+        return mutate_one_shot("journal", operations, prediction, session)
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise JournalEntryNotAllowedError(prediction.status)
@@ -120,6 +126,8 @@ def review_interactively(
     """Record deliberate retention of the reviewed current forecast."""
 
     prediction = operations.get_prediction_for_navigation(prediction_id)
+    if isinstance(prediction, OneShotDetail):
+        return mutate_one_shot("review", operations, prediction, session)
     _print_reviewed_context(prediction, session)
     if prediction.status is not PredictionStatus.OPEN:
         raise ForecastReviewNotAllowedError(prediction.status)
@@ -160,6 +168,8 @@ def resolve_interactively(
     """Record one confirmed terminal outcome against reviewed forecast context."""
 
     prediction = operations.get_prediction_for_navigation(prediction_id)
+    if isinstance(prediction, OneShotDetail):
+        return mutate_one_shot("resolve", operations, prediction, session)
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise LifecycleTransitionNotAllowedError("resolved", prediction.status)
@@ -246,6 +256,8 @@ def invalidate_interactively(
     """Record one confirmed Invalid decision against reviewed forecast context."""
 
     prediction = operations.get_prediction_for_navigation(prediction_id)
+    if isinstance(prediction, OneShotDetail):
+        return mutate_one_shot("invalidate", operations, prediction, session)
     _print_reviewed_context(prediction, session)
     if prediction.status not in (PredictionStatus.OPEN, PredictionStatus.LOCKED):
         raise LifecycleTransitionNotAllowedError(
@@ -289,6 +301,8 @@ def delete_interactively(
     """Permanently delete one confirmed, transaction-current untouched row."""
 
     prediction = operations.get_prediction_for_navigation(prediction_id)
+    if isinstance(prediction, OneShotDetail):
+        return mutate_one_shot("delete", operations, prediction, session)
     _print_reviewed_context(prediction, session)
     if (
         prediction.status is not PredictionStatus.OPEN

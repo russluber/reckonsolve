@@ -4,6 +4,17 @@ from datetime import datetime
 
 from reckonsolve.analytics.trajectory import TrajectoryScorecard
 from reckonsolve.domain.forecast_contracts import ForecastContract
+from reckonsolve.domain.predictions import PredictionStatus
+
+
+def lifecycle_label(status: PredictionStatus, contract: ForecastContract | None) -> str:
+    if contract and contract.is_one_shot and status is PredictionStatus.OPEN:
+        return "Waiting for answer"
+    return status.value.capitalize()
+
+
+def mode_label(contract: ForecastContract | None) -> str:
+    return "One-Shot" if contract and contract.is_one_shot else "Deadline-based"
 
 
 def format_local_deadline(value: datetime) -> str:
@@ -12,6 +23,8 @@ def format_local_deadline(value: datetime) -> str:
 
 
 def binary_contract_summary(contract: ForecastContract) -> str:
+    if contract.is_one_shot:
+        return "One-Shot Binary"
     assert contract.forecast_deadline is not None
     deadline = format_local_deadline(contract.forecast_deadline.instant)
     return f"Trajectory Binary; Deadline {deadline} (permanent)"

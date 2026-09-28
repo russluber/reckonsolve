@@ -6,7 +6,32 @@ Reckonsolve is a local-first personal forecasting journal for Windows. Record pr
 
 **Compatibility:** This source supports trajectory Binary and five-quantile Numeric forecasts only. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
 
-Supported v0.7 history upgrades unchanged to schema 19, including supported Binary-only schema-16/17 archives. M56 adds the internal v0.8 One-Shot storage and scoring foundation; its GUI/CLI workflows are not available yet. Complete SQLite backup includes the new facts, while CSV format 4 refuses archives containing internal One-Shot records. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
+Supported v0.7 history upgrades unchanged to schema 19, including supported Binary-only schema-16/17 archives. The v0.8 work now includes M56 storage and M57 individual One-Shot workflows; M57 awaits manual acceptance and v0.8 is not released. Complete SQLite backup includes One-Shots, while CSV format 4 refuses archives containing them until format 5 is implemented. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
+
+### One-Shot preview (M57)
+
+In **New Prediction**, choose **One-Shot** to record a final Binary probability or
+five Numeric quantiles made before checking an already-existing answer. Enter the
+answer on the same screen, or save first and use **Add answer** later. Reported
+forecast and checking times are optional documentation; approximate or equal-minute
+times are fine. Scores appear after Save. **Correct transcription** preserves the
+original and each correction while recalculating the individual Brier or WIS.
+The top-right **With Deadline** action switches back. Both forms keep their drafts
+when switching. Background (including how you will check the answer), Rationale and
+Tags are visible in the Forecast card. Optional reported times use a calendar date
+picker beside one time field: type hours, Tab, minutes, Tab, then A or P. Up/Down
+adjusts the selected section. It has no Expected Resolution field.
+
+CLI equivalents are `uv run rscd create binary --one-shot` and
+`uv run rscd create numeric --one-shot`, followed by `uv run rscd resolve ID` when
+needed. `show ID` includes original and corrected facts. Deadline-based creation
+remains the default; One-Shots reject `revise` and `review`.
+
+Basic archive rows let you reopen these records. Full mode filtering, matched search
+navigation, Journal correction and Postmortem queue/Skip integration remain M58;
+separate One-Shot aggregate Analytics remains M59. Individual Postmortem text can be
+entered with the answer or through Correct transcription. Read the
+[One-Shot Rulebook](docs/reckonsolve-one-shot-rulebook-v0.8.md) for the intended use.
 
 ## Current features
 

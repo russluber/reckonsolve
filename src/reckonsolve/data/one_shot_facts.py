@@ -1,12 +1,17 @@
 """One-Shot row mapping and validated replay, without transaction ownership."""
 
 import sqlite3
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import datetime
 
 from reckonsolve.clock import parse_utc
 from reckonsolve.domain.forecast_contracts import ForecastContract
-from reckonsolve.domain.one_shot import OneShotValues, ReportedTime
+from reckonsolve.domain.one_shot import (
+    OneShotCorrection,
+    OneShotRecord,
+    OneShotValues,
+    ReportedTime,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     FixedPrecisionValue,
@@ -17,38 +22,6 @@ from reckonsolve.domain.quantiles import (
     NumericValueConstraint,
     QuantileDefinition,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class OneShotCorrection:
-    correction_id: int
-    sequence: int
-    before: OneShotValues
-    after: OneShotValues
-    corrected_at: datetime
-    note: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class OneShotRecord:
-    prediction_id: int
-    contract: ForecastContract
-    definition: QuantileDefinition | None
-    status: PredictionStatus
-    recorded_at: datetime
-    answer_recorded_at: datetime | None
-    metadata_version: int
-    original: OneShotValues
-    effective: OneShotValues
-    corrections: tuple[OneShotCorrection, ...]
-
-    @property
-    def context(self) -> tuple[int, int | None, int | None]:
-        return (
-            self.metadata_version,
-            self.corrections[-1].correction_id if self.corrections else None,
-            1 if self.answer_recorded_at is not None else None,
-        )
 
 
 def _reported_columns(value: ReportedTime | None) -> tuple[str | None, int, int | None]:

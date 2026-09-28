@@ -4,8 +4,19 @@ import ast
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QStyle,
+    QStyleFactory,
+    QStyleOptionSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 from pytestqt.qtbot import QtBot
 
 from reckonsolve.ui.visual_system import (
@@ -76,6 +87,55 @@ def test_exact_datetime_edit_uses_the_shared_input_states() -> None:
         "QDateTimeEdit:disabled,",
     ):
         assert selector in stylesheet
+
+
+@pytest.mark.parametrize("style_name", ["windows11", "Fusion"])
+def test_native_spin_buttons_receive_clicks_without_editor_overlap(
+    qtbot, qapp, style_name
+):
+    available_styles = QStyleFactory.keys()
+    if style_name not in available_styles:
+        pytest.skip(f"{style_name} is unavailable on this platform")
+    original_style = qapp.style().objectName()
+    root = QWidget()
+    qtbot.addWidget(root)
+    try:
+        qapp.setStyle(style_name)
+        layout = QVBoxLayout(root)
+        other = QLineEdit(root)
+        spin = QSpinBox(root)
+        spin.setRange(0, 100)
+        spin.setValue(50)
+        spin.setSuffix("% Yes")
+        layout.addWidget(other)
+        layout.addWidget(spin)
+        install_visual_system(root)
+        root.show()
+        for focus in (other, spin):
+            focus.setFocus()
+            qapp.processEvents()
+            for subcontrol, expected in (
+                (QStyle.SubControl.SC_SpinBoxUp, 51),
+                (QStyle.SubControl.SC_SpinBoxDown, 50),
+            ):
+                option = QStyleOptionSpinBox()
+                spin.initStyleOption(option)
+                rect = spin.style().subControlRect(
+                    QStyle.ComplexControl.CC_SpinBox, option, subcontrol, spin
+                )
+                assert not rect.intersects(spin.lineEdit().geometry())
+                # Deliver to the actual widget under the pointer, as a real
+                # click would; forcing a click onto the spin box hides this bug.
+                target = spin.childAt(rect.center()) or spin
+                qtbot.mouseClick(
+                    target,
+                    Qt.MouseButton.LeftButton,
+                    pos=target.mapFrom(spin, rect.center()),
+                )
+                assert spin.value() == expected
+    finally:
+        root.close()
+        qapp.setStyle(original_style)
 
 
 @pytest.mark.parametrize(

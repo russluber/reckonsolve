@@ -19,6 +19,7 @@ from reckonsolve.analytics.quantiles import (
     resolved_quantile_scorecard,
 )
 from reckonsolve.analytics.trajectory import trajectory_scorecard
+from reckonsolve.application.one_shot import OneShotOperations
 from reckonsolve.application.quantiles import QuantileOperations
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
@@ -26,6 +27,7 @@ from reckonsolve.data.database import Database
 from reckonsolve.data.numeric_predictions import (
     NumericPredictionRepository,
 )
+from reckonsolve.data.one_shot import OneShotRepository
 from reckonsolve.data.predictions import (
     ForecastContextChangedError,
     ForecastReviewContextChangedError,
@@ -106,6 +108,7 @@ from reckonsolve.domain.forecast_contracts import (
     contract_status,
     prospective_contract,
 )
+from reckonsolve.domain.one_shot import OneShotDetail
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     BinaryResolutionHistory,
@@ -173,6 +176,7 @@ from reckonsolve.domain.transfer import (
 )
 
 from .errors import (
+    ApplicationError,
     BackupError,
     ConcurrentForecastReviewError,
     ConcurrentForecastUpdateError,
@@ -227,6 +231,7 @@ class PredictionOperations:
         self._tag_repository = TagRepository(database)
         self._database = database
         self._clock = SystemClock() if clock is None else clock
+        self.one_shots = OneShotOperations(OneShotRepository(database, self._clock))
         self._quantiles = QuantileOperations(
             QuantilePredictionRepository(database, self._clock)
         )
@@ -310,6 +315,7 @@ class PredictionOperations:
         expected_metadata_version: int,
         rationale: str | None = None,
     ) -> NumericPrediction:
+        self.require_deadline_operation(prediction_id)
         self.get_numeric_prediction(prediction_id)
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
@@ -337,6 +343,7 @@ class PredictionOperations:
     ) -> PredictionDetail:
         """Append a changed forecast after rechecking the reviewed context."""
 
+        self.require_deadline_operation(prediction_id)
         try:
             new_revision = NewForecastRevision(probability_percent, rationale)
         except PredictionValidationError as error:
@@ -418,6 +425,7 @@ class PredictionOperations:
     ) -> QuantileTimelineEvent:
         """Record that the current Numeric forecast was deliberately retained."""
 
+        self.require_deadline_operation(prediction_id)
         self.get_numeric_prediction(prediction_id)
         self._validate_positive_token(expected_revision_id, "expected_revision_id")
         self._validate_positive_token(
@@ -666,6 +674,7 @@ class PredictionOperations:
     ) -> ForecastReviewTimelineEvent:
         """Record that the current Binary probability was deliberately retained."""
 
+        self.require_deadline_operation(prediction_id)
         try:
             review = NewForecastReview(note)
         except PredictionValidationError as error:
@@ -889,6 +898,7 @@ class PredictionOperations:
     ) -> BinaryResolutionHistory:
         """Return the original Binary Resolution and every correction."""
 
+        self.require_deadline_operation(prediction_id)
         history = self._terminal_history_repository.get_binary_resolution_history(
             prediction_id
         )
@@ -903,6 +913,7 @@ class PredictionOperations:
     ) -> NumericResolutionHistory:
         """Return the original Numeric Resolution and every correction."""
 
+        self.require_deadline_operation(prediction_id)
         history = self._terminal_history_repository.get_numeric_resolution_history(
             prediction_id
         )
@@ -1896,9 +1907,12 @@ class PredictionOperations:
     def get_prediction_for_navigation(
         self,
         prediction_id: int,
-    ) -> PredictionDetail | NumericPrediction:
+    ) -> PredictionDetail | NumericPrediction | OneShotDetail:
         """Load one current Prediction of either forecast type for Detail routing."""
 
+        one_shot = self.one_shots.repository.find_detail(prediction_id)
+        if one_shot is not None:
+            return one_shot
         detail = self._repository.get_prediction(prediction_id)
         if detail is not None:
             return self._with_derived_status(detail, as_utc(self._clock.now()))
@@ -1909,6 +1923,21 @@ class PredictionOperations:
                 as_utc(self._clock.now()),
             )
         raise PredictionNotFoundError(prediction_id)
+
+    def get_latest_for_navigation(
+        self,
+    ) -> PredictionDetail | NumericPrediction | OneShotDetail | None:
+        rows = self._repository.list_browser_predictions().predictions
+        if not rows:
+            return None
+        latest = max(rows, key=lambda p: (p.created_at, p.prediction_id))
+        return self.get_prediction_for_navigation(latest.prediction_id)
+
+    def require_deadline_operation(self, prediction_id: int) -> None:
+        if self.one_shots.repository.find_detail(prediction_id) is not None:
+            raise ApplicationError(
+                "One-Shot Predictions do not accept revisions or Reviews or deadline-based terminal operations. Use Add answer or desktop Correct transcription."
+            )
 
     def update_metadata(
         self,
@@ -1922,7 +1951,7 @@ class PredictionOperations:
         tags: tuple[str, ...],
         expected_metadata_version: int,
         confirm_meaning_change: bool = False,
-    ) -> PredictionDetail | NumericPrediction:
+    ) -> PredictionDetail | NumericPrediction | OneShotDetail:
         """Validate and atomically replace shared editable metadata."""
 
         try:
@@ -1947,10 +1976,11 @@ class PredictionOperations:
                 field="expected_metadata_version",
             )
 
-        current: PredictionDetail | NumericPrediction | None
-        current = self._repository.get_prediction(prediction_id)
-        if current is None:
-            current = self._numeric_repository.get_prediction(prediction_id)
+        current = (
+            self.one_shots.repository.find_detail(prediction_id)
+            or self._repository.get_prediction(prediction_id)
+            or self._numeric_repository.get_prediction(prediction_id)
+        )
         if current is None:
             raise PredictionNotFoundError(prediction_id)
         if current.metadata_version != expected_metadata_version:
@@ -1961,6 +1991,8 @@ class PredictionOperations:
                 field="forecast_deadline",
             )
         if not metadata_would_change(current, update):
+            if isinstance(current, OneShotDetail):
+                return current
             now = as_utc(self._clock.now())
             if isinstance(current, NumericPrediction):
                 return self._with_derived_numeric_status(current, now)
@@ -1983,6 +2015,8 @@ class PredictionOperations:
             raise ConcurrentPredictionUpdateError(prediction_id) from error
         if update_applied is None:
             raise PredictionNotFoundError(prediction_id)
+        if isinstance(current, OneShotDetail):
+            return self.one_shots.get(prediction_id)
         if isinstance(current, NumericPrediction):
             updated_numeric = self._numeric_repository.get_prediction(prediction_id)
             if updated_numeric is None:
@@ -2044,13 +2078,15 @@ class PredictionOperations:
         return replace(
             prediction,
             status=status,
-            needs_attention=needs_attention(
+            needs_attention=not prediction.forecast_contract.is_one_shot
+            and needs_attention(
                 status,
                 prediction.attention_reference_at,
                 now,
                 stale_threshold_days,
             ),
-            ready_to_resolve=ready_to_resolve(
+            ready_to_resolve=not prediction.forecast_contract.is_one_shot
+            and ready_to_resolve(
                 status,
                 prediction.expected_resolution,
                 current_date,

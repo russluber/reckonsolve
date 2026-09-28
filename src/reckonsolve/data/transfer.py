@@ -482,7 +482,7 @@ class DataTransferRepository:
                 temporary_path.unlink()
 
     def _read_csv_contents(self) -> tuple[_CsvContents, ...]:
-        with self._database.transaction(allow_one_shot=True) as connection:
+        with self._database.transaction() as connection:
             if (
                 connection.execute(
                     "SELECT 1 FROM prediction_forecast_contracts WHERE forecast_model IN "

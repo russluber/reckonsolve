@@ -55,6 +55,7 @@ from reckonsolve.domain.search import (
     build_search_snippet,
     search_source_label,
 )
+from reckonsolve.forecast_display import lifecycle_label, mode_label
 from reckonsolve.ui.components import (
     ContentPanel,
     PageHeader,
@@ -1625,13 +1626,19 @@ class PredictionBrowserScreen(QWidget):
         badges = QHBoxLayout()
         badges.setSpacing(int(Spacing.CONTROL))
         forecast_type = StatusBadge(
-            prediction.prediction_type.value.upper(),
+            prediction.prediction_type.value.upper()
+            + (
+                " · One-Shot"
+                if prediction.forecast_contract
+                and prediction.forecast_contract.is_one_shot
+                else ""
+            ),
             StatusTone.NEUTRAL,
             parent=row,
         )
         forecast_type.setObjectName(f"predictionResultType{prediction.prediction_id}")
         lifecycle = StatusBadge(
-            prediction.status.value.upper(),
+            lifecycle_label(prediction.status, prediction.forecast_contract).upper(),
             _status_tone(prediction.status),
             parent=row,
         )
@@ -1689,7 +1696,7 @@ class PredictionBrowserScreen(QWidget):
         )
         return (
             f"{_forecast_summary(prediction)}. "
-            f"{prediction.status.value}. Forecast updated "
+            f"{lifecycle_label(prediction.status, prediction.forecast_contract)}. {mode_label(prediction.forecast_contract)}. Forecast entered "
             f"{_format_local_timestamp(prediction.latest_revision_at)}.{tag_text}"
         )
 
@@ -1718,7 +1725,9 @@ def _date_context(prediction: PredictionBrowserItem | SearchPrediction) -> str:
         from reckonsolve.forecast_display import binary_contract_summary
 
         parts.append(binary_contract_summary(prediction.forecast_contract))
-    if prediction.latest_revision_at is not None:
+    if prediction.latest_revision_at is not None and not (
+        prediction.forecast_contract and prediction.forecast_contract.is_one_shot
+    ):
         parts.append(
             "Forecast considered "
             f"{_format_local_timestamp(prediction.latest_revision_at)}"

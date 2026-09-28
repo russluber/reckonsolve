@@ -81,6 +81,18 @@ M58 owns correction-text projection and ordinary archive/search integration.
 M57 owns user-facing correction and answer operations. Neither milestone should
 route One-Shot through a deadline scorer or treat a correction as another forecast.
 
+## M57 implementation follow-up
+
+M57 replaces the temporary whole-archive workflow refusal with explicit individual
+One-Shot operations and basic effective archive reads. All transactions still validate
+the closed contract set before work and before commit. Writes return their complete
+Detail snapshot from the write transaction; a failed follow-up read cannot obscure a
+successful save. The foundation repository methods retain their record return values.
+Search projection version 2 follows One-Shot terminal prose corrections and can rebuild
+the derived index; full retrieval and reflection integration remain M58. The two
+deadline-based aggregate sources explicitly exclude One-Shot. CSV format 4 continues
+to refuse these archives; SQLite backup remains complete.
+
 ## Alternatives considered
 
 - Reusing the retired final-Binary identity would conflate incompatible history

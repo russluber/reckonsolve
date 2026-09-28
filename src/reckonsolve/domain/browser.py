@@ -222,6 +222,13 @@ def matches_archive_query(
         else not bool(set(selected_tags) & item_tags)
     ):
         return False
+    if (
+        query.attention
+        in (ArchiveAttention.NEEDS_ATTENTION, ArchiveAttention.READY_TO_RESOLVE)
+        and item.forecast_contract
+        and item.forecast_contract.is_one_shot
+    ):
+        return False
     if query.attention is ArchiveAttention.NEEDS_ATTENTION and not needs_attention(
         item.status,
         _forecast_considered_at(item),

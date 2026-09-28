@@ -30,6 +30,7 @@ from .forecast_contracts import (
     check_forecast_contract_integrity,
     select_supported_contract,
 )
+from .one_shot_archive import read_archive as read_one_shot_archive
 from .quantile_archive import read_archive as read_quantile_archive
 from .search_index import (
     SEARCH_PROJECTION_VERSION,
@@ -445,11 +446,25 @@ def _select_predictions(
                 else BinaryOutcome(str(row["binary_outcome"]))
             ),
         )
-    for item in read_quantile_archive(connection):
+    for item in (
+        *read_quantile_archive(connection),
+        *read_one_shot_archive(connection),
+    ):
         if item.prediction_id in wanted_ids:
+            binary_outcome = None
+            if (
+                item.forecast_contract.is_one_shot
+                and item.prediction_type is PredictionType.BINARY
+            ):
+                row = connection.execute(
+                    "SELECT outcome FROM one_shot_effective_facts WHERE prediction_id = ?",
+                    (item.prediction_id,),
+                ).fetchone()
+                binary_outcome = BinaryOutcome(row[0]) if row[0] is not None else None
             predictions[item.prediction_id] = SearchPrediction(
                 prediction_id=item.prediction_id,
                 question=item.question,
+                probability_percent=item.probability_percent,
                 prediction_type=item.prediction_type,
                 status=item.status,
                 created_at=item.created_at,
@@ -464,6 +479,7 @@ def _select_predictions(
                 numeric_quantiles=item.numeric_quantiles,
                 numeric_actual_value=item.numeric_actual_value,
                 needs_postmortem=item.needs_postmortem,
+                binary_outcome=binary_outcome,
             )
     return predictions
 

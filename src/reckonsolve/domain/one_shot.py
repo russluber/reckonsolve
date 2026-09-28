@@ -6,7 +6,11 @@ from datetime import date, datetime
 from .forecast_contracts import ForecastCohort, ForecastContract
 from .predictions import (
     BinaryOutcome,
+    DefinitionChange,
     FixedPrecisionValue,
+    InvalidationHistory,
+    JournalCorrection,
+    PredictionStatus,
     PredictionValidationError,
     _normalize_tags,
     _optional_text,
@@ -117,7 +121,7 @@ class OneShotValues:
 
 @dataclass(frozen=True, slots=True)
 class NewOneShotPrediction:
-    """Internal foundation request; no public creation operation exists in M56."""
+    """Complete atomic creation request shared by both interfaces."""
 
     question: str
     contract: ForecastContract
@@ -136,3 +140,93 @@ class NewOneShotPrediction:
             object.__setattr__(self, field, _optional_text(getattr(self, field), field))
         _validate_date_only(self.expected_resolution, "expected_resolution")
         object.__setattr__(self, "tags", _normalize_tags(self.tags))
+
+
+@dataclass(frozen=True, slots=True)
+class OneShotCorrection:
+    correction_id: int
+    sequence: int
+    before: OneShotValues
+    after: OneShotValues
+    corrected_at: datetime
+    note: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class OneShotRecord:
+    prediction_id: int
+    contract: ForecastContract
+    definition: QuantileDefinition | None
+    status: PredictionStatus
+    recorded_at: datetime
+    answer_recorded_at: datetime | None
+    metadata_version: int
+    original: OneShotValues
+    effective: OneShotValues
+    corrections: tuple[OneShotCorrection, ...]
+
+    @property
+    def context(self) -> tuple[int, int | None, int | None]:
+        return (
+            self.metadata_version,
+            self.corrections[-1].correction_id if self.corrections else None,
+            1 if self.answer_recorded_at is not None else None,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OneShotDetail:
+    """One consistent individual read; original forecast facts stay explicit."""
+
+    record: OneShotRecord
+    question: str
+    rationale: str | None
+    background: str | None
+    resolution_criteria: str | None
+    expected_resolution: date | None
+    tags: tuple[str, ...]
+    updated_at: datetime
+    deletion_allowed: bool
+    definition_changes: tuple[DefinitionChange, ...] = ()
+    journals: tuple["OneShotJournal", ...] = ()
+    invalidation_history: InvalidationHistory | None = None
+
+    @property
+    def prediction_id(self) -> int:
+        return self.record.prediction_id
+
+    @property
+    def status(self) -> PredictionStatus:
+        return self.record.status
+
+    @property
+    def forecast_contract(self) -> ForecastContract:
+        return self.record.contract
+
+    @property
+    def created_at(self) -> datetime:
+        return self.record.recorded_at
+
+    @property
+    def metadata_version(self) -> int:
+        return self.record.metadata_version
+
+    @property
+    def forecast_deadline(self) -> None:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class OneShotJournal:
+    entry_id: int
+    created_at: datetime
+    original_body: str
+    corrections: tuple[JournalCorrection, ...]
+
+    @property
+    def body(self) -> str:
+        return self.corrections[-1].body if self.corrections else self.original_body
+
+    @property
+    def current_correction_id(self) -> int | None:
+        return self.corrections[-1].correction_id if self.corrections else None

@@ -7,10 +7,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
-from .forecast_contracts import (
-    check_forecast_contract_integrity,
-    require_deadline_workflows,
-)
+from .forecast_contracts import check_forecast_contract_integrity
 from .migrations import (
     MIGRATIONS,
     Migration,
@@ -110,9 +107,7 @@ class Database:
         return row[0] == 1
 
     @contextmanager
-    def transaction(
-        self, *, allow_one_shot: bool = False
-    ) -> Iterator[sqlite3.Connection]:
+    def transaction(self) -> Iterator[sqlite3.Connection]:
         """Run a non-nested transaction and roll it back on any failure."""
 
         connection = self._require_connection()
@@ -122,14 +117,10 @@ class Database:
         connection.execute("BEGIN IMMEDIATE")
         try:
             check_forecast_contract_integrity(connection)
-            if not allow_one_shot:
-                require_deadline_workflows(connection)
             yield connection
             # A stale process or lower-level caller must not introduce a retired
             # or malformed contract between startup and the next operation.
             check_forecast_contract_integrity(connection)
-            if not allow_one_shot:
-                require_deadline_workflows(connection)
             if self._search_enabled:
                 try:
                     refresh_pending_search_documents(connection)
