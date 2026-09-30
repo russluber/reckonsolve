@@ -61,6 +61,7 @@ class NeedsPostmortemPrediction:
     binary_outcome: BinaryOutcome | None = None
     numeric_actual_value: FixedPrecisionValue | None = None
     numeric_unit: str | None = None
+    is_one_shot: bool = False
 
 
 @dataclass(frozen=True, slots=True)

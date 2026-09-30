@@ -1054,7 +1054,8 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert reopened_background.text() == "End-to-end metadata context."
     assert reopened_criteria.text() == ("Yes if the same details reopen from SQLite.")
     assert reopened_tags.text() == "#m3  #persistence"
-    assert "(permanent)" in reopened_deadline.text()
+    assert " at " in reopened_deadline.text()
+    assert "(permanent)" not in reopened_deadline.text()
     assert (
         "2099-01-01"
         in PredictionOperations(second_runtime.database)

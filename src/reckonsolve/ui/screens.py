@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from itertools import pairwise
@@ -46,7 +47,7 @@ from reckonsolve.application.errors import (
 from reckonsolve.domain.attention import DashboardSnapshot
 from reckonsolve.domain.browser import PredictionBrowserSnapshot
 from reckonsolve.domain.forecast_contracts import ForecastContract
-from reckonsolve.domain.one_shot import OneShotDetail
+from reckonsolve.domain.one_shot import OneShotDetail, OneShotJournal
 from reckonsolve.domain.predictions import (
     MAX_METADATA_DATE,
     MIN_METADATA_DATE,
@@ -70,7 +71,10 @@ from reckonsolve.domain.quantiles import (
     quantile_summary,
 )
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
-from reckonsolve.forecast_display import format_local_deadline
+from reckonsolve.forecast_display import (
+    format_local_deadline,
+    format_readable_local_deadline,
+)
 from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
 from reckonsolve.one_shot_display import (
     forecast_text,
@@ -1201,6 +1205,7 @@ class NumericPredictionDetailScreen(QWidget):
             "numericForecastDeadlineRow",
             "numericForecastDeadlineValue",
             self.detail_content,
+            stacked=True,
         )
         self.expected_resolution_row, self.expected_resolution = _detail_value_row(
             "Expected resolution",
@@ -1268,7 +1273,7 @@ class NumericPredictionDetailScreen(QWidget):
         apply_action_role(self.add_journal_entry_button, ActionRole.SECONDARY)
         apply_action_role(self.review_forecast_button, ActionRole.SECONDARY)
         apply_action_role(self.resolve_button, ActionRole.SECONDARY)
-        apply_action_role(self.mark_invalid_button, ActionRole.SECONDARY)
+        apply_action_role(self.mark_invalid_button, ActionRole.CAUTION)
         _configure_detail_action_grid(
             actions_layout,
             (
@@ -1780,8 +1785,11 @@ class NumericPredictionDetailScreen(QWidget):
         contract = getattr(prediction, "forecast_contract", None)
         if contract is not None:
             self.forecast_deadline.setText(
-                format_local_deadline(contract.forecast_deadline.instant)
-                + " (permanent)"
+                format_readable_local_deadline(contract.forecast_deadline.instant)
+            )
+            self.forecast_deadline.setToolTip(
+                "Exact, fixed deadline: "
+                + format_local_deadline(contract.forecast_deadline.instant)
             )
             self.forecast_deadline_row.show()
         self.expected_resolution.setText(_format_date(prediction.expected_resolution))
@@ -2248,6 +2256,7 @@ class OneShotDetailScreen(QWidget):
         header = PageHeader("One-Shot Detail", parent=self)
         self.content_layout.addWidget(header)
         self.question = text_label(detail.question, self)
+        self.question.setObjectName("oneShotQuestion")
         apply_text_role(self.question, TextRole.PAGE_TITLE)
         self.content_layout.addWidget(self.question)
         self.content_layout.addWidget(
@@ -2257,12 +2266,13 @@ class OneShotDetailScreen(QWidget):
             )
         )
         self.forecast = text_label(forecast_text(record.effective, unit), self)
+        self.forecast.setObjectName("oneShotForecast")
         apply_text_role(self.forecast, TextRole.FORECAST)
         self.content_layout.addWidget(self.forecast)
         if detail.tags:
-            self.content_layout.addWidget(
-                text_label("  ".join(f"#{t}" for t in detail.tags), self)
-            )
+            self.tags = text_label("  ".join(f"#{t}" for t in detail.tags), self)
+            self.tags.setObjectName("oneShotTags")
+            self.content_layout.addWidget(self.tags)
         action_panel = QWidget(self)
         actions = QGridLayout(action_panel)
         actions.setContentsMargins(0, 0, 0, 0)
@@ -2277,6 +2287,20 @@ class OneShotDetailScreen(QWidget):
         self.journal_button = QPushButton("Add Journal entry", action_panel)
         self.journal_button.setVisible(detail.status is PredictionStatus.OPEN)
         self.journal_button.clicked.connect(self.open_journal)
+        self.skip_postmortem_button = QPushButton("Skip Postmortem", action_panel)
+        self.add_postmortem_button = QPushButton("Add Postmortem", action_panel)
+        self.add_postmortem_button.setVisible(
+            detail.status is PredictionStatus.RESOLVED
+            and not record.effective.postmortem
+        )
+        self.add_postmortem_button.clicked.connect(self.add_postmortem)
+        needs_skip = (
+            detail.status is PredictionStatus.RESOLVED
+            and not record.effective.postmortem
+            and detail.postmortem_completion is None
+        )
+        self.skip_postmortem_button.setVisible(needs_skip)
+        self.skip_postmortem_button.clicked.connect(self.skip_postmortem)
         self.invalid_button = QPushButton("Mark Invalid", action_panel)
         self.invalid_button.setVisible(detail.status is PredictionStatus.OPEN)
         self.invalid_button.clicked.connect(self.invalidate)
@@ -2287,15 +2311,26 @@ class OneShotDetailScreen(QWidget):
         if detail.status is PredictionStatus.OPEN:
             visible_actions.insert(0, self.answer_button)
             visible_actions.extend((self.journal_button, self.invalid_button))
+        if needs_skip:
+            visible_actions.append(self.skip_postmortem_button)
+        if (
+            detail.status is PredictionStatus.RESOLVED
+            and not record.effective.postmortem
+        ):
+            visible_actions.append(self.add_postmortem_button)
         if detail.deletion_allowed:
             visible_actions.append(self.delete_button)
         for i, button in enumerate(visible_actions):
             if button is not self.answer_button:
                 apply_action_role(
                     button,
-                    ActionRole.DESTRUCTIVE
-                    if button in (self.invalid_button, self.delete_button)
-                    else ActionRole.SECONDARY,
+                    ActionRole.CAUTION
+                    if button is self.invalid_button
+                    else (
+                        ActionRole.DESTRUCTIVE
+                        if button is self.delete_button
+                        else ActionRole.SECONDARY
+                    ),
                 )
             actions.addWidget(button, i // 2, i % 2)
         self.content_layout.addWidget(action_panel)
@@ -2305,20 +2340,22 @@ class OneShotDetailScreen(QWidget):
         )
         self.error.hide()
         self.content_layout.addWidget(self.error)
+        self._show_timeline(detail)
         facts = ContentPanel("Recorded facts", parent=self)
+        facts.setObjectName("oneShotRecordedFacts")
         facts.body_layout.addWidget(
             text_label("\n".join(values_lines(record.effective, unit)[1:]), self)
         )
         facts.body_layout.addWidget(
             text_label(
-                f"Entered in Reckonsolve: {record.recorded_at.astimezone().isoformat(sep=' ')}",
+                f"Entered in Reckonsolve: {_format_local_timestamp(record.recorded_at)}",
                 self,
             )
         )
         if record.answer_recorded_at:
             facts.body_layout.addWidget(
                 text_label(
-                    f"Answer entered in Reckonsolve: {record.answer_recorded_at.astimezone().isoformat(sep=' ')}",
+                    f"Answer entered in Reckonsolve: {_format_local_timestamp(record.answer_recorded_at)}",
                     self,
                 )
             )
@@ -2330,6 +2367,16 @@ class OneShotDetailScreen(QWidget):
                 )
             )
         self.content_layout.addWidget(facts)
+        if detail.postmortem_completion:
+            self.content_layout.addWidget(
+                text_label(
+                    "Postmortem skipped in Reckonsolve: "
+                    + _format_local_timestamp(
+                        detail.postmortem_completion.completed_at
+                    ),
+                    self,
+                )
+            )
         self.scorecard = ContentPanel("Scorecard", parent=self)
         self.content_layout.addWidget(self.scorecard)
         lines = score_lines(self._operations.one_shots.score(detail), unit)
@@ -2360,6 +2407,13 @@ class OneShotDetailScreen(QWidget):
         ):
             if value:
                 panel = ContentPanel(title, parent=self)
+                panel.setObjectName(
+                    {
+                        "Rationale": "oneShotRationale",
+                        "Background": "oneShotBackground",
+                        "How I will check the answer": "oneShotResolutionCriteria",
+                    }.get(title, "oneShotOptionalMetadata")
+                )
                 panel.body_layout.addWidget(text_label(str(value), self))
                 self.content_layout.addWidget(panel)
         history = _collapsible_history_group(
@@ -2379,7 +2433,7 @@ class OneShotDetailScreen(QWidget):
         for correction in record.corrections:
             history_layout.addWidget(
                 text_label(
-                    f"Correction {correction.sequence} · {correction.corrected_at.astimezone().isoformat(sep=' ')}\nBefore\n"
+                    f"Correction {correction.sequence} · {_format_local_timestamp(correction.corrected_at)}\nBefore\n"
                     + "\n".join(values_lines(correction.before, unit))
                     + "\nAfter\n"
                     + "\n".join(values_lines(correction.after, unit))
@@ -2397,38 +2451,327 @@ class OneShotDetailScreen(QWidget):
             for change in detail.definition_changes:
                 body.addWidget(_definition_change_widget(change, self))
             self.content_layout.addWidget(definitions)
-        if detail.journals:
-            journals = ContentPanel("Journal", parent=self)
-            for entry in detail.journals:
-                journals.body_layout.addWidget(
-                    text_label(
-                        f"{entry.created_at.astimezone().isoformat(sep=' ')}\n{entry.body}",
-                        self,
-                    )
-                )
-                if entry.corrections:
-                    journals.body_layout.addWidget(
-                        text_label(
-                            "Original: "
-                            + entry.original_body
-                            + "\n"
-                            + "\n".join(
-                                f"{c.corrected_at.astimezone().isoformat()}: {c.body}"
-                                for c in entry.corrections
-                            ),
-                            self,
-                        )
-                    )
-            self.content_layout.addWidget(journals)
         if detail.invalidation_history:
             invalid = detail.invalidation_history
             self.content_layout.addWidget(
                 text_label(
-                    f"Invalidated: {invalid.original.invalidated_at.astimezone().isoformat()}\nReason: {invalid.effective.reason or 'Not supplied'}",
+                    f"Invalidated: {_format_local_timestamp(invalid.original.invalidated_at)}\nReason: {invalid.effective.reason or 'Not supplied'}",
                     self,
                 )
             )
         self.content_layout.addStretch()
+
+    def _show_timeline(self, detail: OneShotDetail) -> None:
+        """Present app-recorded actions in causal order, separate from reported times."""
+
+        record = detail.record
+        unit = record.definition.unit if record.definition else ""
+        events: list[
+            tuple[
+                datetime,
+                int,
+                str | OneShotJournal,
+                tuple[tuple[SearchSourceKind, int | None, int | None], ...],
+            ]
+        ] = []
+        self._search_targets: dict[
+            tuple[SearchSourceKind, int | None, int | None], QWidget
+        ] = {}
+        events.append(
+            (
+                record.recorded_at,
+                0,
+                "Forecast entered in Reckonsolve: "
+                + forecast_text(record.original, unit)
+                + (f"\nRationale: {detail.rationale}" if detail.rationale else ""),
+                ((SearchSourceKind.FORECAST_RATIONALE, None, None),),
+            )
+        )
+        if record.answer_recorded_at:
+            events.append(
+                (
+                    record.answer_recorded_at,
+                    1,
+                    "Answer entered in Reckonsolve: "
+                    + "\n".join(values_lines(record.original, unit)[2:]),
+                    (
+                        (SearchSourceKind.RESOLUTION_NOTES, None, None),
+                        (SearchSourceKind.POSTMORTEM, None, None),
+                    ),
+                )
+            )
+        for correction in record.corrections:
+            events.append(
+                (
+                    correction.corrected_at,
+                    2,
+                    f"Transcription correction {correction.sequence}\n"
+                    + "\n".join(values_lines(correction.after, unit))
+                    + (f"\nNote: {correction.note}" if correction.note else ""),
+                    (
+                        (
+                            SearchSourceKind.RESOLUTION_NOTES,
+                            None,
+                            correction.correction_id,
+                        ),
+                        (SearchSourceKind.POSTMORTEM, None, correction.correction_id),
+                        (
+                            SearchSourceKind.ONE_SHOT_CORRECTION_NOTE,
+                            correction.correction_id,
+                            None,
+                        ),
+                    ),
+                )
+            )
+        for change in detail.definition_changes:
+            changed_text = []
+            if "question" in change.changed_fields:
+                changed_text.append(
+                    f"Question before: {change.old_question}\nQuestion after: {change.new_question}"
+                )
+            if "resolution_criteria" in change.changed_fields:
+                changed_text.append(
+                    "Resolution Criteria before: "
+                    + (change.old_resolution_criteria or "Not supplied")
+                    + "\nResolution Criteria after: "
+                    + (change.new_resolution_criteria or "Not supplied")
+                )
+            events.append(
+                (
+                    change.changed_at,
+                    3,
+                    "Definition clarified\n" + "\n".join(changed_text),
+                    (
+                        (SearchSourceKind.QUESTION, change.change_id, None),
+                        (SearchSourceKind.RESOLUTION_CRITERIA, change.change_id, None),
+                    ),
+                )
+            )
+        for journal in detail.journals:
+            events.append(
+                (
+                    journal.created_at,
+                    4,
+                    journal,
+                    (),
+                )
+            )
+        if detail.invalidation_history:
+            invalidation = detail.invalidation_history
+            events.append(
+                (
+                    invalidation.original.invalidated_at,
+                    6,
+                    "Marked Invalid: "
+                    + (invalidation.original.reason or "No reason supplied"),
+                    ((SearchSourceKind.INVALIDATION_REASON, None, None),),
+                )
+            )
+            for correction in invalidation.corrections:
+                events.append(
+                    (
+                        correction.corrected_at,
+                        7,
+                        "Invalidation reason corrected: "
+                        + (correction.new_reason or "No reason supplied"),
+                        (
+                            (
+                                SearchSourceKind.INVALIDATION_REASON,
+                                None,
+                                correction.correction_id,
+                            ),
+                        ),
+                    )
+                )
+        if detail.postmortem_completion:
+            events.append(
+                (
+                    detail.postmortem_completion.completed_at,
+                    8,
+                    "Postmortem deliberately skipped",
+                    (),
+                )
+            )
+        timeline = ContentPanel("Timeline", parent=self)
+        timeline.setObjectName("oneShotTimeline")
+        for index, (occurred_at, _, body, keys) in enumerate(
+            sorted(events, key=lambda event: (event[0], event[1]))
+        ):
+            if isinstance(body, OneShotJournal):
+                card = _one_shot_journal_timeline_widget(
+                    body, timeline, self.correct_journal
+                )
+                timeline.body_layout.addWidget(card)
+                current_body = card.findChild(
+                    QLabel, f"oneShotJournalBody{body.entry_id}"
+                )
+                current_key = (
+                    SearchSourceKind.JOURNAL,
+                    body.entry_id,
+                    body.current_correction_id,
+                )
+                self._search_targets[current_key] = current_body or card
+                if body.corrections:
+                    self._search_targets[
+                        (SearchSourceKind.JOURNAL, body.entry_id, None)
+                    ] = (
+                        card.findChild(
+                            QLabel, f"journalEntryOriginalBody{body.entry_id}"
+                        )
+                        or card
+                    )
+                    for correction in body.corrections[:-1]:
+                        self._search_targets[
+                            (
+                                SearchSourceKind.JOURNAL,
+                                body.entry_id,
+                                correction.correction_id,
+                            )
+                        ] = (
+                            card.findChild(
+                                QLabel,
+                                f"journalCorrectionBody{correction.correction_id}",
+                            )
+                            or card
+                        )
+                continue
+            card = QFrame(timeline)
+            card.setFrameShape(QFrame.Shape.StyledPanel)
+            apply_surface_role(card, SurfaceRole.BASE)
+            card_layout = QVBoxLayout(card)
+            timestamp = text_label(_format_local_timestamp(occurred_at), card)
+            apply_text_role(timestamp, TextRole.SECONDARY)
+            card_layout.addWidget(timestamp)
+            label = text_label(body, card)
+            label.setObjectName(f"oneShotTimelineEvent{index}")
+            card_layout.addWidget(label)
+            timeline.body_layout.addWidget(card)
+            for key in keys:
+                self._search_targets[key] = label
+        self.content_layout.addWidget(timeline)
+
+    def focus_search_match(self, document: SearchDocument) -> None:
+        if (
+            self._prediction is None
+            or self._prediction.prediction_id != document.prediction_id
+        ):
+            return
+        kind = document.source_kind
+        target = self._search_targets.get(
+            (kind, document.source_record_id, document.source_version_id)
+        ) or self._search_targets.get((kind, None, document.source_version_id))
+        if target is None:
+            target = {
+                SearchSourceKind.QUESTION: self.question,
+                SearchSourceKind.TAG: getattr(self, "tags", self.question),
+                SearchSourceKind.BACKGROUND: self.findChild(
+                    QWidget, "oneShotBackground"
+                ),
+                SearchSourceKind.RESOLUTION_CRITERIA: self.findChild(
+                    QWidget, "oneShotResolutionCriteria"
+                ),
+                SearchSourceKind.FORECAST_RATIONALE: self.findChild(
+                    QWidget, "oneShotRationale"
+                ),
+            }.get(kind)
+        if target is None:
+            target = self.findChild(QWidget, "oneShotTimeline") or self.question
+        if kind is SearchSourceKind.JOURNAL and document.is_superseded:
+            history = self.findChild(
+                QGroupBox, f"journalEntryEditHistory{document.source_record_id}"
+            )
+            if history is not None:
+                history.setChecked(True)
+        _focus_search_widget(self.scroll, target)
+
+    def correct_journal(self, entry_id: int) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        if self._prediction is None:
+            return
+        try:
+            current = self._operations.one_shots.get(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self.error.setText(str(error))
+            self.error.show()
+            return
+        entry = next(
+            (item for item in current.journals if item.entry_id == entry_id), None
+        )
+        if entry is None:
+            self.error.setText("This Journal entry no longer exists.")
+            self.error.show()
+            return
+        body, accepted = QInputDialog.getMultiLineText(
+            self, "Correct Journal entry", "Corrected text", entry.body
+        )
+        if accepted:
+            try:
+                self.show_prediction(
+                    self._operations.one_shots.correct_journal(
+                        current,
+                        entry_id,
+                        body,
+                        expected_correction_id=entry.current_correction_id,
+                    )
+                )
+            except ApplicationError as error:
+                self.error.setText(str(error))
+                self.error.show()
+
+    def skip_postmortem(self) -> None:
+        if self._prediction is None:
+            return
+        if (
+            QMessageBox.question(
+                self,
+                "Skip Postmortem?",
+                "Mark reflection complete without writing a Postmortem? This decision remains in history.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        try:
+            self.show_prediction(
+                self._operations.one_shots.skip_postmortem(self._prediction)
+            )
+        except ApplicationError as error:
+            self.error.setText(str(error))
+            self.error.show()
+
+    def add_postmortem(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        if self._prediction is None:
+            return
+        try:
+            current = self._operations.one_shots.get(self._prediction.prediction_id)
+        except ApplicationError as error:
+            self.error.setText(str(error))
+            self.error.show()
+            return
+        if current.status is not PredictionStatus.RESOLVED:
+            self.show_prediction(current)
+            return
+        body, accepted = QInputDialog.getMultiLineText(
+            self,
+            "Add Postmortem",
+            "What did you learn from this One-Shot?",
+            current.record.effective.postmortem or "",
+        )
+        if accepted:
+            try:
+                self.show_prediction(
+                    self._operations.one_shots.correct(
+                        current,
+                        replace(current.record.effective, postmortem=body),
+                    )
+                )
+            except ApplicationError as error:
+                self.error.setText(str(error))
+                self.error.show()
 
     def refresh(self) -> None:
         if self._prediction is not None:
@@ -2615,6 +2958,7 @@ class PredictionDetailHost(QWidget):
         """Delegate matched-source navigation to the currently selected Detail."""
 
         if self._stack.currentWidget() is self._one_shot_detail:
+            self._one_shot_detail.focus_search_match(document)
             return
         if self._current_type is PredictionType.NUMERIC:
             self._numeric_detail.focus_search_match(document)
@@ -2792,7 +3136,11 @@ class EditPredictionDetailsDialog(_StyledDialog):
                 self.numeric_definition_context.show()
         else:
             self.exact_deadline_context.setText(
-                "Forecast Deadline (permanent): "
+                "Forecast deadline: "
+                + format_readable_local_deadline(contract.forecast_deadline.instant)
+            )
+            self.exact_deadline_context.setToolTip(
+                "Exact, fixed deadline: "
                 + format_local_deadline(contract.forecast_deadline.instant)
             )
         expected_resolution_row = _date_input_row(
@@ -3027,12 +3375,16 @@ class ReviseForecastDialog(_StyledDialog):
         contract = getattr(prediction, "forecast_contract", None)
         if contract is not None:
             deadline_note = QLabel(
-                "Permanent Deadline: "
-                + format_local_deadline(contract.forecast_deadline.instant),
+                "Forecast deadline: "
+                + format_readable_local_deadline(contract.forecast_deadline.instant),
                 self,
             )
             deadline_note.setWordWrap(True)
             deadline_note.setObjectName("revisionExactDeadline")
+            deadline_note.setToolTip(
+                "Exact, fixed deadline: "
+                + format_local_deadline(contract.forecast_deadline.instant)
+            )
             apply_text_role(deadline_note, TextRole.SECONDARY)
             layout.addWidget(deadline_note)
         layout.addSpacing(8)
@@ -3112,13 +3464,19 @@ class ReviseQuantileForecastDialog(_StyledDialog):
         apply_text_role(title, TextRole.PAGE_TITLE)
         layout.addWidget(title)
         context = QLabel(
-            "Change any values; saving appends all five percentiles. Equal adjacent values are valid.\nPermanent Deadline: "
-            + format_local_deadline(
+            "Change any values; saving appends all five percentiles. Equal adjacent values are valid.\nForecast deadline: "
+            + format_readable_local_deadline(
                 prediction.forecast_contract.forecast_deadline.instant
             ),
             content,
         )
         context.setWordWrap(True)
+        context.setToolTip(
+            "Exact, fixed deadline: "
+            + format_local_deadline(
+                prediction.forecast_contract.forecast_deadline.instant
+            )
+        )
         layout.addWidget(context)
         self.quantile_input = FiveQuantileInput(content)
         self.quantile_input.set_definition(
@@ -4087,16 +4445,17 @@ class ForecastReviewDialog(_StyledDialog):
             self._expected_revision_id = revision.revision_id
             action_text = "Keep current forecast"
             context_text = _numeric_forecast_text(revision, numeric.unit)
+            contract = numeric.forecast_contract
         else:
             binary = prediction
             self._expected_revision_id = binary.current_revision_id
             action_text = f"Still at {binary.probability_percent}%"
             context_text = f"{binary.probability_percent}%"
             contract = getattr(binary, "forecast_contract", None)
-            if contract is not None:
-                context_text += "\nPermanent Deadline: " + format_local_deadline(
-                    contract.forecast_deadline.instant
-                )
+        if contract is not None:
+            context_text += "\nForecast deadline: " + format_readable_local_deadline(
+                contract.forecast_deadline.instant
+            )
         self.setWindowTitle(action_text)
 
         title = QLabel(action_text, self)
@@ -4114,6 +4473,11 @@ class ForecastReviewDialog(_StyledDialog):
         context = QLabel(context_text, self)
         context.setObjectName("forecastReviewContext")
         context.setTextFormat(Qt.TextFormat.PlainText)
+        if contract is not None:
+            context.setToolTip(
+                "Exact, fixed deadline: "
+                + format_local_deadline(contract.forecast_deadline.instant)
+            )
         context.setWordWrap(True)
         apply_text_role(context, TextRole.FORECAST)
         apply_surface_role(context, SurfaceRole.SELECTED)
@@ -4864,7 +5228,7 @@ class PredictionDetailScreen(QWidget):
         self.resolve_button.clicked.connect(self.open_resolve_prediction)
         self.mark_invalid_button = QPushButton("Mark Invalid", action_row)
         self.mark_invalid_button.setObjectName("markInvalidButton")
-        apply_action_role(self.mark_invalid_button, ActionRole.SECONDARY)
+        apply_action_role(self.mark_invalid_button, ActionRole.CAUTION)
         apply_lucide_icon(self.mark_invalid_button, LucideIcon.BAN)
         self.mark_invalid_button.clicked.connect(self.open_mark_invalid)
         self.delete_button = QPushButton("Delete", action_row)
@@ -4897,6 +5261,7 @@ class PredictionDetailScreen(QWidget):
             "predictionDetailForecastDeadlineRow",
             "predictionDetailForecastDeadline",
             self.detail_content,
+            stacked=True,
         )
         self.expected_resolution_row, self.expected_resolution = _detail_value_row(
             "Expected resolution",
@@ -5730,7 +6095,11 @@ class PredictionDetailScreen(QWidget):
             "This is probability history, not a score plot."
         )
         self.forecast_deadline.setText(
-            format_local_deadline(contract.forecast_deadline.instant) + " (permanent)"
+            format_readable_local_deadline(contract.forecast_deadline.instant)
+        )
+        self.forecast_deadline.setToolTip(
+            "Exact, fixed deadline: "
+            + format_local_deadline(contract.forecast_deadline.instant)
         )
         self.forecast_deadline_row.show()
         self.expected_resolution.setText(_format_date(prediction.expected_resolution))
@@ -6114,20 +6483,26 @@ def _detail_value_row(
     row_name: str,
     value_name: str,
     parent: QWidget,
+    *,
+    stacked: bool = False,
 ) -> tuple[QWidget, QLabel]:
     row = QWidget(parent)
     row.setObjectName(row_name)
-    layout = QHBoxLayout(row)
+    layout = QVBoxLayout(row) if stacked else QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
+    if stacked:
+        layout.setSpacing(int(Spacing.COMPACT))
     heading = QLabel(f"{label}:", row)
     apply_text_role(heading, TextRole.LABEL)
     value = QLabel("", row)
     value.setObjectName(value_name)
     value.setTextFormat(Qt.TextFormat.PlainText)
+    value.setWordWrap(stacked)
     _make_selectable(value)
     layout.addWidget(heading)
     layout.addWidget(value)
-    layout.addStretch()
+    if not stacked:
+        layout.addStretch()
     return row, value
 
 
@@ -6527,7 +6902,12 @@ def _apply_dialog_presentation(dialog: QDialog) -> None:
     for buttons in dialog.findChildren(QDialogButtonBox):
         save = buttons.button(QDialogButtonBox.StandardButton.Save)
         if save is not None:
-            apply_action_role(save, ActionRole.PRIMARY)
+            apply_action_role(
+                save,
+                ActionRole.CAUTION
+                if save.text() == "Mark Invalid"
+                else ActionRole.PRIMARY,
+            )
         cancel = buttons.button(QDialogButtonBox.StandardButton.Cancel)
         if cancel is not None:
             apply_action_role(cancel, ActionRole.SECONDARY)
@@ -6812,8 +7192,62 @@ def _forecast_review_widget(
     return frame
 
 
+def _one_shot_journal_timeline_widget(
+    entry: OneShotJournal,
+    parent: QWidget,
+    correct_entry: Callable[[int], None],
+) -> QWidget:
+    """Show the effective Journal text at its original position in the timeline."""
+
+    frame = QFrame(parent)
+    frame.setObjectName(f"oneShotJournalEntry{entry.entry_id}")
+    frame.setFrameShape(QFrame.Shape.StyledPanel)
+    apply_surface_role(frame, SurfaceRole.BASE)
+    layout = QVBoxLayout(frame)
+
+    timestamp = text_label(_format_local_timestamp(entry.created_at), frame)
+    timestamp.setToolTip(entry.created_at.astimezone().isoformat(sep=" "))
+    apply_text_role(timestamp, TextRole.SECONDARY)
+    layout.addWidget(timestamp)
+
+    heading_row = QWidget(frame)
+    heading_layout = QHBoxLayout(heading_row)
+    heading_layout.setContentsMargins(0, 0, 0, 0)
+    kind = text_label("JOURNAL", heading_row)
+    apply_text_role(kind, TextRole.LABEL)
+    heading_layout.addWidget(kind)
+    if entry.corrections:
+        edited = text_label(
+            f"Edited {_format_local_timestamp(entry.corrections[-1].corrected_at)}",
+            heading_row,
+        )
+        edited.setWordWrap(False)
+        apply_text_role(edited, TextRole.SECONDARY)
+        heading_layout.addWidget(edited)
+    heading_layout.addStretch()
+    button = QPushButton("Correct Entry", heading_row)
+    button.setObjectName(f"oneShotCorrectJournal{entry.entry_id}")
+    apply_action_role(button, ActionRole.QUIET)
+    apply_lucide_icon(button, LucideIcon.PENCIL, size=16)
+    button.setToolTip(
+        "Save a correction while preserving the original and prior versions."
+    )
+    button.clicked.connect(
+        lambda _checked=False, entry_id=entry.entry_id: correct_entry(entry_id)
+    )
+    heading_layout.addWidget(button)
+    layout.addWidget(heading_row)
+
+    body = text_label(entry.body, frame)
+    body.setObjectName(f"oneShotJournalBody{entry.entry_id}")
+    layout.addWidget(body)
+    if entry.corrections:
+        layout.addWidget(_journal_edit_history_widget(entry, frame))
+    return frame
+
+
 def _journal_edit_history_widget(
-    entry: JournalTimelineSnapshot | QuantileTimelineEvent,
+    entry: JournalTimelineSnapshot | QuantileTimelineEvent | OneShotJournal,
     parent: QWidget,
 ) -> QGroupBox:
     prior_version_count = len(entry.corrections)

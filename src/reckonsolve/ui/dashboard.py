@@ -41,7 +41,7 @@ from reckonsolve.domain.transfer import (
     CsvExportResult,
     DataManagementStatus,
 )
-from reckonsolve.forecast_display import lifecycle_label
+from reckonsolve.forecast_display import format_readable_local_deadline, lifecycle_label
 from reckonsolve.ui.components import (
     ContentPanel,
     EmptyStateLabel,
@@ -121,6 +121,7 @@ class _DashboardRowButton(QPushButton):
         badges: tuple[tuple[str, StatusTone], ...],
         timing_text: str,
         parent: QWidget,
+        deadline_text: str | None = None,
     ) -> None:
         super().__init__(full_text.replace("&", "&&"), parent)
         self.setProperty("reckonsolveDashboardRow", True)
@@ -158,6 +159,14 @@ class _DashboardRowButton(QPushButton):
         forecast_label.setWordWrap(True)
         apply_text_role(forecast_label, TextRole.LABEL)
         root_layout.addWidget(forecast_label)
+
+        if deadline_text is not None:
+            deadline_label = QLabel(deadline_text, self)
+            deadline_label.setObjectName("dashboardRowDeadline")
+            deadline_label.setTextFormat(Qt.TextFormat.PlainText)
+            deadline_label.setWordWrap(True)
+            apply_text_role(deadline_label, TextRole.SECONDARY)
+            root_layout.addWidget(deadline_label)
 
         badge_row = QHBoxLayout()
         badge_row.setSpacing(int(Spacing.COMPACT))
@@ -385,11 +394,9 @@ class DashboardScreen(QWidget):
                 question=prediction.question,
                 forecast_summary=_forecast_summary(prediction),
                 badges=self._row_badges(prediction),
-                timing_text=(
-                    "Forecast last considered "
-                    f"{_format_local_timestamp(prediction.attention_reference_at)}"
-                ),
+                timing_text=_forecast_time_label(prediction),
                 parent=panel.body,
+                deadline_text=_deadline_label(prediction),
             )
             button.setObjectName(
                 f"dashboard{key[0].upper()}{key[1:]}Prediction"
@@ -440,6 +447,11 @@ class DashboardScreen(QWidget):
                 question=prediction.question,
                 forecast_summary=_postmortem_outcome_summary(prediction),
                 badges=(
+                    (("ONE-SHOT", StatusTone.NEUTRAL),)
+                    if prediction.is_one_shot
+                    else ()
+                )
+                + (
                     ("RESOLVED", StatusTone.SUCCESS),
                     ("NEEDS POSTMORTEM", StatusTone.WARNING),
                 ),
@@ -515,32 +527,36 @@ class DashboardScreen(QWidget):
         badges = [
             lifecycle_label(prediction.status, prediction.forecast_contract).upper()
         ]
+        if prediction.forecast_contract and prediction.forecast_contract.is_one_shot:
+            badges.append("ONE-SHOT")
         if prediction.needs_attention:
             badges.append("NEEDS ATTENTION")
         if prediction.ready_to_resolve:
             badges.append("READY TO RESOLVE")
-        return (
-            f"{prediction.question}\n"
-            f"{_forecast_summary(prediction)}\n"
-            f"{'  |  '.join(badges)}\n"
-            "Forecast last considered "
-            f"{_format_local_timestamp(prediction.attention_reference_at)}"
-        )
+        lines = [prediction.question, _forecast_summary(prediction)]
+        deadline = _deadline_label(prediction)
+        if deadline:
+            lines.append(deadline)
+        lines.extend(("  |  ".join(badges), _forecast_time_label(prediction)))
+        return "\n".join(lines)
 
     @staticmethod
     def _row_description(prediction: DashboardPrediction) -> str:
         classifications = [
             lifecycle_label(prediction.status, prediction.forecast_contract)
         ]
+        if prediction.forecast_contract and prediction.forecast_contract.is_one_shot:
+            classifications.append("One-Shot")
         if prediction.needs_attention:
             classifications.append("needs attention")
         if prediction.ready_to_resolve:
             classifications.append("ready to resolve")
-        return (
-            f"{_forecast_summary(prediction)}. "
-            f"{', '.join(classifications)}. Forecast last considered "
-            f"{_format_local_timestamp(prediction.attention_reference_at)}."
-        )
+        parts = [_forecast_summary(prediction), ", ".join(classifications)]
+        deadline = _deadline_label(prediction)
+        if deadline:
+            parts.append(deadline)
+        parts.append(_forecast_time_label(prediction))
+        return ". ".join(parts) + "."
 
     @staticmethod
     def _row_badges(
@@ -559,6 +575,8 @@ class DashboardScreen(QWidget):
                 lifecycle_tone,
             )
         ]
+        if prediction.forecast_contract and prediction.forecast_contract.is_one_shot:
+            badges.append(("ONE-SHOT", StatusTone.NEUTRAL))
         if prediction.needs_attention:
             badges.append(("NEEDS ATTENTION", StatusTone.WARNING))
         if prediction.ready_to_resolve:
@@ -570,7 +588,8 @@ class DashboardScreen(QWidget):
         return (
             f"{prediction.question}\n"
             f"{_postmortem_outcome_summary(prediction)}  |  "
-            f"RESOLVED\nResolved {_format_local_timestamp(prediction.resolved_at)}"
+            + ("ONE-SHOT  |  " if prediction.is_one_shot else "")
+            + f"RESOLVED\nResolved {_format_local_timestamp(prediction.resolved_at)}"
         )
 
     @staticmethod
@@ -977,6 +996,25 @@ def _format_local_timestamp(value: datetime) -> str:
     return value.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
 
 
+def _forecast_time_label(prediction: DashboardPrediction) -> str:
+    prefix = (
+        "Forecast entered "
+        if prediction.forecast_contract and prediction.forecast_contract.is_one_shot
+        else "Forecast last considered "
+    )
+    return prefix + _format_local_timestamp(prediction.attention_reference_at)
+
+
+def _deadline_label(prediction: DashboardPrediction) -> str | None:
+    contract = prediction.forecast_contract
+    if contract is None or contract.is_one_shot:
+        return None
+    assert contract.forecast_deadline is not None
+    return "Forecast deadline: " + format_readable_local_deadline(
+        contract.forecast_deadline.instant
+    )
+
+
 def _postmortem_outcome_summary(prediction: NeedsPostmortemPrediction) -> str:
     """Return the type-aware effective terminal fact for one queue row."""
 
@@ -1006,9 +1044,7 @@ def _forecast_summary(prediction: DashboardPrediction) -> str:
     if prediction.prediction_type is PredictionType.BINARY:
         if prediction.probability_percent is None:
             raise ValueError("A Binary Dashboard row requires a probability.")
-        from reckonsolve.forecast_display import binary_contract_summary
-
-        return f"BINARY  {prediction.probability_percent}% · {binary_contract_summary(prediction.forecast_contract)}"
+        return f"BINARY · {prediction.probability_percent}% Yes"
     if prediction.numeric_quantiles is not None:
         return "Five-quantile forecast: " + quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""

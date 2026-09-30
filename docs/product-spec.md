@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7/v0.8 Product Specifications
 
-Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56 foundation and M57 individual One-Shot workflows implemented; M57 awaits manual acceptance; M58–M60 remain planned; source release publication is a separate repository step
+Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56–M58 implemented and M57 manually accepted; M58 awaits manual acceptance; M59–M60 remain planned; source release publication is a separate repository step
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -2642,7 +2642,7 @@ v0.6 is not complete unless all of the following are true:
 11. Question and the current type-appropriate forecast remain visually primary in creation and Detail.
 12. Every custom surface, border, text role, accent, warning, destructive state, disabled state, and focus indicator remains legible in system light and dark modes.
 13. Lifecycle, attention, forecast type, analytical meaning, and action consequence never rely on color or iconography alone.
-14. Primary, secondary, quiet, and destructive action roles are consistent, and one action region ordinarily has only one primary committed action.
+14. Primary, secondary, quiet, caution, and destructive action roles are consistent, and one action region ordinarily has only one primary committed action.
 15. No common forecasting action is hidden solely for visual cleanliness, and every secondary or overflow action remains discoverable by mouse and keyboard.
 16. Routine success acknowledgment does not require dismissal and does not reflow the active page.
 17. Backup/export destinations and all actionable failures remain persistent; consequential writes retain explicit pre-write confirmation.
@@ -3350,6 +3350,10 @@ Dashboard and Predictions remain one Binary/Numeric archive. Each row renders th
 stored forecast type, model-appropriate current forecast or terminal summary,
 lifecycle, tags, dates, and attention labels. A new Numeric row shows the
 90% interval, median, and 50% interval without a confidence selector.
+Desktop Dashboard, Predictions, and Prediction Detail show an exact immutable
+Forecast Deadline as a readable local date and time, separate from the forecast
+value. Detail keeps the offset-bearing instant available in a tooltip while the
+canonical Deadline and CLI exact-time display remain unchanged.
 Deadline date filtering projects an exact new-model deadline into the
 query's one local-calendar view. No legacy rows are silently omitted: their
 presence prevents opening the database under Section 35.3.
@@ -3879,10 +3883,11 @@ v0.7 is not complete unless all of the following are true:
 
 ## 36. Planned v0.8.0 One-Shot Prediction contract and milestone plan
 
-Status: M56 and M57 are implemented following explicit user authorization. Schema 19
+Status: M56–M58 are implemented following explicit user authorization. Schema 19
 supports individual One-Shot creation, later answering, transcription correction, and
-post-save Brier/WIS in the desktop and CLI. M57 awaits manual acceptance. M58–M60
-remain planned and require separate explicit authorization. The deadline-based
+post-save Brier/WIS in the desktop and CLI; schema 20 retains the mode filter in
+dynamic Saved Views. M57 has manual acceptance; M58 awaits it. M59–M60 require
+separate explicit authorization. The deadline-based
 contract in Section 35 remains the default.
 
 This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durable
@@ -4028,6 +4033,13 @@ history, Journal history, terminal facts, scorecard, and reflection. Its languag
 probability history as an updating path, initial-versus-final comparisons, trajectory
 timing, and “keep current forecast” actions.
 
+The One-Shot Timeline uses the same Journal-card pattern as deadline-based Detail:
+each entry appears once at its original recording position with its current corrected
+text. An unchecked Edit history control reveals the original and earlier versions;
+matched search results for superseded Journal text open that history and highlight the
+matching version. Journal corrections remain append-only and do not create forecast
+updates or separate top-level Journal events.
+
 The one-shot correction action is available after Save, including after Resolution, so a
 user can correct a copied value or measured answer. The current scorecard uses the
 latest effective corrected forecast and answer, while Detail and CLI `show` keep the
@@ -4095,6 +4107,12 @@ data dictionary; it remains analytical, not restorable. Until that export exists
 format-4 export must refuse an archive containing One-Shot records rather than omit
 them.
 
+The user-approved M58 amendment adds schema version **20** solely to retain an optional
+`deadline` or `one_shot` mode in each dynamic Saved View. Existing views migrate with a
+null mode, meaning All modes; their names, tags, other filters, and dynamic membership
+remain unchanged. The migration is atomic and does not alter Prediction history,
+scoring, or the format-4 CSV boundary.
+
 No mobile app, synchronization, note import, attachment system, proof of phone-note
 authorship, web service, new forecast type, or new production dependency is part of this
 contract. v0.7 release notes and historical Rulebook promises remain descriptions of
@@ -4103,9 +4121,8 @@ older Prediction.
 
 ### 36.6 Proposed implementation milestones
 
-M56 and M57 are implemented under their separate authorizations. The remaining milestones are a
-plan, not authorization to implement. Work on one milestone or one coherent vertical
-slice only after the user explicitly authorizes it.
+M56 and M57 are implemented under their separate authorizations, and M58 is authorized
+and in progress. M59 and M60 remain a plan, not authorization to implement them.
 
 #### Milestone 56: One-Shot contract, exact values, and schema foundation
 
@@ -4129,12 +4146,12 @@ One-Shot creation entry point is available in this milestone.
 
 #### Milestone 57: Complete One-Shot creation, answer, and individual feedback
 
-Status: implemented; manual desktop acceptance pending. The CLI uses
+Status: implemented and manually accepted. The CLI uses
 `create binary --one-shot` / `create numeric --one-shot`, and dispatches `resolve`
 to Add answer. Basic effective archive rows and terminal-text projection allow
 records to reopen without the M56 foundation-only guard. Full retrieval, mode
 filtering, matched-source navigation, Journal corrections, and Postmortem queue/Skip
-integration remain M58; aggregate One-Shot Analytics remains M59. Schema 19 and the
+integration are M58 work; aggregate One-Shot Analytics remains M59. Schema 19 and the
 format-4 CSV refusal are unchanged.
 
 - Add the One-Shot action and tailored Binary/Numeric New Prediction screen while
@@ -4151,6 +4168,18 @@ format-4 CSV refusal are unchanged.
   no pre-save score feedback.
 
 #### Milestone 58: Retrieval, history, and cross-interface integration
+
+Status: implemented; manual acceptance pending. Mode filtering, correction-note search
+and matched-source navigation, the One-Shot causal timeline, audited Journal corrections,
+Postmortem queue/Skip/later reflection, and mode-filtered dynamic Saved Views are in place.
+Schema 20 adds the optional Saved View filter without rewriting schema-19 history.
+The M58 visual follow-up distinguishes **Mark Invalid** with an orange caution action
+from red **Delete** across supported Detail screens. Archive result rows size to their
+wrapped text and keep badges fully visible; Numeric quantiles use three compact lines.
+One-Shot Journal and causal-history timestamps display local date and minute while
+retaining exact stored audit instants. The One-Shot Timeline shows current Journal
+text in cards with prior versions collapsed; matched historical Journal search opens
+the exact prior version.
 
 - Include One-Shot consistently in Dashboard, Predictions, search, tag transactions,
   dynamic Saved Views, mode filtering, causal timeline, Postmortem and Journal history,
@@ -4210,7 +4239,7 @@ format-4 CSV refusal are unchanged.
 7. GUI and CLI create, answer, retrieve, and show the same one-shot record. Search,
    Saved Views, tags, Dashboard, Postmortems, backup, and format-5 CSV include it
    without data loss or unsupported-cohort omission.
-8. Supported v0.7 history and scores survive schema-19 upgrade unchanged; retired or
+8. Supported v0.7 history and scores survive schema-19/20 upgrade unchanged; retired or
    malformed archives remain safely refused. Tests and private-build review use only
    disposable databases.
 

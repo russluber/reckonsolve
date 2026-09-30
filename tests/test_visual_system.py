@@ -154,6 +154,8 @@ def test_semantic_colors_are_palette_aware_and_contrast_safe(
     assert colors.is_dark is expected_dark
     assert contrast_ratio(colors.accent, colors.on_accent) >= 4.5
     assert contrast_ratio(colors.warning, colors.warning_surface) >= 4.5
+    assert contrast_ratio(colors.caution, colors.caution_surface) >= 4.5
+    assert colors.caution != colors.destructive
     assert contrast_ratio(colors.error, colors.error_surface) >= 4.5
     assert contrast_ratio(colors.secondary_text, colors.canvas) >= 4.5
     assert contrast_ratio(colors.text, colors.surface) >= 4.5

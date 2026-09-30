@@ -7,7 +7,16 @@ from html import escape
 from itertools import pairwise
 from typing import Protocol
 
-from PySide6.QtCore import QDate, QSignalBlocker, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QDate,
+    QEvent,
+    QObject,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QHideEvent, QResizeEvent, QShowEvent, QWheelEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -36,6 +45,7 @@ from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.browser import (
     ArchiveAttention,
     ArchiveDateMeaning,
+    ArchiveMode,
     ArchiveQuery,
     ArchiveSort,
     ArchiveTagMatchMode,
@@ -43,7 +53,7 @@ from reckonsolve.domain.browser import (
     PredictionBrowserSnapshot,
 )
 from reckonsolve.domain.predictions import PredictionStatus, PredictionType
-from reckonsolve.domain.quantiles import quantile_summary
+from reckonsolve.domain.quantiles import FiveQuantiles, quantile_summary
 from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import (
     ParsedSearchText,
@@ -55,7 +65,11 @@ from reckonsolve.domain.search import (
     build_search_snippet,
     search_source_label,
 )
-from reckonsolve.forecast_display import lifecycle_label, mode_label
+from reckonsolve.forecast_display import (
+    format_readable_local_deadline,
+    lifecycle_label,
+    mode_label,
+)
 from reckonsolve.ui.components import (
     ContentPanel,
     PageHeader,
@@ -91,6 +105,7 @@ class PredictionBrowserOperations(TagManagementOperations, Protocol):
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        mode: ArchiveMode | None = None,
         tags: tuple[str, ...] = (),
         tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
         attention: ArchiveAttention | None = None,
@@ -110,6 +125,7 @@ class PredictionBrowserOperations(TagManagementOperations, Protocol):
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        mode: ArchiveMode | None = None,
         tags: tuple[str, ...] = (),
         tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
         attention: ArchiveAttention | None = None,
@@ -272,6 +288,9 @@ class PredictionBrowserScreen(QWidget):
         ) = None
         self._saved_views: dict[int, SavedView] = {}
         self._active_saved_view_id: int | None = None
+        self._row_layout_timer = QTimer(self)
+        self._row_layout_timer.setSingleShot(True)
+        self._row_layout_timer.timeout.connect(self._resize_result_items)
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setObjectName("predictionBrowserRefreshTimer")
         self._refresh_timer.setInterval(60_000)
@@ -374,6 +393,15 @@ class PredictionBrowserScreen(QWidget):
         self.type_filter.addItem("Binary", PredictionType.BINARY.value)
         self.type_filter.addItem("Numeric", PredictionType.NUMERIC.value)
         type_label.setBuddy(self.type_filter)
+
+        mode_label = QLabel("Mode", self)
+        self.mode_filter = _ArchiveComboBox(self)
+        self.mode_filter.setObjectName("predictionModeFilter")
+        self.mode_filter.setAccessibleName("Filter predictions by mode")
+        self.mode_filter.addItem("All modes", None)
+        self.mode_filter.addItem("With Deadline", ArchiveMode.DEADLINE.value)
+        self.mode_filter.addItem("One-Shot", ArchiveMode.ONE_SHOT.value)
+        mode_label.setBuddy(self.mode_filter)
 
         tag_label = QLabel("Tags", self)
         self.tag_filter = TagFilterPicker(self)
@@ -494,6 +522,7 @@ class PredictionBrowserScreen(QWidget):
             match_label,
             status_label,
             type_label,
+            mode_label,
             tag_label,
             tag_mode_label,
             attention_label,
@@ -511,6 +540,7 @@ class PredictionBrowserScreen(QWidget):
             self.match_mode,
             self.status_filter,
             self.type_filter,
+            self.mode_filter,
             self.attention_filter,
             self.sort_filter,
             self.tag_match_mode,
@@ -525,6 +555,7 @@ class PredictionBrowserScreen(QWidget):
             self.match_mode,
             self.status_filter,
             self.type_filter,
+            self.mode_filter,
             self.tag_match_mode,
             self.attention_filter,
             self.date_meaning,
@@ -622,6 +653,8 @@ class PredictionBrowserScreen(QWidget):
         common_grid.addWidget(sort_label, 2, 1)
         common_grid.addWidget(self.type_filter, 3, 0)
         common_grid.addWidget(self.sort_filter, 3, 1)
+        common_grid.addWidget(mode_label, 4, 0)
+        common_grid.addWidget(self.mode_filter, 5, 0)
         common_grid.setColumnStretch(0, 1)
         common_grid.setColumnStretch(1, 1)
         common_body.addLayout(common_grid)
@@ -721,7 +754,9 @@ class PredictionBrowserScreen(QWidget):
         self.results_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.results_list.setAlternatingRowColors(True)
         self.results_list.setWordWrap(True)
+        self.results_list.setSpacing(int(Spacing.COMPACT))
         self.results_list.setMinimumHeight(220)
+        self.results_list.viewport().installEventFilter(self)
 
         self.empty_label = QLabel(self)
         self.empty_label.setObjectName("predictionBrowserEmpty")
@@ -839,6 +874,7 @@ class PredictionBrowserScreen(QWidget):
         self.include_history.toggled.connect(self.refresh)
         self.status_filter.currentIndexChanged.connect(self.refresh)
         self.type_filter.currentIndexChanged.connect(self.refresh)
+        self.mode_filter.currentIndexChanged.connect(self.refresh)
         self.tag_filter.selection_changed.connect(self.refresh)
         self.tag_match_mode.currentIndexChanged.connect(self.refresh)
         self.attention_filter.currentIndexChanged.connect(self.refresh)
@@ -880,6 +916,7 @@ class PredictionBrowserScreen(QWidget):
             self.status_filter,
             self.attention_filter,
             self.type_filter,
+            self.mode_filter,
             self.sort_filter,
             self.clear_button,
             self.apply_button,
@@ -934,6 +971,37 @@ class PredictionBrowserScreen(QWidget):
         self._workspace_splitter.setSizes(
             [controls_size, max(1, available - controls_size)]
         )
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if (
+            watched is self.results_list.viewport()
+            and event.type() is QEvent.Type.Resize
+        ):
+            self._schedule_result_item_layout()
+        return super().eventFilter(watched, event)
+
+    def _schedule_result_item_layout(self) -> None:
+        if self.results_list.count() and not self._row_layout_timer.isActive():
+            self._row_layout_timer.start(0)
+
+    def _resize_result_items(self) -> None:
+        """Size each row at the actual results width after text wrapping and styling."""
+
+        width = self.results_list.viewport().width()
+        if width <= 0:
+            return
+        for index in range(self.results_list.count()):
+            item = self.results_list.item(index)
+            row = self.results_list.itemWidget(item)
+            if row is None or row.layout() is None:
+                continue
+            row.ensurePolished()
+            for label in row.findChildren(QLabel):
+                label.ensurePolished()
+            layout = row.layout()
+            wrapped_height = layout.heightForWidth(width)
+            height = wrapped_height if wrapped_height >= 0 else row.sizeHint().height()
+            item.setSizeHint(QSize(0, height + 2))
 
     def showEvent(self, event: QShowEvent) -> None:
         """Keep derived Locked status current while the browser remains visible."""
@@ -1027,6 +1095,7 @@ class PredictionBrowserScreen(QWidget):
             QSignalBlocker(self.include_history),
             QSignalBlocker(self.status_filter),
             QSignalBlocker(self.type_filter),
+            QSignalBlocker(self.mode_filter),
             QSignalBlocker(self.tag_filter),
             QSignalBlocker(self.tag_match_mode),
             QSignalBlocker(self.attention_filter),
@@ -1052,6 +1121,11 @@ class PredictionBrowserScreen(QWidget):
                     None
                     if query.prediction_type is None
                     else query.prediction_type.value
+                )
+            )
+            self.mode_filter.setCurrentIndex(
+                self.mode_filter.findData(
+                    None if query.mode is None else query.mode.value
                 )
             )
             self._set_selected_tags(query.tags)
@@ -1095,6 +1169,7 @@ class PredictionBrowserScreen(QWidget):
             archive_query=ArchiveQuery(
                 status=self._selected_status(),
                 prediction_type=self._selected_prediction_type(),
+                mode=self._selected_mode(),
                 tags=self._selected_tags(),
                 tag_match_mode=self._selected_tag_match_mode(),
                 attention=self._selected_attention(),
@@ -1252,6 +1327,7 @@ class PredictionBrowserScreen(QWidget):
         shared_arguments = {
             "status": self._selected_status(),
             "prediction_type": self._selected_prediction_type(),
+            "mode": self._selected_mode(),
             "tags": self._selected_tags(),
             "tag_match_mode": self._selected_tag_match_mode(),
             "attention": self._selected_attention(),
@@ -1279,6 +1355,7 @@ class PredictionBrowserScreen(QWidget):
         with (
             QSignalBlocker(self.status_filter),
             QSignalBlocker(self.type_filter),
+            QSignalBlocker(self.mode_filter),
             QSignalBlocker(self.tag_filter),
             QSignalBlocker(self.tag_match_mode),
             QSignalBlocker(self.attention_filter),
@@ -1293,6 +1370,7 @@ class PredictionBrowserScreen(QWidget):
         ):
             self.status_filter.setCurrentIndex(0)
             self.type_filter.setCurrentIndex(0)
+            self.mode_filter.setCurrentIndex(0)
             self.tag_filter.clear_selection()
             self.tag_match_mode.setCurrentIndex(0)
             self.attention_filter.setCurrentIndex(0)
@@ -1359,9 +1437,10 @@ class PredictionBrowserScreen(QWidget):
             )
             item.setToolTip("Open Prediction Detail")
             row = self._archive_result_widget(prediction)
-            item.setSizeHint(row.sizeHint())
+            item.setSizeHint(QSize(0, row.sizeHint().height()))
             self.results_list.addItem(item)
             self.results_list.setItemWidget(item, row)
+        self._schedule_result_item_layout()
 
     def _render_search_results(self, results: PredictionSearchResults) -> None:
         self._prepare_results(len(results.hits))
@@ -1404,9 +1483,10 @@ class PredictionBrowserScreen(QWidget):
             )
             item.setToolTip("Open Prediction Detail at this matching context")
             row = self._search_result_widget(hit)
-            item.setSizeHint(row.sizeHint())
+            item.setSizeHint(QSize(0, row.sizeHint().height()))
             self.results_list.addItem(item)
             self.results_list.setItemWidget(item, row)
+        self._schedule_result_item_layout()
 
     def _update_tag_choices(self, tags: tuple[str, ...]) -> None:
         selected_tags = self._selected_tags()
@@ -1427,6 +1507,10 @@ class PredictionBrowserScreen(QWidget):
     def _selected_prediction_type(self) -> PredictionType | None:
         value = self.type_filter.currentData()
         return None if value is None else PredictionType(str(value))
+
+    def _selected_mode(self) -> ArchiveMode | None:
+        value = self.mode_filter.currentData()
+        return None if value is None else ArchiveMode(str(value))
 
     def _selected_match_mode(self) -> SearchMatchMode:
         return SearchMatchMode(str(self.match_mode.currentData()))
@@ -1488,6 +1572,7 @@ class PredictionBrowserScreen(QWidget):
             self.search_input.text().strip()
             or self._selected_status() is not None
             or self._selected_prediction_type() is not None
+            or self._selected_mode() is not None
             or bool(self._selected_tags())
             or self._selected_attention() is not None
             or self.date_start_enabled.isChecked()
@@ -1616,6 +1701,7 @@ class PredictionBrowserScreen(QWidget):
             int(Spacing.CONTROL),
         )
         layout.setSpacing(int(Spacing.COMPACT))
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         question = QLabel(prediction.question, row)
         question.setTextFormat(Qt.TextFormat.PlainText)
@@ -1721,10 +1807,13 @@ def _status_tone(status: PredictionStatus) -> StatusTone:
 
 def _date_context(prediction: PredictionBrowserItem | SearchPrediction) -> str:
     parts = [f"Created {_format_local_timestamp(prediction.created_at)}"]
-    if prediction.prediction_type is PredictionType.BINARY:
-        from reckonsolve.forecast_display import binary_contract_summary
-
-        parts.append(binary_contract_summary(prediction.forecast_contract))
+    contract = prediction.forecast_contract
+    if contract is not None and not contract.is_one_shot:
+        assert contract.forecast_deadline is not None
+        parts.append(
+            "Forecast deadline "
+            + format_readable_local_deadline(contract.forecast_deadline.instant)
+        )
     if prediction.latest_revision_at is not None and not (
         prediction.forecast_contract and prediction.forecast_contract.is_one_shot
     ):
@@ -1750,10 +1839,20 @@ def _forecast_value_summary(prediction: PredictionBrowserItem) -> str:
             raise ValueError("A Binary browser row requires a probability.")
         return f"Current forecast · {prediction.probability_percent}%"
     if prediction.numeric_quantiles is not None:
-        return "Five-quantile forecast: " + quantile_summary(
+        return _compact_quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""
         )
     raise ValueError("A Numeric row requires all five exact quantiles and its unit.")
+
+
+def _compact_quantile_summary(quantiles: FiveQuantiles, unit: str) -> str:
+    """Show one fixed interval per line in the narrow archive results pane."""
+
+    return (
+        f"90% interval: {quantiles.q05} to {quantiles.q95} {unit}\n"
+        f"Median: {quantiles.q50} {unit}\n"
+        f"50% interval: {quantiles.q25} to {quantiles.q75} {unit}"
+    )
 
 
 def _search_value_summary(prediction: SearchPrediction) -> str:
@@ -1775,7 +1874,7 @@ def _search_value_summary(prediction: SearchPrediction) -> str:
             raise ValueError("A Binary search result requires a probability.")
         return f"Current forecast · {prediction.probability_percent}%"
     if prediction.numeric_quantiles is not None:
-        return "Five-quantile forecast: " + quantile_summary(
+        return _compact_quantile_summary(
             prediction.numeric_quantiles, prediction.numeric_unit or ""
         )
     raise ValueError("A Numeric row requires all five exact quantiles and its unit.")

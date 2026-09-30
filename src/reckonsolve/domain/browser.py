@@ -27,6 +27,13 @@ class ArchiveTagMatchMode(StrEnum):
     ANY = "any"
 
 
+class ArchiveMode(StrEnum):
+    """Which immutable forecasting commitment a Prediction uses."""
+
+    DEADLINE = "deadline"
+    ONE_SHOT = "one_shot"
+
+
 class ArchiveAttention(StrEnum):
     """Derived attention populations available in the archive."""
 
@@ -66,6 +73,7 @@ class ArchiveQuery:
 
     status: PredictionStatus | None = None
     prediction_type: PredictionType | None = None
+    mode: ArchiveMode | None = None
     tags: tuple[str, ...] = ()
     tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL
     attention: ArchiveAttention | None = None
@@ -129,6 +137,8 @@ def validate_archive_query(query: ArchiveQuery, *, text_active: bool) -> None:
         raise ArchiveQueryValidationError("The prediction status filter is invalid.")
     if not isinstance(query.prediction_type, (PredictionType, type(None))):
         raise ArchiveQueryValidationError("The forecast type filter is invalid.")
+    if not isinstance(query.mode, (ArchiveMode, type(None))):
+        raise ArchiveQueryValidationError("The prediction mode filter is invalid.")
     if not isinstance(query.tag_match_mode, ArchiveTagMatchMode):
         raise ArchiveQueryValidationError("The tag matching mode is invalid.")
     if not isinstance(query.attention, (ArchiveAttention, type(None))):
@@ -212,6 +222,14 @@ def matches_archive_query(
     if (
         query.prediction_type is not None
         and item.prediction_type is not query.prediction_type
+    ):
+        return False
+    if query.mode is ArchiveMode.ONE_SHOT and not (
+        item.forecast_contract and item.forecast_contract.is_one_shot
+    ):
+        return False
+    if query.mode is ArchiveMode.DEADLINE and (
+        item.forecast_contract is None or item.forecast_contract.is_one_shot
     ):
         return False
     selected_tags = normalized_archive_tags(query.tags)

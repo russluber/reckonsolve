@@ -7,6 +7,7 @@ from datetime import date
 from reckonsolve.domain.browser import (
     ArchiveAttention,
     ArchiveDateMeaning,
+    ArchiveMode,
     ArchiveQuery,
     ArchiveSort,
     ArchiveTagMatchMode,
@@ -56,9 +57,10 @@ class SavedViewRepository:
                     """
                     INSERT INTO saved_views (
                         display_name, normalized_name, search_text, match_mode,
-                        include_superseded, status, prediction_type, tag_match_mode,
+                        include_superseded, status, prediction_type, forecast_mode,
+                        tag_match_mode,
                         attention, date_meaning, date_start, date_end, sort
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     _saved_view_values(name, normalized_name, configuration),
                 )
@@ -89,7 +91,8 @@ class SavedViewRepository:
                 """
                 UPDATE saved_views
                 SET search_text = ?, match_mode = ?, include_superseded = ?,
-                    status = ?, prediction_type = ?, tag_match_mode = ?,
+                    status = ?, prediction_type = ?, forecast_mode = ?,
+                    tag_match_mode = ?,
                     attention = ?, date_meaning = ?, date_start = ?, date_end = ?,
                     sort = ?
                 WHERE id = ?
@@ -166,6 +169,7 @@ def _saved_view_values(
         int(configuration.include_superseded),
         None if query.status is None else query.status.value,
         None if query.prediction_type is None else query.prediction_type.value,
+        None if query.mode is None else query.mode.value,
         query.tag_match_mode.value,
         None if query.attention is None else query.attention.value,
         query.date_meaning.value,
@@ -220,7 +224,8 @@ def _load_saved_views(connection: sqlite3.Connection) -> tuple[SavedView, ...]:
     rows = connection.execute(
         """
         SELECT id, display_name, normalized_name, search_text, match_mode,
-               include_superseded, status, prediction_type, tag_match_mode,
+               include_superseded, status, prediction_type, forecast_mode,
+               tag_match_mode,
                attention, date_meaning, date_start, date_end, sort
         FROM saved_views
         ORDER BY normalized_name, id
@@ -268,6 +273,11 @@ def _map_saved_view(row, tags: tuple[SavedViewTag, ...]) -> SavedView:
             None
             if row["prediction_type"] is None
             else PredictionType(str(row["prediction_type"]))
+        ),
+        mode=(
+            None
+            if row["forecast_mode"] is None
+            else ArchiveMode(str(row["forecast_mode"]))
         ),
         tags=tuple(tag.display_name for tag in tags),
         tag_match_mode=ArchiveTagMatchMode(str(row["tag_match_mode"])),

@@ -10,6 +10,7 @@ from .predictions import (
     FixedPrecisionValue,
     InvalidationHistory,
     JournalCorrection,
+    PostmortemCompletion,
     PredictionStatus,
     PredictionValidationError,
     _normalize_tags,
@@ -190,6 +191,7 @@ class OneShotDetail:
     definition_changes: tuple[DefinitionChange, ...] = ()
     journals: tuple["OneShotJournal", ...] = ()
     invalidation_history: InvalidationHistory | None = None
+    postmortem_completion: PostmortemCompletion | None = None
 
     @property
     def prediction_id(self) -> int:

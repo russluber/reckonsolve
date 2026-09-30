@@ -61,6 +61,7 @@ from .forecast_contracts import (
     select_supported_contract,
 )
 from .one_shot_archive import read_archive as read_one_shot_archive
+from .one_shot_facts import read_one_shot
 from .quantile_archive import read_archive as read_quantile_archive
 
 
@@ -1013,7 +1014,47 @@ class PredictionRepository:
                 ORDER BY resolved_at, prediction_id
                 """
             ).fetchall()
-        return tuple(_map_needs_postmortem_prediction(row) for row in rows)
+            one_shot_queue = []
+            for item in read_one_shot_archive(connection):
+                if not item.needs_postmortem:
+                    continue
+                record = read_one_shot(
+                    connection, item.prediction_id, item.forecast_contract
+                )
+                one_shot_queue.append(
+                    NeedsPostmortemPrediction(
+                        prediction_id=item.prediction_id,
+                        question=item.question,
+                        prediction_type=item.prediction_type,
+                        resolved_at=record.answer_recorded_at,
+                        current_correction_id=(
+                            record.corrections[-1].correction_id
+                            if record.corrections
+                            else None
+                        ),
+                        binary_outcome=(
+                            record.effective.answer
+                            if item.prediction_type is PredictionType.BINARY
+                            else None
+                        ),
+                        numeric_actual_value=(
+                            record.effective.answer
+                            if item.prediction_type is PredictionType.NUMERIC
+                            else None
+                        ),
+                        numeric_unit=item.numeric_unit,
+                        is_one_shot=True,
+                    )
+                )
+        return tuple(
+            sorted(
+                (
+                    *(_map_needs_postmortem_prediction(row) for row in rows),
+                    *one_shot_queue,
+                ),
+                key=lambda item: (item.resolved_at, item.prediction_id),
+            )
+        )
 
     def list_browser_predictions(self) -> PredictionBrowserSnapshot:
         """Load every prediction summary and every associated tag."""

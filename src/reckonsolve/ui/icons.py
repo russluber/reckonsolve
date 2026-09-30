@@ -161,6 +161,8 @@ def _button_icon(name: LucideIcon, button: QAbstractButton) -> QIcon:
     action_role = button.property(ACTION_ROLE_PROPERTY)
     if action_role == ActionRole.PRIMARY.value:
         normal_color = colors.on_accent
+    elif action_role == ActionRole.CAUTION.value:
+        normal_color = colors.caution
     elif action_role == ActionRole.DESTRUCTIVE.value:
         normal_color = colors.destructive
     else:

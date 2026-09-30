@@ -22,6 +22,11 @@ def format_local_deadline(value: datetime) -> str:
     return value.astimezone().isoformat(sep=" ", timespec="minutes")
 
 
+def format_readable_local_deadline(value: datetime) -> str:
+    """Show a local deadline in plain language for desktop cards and dialogs."""
+    return value.astimezone().strftime("%b %d, %Y at %I:%M %p").replace(" 0", " ")
+
+
 def binary_contract_summary(contract: ForecastContract) -> str:
     if contract.is_one_shot:
         return "One-Shot Binary"

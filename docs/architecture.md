@@ -1,11 +1,11 @@
 # Reckonsolve Architecture
 
-Status: v0.7 complete through M55; v0.8 M56/M57 implemented; M57 awaits manual acceptance; M58–M60 planned
+Status: v0.7 complete through M55; v0.8 M56–M58 implemented and M57 manually accepted; M58 awaits manual acceptance; M59–M60 planned
 Last reviewed: 2026-09-27
 
-This document describes the implemented structure from the binary v0.1 baseline through v0.7 and the v0.8 M56/M57 One-Shot work, with remaining work identified in Section 25. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+This document describes the implemented structure from the binary v0.1 baseline through v0.7 and the v0.8 M56–M58 One-Shot work, with remaining work identified in Section 25. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
-**Current support boundary:** trajectory Binary and deadline-based five-quantile Numeric remain the default. M57 exposes individual Binary and Numeric One-Shot workflows on schema 19, described in Section 25 and [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md). Retired-only or mixed-with-retired archives, and missing/unknown/mismatched contracts, still fail before migration, repair, or ordinary transaction work. No conversion or deletion occurs. Supported v0.7 history remains intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the earlier retirement boundary.
+**Current support boundary:** trajectory Binary and deadline-based five-quantile Numeric remain the default. M57 exposes individual Binary and Numeric One-Shot workflows on schema 19, described in Section 25 and [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md); M58 adds a schema-20 Saved View mode filter. Retired-only or mixed-with-retired archives, and missing/unknown/mismatched contracts, still fail before migration, repair, or ordinary transaction work. No conversion or deletion occurs. Supported v0.7 history remains intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the earlier retirement boundary.
 
 **Reading historical sections:** Sections 2–23 and the M46–M54A subsections record the system's evolution. Their legacy editors, calculations, compatibility promises, and old creation paths are superseded by M54B below; they are not instructions to restore those paths. Historical migration SQL remains unchanged as storage infrastructure, not runtime compatibility. Live database cleanup requires separate authorization.
 
@@ -24,7 +24,7 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutabl
 | UI | The six existing screen routes remain functional over one centralized palette-aware visual foundation, while the M40 shell distinguishes one creation action, three permanent primary destinations, one bottom utility, and contextual Prediction Detail; the sidebar has complete expanded and icon-only compact modes, and Detail return preserves the originating primary context without refreshing the Predictions query; M41 gives Dashboard and Settings the shared page/panel/message grammar and routes only disposable success acknowledgments through one non-reflowing shell overlay; M42 gives creation, both Detail variants, their timelines, and focused dialogs the same hierarchy while preserving every workflow; M42A gives Numeric Detail the shared Edit Details dialog with immutable unit and precision shown as context; M43 gives Predictions stable grouped controls, readable detailed filters, type-aware structured rows, direct row activation, and consistently styled tag management; M44 gives Analytics the same page/panel/message hierarchy, keeps its filter frame stable above responsive scrollable results, and adds guarded global navigation shortcuts plus visible shortcut reference, logical focus order, and stronger accessible descriptions; selected navigation and action icons remain local, palette-aware Lucide SVGs rendered through QtSvg while visible or accessible names remain authoritative |
 | Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; each identity keeps `presentation.ini` beside its database; tests and private smoke inject explicit disposable paths |
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
-| Schema | Version 19 expands the immutable contract table and adds One-Shot reported times and correction snapshots; all supported schema-18 canonical facts remain unchanged. Historical SQL is unchanged and retired tables provide no supported legacy workflow |
+| Schema | Version 19 expands the immutable contract table and adds One-Shot reported times and correction snapshots; version 20 adds an optional mode column to dynamic Saved Views. All supported schema-18 canonical facts remain unchanged. Historical SQL is unchanged and retired tables provide no supported legacy workflow |
 | Domain and application operations | Exact-Deadline trajectory Binary and five-quantile Numeric remain available. M57 adds shared individual One-Shot creation, later answers, metadata, Journals, guarded lifecycle actions, and transcription corrections over the M56 foundation. Retired workflows remain absent |
 | Analytics | Public aggregate snapshots retain trajectory Binary and five-quantile Numeric sources. M56 adds pure individual One-Shot Brier/WIS without time selection; its separate aggregates remain M59 work. Binary receives equal per-Prediction votes, Numeric continuous/whole-number calibration stays separate, and raw WIS is never pooled. No legacy calculators or UI sections remain |
 | Automated tests | Disposable supported-model workflows, byte-preserving whole-database refusal, supported schema-16/17 upgrades and rollback, history/anchor ownership, backup/restart, search/Saved Views/tags, independent connections, and GUI/CLI parity. Empty historical schemas exercise migration DDL; populated retired schemas test refusal |
@@ -470,7 +470,7 @@ The type and tag filters apply before every type-specific output. Numeric **All 
 
 ## 12. UI data flow
 
-M39 adds a presentation-only layer above the existing screen coordination. `MainWindow` installs one stylesheet generated from its effective `QPalette`; palette or application-font changes rebuild semantic colors/fonts and re-render remembered Lucide icons. New and M39-converted widgets state visual intent with dynamic properties and small helpers instead of adding more embedded color declarations or screen-specific font increments. The shared boundary defines compact/ordinary/section/page spacing, control/panel radii, short motion limits governed by Qt's `SH_Widget_Animate` preference, relative native-font roles, palette-derived base/raised/input/selected surfaces, light/dark green accents, focus and disabled treatment, four action roles, text badges, and persistent message tones. It imports no domain, analytics, application, or data module, persists nothing, and does not participate in any operation or query. The boundary is an ordinary UI implementation detail rather than a new framework or architecture constraint, so M39 requires no new decision record.
+M39 adds a presentation-only layer above the existing screen coordination. `MainWindow` installs one stylesheet generated from its effective `QPalette`; palette or application-font changes rebuild semantic colors/fonts and re-render remembered Lucide icons. New and M39-converted widgets state visual intent with dynamic properties and small helpers instead of adding more embedded color declarations or screen-specific font increments. The shared boundary defines compact/ordinary/section/page spacing, control/panel radii, short motion limits governed by Qt's `SH_Widget_Animate` preference, relative native-font roles, palette-derived base/raised/input/selected surfaces, light/dark green accents, focus and disabled treatment, shared action roles including the M58 caution role, text badges, and persistent message tones. It imports no domain, analytics, application, or data module, persists nothing, and does not participate in any operation or query. The boundary is an ordinary UI implementation detail rather than a new framework or architecture constraint, so M39 requires no new decision record.
 
 M42 completes the first core-workflow rollout of that presentation boundary. New Prediction uses a bounded raised Forecast panel, type-aware guidance, a collapsed optional-details panel, one persistent inline error, and one primary create action while retaining the exact Binary and Numeric control sequence and atomic operation calls. Both Detail variants now compose the same ordered regions: type/status and full Question with the current forecast, common forecast actions, secondary lifecycle actions, nonempty metadata, effective terminal facts and correction history, the causal text timeline, and the type-specific history chart. Timeline and correction records use nested base surfaces and selectable plain text; absent optional metadata stays hidden and history groups stay collapsed. A small dialog superclass applies shared spacing, headings, field labels, reviewed-context surfaces, inline error tones, and Save/Cancel roles only after each existing dialog has built its controls. This layer does not intercept signals, change focus order, select scoring data, create history, or participate in transactions.
 
@@ -1018,8 +1018,8 @@ unsupported archive. No new schema or production dependency is introduced.
 
 M56's foundation and M57's individual workflows are implemented. [Product-spec Section
 36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan)
-owns the behavior and M56–M60 sequencing. M57 awaits manual acceptance. M58–M60
-own the remaining retrieval/reflection, aggregate, and release work.
+owns the behavior and M56–M60 sequencing. M57 has manual acceptance. M58 is
+implemented and awaits manual acceptance; M59–M60 own aggregate and release work.
 
 ### Contract and dependency boundary
 
@@ -1094,11 +1094,12 @@ to those same transactions. `application/one_shot.py`, composed by
 individual scores. The UI and CLI never select an original revision for scoring.
 
 Basic effective rows in Dashboard/Predictions/search allow saved records to reopen and
-exclude them from revision staleness. Search projection version 2 follows effective and
-superseded Resolution notes/Postmortems from the transcription chain; writes mark the
-Prediction dirty in their transaction. Existing indexes rebuild without changing
-canonical history. Deadline-specific Detail and aggregate loaders exclude One-Shot.
-The Postmortem queue remains deadline-only until M58 adds its completion integration.
+exclude them from revision staleness. Search projection version 3 follows effective and
+superseded Resolution notes/Postmortems from the transcription chain, and indexes each
+immutable transcription-correction note; writes mark the Prediction dirty in their
+transaction. Existing indexes rebuild without changing canonical history.
+Deadline-specific Detail and aggregate loaders exclude One-Shot. The shared
+Postmortem queue now includes eligible Resolved One-Shots.
 
 ### Implemented M57 presentation
 
@@ -1151,11 +1152,38 @@ interactive `create binary --one-shot` / `create numeric --one-shot` and later
 correction forms do not request scores. Mode is fixed at creation, and neither
 interface can add a second committed forecast or Forecast Review.
 
-### Remaining M58–M60 work
+### M58 retrieval and reflection
 
-M58 owns mode filters, complete matched-source navigation (including correction
-notes), Journal corrections, causal timeline and Postmortem queue/Skip integration.
-M57 supplies the basic current record and terminal prose reads needed for individual use.
+The archive query now filters on the immutable deadline/One-Shot identity across
+desktop and CLI. Current One-Shot rows use effective facts, no fabricated Deadline,
+and no updating attention. One-Shot correction notes enter rebuildable search
+projection version 3. Search navigation reveals original or corrected text in a
+chronological Detail timeline. One-Shot Journal body corrections share the existing
+append-only correction table and search provenance; the one-shot operation checks
+the current entry and expected correction token in its write transaction. Resolved
+One-Shots enter the shared Needs Postmortem queue; Skip creates the existing immutable
+completion fact, and a later Postmortem remains possible. The Dashboard marks their
+mode and uses entry wording instead of update wording.
+
+The M58 visual follow-up adds a palette-aware orange Caution action role for Mark Invalid
+in all supported Detail types and their confirmation forms; Delete retains the red
+Destructive role. Predictions rows calculate height from the actual results-pane width
+after wrapping, with uniform row spacing and compact three-line Numeric summaries.
+One-Shot Journal, correction, and timeline timestamps use the existing local-minute
+formatter; the exact canonical instants and causal ordering are unchanged.
+The One-Shot Detail Timeline renders one Journal card per original entry, using the
+current corrected body and the shared collapsed edit-history widget. The separate
+Journal panel is removed. Superseded Journal search targets expand the card's history
+before scrolling to and emphasizing the original or intermediate correction; current
+matches target the visible body. Corrections remain in canonical append-only history.
+
+Schema 20 adds nullable `forecast_mode` to the existing strict `saved_views` table,
+constrained to `deadline` or `one_shot`. Null preserves All modes for existing views.
+The repository reads and writes this field with the other filters; desktop controls
+and CLI execution use the stored mode in the normal archive query. The atomic upgrade
+preserves existing view rows and stable tag references; forced failure rolls back the
+column. Saved Views still store configurations rather than Prediction membership.
+M59–M60 remain separately authorized work.
 
 Shared archive, Dashboard, search, and Saved View reads carry the stored One-Shot
 identity and no fabricated Deadline. An explicit mode filter is dynamic Saved View

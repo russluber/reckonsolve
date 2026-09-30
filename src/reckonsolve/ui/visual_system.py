@@ -88,6 +88,7 @@ class ActionRole(StrEnum):
     PRIMARY = "primary"
     SECONDARY = "secondary"
     QUIET = "quiet"
+    CAUTION = "caution"
     DESTRUCTIVE = "destructive"
 
 
@@ -123,6 +124,8 @@ class SemanticColors:
     focus: str
     warning: str
     warning_surface: str
+    caution: str
+    caution_surface: str
     error: str
     error_surface: str
     destructive: str
@@ -212,6 +215,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
             focus="#74e2ae",
             warning="#f0c66d",
             warning_surface="#3a2f17",
+            caution="#ffb66e",
+            caution_surface="#3e291a",
             error="#ff9a92",
             error_surface="#45211f",
             destructive="#ff8e87",
@@ -236,6 +241,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         focus="#0f7651",
         warning="#765200",
         warning_surface="#fff2c2",
+        caution="#a64b00",
+        caution_surface="#fff1e6",
         error="#a82a23",
         error_surface="#fde9e7",
         destructive="#a82a23",
@@ -511,6 +518,28 @@ QPushButton[reckonsolveActionRole="primary"][reckonsolveNavigationActive="true"]
     color: {color.on_accent};
     border-color: {color.focus};
 }}
+QPushButton[reckonsolveActionRole="caution"] {{
+    background-color: transparent;
+    color: {color.caution};
+    border-color: {color.caution};
+    font-weight: 600;
+}}
+QPushButton[reckonsolveActionRole="caution"]:hover {{
+    background-color: {color.caution_surface};
+    color: {color.caution};
+}}
+QPushButton[reckonsolveActionRole="caution"]:pressed {{
+    background-color: {color.caution};
+    color: {color.on_accent};
+}}
+QPushButton[reckonsolveActionRole="caution"]:focus {{
+    border: 2px solid {color.focus};
+}}
+QPushButton[reckonsolveActionRole="caution"]:disabled {{
+    background-color: transparent;
+    color: {color.disabled_text};
+    border-color: {color.border};
+}}
 QPushButton[reckonsolveActionRole="destructive"] {{
     background-color: transparent;
     color: {color.destructive};
@@ -631,6 +660,9 @@ QListWidget#primaryNavigation {{
 }}
 QListWidget#predictionBrowserResults {{
     padding: {int(Radius.SMALL)}px;
+}}
+QListWidget#predictionBrowserResults::item {{
+    padding: 0px;
 }}
 QListWidget::item {{
     border-radius: {int(Radius.SMALL)}px;

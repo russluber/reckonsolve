@@ -40,6 +40,7 @@ from reckonsolve.domain.attention import DashboardSnapshot
 from reckonsolve.domain.browser import (
     ArchiveAttention,
     ArchiveDateMeaning,
+    ArchiveMode,
     ArchiveSort,
     ArchiveTagMatchMode,
     PredictionBrowserItem,
@@ -312,6 +313,12 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
         default="all",
         dest="prediction_type",
         help="Filter by forecast type (default: all).",
+    )
+    list_parser.add_argument(
+        "--mode",
+        choices=("all", "deadline", "one-shot"),
+        default="all",
+        help="Filter by forecasting mode (default: all).",
     )
     list_parser.add_argument(
         "--tag",
@@ -608,6 +615,12 @@ def _add_search_archive_filters(parser: argparse.ArgumentParser) -> None:
         help="Filter by forecast type (default: all).",
     )
     parser.add_argument(
+        "--mode",
+        choices=("all", "deadline", "one-shot"),
+        default="all",
+        help="Filter by forecasting mode (default: all).",
+    )
+    parser.add_argument(
         "--tag",
         action="append",
         default=[],
@@ -693,6 +706,7 @@ def _run_list(
         status=status,
         tag=arguments.tag,
         prediction_type=prediction_type,
+        mode=_optional_mode(arguments.mode),
     )
     if not snapshot.predictions:
         unfiltered = operations.browse_predictions()
@@ -729,6 +743,7 @@ def _run_search(
         include_superseded=arguments.include_superseded_history,
         status=_optional_status(arguments.status),
         prediction_type=_optional_prediction_type(arguments.prediction_type),
+        mode=_optional_mode(arguments.mode),
         tags=tuple(arguments.tag),
         tag_match_mode=_archive_enum(ArchiveTagMatchMode, arguments.tag_mode),
         attention=_optional_attention(arguments.attention),
@@ -775,6 +790,7 @@ def _run_saved_view(
             include_superseded=configuration.include_superseded,
             status=query.status,
             prediction_type=query.prediction_type,
+            mode=query.mode,
             tags=query.tags,
             tag_match_mode=query.tag_match_mode,
             attention=query.attention,
@@ -797,6 +813,7 @@ def _run_saved_view(
     snapshot = operations.browse_predictions(
         status=query.status,
         prediction_type=query.prediction_type,
+        mode=query.mode,
         tags=query.tags,
         tag_match_mode=query.tag_match_mode,
         attention=query.attention,
@@ -825,6 +842,10 @@ def _optional_prediction_type(value: str) -> PredictionType | None:
     """Convert an argparse type selection to the domain's optional filter."""
 
     return None if value == "all" else PredictionType(value)
+
+
+def _optional_mode(value: str) -> ArchiveMode | None:
+    return None if value == "all" else _archive_enum(ArchiveMode, value)
 
 
 def _optional_attention(value: str) -> ArchiveAttention | None:
@@ -931,6 +952,13 @@ def _append_saved_view_configuration(
         "All"
         if query.prediction_type is None
         else query.prediction_type.value.capitalize(),
+    )
+    _append_field(
+        lines,
+        "  Mode",
+        "All"
+        if query.mode is None
+        else ("One-Shot" if query.mode is ArchiveMode.ONE_SHOT else "With Deadline"),
     )
     _append_field(
         lines,

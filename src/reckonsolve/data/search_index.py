@@ -14,7 +14,7 @@ from reckonsolve.domain.search import (
 
 from .forecast_contracts import check_forecast_contract_integrity, quantile_tables_exist
 
-SEARCH_PROJECTION_VERSION = 2
+SEARCH_PROJECTION_VERSION = 3
 
 
 class SearchIndexError(sqlite3.DatabaseError):
@@ -345,9 +345,28 @@ def project_prediction_documents(
     _append_journal_documents(connection, prediction_id, add)
     _append_definition_history_documents(connection, prediction_id, prediction, add)
     _append_resolution_documents(connection, prediction_id, add)
+    _append_one_shot_correction_notes(connection, prediction_id, add)
     _append_invalidation_documents(connection, prediction_id, add)
 
     return tuple(documents)
+
+
+def _append_one_shot_correction_notes(connection, prediction_id: int, add) -> None:
+    if not connection.execute(
+        "SELECT 1 FROM sqlite_schema WHERE name = 'one_shot_corrections'"
+    ).fetchone():
+        return
+    for row in connection.execute(
+        "SELECT id, sequence, corrected_at, note FROM one_shot_corrections WHERE prediction_id = ? AND note IS NOT NULL ORDER BY sequence",
+        (prediction_id,),
+    ):
+        add(
+            SearchSourceKind.ONE_SHOT_CORRECTION_NOTE,
+            int(row["id"]),
+            row["note"],
+            source_sequence=int(row["sequence"]),
+            occurred_at=parse_utc(str(row["corrected_at"])),
+        )
 
 
 def _append_journal_documents(connection, prediction_id: int, add) -> None:

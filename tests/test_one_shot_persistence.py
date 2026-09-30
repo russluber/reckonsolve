@@ -397,7 +397,7 @@ def test_v18_upgrade_preserves_all_existing_rows_scores_search_and_export(tmp_pa
     database.close()
     upgraded = Database.open(path)
     try:
-        assert upgraded.schema_version == 19
+        assert upgraded.schema_version == 20
         with upgraded.transaction() as c:
             after = canonical_snapshot(c)
             for table, rows in before.items():
@@ -418,9 +418,10 @@ def test_m56_failure_rolls_back_ddl_and_data_byte_for_byte(tmp_path, phase):
     database, _, _ = populated_v18(path)
     database.close()
     before = path.read_bytes()
-    statements = MIGRATIONS[-1].statements
+    m56 = MIGRATIONS[18]
+    statements = m56.statements
     statements = (*statements[:phase], "INVALID SQL", *statements[phase:])
-    broken = (*MIGRATIONS[:-1], Migration(19, MIGRATIONS[-1].name, statements))
+    broken = (*MIGRATIONS[:18], Migration(19, m56.name, statements))
     with pytest.raises(sqlite3.Error):
         Database.open(path, migrations=broken)
     assert path.read_bytes() == before

@@ -47,6 +47,7 @@ class SearchSourceKind(StrEnum):
     POSTMORTEM = "postmortem"
     INVALIDATION_REASON = "invalidation_reason"
     OUTCOME_CORRECTION_REASON = "outcome_correction_reason"
+    ONE_SHOT_CORRECTION_NOTE = "one_shot_correction_note"
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,6 +365,8 @@ def search_source_label(document: SearchDocument) -> str:
         label = "Postmortem match"
     elif document.source_kind is SearchSourceKind.INVALIDATION_REASON:
         label = "Invalidation reason match"
+    elif document.source_kind is SearchSourceKind.ONE_SHOT_CORRECTION_NOTE:
+        label = "One-Shot transcription correction note"
     else:
         label = "Outcome-correction explanation"
     return f"{label} — superseded history" if document.is_superseded else label
@@ -476,6 +479,7 @@ def _source_priority(document: SearchDocument) -> int:
         SearchSourceKind.POSTMORTEM: 4,
         SearchSourceKind.INVALIDATION_REASON: 4,
         SearchSourceKind.OUTCOME_CORRECTION_REASON: 4,
+        SearchSourceKind.ONE_SHOT_CORRECTION_NOTE: 4,
     }
     return priorities[document.source_kind] + (10 if document.is_superseded else 0)
 

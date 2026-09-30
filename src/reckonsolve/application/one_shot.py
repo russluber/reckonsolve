@@ -69,6 +69,26 @@ class OneShotOperations:
     def add_journal(self, expected: OneShotDetail, body: str) -> OneShotDetail:
         return self._perform(lambda: self.repository.add_journal(expected.record, body))
 
+    def correct_journal(
+        self,
+        expected: OneShotDetail,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> OneShotDetail:
+        return self._perform(
+            lambda: self.repository.correct_journal(
+                expected.record,
+                entry_id,
+                body,
+                expected_correction_id=expected_correction_id,
+            )
+        )
+
+    def skip_postmortem(self, expected: OneShotDetail) -> OneShotDetail:
+        return self._perform(lambda: self.repository.skip_postmortem(expected.record))
+
     def delete(self, expected: OneShotDetail, *, confirmed: bool = False) -> None:
         if not confirmed:
             raise ApplicationError(

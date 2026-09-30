@@ -3389,6 +3389,19 @@ MIGRATIONS += (
     ),
 )
 
+MIGRATIONS += (
+    Migration(
+        version=20,
+        name="save forecasting mode in dynamic views",
+        statements=(
+            """
+            ALTER TABLE saved_views ADD COLUMN forecast_mode TEXT
+                CHECK (forecast_mode IN ('deadline', 'one_shot'))
+            """,
+        ),
+    ),
+)
+
 
 def apply_migrations(
     connection: sqlite3.Connection,

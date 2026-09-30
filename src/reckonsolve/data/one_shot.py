@@ -18,7 +18,9 @@ from reckonsolve.domain.one_shot import (
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     JournalCorrection,
+    NewJournalCorrection,
     NewJournalEntry,
+    PostmortemCompletion,
     PredictionStatus,
     PredictionValidationError,
     _optional_text,
@@ -117,6 +119,19 @@ class OneShotRepository:
                 (identifier,),
             )
         )
+        completion_row = connection.execute(
+            "SELECT id, completed_at FROM postmortem_completions WHERE prediction_id = ?",
+            (identifier,),
+        ).fetchone()
+        completion = (
+            None
+            if completion_row is None
+            else PostmortemCompletion(
+                int(completion_row["id"]),
+                identifier,
+                parse_utc(completion_row["completed_at"]),
+            )
+        )
         return OneShotDetail(
             record,
             row["question"],
@@ -132,6 +147,7 @@ class OneShotRepository:
             changes,
             journals,
             _select_invalidation_history(connection, identifier),
+            completion,
         )
 
     def add_journal(self, expected: OneShotRecord, body: str) -> OneShotDetail:
@@ -157,6 +173,65 @@ class OneShotRepository:
                 ),
             )
 
+            return self._detail(connection, current)
+
+    def correct_journal(
+        self,
+        expected: OneShotRecord,
+        entry_id: int,
+        body: str,
+        *,
+        expected_correction_id: int | None,
+    ) -> OneShotDetail:
+        correction = NewJournalCorrection(body)
+        with self.database.transaction() as connection:
+            current = self._current(connection, expected)
+            entry = next(
+                (
+                    journal
+                    for journal in self._detail(connection, current).journals
+                    if journal.entry_id == entry_id
+                ),
+                None,
+            )
+            if entry is None:
+                raise ValueError("The Journal entry no longer exists.")
+            if entry.current_correction_id != expected_correction_id:
+                raise ForecastContextChangedError(
+                    "The Journal entry changed. Refresh and try again."
+                )
+            if entry.body == correction.body:
+                raise ValueError("The Journal entry is unchanged.")
+            connection.execute(
+                """INSERT INTO journal_entry_corrections
+                   (prediction_id, journal_entry_id, sequence, body, corrected_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    current.prediction_id,
+                    entry_id,
+                    len(entry.corrections) + 1,
+                    correction.body,
+                    format_utc(as_utc(self.clock.now())),
+                ),
+            )
+            return self._detail(connection, current)
+
+    def skip_postmortem(self, expected: OneShotRecord) -> OneShotDetail:
+        with self.database.transaction() as connection:
+            current = self._current(connection, expected)
+            if current.status is not PredictionStatus.RESOLVED:
+                raise ValueError("Only a Resolved One-Shot can skip its Postmortem.")
+            if current.effective.postmortem is not None:
+                raise ValueError("This One-Shot already has a Postmortem.")
+            if connection.execute(
+                "SELECT 1 FROM postmortem_completions WHERE prediction_id = ?",
+                (current.prediction_id,),
+            ).fetchone():
+                raise ValueError("This Postmortem has already been skipped.")
+            connection.execute(
+                "INSERT INTO postmortem_completions (prediction_id, completed_at) VALUES (?, ?)",
+                (current.prediction_id, format_utc(as_utc(self.clock.now()))),
+            )
             return self._detail(connection, current)
 
     def invalidate_or_delete(

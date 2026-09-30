@@ -4,11 +4,11 @@ Reckonsolve is a local-first personal forecasting journal for Windows. Record pr
 
 > v0.7.0 is the current source version. Original app artwork, an installer, signing, and public binaries remain deferred.
 
-**Compatibility:** This source supports trajectory Binary and five-quantile Numeric forecasts only. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
+**Compatibility:** This source supports trajectory Binary, deadline-based five-quantile Numeric, and the v0.8 One-Shot Binary and Numeric contracts. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
 
-Supported v0.7 history upgrades unchanged to schema 19, including supported Binary-only schema-16/17 archives. The v0.8 work now includes M56 storage and M57 individual One-Shot workflows; M57 awaits manual acceptance and v0.8 is not released. Complete SQLite backup includes One-Shots, while CSV format 4 refuses archives containing them until format 5 is implemented. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
+Supported v0.7 history upgrades unchanged through schema 20, including supported Binary-only schema-16/17 archives. The v0.8 work includes M56 storage, manually accepted M57 individual One-Shot workflows, and implemented M58 retrieval/history work awaiting manual acceptance; v0.8 is not released. Schema 20 saves One-Shot/With Deadline filters in dynamic Saved Views while existing views retain All modes. Complete SQLite backup includes One-Shots, while CSV format 4 refuses archives containing them until format 5 is implemented. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
 
-### One-Shot preview (M57)
+### One-Shot preview (M57/M58)
 
 In **New Prediction**, choose **One-Shot** to record a final Binary probability or
 five Numeric quantiles made before checking an already-existing answer. Enter the
@@ -27,10 +27,12 @@ CLI equivalents are `uv run rscd create binary --one-shot` and
 needed. `show ID` includes original and corrected facts. Deadline-based creation
 remains the default; One-Shots reject `revise` and `review`.
 
-Basic archive rows let you reopen these records. Full mode filtering, matched search
-navigation, Journal correction and Postmortem queue/Skip integration remain M58;
-separate One-Shot aggregate Analytics remains M59. Individual Postmortem text can be
-entered with the answer or through Correct transcription. Read the
+The archive and CLI support `--mode` filtering, and search can find effective or
+superseded history plus transcription-correction notes. Detail opens at the matched
+timeline event. Journal corrections preserve every prior body; Resolved One-Shots enter
+the Needs Postmortem queue, with Skip and later Add Postmortem actions. Saving the mode
+filter in a Saved View awaits a schema decision. Separate One-Shot aggregate Analytics
+remains M59. Read the
 [One-Shot Rulebook](docs/reckonsolve-one-shot-rulebook-v0.8.md) for the intended use.
 
 ## Current features
@@ -133,6 +135,10 @@ uv run reckonsolve-cli-dev export-csv C:\path\to\reckonsolve-export.zip
 `backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` creates a format-4 ZIP of the supported analytical history with a complete data dictionary. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
 
 `list`, `show`, `search`, `saved-views`, and `saved-view` remain read-only. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
+
+For the current checkout's One-Shot mode filters, run `uv run rscd list --mode one-shot`
+or `uv run reckonsolve-cli-dev list --mode one-shot`. A bare `rscd` from an earlier
+non-editable `uv tool install` is an older snapshot and does not follow source edits.
 
 ## Private Windows build
 

@@ -74,9 +74,10 @@ def test_public_creation_correction_and_deadline_coexistence(app, numeric):
         == numeric_deadline
     )
     assert not operations.get_dashboard().needs_attention_predictions
-    assert (
-        not operations.get_dashboard().needs_postmortem_predictions
-    )  # queue integration is M58
+    assert tuple(
+        item.prediction_id
+        for item in operations.get_dashboard().needs_postmortem_predictions
+    ) == (corrected.prediction_id,)
     analytics = operations.get_forecast_analytics()
     assert analytics.trajectory_binary.resolved_candidate_count == 0
     assert analytics.quantile_numeric.resolved_candidate_count == 0
@@ -352,6 +353,8 @@ def test_main_window_one_shot_route_defaults_and_detail(app, qtbot):
     assert detail.edit_button.isVisible()
     assert not detail.answer_button.isVisible()
     assert detail.scorecard.isVisible()
+    assert detail.add_postmortem_button.isVisible()
+    assert detail.skip_postmortem_button.isVisible()
     assert (
         len(
             [

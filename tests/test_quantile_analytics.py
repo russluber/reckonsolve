@@ -515,4 +515,4 @@ def test_desktop_groups_responsive_tables_filters_and_rendering(
     )
     assert not view.isVisible()
     assert screen.empty_label.isVisible()
-    assert db.schema_version == 19
+    assert db.schema_version == 20

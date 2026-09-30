@@ -50,6 +50,7 @@ from reckonsolve.domain.attention import DashboardPrediction, DashboardSnapshot
 from reckonsolve.domain.browser import (
     ArchiveAttention,
     ArchiveDateMeaning,
+    ArchiveMode,
     ArchiveQuery,
     ArchiveSort,
     ArchiveTagMatchMode,
@@ -1127,6 +1128,7 @@ class FakePredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        mode: ArchiveMode | None = None,
         tags: tuple[str, ...] = (),
         tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
         attention: ArchiveAttention | None = None,
@@ -1183,6 +1185,16 @@ class FakePredictionOperations:
                     or prediction.prediction_type is prediction_type
                 )
                 and (
+                    mode is None
+                    or (
+                        bool(
+                            prediction.forecast_contract
+                            and prediction.forecast_contract.is_one_shot
+                        )
+                        == (mode is ArchiveMode.ONE_SHOT)
+                    )
+                )
+                and (
                     tag_key is None
                     or tag_key in {item.casefold() for item in prediction.tags}
                 )
@@ -1208,6 +1220,7 @@ class FakePredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        mode: ArchiveMode | None = None,
         tags: tuple[str, ...] = (),
         tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
         attention: ArchiveAttention | None = None,
@@ -1224,6 +1237,7 @@ class FakePredictionOperations:
             status=status,
             tag=tag,
             prediction_type=prediction_type,
+            mode=mode,
             tags=tags,
             tag_match_mode=tag_match_mode,
             attention=attention,
@@ -2142,10 +2156,10 @@ def test_prediction_browser_renders_all_results_and_filter_choices(
         "Current forecast · 80%"
         in _required_child(window, QLabel, "predictionResultForecast2").text()
     )
-    assert (
-        "Created Aug 20, 2026"
-        in _required_child(window, QLabel, "predictionResultDates2").text()
-    )
+    dates = _required_child(window, QLabel, "predictionResultDates2").text()
+    assert "Created Aug 20, 2026" in dates
+    assert "Forecast deadline " in dates and " at " in dates
+    assert "(permanent)" not in dates
     assert _required_child(window, QLabel, "predictionResultTags2").text() == (
         "Tags · Personal, Work"
     )
@@ -2289,6 +2303,7 @@ def test_prediction_browser_groups_controls_and_keeps_detailed_inputs_readable(
         "predictionSearchMatchMode",
         "predictionStatusFilter",
         "predictionTypeFilter",
+        "predictionModeFilter",
         "predictionTagMatchMode",
         "predictionAttentionFilter",
         "predictionDateMeaning",
@@ -2681,6 +2696,7 @@ def test_prediction_browser_applies_and_explicitly_updates_dynamic_saved_views(
         archive_query=ArchiveQuery(
             status=PredictionStatus.OPEN,
             prediction_type=PredictionType.BINARY,
+            mode=ArchiveMode.ONE_SHOT,
             tags=("Work",),
             tag_match_mode=ArchiveTagMatchMode.ALL,
             attention=None,
@@ -2738,6 +2754,9 @@ def test_prediction_browser_applies_and_explicitly_updates_dynamic_saved_views(
     assert _required_child(
         window, QComboBox, "predictionStatusFilter"
     ).currentData() == (PredictionStatus.OPEN.value)
+    assert _required_child(window, QComboBox, "predictionModeFilter").currentData() == (
+        ArchiveMode.ONE_SHOT.value
+    )
     assert _required_child(
         window, QComboBox, "predictionDateMeaning"
     ).currentData() == (ArchiveDateMeaning.EXPECTED_RESOLUTION.value)
@@ -2755,6 +2774,9 @@ def test_prediction_browser_applies_and_explicitly_updates_dynamic_saved_views(
 
     assert operations.saved_views[0].configuration.archive_query.status is (
         PredictionStatus.RESOLVED
+    )
+    assert operations.saved_views[0].configuration.archive_query.mode is (
+        ArchiveMode.ONE_SHOT
     )
     assert _required_child(window, QLabel, "savedViewState").text() == "Evidence: Saved"
 
@@ -3047,8 +3069,18 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
     dashboard_row = _required_child(window, QPushButton, "dashboardOpenPrediction2")
     assert "Five-quantile" in dashboard_row.text()
     assert "90% interval: 2.0 to 8.0 days; median: 4.0 days" in dashboard_row.text()
+    numeric_deadline = _required_child(dashboard_row, QLabel, "dashboardRowDeadline")
+    assert numeric_deadline.text().startswith("Forecast deadline: ")
+    assert " at " in numeric_deadline.text()
     qtbot.mouseClick(dashboard_row, Qt.MouseButton.LeftButton)
     assert window.current_screen_name == "Prediction Detail"
+    numeric_detail_deadline = _required_child(
+        window, QLabel, "numericForecastDeadlineValue"
+    )
+    assert " at " in numeric_detail_deadline.text()
+    assert "(permanent)" not in numeric_detail_deadline.text()
+    assert "Exact, fixed deadline:" in numeric_detail_deadline.toolTip()
+    assert numeric_detail_deadline.wordWrap()
     assert _required_child(window, QLabel, "numericPredictionQuestion").text() == (
         numeric.question
     )
@@ -3072,7 +3104,7 @@ def test_type_aware_dashboard_and_browser_render_and_open_numeric_detail(
             QLabel,
             f"predictionResultForecast{numeric.prediction_id}",
         ).text()
-        == "Five-quantile forecast: 90% interval: 2.0 to 8.0 days; median: 4.0 days; 50% interval: 3.0 to 6.0 days"
+        == "90% interval: 2.0 to 8.0 days\nMedian: 4.0 days\n50% interval: 3.0 to 6.0 days"
     )
     assert operations.browser_type_calls[-1] is PredictionType.NUMERIC
 
@@ -3471,8 +3503,14 @@ def test_dashboard_renders_overlapping_buckets_without_losing_classifications(
         assert "needs attention" in row.accessibleDescription()
         assert "ready to resolve" in row.accessibleDescription()
         question = _required_child(row, QLabel, "dashboardRowQuestion")
+        summary = _required_child(row, QLabel, "dashboardRowForecast")
+        deadline = _required_child(row, QLabel, "dashboardRowDeadline")
         assert question.textFormat() is Qt.TextFormat.PlainText
         assert question.wordWrap()
+        assert summary.text() == "BINARY · 70% Yes"
+        assert deadline.text().startswith("Forecast deadline: ")
+        assert " at " in deadline.text()
+        assert "(permanent)" not in row.text()
         badges = {badge.text() for badge in row.findChildren(QLabel) if badge.text()}
         assert "LOCKED" in badges
         assert "NEEDS ATTENTION" in badges
@@ -4131,7 +4169,7 @@ def test_m42_binary_detail_separates_identity_common_and_lifecycle_actions(
     review = _required_child(window, QPushButton, "reviewForecastButton")
     resolve = _required_child(window, QPushButton, "resolvePredictionButton")
     assert edit.property(ACTION_ROLE_PROPERTY) == ActionRole.SECONDARY.value
-    assert invalid.property(ACTION_ROLE_PROPERTY) == ActionRole.SECONDARY.value
+    assert invalid.property(ACTION_ROLE_PROPERTY) == ActionRole.CAUTION.value
     assert action_grid.getItemPosition(action_grid.indexOf(journal)) == (0, 1, 1, 1)
     assert action_grid.getItemPosition(action_grid.indexOf(revise)) == (0, 2, 1, 1)
     assert action_grid.getItemPosition(action_grid.indexOf(review)) == (0, 3, 1, 1)
@@ -4860,7 +4898,10 @@ def test_prediction_detail_shows_present_metadata_and_hides_missing_sections(
         "#release  #desktop"
     )
     deadline = _required_child(window, QLabel, "predictionDetailForecastDeadline")
-    assert "(permanent)" in deadline.text()
+    assert " at " in deadline.text()
+    assert "(permanent)" not in deadline.text()
+    assert "Exact, fixed deadline:" in deadline.toolTip()
+    assert deadline.wordWrap()
     assert not _required_child(
         window,
         QWidget,
@@ -6242,7 +6283,7 @@ def test_permanent_deadline_has_no_metadata_edit_controls(qtbot: QtBot) -> None:
     assert dialog.findChild(QCheckBox, "editForecastDeadlineToggle") is None
     assert dialog.findChild(QDateEdit, "editForecastDeadlineInput") is None
     assert any(
-        "Forecast Deadline (permanent)" in label.text()
+        "Forecast deadline: " in label.text() and " at " in label.text()
         for label in dialog.findChildren(QLabel)
     )
     assert operations.update_calls == []
@@ -6608,6 +6649,12 @@ def test_mark_invalid_saves_optional_reason_and_renders_preserved_state(
     window = MainWindow(operations)
     qtbot.addWidget(window)
     dialog = _open_invalidation_dialog(qtbot, window)
+    assert (
+        _required_child(dialog, QPushButton, "confirmMarkInvalidButton").property(
+            ACTION_ROLE_PROPERTY
+        )
+        == ActionRole.CAUTION.value
+    )
     explanation = _required_child(dialog, QLabel, "markInvalidExplanation")
     assert "excludes it from scoring" in explanation.text()
     reason = _required_child(dialog, QPlainTextEdit, "invalidationReasonInput")

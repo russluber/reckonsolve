@@ -148,6 +148,11 @@ def detail_lines(
                 f"Journal correction · {c.corrected_at.astimezone().isoformat()}: {c.body}"
                 for c in journal.corrections
             )
+    if detail.postmortem_completion:
+        lines.append(
+            "Postmortem deliberately skipped: "
+            + detail.postmortem_completion.completed_at.astimezone().isoformat()
+        )
     if detail.invalidation_history:
         history = detail.invalidation_history
         lines.append(

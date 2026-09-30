@@ -89,6 +89,7 @@ from reckonsolve.domain.attention import (
 from reckonsolve.domain.browser import (
     ArchiveAttention,
     ArchiveDateMeaning,
+    ArchiveMode,
     ArchiveQuery,
     ArchiveQueryValidationError,
     ArchiveSort,
@@ -1133,6 +1134,18 @@ class PredictionOperations:
             expected_correction_id,
             "expected_correction_id",
         )
+        one_shot = self.one_shots.repository.find_detail(prediction_id)
+        if one_shot is not None:
+            current_correction_id = (
+                one_shot.record.corrections[-1].correction_id
+                if one_shot.record.corrections
+                else None
+            )
+            if current_correction_id != expected_correction_id:
+                raise ConcurrentTerminalCorrectionError(prediction_id)
+            saved = self.one_shots.skip_postmortem(one_shot)
+            assert saved.postmortem_completion is not None
+            return saved.postmortem_completion
         history = self._get_resolution_history(prediction_id)
         if history.current_correction_id != expected_correction_id:
             raise ConcurrentTerminalCorrectionError(prediction_id)
@@ -1324,6 +1337,7 @@ class PredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        mode: ArchiveMode | None = None,
         tags: tuple[str, ...] = (),
         tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
         attention: ArchiveAttention | None = None,
@@ -1344,6 +1358,7 @@ class PredictionOperations:
             status=status,
             tag=tag,
             prediction_type=prediction_type,
+            mode=mode,
             tags=tags,
             tag_match_mode=tag_match_mode,
             attention=attention,
@@ -1391,6 +1406,7 @@ class PredictionOperations:
         status: PredictionStatus | None = None,
         tag: str | None = None,
         prediction_type: PredictionType | None = None,
+        mode: ArchiveMode | None = None,
         tags: tuple[str, ...] = (),
         tag_match_mode: ArchiveTagMatchMode = ArchiveTagMatchMode.ALL,
         attention: ArchiveAttention | None = None,
@@ -1418,6 +1434,7 @@ class PredictionOperations:
             status=status,
             tag=tag,
             prediction_type=prediction_type,
+            mode=mode,
             tags=tags,
             tag_match_mode=tag_match_mode,
             attention=attention,
@@ -1516,6 +1533,7 @@ class PredictionOperations:
         status: PredictionStatus | None,
         tag: str | None,
         prediction_type: PredictionType | None,
+        mode: ArchiveMode | None,
         tags: tuple[str, ...],
         tag_match_mode: ArchiveTagMatchMode,
         attention: ArchiveAttention | None,
@@ -1545,6 +1563,7 @@ class PredictionOperations:
         request = ArchiveQuery(
             status=status,
             prediction_type=prediction_type,
+            mode=mode,
             tags=selected_tags,
             tag_match_mode=tag_match_mode,
             attention=attention,
