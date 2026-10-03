@@ -4,6 +4,8 @@ import sqlite3
 
 from reckonsolve.clock import parse_utc
 from reckonsolve.domain.analytics import (
+    OneShotAnalyticsSource,
+    OneShotScoringRecord,
     QuantileAnalyticsSource,
     QuantileScoringRecord,
     TrajectoryAnalyticsSource,
@@ -22,6 +24,7 @@ from .forecast_contracts import (
     check_forecast_contract_integrity,
     select_supported_contract,
 )
+from .one_shot_facts import read_one_shot
 from .quantiles import read_definition, read_revisions
 from .terminal_history import (
     _select_binary_resolution_history,
@@ -34,6 +37,41 @@ class AnalyticsRepository:
 
     def __init__(self, database: Database) -> None:
         self._database = database
+
+    def get_one_shot_source(self) -> OneShotAnalyticsSource:
+        """Read corrected facts and current tags together in one checked snapshot."""
+        with self._database.transaction() as connection:
+            check_forecast_contract_integrity(connection)
+            rows = connection.execute(
+                """
+                SELECT p.id, p.question FROM predictions AS p
+                JOIN prediction_forecast_contracts AS c ON c.prediction_id = p.id
+                WHERE p.status = 'resolved' AND (
+                    (c.forecast_model = 'binary-one-shot-v1'
+                     AND c.scoring_contract = 'binary-one-shot-brier-v1') OR
+                    (c.forecast_model = 'numeric-one-shot-5-v1'
+                     AND c.scoring_contract = 'numeric-one-shot-wis-v1')
+                )
+                ORDER BY p.id
+                """
+            ).fetchall()
+            records = []
+            for row in rows:
+                prediction_id = int(row["id"])
+                contract = select_supported_contract(connection, prediction_id)
+                assert contract is not None
+                record = read_one_shot(connection, prediction_id, contract)
+                tags = tuple(
+                    str(tag[0])
+                    for tag in connection.execute(
+                        "SELECT t.display_name FROM tags AS t "
+                        "JOIN prediction_tags AS pt ON pt.tag_id = t.id "
+                        "WHERE pt.prediction_id = ? ORDER BY t.normalized_name, t.id",
+                        (prediction_id,),
+                    )
+                )
+                records.append(OneShotScoringRecord(str(row["question"]), record, tags))
+            return OneShotAnalyticsSource(tuple(records))
 
     def get_quantile_source(
         self, prediction_id: int

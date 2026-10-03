@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from reckonsolve.domain.analytics import TrajectoryAnalyticsSource
-from reckonsolve.domain.predictions import BinaryOutcome
 
-from .scoring import CalibrationBin
+from .scoring import CalibrationBin, calibration_bins
 from .trajectory import TrajectoryScorecard, trajectory_scorecard
 
 
@@ -138,35 +137,8 @@ def _unique_tags(tags) -> tuple[str, ...]:
 def _final_calibration_bins(
     scored: tuple[TrajectoryScoredPrediction, ...],
 ) -> tuple[CalibrationBin, ...]:
-    members: list[list[TrajectoryScoredPrediction]] = [[] for _index in range(10)]
-    for item in scored:
-        members[min(item.final_probability_percent // 10, 9)].append(item)
-    bins: list[CalibrationBin] = []
-    for index, bin_members in enumerate(members):
-        lower = index * 10
-        upper = 100 if index == 9 else lower + 9
-        count = len(bin_members)
-        bins.append(
-            CalibrationBin(
-                lower_percent=lower,
-                upper_percent=upper,
-                count=count,
-                mean_forecast_percent=(
-                    None
-                    if not count
-                    else sum(item.final_probability_percent for item in bin_members)
-                    / count
-                ),
-                observed_yes_percent=(
-                    None
-                    if not count
-                    else 100
-                    * sum(
-                        item.scorecard.outcome is BinaryOutcome.YES
-                        for item in bin_members
-                    )
-                    / count
-                ),
-            )
+    return calibration_bins(
+        tuple(
+            (item.final_probability_percent, item.scorecard.outcome) for item in scored
         )
-    return tuple(bins)
+    )

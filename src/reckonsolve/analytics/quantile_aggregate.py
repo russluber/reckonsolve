@@ -5,7 +5,12 @@ from fractions import Fraction
 from math import sqrt
 
 from reckonsolve.domain.analytics import QuantileAnalyticsSource
-from reckonsolve.domain.quantiles import QUANTILE_LEVELS, NumericValueConstraint
+from reckonsolve.domain.predictions import FixedPrecisionValue
+from reckonsolve.domain.quantiles import (
+    QUANTILE_LEVELS,
+    FiveQuantiles,
+    NumericValueConstraint,
+)
 
 from .quantiles import QuantileScorecard, resolved_quantile_scorecard
 
@@ -148,14 +153,25 @@ def _group(
     constraint: NumericValueConstraint,
 ) -> QuantileCalibrationGroup:
     selected = tuple(c for c in cards if c.definition.value_constraint is constraint)
+    return quantile_calibration_group(
+        tuple((c.actual_value, c.scoring_revision.quantiles) for c in selected),
+        constraint,
+    )
+
+
+def quantile_calibration_group(
+    observations: tuple[tuple[FixedPrecisionValue, FiveQuantiles], ...],
+    constraint: NumericValueConstraint,
+) -> QuantileCalibrationGroup:
+    """Summarize validated forecast/answer pairs without model-specific selection."""
     # Scorer validation guarantees matching fixed precision within each pair.
     # Scaled integers avoid loss of equality for large or signed decimal values.
     pairs = tuple(
         (
-            c.actual_value.scaled_value,
-            tuple(v.scaled_value for v in c.scoring_revision.quantiles.values),
+            actual.scaled_value,
+            tuple(v.scaled_value for v in quantiles.values),
         )
-        for c in selected
+        for actual, quantiles in observations
     )
     n = len(pairs)
     levels = tuple(

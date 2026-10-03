@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7/v0.8 Product Specifications
 
-Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56–M58 implemented and M57 manually accepted; M58 awaits manual acceptance; M59–M60 remain planned; source release publication is a separate repository step
+Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56–M59 implemented and M57–M59 manually accepted; M60 remains planned; source release publication is a separate repository step
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -3883,11 +3883,12 @@ v0.7 is not complete unless all of the following are true:
 
 ## 36. Planned v0.8.0 One-Shot Prediction contract and milestone plan
 
-Status: M56–M58 are implemented following explicit user authorization. Schema 19
+Status: M56–M59 are implemented following explicit user authorization. Schema 19
 supports individual One-Shot creation, later answering, transcription correction, and
 post-save Brier/WIS in the desktop and CLI; schema 20 retains the mode filter in
-dynamic Saved Views. M57 has manual acceptance; M58 awaits it. M59–M60 require
-separate explicit authorization. The deadline-based
+dynamic Saved Views. M57–M59 have manual acceptance. M59 adds separate
+One-Shot aggregate Analytics without a migration. M60 requires separate explicit
+authorization. The deadline-based
 contract in Section 35 remains the default.
 
 This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durable
@@ -4073,6 +4074,15 @@ Analytics should briefly note that externally transcribed results rely on the us
 record and that selectively entering exercises can bias apparent calibration; this is
 interpretation guidance, not a proof or attestation flow.
 
+The Analytics **Prediction mode** selector defaults to **With Deadline** and offers
+**One-Shot**. Forecast type and tag filters apply within the selected mode; choosing
+Numeric enables the exact-unit filter. Binary bins remain 0–9%, 10–19%, through
+90–100%, with count, mean forecast, observed Yes frequency, and a pointwise 95% Wilson
+interval for that frequency. The interval describes observed frequency, not uncertainty
+in mean Brier. Empty bins have no invented means or uncertainty bounds. Numeric tables
+retain the established pointwise Wilson intervals, inclusive interval endpoints, and
+strict/inclusive whole-number tie bands. Every chart has a text-table alternative.
+
 ### 36.5 Retrieval, interfaces, compatibility, and portability
 
 Dashboard, Predictions, search, Saved Views, tags, and Detail include supported One-Shot
@@ -4121,8 +4131,8 @@ older Prediction.
 
 ### 36.6 Proposed implementation milestones
 
-M56 and M57 are implemented under their separate authorizations, and M58 is authorized
-and in progress. M59 and M60 remain a plan, not authorization to implement them.
+M56–M59 are implemented under their separate authorizations. M57–M59 have manual
+acceptance. M60 remains a plan, not authorization to implement it.
 
 #### Milestone 56: One-Shot contract, exact values, and schema foundation
 
@@ -4169,7 +4179,7 @@ format-4 CSV refusal are unchanged.
 
 #### Milestone 58: Retrieval, history, and cross-interface integration
 
-Status: implemented; manual acceptance pending. Mode filtering, correction-note search
+Status: implemented and manually accepted. Mode filtering, correction-note search
 and matched-source navigation, the One-Shot causal timeline, audited Journal corrections,
 Postmortem queue/Skip/later reflection, and mode-filtered dynamic Saved Views are in place.
 Schema 20 adds the optional Saved View filter without rewriting schema-19 history.
@@ -4191,6 +4201,16 @@ the exact prior version.
   independent connections, and stable/development isolation.
 
 #### Milestone 59: Separate One-Shot calibration
+
+Status: implemented and manually accepted. Analytics opens in With Deadline mode;
+the One-Shot selection displays separate Binary and Numeric summaries from one checked
+database snapshot. The current corrected forecast and answer contribute exactly once,
+including answers entered later. Reported times never select observations. Shared pure
+calibration helpers preserve the existing bins, exact Numeric comparisons, ties, and
+Wilson intervals. Type, tag, and exact-unit filtering, empty states, responsive chart/table
+pairs, and accessible text alternatives are implemented. Schema 20 and the format-4 CSV
+refusal remain unchanged. See the [Analytics guide](analytics-guide.md#11-one-shot-analytics)
+and [manual checklist](release-checklist.md#v08-development-m59-manual-acceptance).
 
 - Add one combined One-Shot Analytics view with separate Binary and Numeric sections.
   Reuse pure individual scorers and established Binary bins and five-quantile

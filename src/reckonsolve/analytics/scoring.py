@@ -32,6 +32,28 @@ class CalibrationBin:
         return f"{self.lower_percent}-{self.upper_percent}%"
 
 
+def calibration_bins(
+    observations: tuple[tuple[int, BinaryOutcome], ...],
+) -> tuple[CalibrationBin, ...]:
+    """Use the established 0–9, …, 90–100 percent bins for validated forecasts."""
+    members: list[list[tuple[int, BinaryOutcome]]] = [[] for _ in range(10)]
+    for probability, outcome in observations:
+        exact_brier_score(probability, outcome)
+        members[min(probability // 10, 9)].append((probability, outcome))
+    return tuple(
+        CalibrationBin(
+            index * 10,
+            100 if index == 9 else index * 10 + 9,
+            len(items),
+            sum(p for p, _ in items) / len(items) if items else None,
+            100 * sum(y is BinaryOutcome.YES for _, y in items) / len(items)
+            if items
+            else None,
+        )
+        for index, items in enumerate(members)
+    )
+
+
 def brier_score(probability_percent: int, outcome: BinaryOutcome) -> float:
     """Calculate binary Brier loss on the 0-through-1 scale."""
 

@@ -14,6 +14,10 @@ from reckonsolve.analytics import (
     PredictionScorecard,
     summarize_forecast_analytics,
 )
+from reckonsolve.analytics.one_shot_aggregate import (
+    OneShotAnalyticsSnapshot,
+    summarize_one_shot_analytics,
+)
 from reckonsolve.analytics.quantiles import (
     QuantileScorecard,
     resolved_quantile_scorecard,
@@ -1791,6 +1795,42 @@ class PredictionOperations:
     ) -> ForecastAnalyticsSnapshot:
         """Return separate Binary and Numeric metrics for one filter subset."""
 
+        normalized_unit = self._validate_analytics_filters(prediction_type, tag, unit)
+        trajectory_source, quantile_source = (
+            self._analytics_repository.get_forecast_sources()
+        )
+        return summarize_forecast_analytics(
+            trajectory_source,
+            quantile_source,
+            prediction_type=prediction_type,
+            tag=tag,
+            unit=normalized_unit,
+        )
+
+    def get_one_shot_analytics(
+        self,
+        *,
+        prediction_type: PredictionType | None = None,
+        tag: str | None = None,
+        unit: str | None = None,
+    ) -> OneShotAnalyticsSnapshot:
+        """Summarize the separate One-Shot collection using effective saved facts."""
+        normalized_unit = self._validate_analytics_filters(prediction_type, tag, unit)
+        try:
+            source = self._analytics_repository.get_one_shot_source()
+        except sqlite3.Error as error:
+            raise ApplicationError(
+                f"One-Shot analytics could not be loaded. {error}"
+            ) from error
+        return summarize_one_shot_analytics(
+            source, prediction_type=prediction_type, tag=tag, unit=normalized_unit
+        )
+
+    @staticmethod
+    def _validate_analytics_filters(
+        prediction_type: PredictionType | None, tag: str | None, unit: str | None
+    ) -> str | None:
+
         if prediction_type is not None and not isinstance(
             prediction_type,
             PredictionType,
@@ -1818,16 +1858,7 @@ class PredictionOperations:
                 "Choose Numeric analytics before filtering by unit.",
                 field="unit",
             )
-        trajectory_source, quantile_source = (
-            self._analytics_repository.get_forecast_sources()
-        )
-        return summarize_forecast_analytics(
-            trajectory_source,
-            quantile_source,
-            prediction_type=prediction_type,
-            tag=tag,
-            unit=normalized_unit,
-        )
+        return normalized_unit
 
     def get_data_management_status(self) -> DataManagementStatus:
         """Return recovery status and suggested timestamped artifact names."""

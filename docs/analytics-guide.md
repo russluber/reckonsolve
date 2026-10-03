@@ -1,12 +1,13 @@
 # Reckonsolve Analytics: A Practical User's Guide
 
-This guide explains the v0.7 Analytics screen in plain language. You do not need
+This guide explains deadline-based and One-Shot Analytics in plain language. You do not need
 to memorize formulas. Start with the routine below; use the later sections when
 a particular label or chart is confusing.
 
 **New to Numeric forecasts?** Read Sections 6 → 7 → 8 in order. They build from
 entering your five numbers, through interpreting outcomes, to judging revisions.
-For Binary basics, start with Section 4.
+For Binary basics, start with Section 4. For One-Shot exercises, start with Section 11;
+timing and updating guidance elsewhere applies to deadline-based predictions.
 
 The cards intentionally keep explanations out of the way. Hover a card title for
 its scope or a timing value for its meaning; this guide contains the longer
@@ -19,7 +20,8 @@ Quick navigation: [Binary calibration](#4-binary-calibration-read-the-table-firs
 [uncertainty bars](#7-what-95-wilson-means),
 [WIS and updates](#8-numeric-scores-and-updating-what-you-can-compare),
 [older databases](#9-older-databases-and-retired-models),
-[individual scorecards](#what-can-i-see-for-one-prediction).
+[individual scorecards](#what-can-i-see-for-one-prediction),
+[One-Shot Analytics](#11-one-shot-analytics).
 
 **The purpose is to improve your next forecast, not to make every chart look perfect.**
 One surprising outcome is not evidence that your method is broken. Look for
@@ -68,7 +70,8 @@ solve that problem.
 
 ## 1. A useful five-minute review
 
-1. **Choose the forecasts you mean to study.** Select Binary or Numeric. Use a
+1. **Choose the forecasts you mean to study.** Choose With Deadline or One-Shot,
+   then All types, Binary, or Numeric. Use a
    meaningful tag if you want to study one subject. Avoid choosing a subset only
    because it makes your results look good.
 2. **Check the sample size.** Only eligible resolved predictions count. A graph
@@ -91,12 +94,17 @@ The app does not automatically recommend or modify probabilities or percentiles.
 
 ## 2. Know which forecasts you are looking at
 
-“All types” displays several separate sections; it does not calculate one universal score.
+**Prediction mode** starts at **With Deadline**. Choose **One-Shot** for exercises
+where you settled a forecast before checking an answer that already existed.
+Within either mode, “All types” displays separate Binary and Numeric sections;
+it does not calculate one universal score or combine modes.
 
 | Section | Which predictions? | Main feedback |
 |---|---|---|
 | Trajectory Binary forecasts | New v0.7 Yes/No predictions | Time-weighted Brier, plus separate final-probability calibration |
 | Five-quantile Numeric | New v0.7 quantity predictions | Five-percentile calibration, interval outcomes, and update direction |
+| Binary One-Shot | Answered One-Shot Yes/No exercises | Ordinary mean Brier and probability calibration |
+| Numeric One-Shot | Answered One-Shot quantity exercises | Five-percentile calibration and interval outcomes, with separate continuous/whole-number groups |
 
 Only these two forecast models are supported. An archive containing older models is refused as a whole, never converted or partly displayed (Section 9). Continuous-style and whole-number Numeric predictions have separate calibration displays.
 
@@ -750,6 +758,58 @@ Useful Postmortem template:
 > I found [specific reasoning issue]. Next time I will [one concrete habit]. I will
 > reassess after more outcomes rather than adjusting to every new dot.
 
-For the governing rules, see Section 35 of the [Product specification](product-spec.md)
-and the [Forecasting Rulebook](reckonsolve-forecasting-rulebook-v0.7.md).
+## 11. One-Shot Analytics
+
+Open **Analytics → Prediction mode → One-Shot**. All types shows separate Binary and
+Numeric sections. Choose a type and a tag to study a topic. Choosing Numeric also enables
+the unit filter, which matches the exact saved label: `m` and `cm` are different, and
+Reckonsolve does not convert between them. All units can share calibration frequencies
+because each outcome is compared with its own forecast before the counts are combined.
+
+Each answered One-Shot contributes once using the latest corrected forecast and answer.
+Waiting for answer and Invalid records contribute nothing. Saving the answer together
+with the forecast or adding it later leads to the same summary. Missing, approximate, or
+equal-minute reported times do not change the score or its weight. Correcting a copied
+number can change the results; it does not add a second observation.
+
+### Binary: ordinary Brier and calibration
+
+Mean Brier gives each answered Binary exercise equal weight; lower is better. For example,
+an 80% Yes forecast scores **0.04** if the answer is Yes and **0.64** if it is No. Two
+such exercises, one Yes and one No, have mean Brier **0.34**. Their 80–89% bin has count
+**2**, mean forecast **80%**, and observed Yes **50%**. That is a very small sample,
+so its uncertainty is wide.
+
+The chart compares each occupied bin's mean forecast with its observed Yes frequency.
+The table gives the counts and pointwise 95% Wilson ranges for observed Yes; see Section 7
+for interpretation. Those ranges do not describe uncertainty in mean Brier. Empty bins
+have count zero and no invented average or range. Read the bin counts even when the
+overall answered count seems large.
+
+### Numeric: where answers land
+
+Continuous-style and whole-number forecasts have separate panels. The five percentile
+rows, inclusive 50%/90% interval balances, median ties, and Wilson ranges mean the same
+as in Sections 6–7. For example, an answer exactly on q25 is inside the 50% interval;
+one above q95 is above the 90% interval. Repeated upper-tail misses suggest reviewing
+how you allowed for unusually large answers. With whole-number quantities, use the
+strict/inclusive bands to understand ties before diagnosing bias.
+
+Individual Prediction Detail still shows WIS. The aggregate view has no raw WIS average,
+even after selecting one unit: differently sized questions can have very different
+score scales. One-Shot has no forecast updating path, so there is no initial/final
+comparison, Updating Gain, or time-weighted trajectory score here.
+
+### Make the collection useful
+
+External notes rely on your own record of what you predicted before checking. Enter
+misses as well as hits: selectively copying only memorable or successful exercises can
+make calibration misleading. A large count cannot fix that selection bias, and related
+questions may provide less independent evidence than their count suggests. Use tags to
+compare meaningful topics, inspect individual records, and treat sparse groups as a
+reason to collect more examples. Charts and text tables describe the same observations.
+
+For the governing rules, see Sections 35–36 of the [Product specification](product-spec.md),
+the [Forecasting Rulebook](reckonsolve-forecasting-rulebook-v0.7.md), and the
+[One-Shot addendum](reckonsolve-one-shot-rulebook-v0.8.md).
 For implementation boundaries, see [Architecture](architecture.md).

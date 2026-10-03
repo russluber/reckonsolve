@@ -254,6 +254,9 @@ def test_analytics_card_titles_and_on_demand_help(active, qtbot):
     panels = screen.findChildren(ContentPanel)
     assert {panel.title_label.text() for panel in panels} == {
         "Analytics View",
+        "One-Shot Analytics",
+        "Binary One-Shot",
+        "Numeric One-Shot",
         "Trajectory Binary Forecast",
         "Trajectory Binary Final-Probability Calibration",
         "Five-Quantile Numeric Forecast",

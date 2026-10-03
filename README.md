@@ -6,9 +6,9 @@ Reckonsolve is a local-first personal forecasting journal for Windows. Record pr
 
 **Compatibility:** This source supports trajectory Binary, deadline-based five-quantile Numeric, and the v0.8 One-Shot Binary and Numeric contracts. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
 
-Supported v0.7 history upgrades unchanged through schema 20, including supported Binary-only schema-16/17 archives. The v0.8 work includes M56 storage, manually accepted M57 individual One-Shot workflows, and implemented M58 retrieval/history work awaiting manual acceptance; v0.8 is not released. Schema 20 saves One-Shot/With Deadline filters in dynamic Saved Views while existing views retain All modes. Complete SQLite backup includes One-Shots, while CSV format 4 refuses archives containing them until format 5 is implemented. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
+Supported v0.7 history upgrades unchanged through schema 20, including supported Binary-only schema-16/17 archives. The v0.8 work includes M56 storage, manually accepted M57–M58 individual workflows and retrieval/history, and manually accepted M59 One-Shot Analytics; v0.8 is not released. Schema 20 saves One-Shot/With Deadline filters in dynamic Saved Views while existing views retain All modes. Complete SQLite backup includes One-Shots, while CSV format 4 refuses archives containing them until format 5 is implemented. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
 
-### One-Shot preview (M57/M58)
+### One-Shot preview (M57–M59)
 
 In **New Prediction**, choose **One-Shot** to record a final Binary probability or
 five Numeric quantiles made before checking an already-existing answer. Enter the
@@ -30,9 +30,15 @@ remains the default; One-Shots reject `revise` and `review`.
 The archive and CLI support `--mode` filtering, and search can find effective or
 superseded history plus transcription-correction notes. Detail opens at the matched
 timeline event. Journal corrections preserve every prior body; Resolved One-Shots enter
-the Needs Postmortem queue, with Skip and later Add Postmortem actions. Saving the mode
-filter in a Saved View awaits a schema decision. Separate One-Shot aggregate Analytics
-remains M59. Read the
+the Needs Postmortem queue, with Skip and later Add Postmortem actions. Saved Views retain
+the mode filter across restarts.
+
+In **Analytics**, choose **Prediction mode → One-Shot** for its separate Binary and
+Numeric summaries. Binary shows mean Brier and probability calibration; Numeric shows
+percentile and interval calibration with continuous-style and whole-number results
+separate. Counts, uncertainty, tags, and exact-unit filtering help you interpret the
+sample. Corrected records count once, and reported times do not affect scores. See the
+[Analytics guide](docs/analytics-guide.md#11-one-shot-analytics). Read the
 [One-Shot Rulebook](docs/reckonsolve-one-shot-rulebook-v0.8.md) for the intended use.
 
 ## Current features

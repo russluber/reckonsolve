@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from .forecast_contracts import ForecastContract
+from .one_shot import OneShotRecord
 from .predictions import (
     BinaryResolutionHistory,
     ForecastRevision,
@@ -44,3 +45,17 @@ class QuantileScoringRecord:
 @dataclass(frozen=True, slots=True)
 class QuantileAnalyticsSource:
     records: tuple[QuantileScoringRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class OneShotScoringRecord:
+    """One canonical One-Shot history, with current tags for filtering."""
+
+    question: str
+    record: OneShotRecord
+    tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class OneShotAnalyticsSource:
+    records: tuple[OneShotScoringRecord, ...]

@@ -1,8 +1,8 @@
 # Reckonsolve One-Shot Rulebook Addendum (planned v0.8)
 
-Status: v0.8 guidance; M57 individual workflows are implemented and await manual
-acceptance. Retrieval/reflection integration and aggregate Analytics are still staged
-in M58–M59. This is not part of the v0.7 release. This
+Status: v0.8 guidance; M57 individual workflows and M58 retrieval/reflection have manual
+acceptance. M59 aggregate Analytics is implemented and manually accepted;
+M60 export/release work remains planned. This is not part of the v0.7 release. This
 addendum applies only to the new One-Shot mode described in [product-spec Section
 36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan).
 The [v0.7 Forecasting Rulebook](reckonsolve-forecasting-rulebook-v0.7.md) remains the
@@ -78,8 +78,14 @@ match what you actually wrote or observed. It is not a way to make a new forecas
 seeing the answer. Optional reasoning, Journal notes, and a later Postmortem can help
 explain what you learned without changing the one committed forecast.
 
-One-Shot Analytics is separate from Deadline-based Analytics. It can help you review
-Binary probability calibration and Numeric quantile/interval calibration across many
-exercises. A single result does not prove calibration, and choosing which phone-note
+In Analytics, choose **Prediction mode → One-Shot**. The combined view has separate
+Binary and Numeric sections, with ordinary mean Binary Brier and probability calibration,
+plus Numeric quantile/interval calibration. Each answered Prediction counts once using
+its current corrected facts. Waiting for answer and Invalid records do not count.
+Reported times do not change eligibility or weight. Deadline-based results remain in
+their own view, and raw Numeric WIS is never averaged across questions.
+
+A single result does not prove calibration, and choosing which phone-note
 exercises to enter can bias a collection. Record misses as well as hits if you want the
-summary to teach you something.
+summary to teach you something. See the [Analytics guide](analytics-guide.md#11-one-shot-analytics)
+for examples, filters, uncertainty, and whole-number ties.

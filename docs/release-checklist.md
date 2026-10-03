@@ -40,3 +40,32 @@ rsc --version
 ```
 
 This refreshes `reckonsolve`, `reckonsolve-cli`, `rsc`, and their development counterparts. It does not alter either stable or development SQLite data.
+
+## v0.8 development: M59 manual acceptance
+
+M59 is implemented and manually accepted. The user confirmed all checks below passed.
+Use `uv run reckonsolve-dev` and development records. The v0.7 release checks above
+describe that historical release. Current development uses schema 20; M59 adds no
+migration. Format-5 export and v0.8 release/build validation remain M60 work.
+
+- [x] Open Analytics: With Deadline is selected initially and existing deadline-based
+  results are unchanged. Select One-Shot and confirm its Binary and Numeric sections
+  are clearly identified; switching back restores the deadline-based view.
+- [x] Check answered Binary One-Shots against their Detail Brier scores. For two 80%
+  forecasts with one Yes and one No, mean Brier is 0.340, answered count is 2, and the
+  80–89% bin shows count 2, mean forecast 80%, and observed Yes 50%. The table includes
+  uncertainty; empty bins have zero count and unavailable values.
+- [x] Check Numeric continuous-style and whole-number panels, including an answer on
+  a saved quantile. Review five percentile rows, 50%/90% interval balances, and median
+  ties. WIS remains in individual Detail; no aggregate WIS average appears.
+- [x] Try Forecast type, tag, and Numeric exact-unit filters. A subset with no answers
+  shows an honest empty state. Waiting for answer and Invalid records do not count.
+- [x] Add an answer to a waiting One-Shot, then revisit Analytics: its count increases
+  by one. Correct a copied forecast or answer: results change while the count stays
+  fixed. Changing only reported times leaves the results unchanged.
+- [x] Resize to a narrow window and back. Chart/table pairs stack without clipping;
+  tables, counts, uncertainty, help, and the short caution remain readable. Tab through
+  filters and Refresh, and inspect both light/dark palettes at your normal scaling.
+
+Manual acceptance is complete; M59 is ready to commit. No stable-database test data or public release
+is needed for these checks.

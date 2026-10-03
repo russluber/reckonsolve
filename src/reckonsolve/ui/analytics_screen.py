@@ -28,6 +28,7 @@ from reckonsolve.analytics import (
     ForecastAnalyticsSnapshot,
     TrajectoryAnalyticsSnapshot,
 )
+from reckonsolve.analytics.one_shot_aggregate import OneShotAnalyticsSnapshot
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.predictions import PredictionType
 from reckonsolve.ui.analytics_charts import (
@@ -45,6 +46,7 @@ from reckonsolve.ui.components import (
     PersistentMessageLabel,
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.one_shot_analytics import OneShotAnalyticsView
 from reckonsolve.ui.quantile_analytics import QuantileAnalyticsView
 from reckonsolve.ui.visual_system import (
     ActionRole,
@@ -68,6 +70,15 @@ class AnalyticsOperations(Protocol):
     ) -> ForecastAnalyticsSnapshot:
         """Return separate type-aware views for one common filter subset."""
 
+    def get_one_shot_analytics(
+        self,
+        *,
+        prediction_type: PredictionType | None = None,
+        tag: str | None = None,
+        unit: str | None = None,
+    ) -> OneShotAnalyticsSnapshot:
+        """Return the distinct One-Shot summary for these filters."""
+
 
 class AnalyticsScreen(QWidget):
     """Display Binary scoring and Numeric interval performance separately."""
@@ -80,7 +91,9 @@ class AnalyticsScreen(QWidget):
         super().__init__(parent)
         self.setObjectName("analyticsScreen")
         self._operations = operations
-        self._loaded_snapshot: ForecastAnalyticsSnapshot | None = None
+        self._loaded_snapshot: (
+            ForecastAnalyticsSnapshot | OneShotAnalyticsSnapshot | None
+        ) = None
 
         header = PageHeader(
             "Analytics",
@@ -105,6 +118,16 @@ class AnalyticsScreen(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
+
+        mode_label = QLabel("Prediction mode", filters_panel.body)
+        self.mode_filter = QComboBox(filters_panel.body)
+        self.mode_filter.setObjectName("analyticsModeFilter")
+        self.mode_filter.setAccessibleName(
+            "Choose deadline-based or One-Shot analytics"
+        )
+        self.mode_filter.addItem("With Deadline", "deadline")
+        self.mode_filter.addItem("One-Shot", "one_shot")
+        mode_label.setBuddy(self.mode_filter)
 
         type_label = QLabel("Forecast type", filters_panel.body)
         self.type_filter = QComboBox(filters_panel.body)
@@ -134,13 +157,13 @@ class AnalyticsScreen(QWidget):
         self.unit_filter.setObjectName("analyticsUnitFilter")
         self.unit_filter.setAccessibleName("Filter Numeric analytics by exact unit")
         self.unit_filter.setAccessibleDescription(
-            "Available only in the Numeric view. One exact unit is required for "
-            "raw error, width, and interval-score averages."
+            "Available in the Numeric view. Restrict calibration to one exact unit label; "
+            "units are not converted and raw WIS is never averaged across questions."
         )
         self.unit_filter.addItem("All units", None)
         self.unit_filter.setEnabled(False)
         self.unit_filter.setToolTip(
-            "Choose Numeric forecast type to enable exact-unit scoring."
+            "Choose Numeric forecast type to filter calibration by exact unit."
         )
         unit_label.setBuddy(self.unit_filter)
 
@@ -150,9 +173,14 @@ class AnalyticsScreen(QWidget):
         apply_action_role(self.refresh_button, ActionRole.QUIET)
         apply_lucide_icon(self.refresh_button, LucideIcon.REFRESH)
 
-        for label in (type_label, tag_label, unit_label):
+        for label in (mode_label, type_label, tag_label, unit_label):
             apply_text_role(label, TextRole.LABEL)
-        for control in (self.type_filter, self.tag_filter, self.unit_filter):
+        for control in (
+            self.mode_filter,
+            self.type_filter,
+            self.tag_filter,
+            self.unit_filter,
+        ):
             control.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
                 QSizePolicy.Policy.Fixed,
@@ -165,15 +193,17 @@ class AnalyticsScreen(QWidget):
         filter_layout = QGridLayout()
         filter_layout.setHorizontalSpacing(int(Spacing.ORDINARY))
         filter_layout.setVerticalSpacing(int(Spacing.COMPACT))
-        for column, (label, control) in enumerate(
+        for index, (label, control) in enumerate(
             (
+                (mode_label, self.mode_filter),
                 (type_label, self.type_filter),
                 (tag_label, self.tag_filter),
                 (unit_label, self.unit_filter),
             )
         ):
-            filter_layout.addWidget(label, 0, column)
-            filter_layout.addWidget(control, 1, column)
+            row, column = divmod(index, 2)
+            filter_layout.addWidget(label, row * 2, column)
+            filter_layout.addWidget(control, row * 2 + 1, column)
             filter_layout.setColumnStretch(column, 1)
         filters_panel.body_layout.addLayout(filter_layout)
         filter_actions = QHBoxLayout()
@@ -210,9 +240,12 @@ class AnalyticsScreen(QWidget):
         self.trajectory_summary = self._create_trajectory_summary(content)
         self.trajectory_content = self._create_trajectory_content(content)
         self.quantile_content = QuantileAnalyticsView(content)
+        self.one_shot_content = OneShotAnalyticsView(content)
+        self.one_shot_content.hide()
         content_layout.addWidget(self.trajectory_summary)
         content_layout.addWidget(self.trajectory_content)
         content_layout.addWidget(self.quantile_content)
+        content_layout.addWidget(self.one_shot_content)
         content_layout.addStretch()
 
         self.scroll_area = QScrollArea(self)
@@ -235,11 +268,13 @@ class AnalyticsScreen(QWidget):
         layout.addWidget(self.empty_region, 1)
         layout.addWidget(self.scroll_area, 1)
 
+        self.setTabOrder(self.mode_filter, self.type_filter)
         self.setTabOrder(self.type_filter, self.tag_filter)
         self.setTabOrder(self.tag_filter, self.unit_filter)
         self.setTabOrder(self.unit_filter, self.refresh_button)
 
         self.type_filter.currentIndexChanged.connect(self._forecast_type_changed)
+        self.mode_filter.currentIndexChanged.connect(self.refresh)
         self.tag_filter.currentIndexChanged.connect(self.refresh)
         self.unit_filter.currentIndexChanged.connect(self.refresh)
         self.refresh_button.clicked.connect(self.refresh)
@@ -358,8 +393,13 @@ class AnalyticsScreen(QWidget):
         prediction_type = self._selected_type()
         selected_tag = self._selected_tag()
         selected_unit = self._selected_unit()
+        query = (
+            self._operations.get_one_shot_analytics
+            if self.mode_filter.currentData() == "one_shot"
+            else self._operations.get_forecast_analytics
+        )
         try:
-            snapshot = self._operations.get_forecast_analytics(
+            snapshot = query(
                 prediction_type=prediction_type,
                 tag=selected_tag,
                 unit=selected_unit,
@@ -369,7 +409,7 @@ class AnalyticsScreen(QWidget):
             }:
                 with QSignalBlocker(self.tag_filter):
                     self.tag_filter.setCurrentIndex(0)
-                snapshot = self._operations.get_forecast_analytics(
+                snapshot = query(
                     prediction_type=prediction_type,
                     tag=None,
                     unit=selected_unit,
@@ -380,7 +420,7 @@ class AnalyticsScreen(QWidget):
             ):
                 with QSignalBlocker(self.unit_filter):
                     self.unit_filter.setCurrentIndex(0)
-                snapshot = self._operations.get_forecast_analytics(
+                snapshot = query(
                     prediction_type=prediction_type,
                     tag=self._selected_tag(),
                     unit=None,
@@ -397,6 +437,29 @@ class AnalyticsScreen(QWidget):
                 message = (
                     "Analytics could not refresh; showing the last loaded results. "
                     f"{error}"
+                )
+                # Keep visible filters consistent with the retained results after a failure.
+                previous = self._loaded_snapshot
+                for control, value in (
+                    (
+                        self.mode_filter,
+                        "one_shot"
+                        if isinstance(previous, OneShotAnalyticsSnapshot)
+                        else "deadline",
+                    ),
+                    (
+                        self.type_filter,
+                        previous.selected_type.value
+                        if previous.selected_type
+                        else None,
+                    ),
+                    (self.tag_filter, previous.selected_tag),
+                    (self.unit_filter, previous.selected_unit),
+                ):
+                    with QSignalBlocker(control):
+                        control.setCurrentIndex(max(0, control.findData(value)))
+                self.unit_filter.setEnabled(
+                    previous.selected_type is PredictionType.NUMERIC
                 )
             self.error_label.show_message(message, StatusTone.ERROR)
             return
@@ -415,7 +478,20 @@ class AnalyticsScreen(QWidget):
             self.unit_filter.setEnabled(numeric_selected)
         self.refresh()
 
-    def _render(self, snapshot: ForecastAnalyticsSnapshot) -> None:
+    def _render(
+        self, snapshot: ForecastAnalyticsSnapshot | OneShotAnalyticsSnapshot
+    ) -> None:
+        one_shot = isinstance(snapshot, OneShotAnalyticsSnapshot)
+        self.one_shot_content.setVisible(one_shot)
+        if one_shot:
+            self.trajectory_summary.hide()
+            self.trajectory_content.hide()
+            self.quantile_content.hide()
+            self.empty_label.hide()
+            self.empty_region.hide()
+            self.one_shot_content.render(snapshot)
+            self.scroll_area.show()
+            return
         show_binary = snapshot.selected_type in (None, PredictionType.BINARY)
         show_numeric = snapshot.selected_type in (None, PredictionType.NUMERIC)
         self.quantile_content.setHidden(

@@ -200,10 +200,12 @@ class QuantileCalibrationChart(QWidget):
                 painter.drawEllipse(point(float(level.inclusive.fraction)), 4, 4)
 
 
-class _CalibrationPanel(AnalyticsPanel):
-    def __init__(self, *, whole: bool, parent: QWidget) -> None:
+class QuantileCalibrationPanel(AnalyticsPanel):
+    def __init__(self, *, whole: bool, parent: QWidget, name_prefix: str = "") -> None:
         self.whole = whole
         name = "wholeNumber" if whole else "continuous"
+        if name_prefix:
+            name = name_prefix + name[0].upper() + name[1:]
         super().__init__(
             "Whole-Number Calibration" if whole else "Continuous-Style Calibration",
             "Open dot: actual < percentile; filled dot: actual ≤ percentile. The connecting band preserves ties."
@@ -332,8 +334,8 @@ class QuantileAnalyticsView(QWidget):
         )
         self.summary = _label("", summary.body)
         summary.body_layout.addWidget(self.summary)
-        self.continuous = _CalibrationPanel(whole=False, parent=self)
-        self.whole_number = _CalibrationPanel(whole=True, parent=self)
+        self.continuous = QuantileCalibrationPanel(whole=False, parent=self)
+        self.whole_number = QuantileCalibrationPanel(whole=True, parent=self)
         updates = AnalyticsPanel(
             "Five-Quantile Updates — Initial versus Final",
             "One pair per eligible revised-and-resolved Prediction; direction only, "
