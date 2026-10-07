@@ -87,17 +87,17 @@ These may be addressed separately in later versions.
 
 Every new v0.7.0 Numeric Prediction uses exactly five quantiles:
 
-\[
+$$
 \boxed{q_5,\ q_{25},\ q_{50},\ q_{75},\ q_{95}}
-\]
+$$
 
-where \(q_\tau\) denotes the forecasted \(\tau\)-quantile of the target quantity.
+where $q_\tau$ denotes the forecasted $\tau$-quantile of the target quantity.
 
 The user-facing representation is:
 
-- **90% central interval:** \([q_5,q_{95}]\)
-- **Median:** \(q_{50}\)
-- **50% central interval:** \([q_{25},q_{75}]\)
+- **90% central interval:** $[q_5,q_{95}]$
+- **Median:** $q_{50}$
+- **50% central interval:** $[q_{25},q_{75}]$
 
 There is no confidence selector.
 
@@ -113,29 +113,29 @@ There is no choice between the legacy interval model and the new model for newly
 
 The durable semantic statement is:
 
-\[
+$$
 Q(\tau)=q_\tau
-\]
+$$
 
 for:
 
-\[
+$$
 \tau\in\{0.05,0.25,0.50,0.75,0.95\}.
-\]
+$$
 
 For an effectively continuous distribution with distinct quantiles, it is natural to visualize these as CDF anchors:
 
-\[
+$$
 F(q_\tau)=\tau.
-\]
+$$
 
 That equality must not be treated as universally exact.
 
-For discrete outcomes or repeated quantiles, a valid \(\tau\)-quantile satisfies:
+For discrete outcomes or repeated quantiles, a valid $\tau$-quantile satisfies:
 
-\[
+$$
 P(Y<q_\tau)\le\tau\le P(Y\le q_\tau).
-\]
+$$
 
 This distinction is required for correct tie handling and calibration analytics.
 
@@ -143,15 +143,15 @@ This distinction is required for correct tie handling and calibration analytics.
 
 For an effectively continuous quantity:
 
-\[
+$$
 [q_{25},q_{75}]
-\]
+$$
 
 corresponds approximately to:
 
-- 25% probability below \(q_{25}\)
+- 25% probability below $q_{25}$
 - 50% probability inside the closed interval
-- 25% probability above \(q_{75}\)
+- 25% probability above $q_{75}$
 
 For a discrete quantity, endpoint probability mass may make closed-interval coverage exceed 50%.
 
@@ -159,15 +159,15 @@ For a discrete quantity, endpoint probability mass may make closed-interval cove
 
 For an effectively continuous quantity:
 
-\[
+$$
 [q_5,q_{95}]
-\]
+$$
 
 corresponds approximately to:
 
-- 5% probability below \(q_5\)
+- 5% probability below $q_5$
 - 90% probability inside the closed interval
-- 5% probability above \(q_{95}\)
+- 5% probability above $q_{95}$
 
 For a discrete quantity, endpoint probability mass may make closed-interval coverage exceed 90%.
 
@@ -175,9 +175,9 @@ For a discrete quantity, endpoint probability mass may make closed-interval cove
 
 The median is:
 
-\[
+$$
 q_{50}.
-\]
+$$
 
 It is a probability balance point.
 
@@ -332,7 +332,7 @@ The exact persistence layout may use normalized quantile rows rather than five l
 
 Every committed revision contains all five quantiles.
 
-If only \(q_{95}\) changes, the new revision still records the complete five-quantile distribution that now stands.
+If only $q_{95}$ changes, the new revision still records the complete five-quantile distribution that now stands.
 
 ### 10.2 Atomic initial creation
 
@@ -380,9 +380,9 @@ Every new v0.7.0 Numeric Prediction must have one mandatory Forecast Deadline.
 
 Let:
 
-\[
+$$
 T
-\]
+$$
 
 be that timestamp.
 
@@ -396,11 +396,11 @@ The Forecast Deadline is:
 
 Forecasting is allowed on:
 
-\[
+$$
 [t_0,T).
-\]
+$$
 
-At exactly \(T\), a nonterminal Prediction becomes Locked.
+At exactly $T$, a nonterminal Prediction becomes Locked.
 
 Journals may continue according to ordinary product rules.
 
@@ -414,9 +414,9 @@ Expected Resolution remains separate optional editable metadata with no scoring 
 
 Let:
 
-\[
+$$
 R
-\]
+$$
 
 be `effective_resolution_at`.
 
@@ -428,7 +428,7 @@ Let `recorded_at` be the immutable timestamp at which the user entered the Resol
 
 These must remain separate.
 
-Scoring uses \(R\), not `recorded_at`.
+Scoring uses $R$, not `recorded_at`.
 
 ---
 
@@ -436,37 +436,37 @@ Scoring uses \(R\), not `recorded_at`.
 
 Define:
 
-\[
+$$
 C=\min(R,T).
-\]
+$$
 
 The final scoring revision is:
 
-> The latest valid v0.7.0 Numeric ForecastRevision whose immutable commit timestamp is strictly earlier than \(C\).
+> The latest valid v0.7.0 Numeric ForecastRevision whose immutable commit timestamp is strictly earlier than $C$.
 
 ### 14.1 Resolution before Deadline
 
-If \(R<T\), the last revision before \(R\) is final.
+If $R<T$, the last revision before $R$ is final.
 
 There is no Numeric neutral truncation and no post-resolution Numeric scoring contribution.
 
 ### 14.2 Resolution after Deadline
 
-If \(R\ge T\), the last revision before \(T\) is final.
+If $R\ge T$, the last revision before $T$ is final.
 
 No post-Deadline waiting time enters Numeric scoring.
 
 ### 14.3 Revision committed after effective resolution but before recorded resolution
 
-The application may not know \(R\) until later.
+The application may not know $R$ until later.
 
 If a revision was committed after the outcome had already become effectively resolved, that revision remains immutable audit history but is excluded from scoring.
 
 For scoring:
 
-\[
-t_{revision}\ge C
-\]
+$$
+t_{\text{revision}}\ge C
+$$
 
 is never eligible.
 
@@ -474,9 +474,9 @@ is never eligible.
 
 If:
 
-\[
+$$
 R\le t_0
-\]
+$$
 
 the record is not a meaningful scored forecast under the v0.7.0 contract and should not produce WIS or calibration observations.
 
@@ -486,9 +486,9 @@ the record is not a meaningful scored forecast under the v0.7.0 contract and sho
 
 A resolved Numeric Prediction has one finite exact value:
 
-\[
+$$
 y\in\mathbb R
-\]
+$$
 
 subject to the Prediction's value-type and precision constraints.
 
@@ -504,9 +504,9 @@ If the factual outcome cannot validly be determined, use Invalid rather than a n
 
 Every v0.7.0 Numeric revision must satisfy:
 
-\[
+$$
 \boxed{q_5\le q_{25}\le q_{50}\le q_{75}\le q_{95}}.
-\]
+$$
 
 Equality is valid.
 
@@ -534,9 +534,9 @@ Do not impose a minimum width.
 
 The canonical v0.7.0 Numeric score is **Weighted Interval Score (WIS)** using:
 
-- The median \(q_{50}\)
-- The 50% central interval \([q_{25},q_{75}]\)
-- The 90% central interval \([q_5,q_{95}]\)
+- The median $q_{50}$
+- The 50% central interval $[q_{25},q_{75}]$
+- The 90% central interval $[q_5,q_{95}]$
 
 Lower is better.
 
@@ -546,43 +546,43 @@ The formula follows the standard WIS weighting for central prediction intervals.
 
 ## 18. Interval Score Definitions
 
-For a central \((1-\alpha)\) interval \([L,U]\) and realized value \(y\):
+For a central $(1-\alpha)$ interval $[L,U]$ and realized value $y$:
 
-\[
-IS_\alpha(L,U;y)
+$$
+\operatorname{IS}_\alpha(L,U;y)
 =
 (U-L)
 +
 \frac{2}{\alpha}(L-y)\mathbf 1[y<L]
 +
 \frac{2}{\alpha}(y-U)\mathbf 1[y>U].
-\]
+$$
 
 Interval endpoints count as contained.
 
 ### 18.1 50% interval score
 
-For \(\alpha_{50}=0.50\):
+For $\alpha_{50}=0.50$:
 
-\[
-IS_{50}
+$$
+\operatorname{IS}_{50}
 =
 (q_{75}-q_{25})
 +4(q_{25}-y)\mathbf 1[y<q_{25}]
 +4(y-q_{75})\mathbf 1[y>q_{75}].
-\]
+$$
 
 ### 18.2 90% interval score
 
-For \(\alpha_{90}=0.10\):
+For $\alpha_{90}=0.10$:
 
-\[
-IS_{90}
+$$
+\operatorname{IS}_{90}
 =
 (q_{95}-q_5)
 +20(q_5-y)\mathbf 1[y<q_5]
 +20(y-q_{95})\mathbf 1[y>q_{95}].
-\]
+$$
 
 ---
 
@@ -590,30 +590,30 @@ IS_{90}
 
 For the fixed v0.7.0 five-quantile model:
 
-\[
+$$
 \boxed{
-WIS
+\operatorname{WIS}
 =
 \frac{
 0.5|y-q_{50}|
-+0.25IS_{50}
-+0.05IS_{90}
++0.25\operatorname{IS}_{50}
++0.05\operatorname{IS}_{90}
 }{2.5}
 }.
-\]
+$$
 
 The fixed weights are:
 
-- Median weight \(w_0=0.5\)
-- 50% interval weight \(w_{50}=0.50/2=0.25\)
-- 90% interval weight \(w_{90}=0.10/2=0.05\)
-- \(K=2\), giving denominator \(K+0.5=2.5\)
+- Median weight $w_0=0.5$
+- 50% interval weight $w_{50}=0.50/2=0.25$
+- 90% interval weight $w_{90}=0.10/2=0.05$
+- $K=2$, giving denominator $K+0.5=2.5$
 
 Lower is better.
 
-\[
-WIS\ge0.
-\]
+$$
+\operatorname{WIS}\ge0.
+$$
 
 There is no finite upper bound.
 
@@ -623,25 +623,25 @@ There is no finite upper bound.
 
 Under the standard quantile-score convention:
 
-\[
-QS_\tau(q,y)=
+$$
+\operatorname{QS}_\tau(q,y)=
 \begin{cases}
 2(1-\tau)(q-y), & y\le q\\
 2\tau(y-q), & y>q
 \end{cases}
-\]
+$$
 
 then:
 
-\[
+$$
 \boxed{
-WIS
+\operatorname{WIS}
 =
 \frac{
-QS_{0.05}+QS_{0.25}+QS_{0.50}+QS_{0.75}+QS_{0.95}
+\operatorname{QS}_{0.05}+\operatorname{QS}_{0.25}+\operatorname{QS}_{0.50}+\operatorname{QS}_{0.75}+\operatorname{QS}_{0.95}
 }{5}
 }.
-\]
+$$
 
 This interpretation is important for Reckonsolve.
 
@@ -682,17 +682,17 @@ A future normalized or reference-relative skill score requires a separate design
 For one resolved eligible Prediction, Reckonsolve should derive at least:
 
 - WIS
-- Realized value \(y\)
-- Median absolute error \(|y-q_{50}|\)
-- 50% interval width \(q_{75}-q_{25}\)
+- Realized value $y$
+- Median absolute error $|y-q_{50}|$
+- 50% interval width $q_{75}-q_{25}$
 - 50% containment
 - 50% miss direction and miss distance if outside
-- \(IS_{50}\)
+- $\operatorname{IS}_{50}$
 - Weighted 50% contribution
-- 90% interval width \(q_{95}-q_5\)
+- 90% interval width $q_{95}-q_5$
 - 90% containment
 - 90% miss direction and miss distance if outside
-- \(IS_{90}\)
+- $\operatorname{IS}_{90}$
 - Weighted 90% contribution
 
 These should be derived from immutable forecast and resolution facts.
@@ -719,27 +719,27 @@ For a resolved eligible v0.7.0 Numeric Prediction:
 
 ### 24.1 Initial WIS
 
-Score the sequence-one revision against \(y\):
+Score the sequence-one revision against $y$:
 
-\[
-WIS_{initial}.
-\]
+$$
+\operatorname{WIS}_{\text{initial}}.
+$$
 
 ### 24.2 Final WIS
 
 Score the final scoring revision selected under Section 14:
 
-\[
-WIS_{final}.
-\]
+$$
+\operatorname{WIS}_{\text{final}}.
+$$
 
 ### 24.3 Initial-to-final improvement
 
 Define:
 
-\[
-\boxed{\Delta WIS=WIS_{initial}-WIS_{final}}.
-\]
+$$
+\boxed{\Delta \operatorname{WIS}=\operatorname{WIS}_{\text{initial}}-\operatorname{WIS}_{\text{final}}}.
+$$
 
 Interpretation:
 
@@ -761,14 +761,14 @@ Numeric trajectory scoring has not been designed.
 
 ## 25. Cross-Prediction Updating Summary
 
-Raw \(\Delta WIS\) values must not be averaged across heterogeneous targets.
+Raw $\Delta \operatorname{WIS}$ values must not be averaged across heterogeneous targets.
 
 A scale-free descriptive summary may count signs:
 
 - Number of revised + resolved eligible Numeric predictions
-- Number with \(WIS_{final}<WIS_{initial}\)
+- Number with $\operatorname{WIS}_{\text{final}}<\operatorname{WIS}_{\text{initial}}$
 - Number with equality
-- Number with \(WIS_{final}>WIS_{initial}\)
+- Number with $\operatorname{WIS}_{\text{final}}>\operatorname{WIS}_{\text{initial}}$
 
 The UI may report the fraction of revised Numeric forecasts that finished with lower WIS than their initial forecast.
 
@@ -794,23 +794,23 @@ Legacy interval-v1 Numeric Predictions contribute none to v0.7.0 five-quantile c
 
 For each quantile level:
 
-\[
+$$
 \tau\in\{0.05,0.25,0.50,0.75,0.95\}
-\]
+$$
 
 define:
 
-\[
+$$
 \hat F_\tau
 =
 \frac{1}{N}\sum_{j=1}^{N}\mathbf 1[y_j\le q_{\tau,j}].
-\]
+$$
 
 With negligible ties, calibrated forecasts should approximately satisfy:
 
-\[
+$$
 \hat F_\tau\approx\tau.
-\]
+$$
 
 The primary visualization should plot nominal quantile level against observed frequency with the perfect-calibration diagonal.
 
@@ -824,29 +824,29 @@ For whole-number targets, equality with a quantile may have non-negligible proba
 
 Exact calibration therefore must not assume:
 
-\[
+$$
 P(Y\le q_\tau)=\tau.
-\]
+$$
 
-For each \(\tau\), compute:
+For each $\tau$, compute:
 
-\[
+$$
 \hat F_\tau^-=
 \frac{1}{N}\sum_{j=1}^{N}\mathbf 1[y_j<q_{\tau,j}]
-\]
+$$
 
 and:
 
-\[
+$$
 \hat F_\tau=
 \frac{1}{N}\sum_{j=1}^{N}\mathbf 1[y_j\le q_{\tau,j}].
-\]
+$$
 
 A calibrated discrete quantile is compatible with:
 
-\[
+$$
 \boxed{\hat F_\tau^-\lesssim\tau\lesssim\hat F_\tau}
-\]
+$$
 
 allowing sampling variation.
 
@@ -862,29 +862,29 @@ Do not force whole-number forecasts into the continuous diagonal test.
 
 Report:
 
-- Fraction below \(q_{25}\)
-- Fraction inside \([q_{25},q_{75}]\)
-- Fraction above \(q_{75}\)
+- Fraction below $q_{25}$
+- Fraction inside $[q_{25},q_{75}]$
+- Fraction above $q_{75}$
 
 Targets are approximately:
 
-\[
+$$
 25\%,50\%,25\%.
-\]
+$$
 
 ### 29.2 Continuous-style 90% interval
 
 Report:
 
-- Fraction below \(q_5\)
-- Fraction inside \([q_5,q_{95}]\)
-- Fraction above \(q_{95}\)
+- Fraction below $q_5$
+- Fraction inside $[q_5,q_{95}]$
+- Fraction above $q_{95}$
 
 Targets are approximately:
 
-\[
+$$
 5\%,90\%,5\%.
-\]
+$$
 
 ### 29.3 Whole-number interval interpretation
 
@@ -892,35 +892,35 @@ For discrete targets, endpoint mass may increase closed-interval coverage.
 
 For the 50% interval:
 
-\[
+$$
 P(Y<q_{25})\le0.25,
-\]
+$$
 
-\[
+$$
 P(Y>q_{75})\le0.25,
-\]
+$$
 
 so:
 
-\[
+$$
 P(q_{25}\le Y\le q_{75})\ge0.50.
-\]
+$$
 
 For the 90% interval:
 
-\[
+$$
 P(Y<q_5)\le0.05,
-\]
+$$
 
-\[
+$$
 P(Y>q_{95})\le0.05,
-\]
+$$
 
 so:
 
-\[
+$$
 P(q_5\le Y\le q_{95})\ge0.90.
-\]
+$$
 
 Do not label a whole-number forecast miscalibrated merely because closed-interval containment exceeds the nominal percentage.
 
@@ -932,21 +932,21 @@ For effectively continuous targets, the median diagnostic may show fraction belo
 
 For whole-number targets, retain equality:
 
-- Below \(q_{50}\)
-- Equal to \(q_{50}\)
-- Above \(q_{50}\)
+- Below $q_{50}$
+- Equal to $q_{50}$
+- Above $q_{50}$
 
 The valid discrete median condition is compatible with:
 
-\[
+$$
 P(Y<q_{50})\le0.50
-\]
+$$
 
 and:
 
-\[
+$$
 P(Y\le q_{50})\ge0.50.
-\]
+$$
 
 Do not discard ties.
 
@@ -954,7 +954,7 @@ Do not discard ties.
 
 ## 31. Sampling Uncertainty in Calibration
 
-Reckonsolve is a personal forecasting system and will often have small \(N\).
+Reckonsolve is a personal forecasting system and will often have small $N$.
 
 The Analytics UI must always show the eligible sample size.
 
@@ -1101,27 +1101,27 @@ The visual curve is derived presentation logic.
 
 If adjacent quantiles have distinct numerical values, use piecewise-linear interpolation in CDF space between the elicited probability levels.
 
-For adjacent points \((q_a,a)\) and \((q_b,b)\) with \(q_a<q_b\), define:
+For adjacent points $(q_a,a)$ and $(q_b,b)$ with $q_a<q_b$, define:
 
-\[
-F_{impl}(x)
+$$
+F_{\text{impl}}(x)
 =
 a+(b-a)\frac{x-q_a}{q_b-q_a}
-\]
+$$
 
 for:
 
-\[
+$$
 q_a\le x\le q_b.
-\]
+$$
 
 ### 37.2 Repeated quantiles
 
 If:
 
-\[
+$$
 q_a=q_b
-\]
+$$
 
 for two or more adjacent quantile levels, do not divide by zero and do not pretend the CDF equals several probabilities at one point.
 
@@ -1142,14 +1142,14 @@ Tooltips or labels may identify **Elicited 75th percentile** versus **Interpolat
 
 ## 38. Outer Tails
 
-The user supplies \(q_5\) and \(q_{95}\), but not the shape of probability below and above them.
+The user supplies $q_5$ and $q_{95}$, but not the shape of probability below and above them.
 
 v0.7.0 must not invent complete outer-tail distributions.
 
 For effectively continuous targets, the visualization may annotate approximately:
 
-- 5% probability below \(q_5\)
-- 5% probability above \(q_{95}\)
+- 5% probability below $q_5$
+- 5% probability above $q_{95}$
 
 For discrete targets, use quantile-aware wording because endpoint mass can alter strict-tail probability.
 
@@ -1189,9 +1189,9 @@ They do not use interpolated CDF values.
 
 Therefore:
 
-\[
+$$
 \boxed{\text{forecast/scoring semantics}\neq\text{visual interpolation semantics}}.
-\]
+$$
 
 A later visualization improvement must not alter historical WIS or the meaning of stored forecasts.
 
@@ -1259,17 +1259,17 @@ The v0.6.0 Numeric model is a different forecast contract.
 
 Conceptually:
 
-\[
+$$
 \text{interval-v1}=(L,M,U,c)
-\]
+$$
 
-where \(c\) is a user-selected confidence percentage.
+where $c$ is a user-selected confidence percentage.
 
 The v0.7.0 model is:
 
-\[
+$$
 \text{quantiles-5-v2}=(q_5,q_{25},q_{50},q_{75},q_{95}).
-\]
+$$
 
 These must have a hard cohort boundary.
 
@@ -1293,7 +1293,7 @@ The legacy model exists only for historical compatibility and completion of alre
 
 Do not invent missing quantiles.
 
-An old 90% interval may imply \(q_5\), \(q_{50}\), and \(q_{95}\), but it does not provide \(q_{25}\) or \(q_{75}\).
+An old 90% interval may imply $q_5$, $q_{50}$, and $q_{95}$, but it does not provide $q_{25}$ or $q_{75}$.
 
 An old 80% interval provides different outer quantiles entirely.
 
@@ -1373,7 +1373,7 @@ The v0.6.0 repository currently stores legacy revisions in a `numeric_forecast_r
 
 Those fields have legacy meaning and should continue to mean exactly that.
 
-Do not repurpose legacy lower/upper fields as \(q_5\)/\(q_{95}\) and then bolt quartiles onto the old schema.
+Do not repurpose legacy lower/upper fields as $q_5$/$q_{95}$ and then bolt quartiles onto the old schema.
 
 ### 48.1 Recommended v2 storage shape
 
@@ -1488,9 +1488,9 @@ However, v0.7.0 must not invent a trajectory formula merely for symmetry with Bi
 
 There is no universally natural Numeric analogue of Binary's outcome-independent neutral Brier constant:
 
-\[
+$$
 0.25.
-\]
+$$
 
 WIS depends on unit and scale, so there is no universal neutral post-resolution loss.
 
@@ -1539,7 +1539,7 @@ Do not invent exact Forecast Deadline times or effective-resolution timestamps f
 A resolved Numeric Prediction enters the canonical v0.7.0 Numeric analytics cohort only if:
 
 - It uses `quantiles-5-v2`
-- It has a valid final scoring revision before \(C=\min(R,T)\)
+- It has a valid final scoring revision before $C=\min(R,T)$
 - It has a valid finite realized value
 - It is Resolved rather than Invalid
 - Its scoring contract is recognized as eligible
@@ -1554,12 +1554,12 @@ No duration-based aggregate weight is used.
 
 Codex should treat the following as hard invariants unless a later accepted design explicitly supersedes them:
 
-- Every new v0.7.0 Numeric Prediction uses exactly \(q_5,q_{25},q_{50},q_{75},q_{95}\)
+- Every new v0.7.0 Numeric Prediction uses exactly $q_5,q_{25},q_{50},q_{75},q_{95}$
 - Newly created Numeric predictions do not expose the legacy confidence selector
 - A Numeric model is fixed for a Prediction's lifetime
 - Existing pre-v0.7 Numeric predictions remain legacy interval-v1
 - Every v2 revision is complete and immutable
-- Quantiles satisfy \(q_5\le q_{25}\le q_{50}\le q_{75}\le q_{95}\)
+- Quantiles satisfy $q_5\le q_{25}\le q_{50}\le q_{75}\le q_{95}$
 - Equal quantiles are allowed
 - Crossed quantiles are rejected and never auto-sorted
 - Numeric values preserve exact fixed-precision semantics
@@ -1569,7 +1569,7 @@ Codex should treat the following as hard invariants unless a later accepted desi
 - Forecast revisions cannot be user-backdated
 - Revisions and Reviews are rejected at or after Forecast Deadline
 - `effective_resolution_at` is distinct from `recorded_at`
-- The final scoring revision is the latest valid revision strictly before \(\min(R,T)\)
+- The final scoring revision is the latest valid revision strictly before $\min(R,T)$
 - A post-effective-resolution revision remains audit history but never scores
 - WIS uses only the elicited five quantiles
 - Interpolation never changes WIS
@@ -1656,9 +1656,9 @@ Codex should treat the following as hard invariants unless a later accepted desi
 
 - Initial WIS uses sequence-one revision
 - Final WIS uses the final scoring revision
-- \(\Delta WIS=WIS_{initial}-WIS_{final}\)
+- $\Delta \operatorname{WIS}=\operatorname{WIS}_{\text{initial}}-\operatorname{WIS}_{\text{final}}$
 - Positive and negative sign interpretation is correct
-- Raw \(\Delta WIS\) is not averaged across heterogeneous targets
+- Raw $\Delta \operatorname{WIS}$ is not averaged across heterogeneous targets
 
 ### Calibration
 
@@ -1715,7 +1715,7 @@ A reasonable implementation sequence is:
 7. Update Numeric creation and revision application services
 8. Update Numeric UI to the fixed 90% interval + median + 50% interval form
 9. Implement pure WIS and quantile-score functions with comprehensive tests
-10. Implement final-scoring-revision selection using \(\min(R,T)\)
+10. Implement final-scoring-revision selection using $\min(R,T)$
 11. Update Numeric Resolution and correction flows
 12. Add individual resolved Numeric scorecard
 13. Add implied-CDF visualization with repeated-quantile handling
@@ -1767,19 +1767,19 @@ Binary and Numeric share one v0.7.0 forecasting lifecycle but do not share one s
 
 Binary:
 
-\[
+$$
 \text{standing probabilities through time}
 \rightarrow
-\text{Trajectory Brier}
-\]
+\operatorname{Trajectory\ Brier}
+$$
 
 Numeric:
 
-\[
+$$
 \text{five-quantile final standing distribution}
 \rightarrow
-\text{WIS}
-\]
+\operatorname{WIS}
+$$
 
 Binary early-resolution neutral truncation is intentionally Binary-specific.
 

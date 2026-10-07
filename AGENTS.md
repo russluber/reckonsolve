@@ -111,6 +111,15 @@ AGENTS.md contains working policy and essential safeguards. Link to the spec for
 - Separate proposed, implemented, manually accepted, and published status. Never describe a plan as shipped or old test evidence as verification of later edits. Avoid conversational debugging diaries and unverified test counts in current guides.
 - Add a new guide only for a distinct audience or task that existing docs cannot reasonably cover. Do not add a docs framework, generated copies, or additional policy files without a demonstrated need.
 
+### Mathematical notation
+
+Apply these conventions to all new or edited mathematics in repository Markdown and mathematical explanations produced while working on this repository:
+
+- Use `$...$` for inline expressions. For equation blocks, put `$$` on its own opening and closing lines, with blank lines around the block. Do not use `\(...\)` or `\[...\]` as Markdown math delimiters.
+- Use `\operatorname{...}` for named scores/operators, such as `\operatorname{WIS}`, `\operatorname{IS}`, `\operatorname{QS}`, and `\operatorname{Brier}`. Standard LaTeX operators such as `\min` retain their built-in commands.
+- Put word subscripts and superscripts in `\text{...}`, for example `\operatorname{WIS}_{\text{initial}}` and `t_{\text{revision}}`. Keep variables and numeric or variable indices in ordinary math notation.
+- Preserve mathematical meaning and balanced LaTeX syntax. Keep literal code and command examples in code formatting. Check complex formulas in a math-capable preview; the documentation link checker does not validate mathematics. See [documentation checks](docs/maintainer/development.md#documentation-checks) for rendering guidance.
+
 ### Current guidance and historical records
 
 - Keep active plans with the governing specification. On completion, preserve any continuing requirements there and move historical planning/acceptance detail into the archive with a link. Completed milestones are not a new work queue or permission to implement.

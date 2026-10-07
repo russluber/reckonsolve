@@ -1847,15 +1847,15 @@ Choosing forecasting windows is itself part of good question design.
 
 A v0.7 Numeric forecast consists of five committed quantiles:
 
-\[
+$$
 q_5,\ q_{25},\ q_{50},\ q_{75},\ q_{95}.
-\]
+$$
 
 The interface presents them in human terms as:
 
-- A **90% central interval** from \(q_5\) to \(q_{95}\)
-- The **median** \(q_{50}\)
-- A **50% central interval** from \(q_{25}\) to \(q_{75}\)
+- A **90% central interval** from $q_5$ to $q_{95}$
+- The **median** $q_{50}$
+- A **50% central interval** from $q_{25}$ to $q_{75}$
 
 These values describe uncertainty about one well-defined scalar quantity.
 
@@ -1865,9 +1865,9 @@ They are not five independent guesses.
 
 For an effectively continuous quantity, the 50% central interval:
 
-\[
+$$
 [q_{25},q_{75}]
-\]
+$$
 
 places approximately:
 
@@ -1877,9 +1877,9 @@ places approximately:
 
 The 90% central interval:
 
-\[
+$$
 [q_5,q_{95}]
-\]
+$$
 
 places approximately:
 
@@ -1891,7 +1891,7 @@ For whole-number or otherwise discrete quantities, probability mass may sit exac
 
 #### Rule 19.3 — Treat the median as a probability balance point, not necessarily the "most likely" value
 
-The median \(q_{50}\) divides the forecast distribution into lower and upper probability halves.
+The median $q_{50}$ divides the forecast distribution into lower and upper probability halves.
 
 It need not equal:
 
@@ -1904,9 +1904,9 @@ Skew is allowed and often appropriate.
 
 For example:
 
-\[
+$$
 q_{25}=70,\quad q_{50}=100,\quad q_{75}=200
-\]
+$$
 
 can be a coherent forecast.
 
@@ -1914,9 +1914,9 @@ can be a coherent forecast.
 
 A valid Numeric forecast requires:
 
-\[
+$$
 q_5\le q_{25}\le q_{50}\le q_{75}\le q_{95}.
-\]
+$$
 
 Equal quantiles are allowed.
 
@@ -1943,9 +1943,9 @@ This revision/Review workflow applies to Adaptive. For One-Shot, private drafts 
 
 A Numeric ForecastRevision is a complete new statement of:
 
-\[
+$$
 q_5,\ q_{25},\ q_{50},\ q_{75},\ q_{95}.
-\]
+$$
 
 If only one quantile changes, the new revision still represents the complete five-quantile forecast that now stands.
 
@@ -2002,13 +2002,13 @@ Across many resolved Numeric predictions, ask whether the stated quantiles and c
 
 For effectively continuous quantities:
 
-- About 5% of outcomes should fall below \(q_5\)
-- About 25% should fall below \(q_{25}\)
-- About 50% should fall below \(q_{50}\)
-- About 75% should fall below \(q_{75}\)
-- About 95% should fall below \(q_{95}\)
-- About 50% should fall inside \([q_{25},q_{75}]\)
-- About 90% should fall inside \([q_5,q_{95}]\)
+- About 5% of outcomes should fall below $q_5$
+- About 25% should fall below $q_{25}$
+- About 50% should fall below $q_{50}$
+- About 75% should fall below $q_{75}$
+- About 95% should fall below $q_{95}$
+- About 50% should fall inside $[q_{25},q_{75}]$
+- About 90% should fall inside $[q_5,q_{95}]$
 
 For whole-number quantities, ties at quantile values require discrete-aware interpretation rather than pretending those equalities must hold exactly.
 

@@ -71,9 +71,9 @@ These may be addressed separately.
 
 Let:
 
-\[
+$$
 t_0
-\]
+$$
 
 be the timestamp of the first immutable ForecastRevision.
 
@@ -85,9 +85,9 @@ There is therefore no scored interval during which a Prediction exists without a
 
 Let:
 
-\[
+$$
 T
-\]
+$$
 
 be the fixed Forecast Deadline.
 
@@ -101,11 +101,11 @@ The Forecast Deadline is:
 
 The forecast is updateable on:
 
-\[
+$$
 [t_0,T)
-\]
+$$
 
-At exactly \(T\), the Prediction becomes Locked if it has not already become Resolved or Invalid.
+At exactly $T$, the Prediction becomes Locked if it has not already become Resolved or Invalid.
 
 ### 4.3 Expected Resolution
 
@@ -124,9 +124,9 @@ Expected Resolution:
 
 Let:
 
-\[
+$$
 R
-\]
+$$
 
 be the **effective resolution timestamp**.
 
@@ -143,9 +143,9 @@ User records Resolution:    8:04 PM
 
 For scoring:
 
-\[
+$$
 R=2{:}13\text{ PM}
-\]
+$$
 
 ### 4.5 Recorded Resolution Time
 
@@ -157,21 +157,21 @@ Effective resolution time and recorded resolution time must be preserved separat
 
 Define:
 
-\[
+$$
 C=\min(R,T)
-\]
+$$
 
 for a Resolved Prediction.
 
-Actual forecast revisions contribute ordinary Brier loss only until \(C\).
+Actual forecast revisions contribute ordinary Brier loss only until $C$.
 
 ### 4.7 Predetermined Scoring Duration
 
 Define:
 
-\[
+$$
 D=T-t_0
-\]
+$$
 
 This denominator is fixed when the Prediction is created.
 
@@ -189,35 +189,35 @@ Reckonsolve should retain ordinary Binary Brier loss as the canonical Binary sco
 
 For reported probability:
 
-\[
+$$
 p\in[0,1]
-\]
+$$
 
 and realized outcome:
 
-\[
+$$
 y\in\{0,1\}
-\]
+$$
 
 define:
 
-\[
+$$
 B(p,y)=(p-y)^2
-\]
+$$
 
 Lower is better.
 
 The Binary Brier range remains:
 
-\[
+$$
 0\le B\le1
-\]
+$$
 
 A neutral 50% forecast has Brier loss:
 
-\[
+$$
 B(0.5,y)=0.25
-\]
+$$
 
 for either Binary outcome.
 
@@ -227,21 +227,21 @@ Each ForecastRevision creates a standing probability.
 
 Suppose revisions occur at timestamps:
 
-\[
+$$
 t_0<t_1<t_2<\dots<t_k<C
-\]
+$$
 
 with probabilities:
 
-\[
+$$
 p_0,p_1,p_2,\dots,p_k
-\]
+$$
 
 Then the standing intervals are:
 
-\[
+$$
 [t_0,t_1),[t_1,t_2),\dots,[t_k,C)
-\]
+$$
 
 Each revision remains in force continuously until the next scoring-relevant event.
 
@@ -286,9 +286,9 @@ Trajectory scoring measures committed forecast history, not reconstructed mental
 
 A revision with commit timestamp:
 
-\[
+$$
 t\ge T
-\]
+$$
 
 must be rejected.
 
@@ -296,15 +296,15 @@ The same applies to Forecast Reviews.
 
 ### 8.4 Revisions discovered to be post-resolution remain audit history but do not score
 
-The application may not know the effective resolution time \(R\) until the user records the Resolution.
+The application may not know the effective resolution time $R$ until the user records the Resolution.
 
 It is therefore possible for a ForecastRevision to be committed after the outcome had already become fixed and ascertainable, but before Reckonsolve knew that fact.
 
 If a later Resolution establishes:
 
-\[
-t_{revision}\ge R
-\]
+$$
+t_{\text{revision}}\ge R
+$$
 
 that revision remains part of the immutable audit history but is excluded from scoring.
 
@@ -312,11 +312,11 @@ The scoring cutoff is determined by the effective facts, not by when Reckonsolve
 
 For all scoring-relevant revision selection, use revisions with commit timestamp strictly earlier than:
 
-\[
+$$
 C=\min(R,T)
-\]
+$$
 
-A revision at or after \(C\) must never become the final scoring revision.
+A revision at or after $C$ must never become the final scoring revision.
 
 ## 9. Fixed Forecast Deadline Contract
 
@@ -337,13 +337,13 @@ If external events fundamentally invalidate the question, use the existing Inval
 
 If:
 
-\[
+$$
 R\ge T
-\]
+$$
 
-the Prediction receives ordinary trajectory scoring from \(t_0\) through \(T\).
+the Prediction receives ordinary trajectory scoring from $t_0$ through $T$.
 
-No time after \(T\) enters the score.
+No time after $T$ enters the score.
 
 Example:
 
@@ -356,19 +356,19 @@ Day 14   Outcome becomes known: Yes
 
 Brier losses are:
 
-\[
+$$
 B(0.40,1)=0.36
-\]
+$$
 
-\[
+$$
 B(0.70,1)=0.09
-\]
+$$
 
 The Trajectory Brier is:
 
-\[
+$$
 \frac{4(0.36)+6(0.09)}{10}=0.198
-\]
+$$
 
 Days 10 through 14 do not participate in scoring.
 
@@ -380,33 +380,33 @@ It merely remained unresolved.
 
 If:
 
-\[
+$$
 R<T
-\]
+$$
 
 the outcome becomes known before the predetermined Forecast Deadline.
 
-Forecasting must stop at \(R\).
+Forecasting must stop at $R$.
 
 However, the predetermined denominator:
 
-\[
+$$
 D=T-t_0
-\]
+$$
 
 must remain unchanged.
 
 The interval:
 
-\[
+$$
 [R,T)
-\]
+$$
 
 receives the neutral Brier contribution:
 
-\[
+$$
 0.25
-\]
+$$
 
 This is **neutral truncation**.
 
@@ -432,37 +432,37 @@ It does not rewrite the predetermined scoring horizon.
 
 ## 12. Trajectory Brier Formula
 
-Suppose the actual standing ForecastRevisions before \(C\) have durations:
+Suppose the actual standing ForecastRevisions before $C$ have durations:
 
-\[
+$$
 d_1,d_2,\dots,d_k
-\]
+$$
 
 and Brier losses:
 
-\[
+$$
 B_1,B_2,\dots,B_k
-\]
+$$
 
 Define neutral truncation duration:
 
-\[
+$$
 d_N=\begin{cases}T-R & \text{if }R<T\\0 & \text{otherwise}\end{cases}
-\]
+$$
 
 Then:
 
-\[
+$$
 \boxed{B_{\text{trajectory}}=\frac{\sum_{i=1}^{k}d_iB_i+d_N(0.25)}{T-t_0}}
-\]
+$$
 
 Lower is better.
 
 The score remains bounded:
 
-\[
+$$
 0\le B_{\text{trajectory}}\le1
-\]
+$$
 
 ## 13. Worked Early-Resolution Example
 
@@ -477,37 +477,37 @@ Day 10   Forecast Deadline
 
 Actual Brier contributions:
 
-\[
+$$
 B(0.40,1)=0.36
-\]
+$$
 
-\[
+$$
 B(0.70,1)=0.09
-\]
+$$
 
 Neutral truncation:
 
-\[
+$$
 0.25
-\]
+$$
 
 Therefore:
 
-\[
+$$
 B_{\text{trajectory}}=\frac{2(0.36)+2(0.09)+6(0.25)}{10}=0.24
-\]
+$$
 
 The four-day active forecasting portion by itself would have mean Brier:
 
-\[
+$$
 0.225
-\]
+$$
 
 The official Trajectory Brier remains:
 
-\[
+$$
 0.24
-\]
+$$
 
 because the original ten-day scoring window remains fixed.
 
@@ -519,9 +519,9 @@ Do not replace it in the ordinary UI with a centered transformation.
 
 A centered form may be useful internally or explanatorily:
 
-\[
+$$
 S_B=0.25-B
-\]
+$$
 
 Under this transformation:
 - Neutral 50% = 0
@@ -549,9 +549,9 @@ This should replace final-revision Brier as the primary Binary performance score
 
 Define:
 
-\[
+$$
 B_{\text{initial}}=B(p_0,y)
-\]
+$$
 
 Question answered:
 > How good was my first committed judgment?
@@ -562,17 +562,17 @@ This remains a diagnostic.
 
 The final forecast is the latest valid ForecastRevision whose immutable commit timestamp is strictly earlier than:
 
-\[
+$$
 C=\min(R,T)
-\]
+$$
 
-This definition remains correct even if Reckonsolve only learns \(R\) later and the audit history contains revisions committed after effective resolution.
+This definition remains correct even if Reckonsolve only learns $R$ later and the audit history contains revisions committed after effective resolution.
 
 Define:
 
-\[
+$$
 B_{\text{final}}=B(p_{\text{final}},y)
-\]
+$$
 
 Question answered:
 > How good was the last probability I held while the question was still forecastable?
@@ -591,17 +591,17 @@ Use the same:
 
 Call this:
 
-\[
+$$
 B_{\text{hold-initial}}
-\]
+$$
 
 ### 15.5 Updating Gain
 
 Define:
 
-\[
+$$
 \boxed{G_{\text{update}}=B_{\text{hold-initial}}-B_{\text{trajectory}}}
-\]
+$$
 
 Interpretation:
 - Positive means the actual revision path mechanically improved the trajectory score relative to never updating
@@ -620,15 +620,15 @@ Reckonsolve should expose how much of the window contained actual forecasting.
 
 Define:
 
-\[
+$$
 F_{\text{active}}=\frac{C-t_0}{T-t_0}
-\]
+$$
 
 where:
 
-\[
+$$
 C=\min(R,T)
-\]
+$$
 
 Display this as a diagnostic such as:
 > Active forecasting: 10% of scheduled window
@@ -643,11 +643,11 @@ Time weighting occurs **within** each Prediction.
 
 It must not cause long-duration Predictions to dominate aggregate analytics.
 
-For \(N\) eligible Resolved Predictions:
+For $N$ eligible Resolved Predictions:
 
-\[
+$$
 \boxed{\bar B_{\text{trajectory}}=\frac{1}{N}\sum_{j=1}^{N}B_{\text{trajectory},j}}
-\]
+$$
 
 Each eligible Prediction contributes exactly one Trajectory Brier to the aggregate mean.
 
@@ -675,12 +675,12 @@ Reckonsolve's append-only terminal correction philosophy should remain intact.
 If the effective Binary outcome is corrected:
 - Preserve all original Resolution facts and corrections
 - Recompute the Trajectory Brier against the latest effective outcome
-- Keep the original \(t_0\)
-- Keep the original immutable Forecast Deadline \(T\)
+- Keep the original $t_0$
+- Keep the original immutable Forecast Deadline $T$
 - Keep all ForecastRevision timestamps
 - Do not create a new scoring window
 
-If effective resolution time \(R\) is corrected, the correction must also be append-only and audited because changing \(R\) may change neutral truncation and therefore the Trajectory Brier.
+If effective resolution time $R$ is corrected, the correction must also be append-only and audited because changing $R$ may change neutral truncation and therefore the Trajectory Brier.
 
 ## 20. Resolution Data Model Implication
 
@@ -731,8 +731,8 @@ It may remain editable.
 Its editing history may continue to follow whatever metadata-history policy Reckonsolve chooses.
 
 It must never:
-- Change \(T\)
-- Change \(R\)
+- Change $T$
+- Change $R$
 - Change trajectory duration
 - Change scoring weights
 - Unlock a Prediction
@@ -830,9 +830,9 @@ If effective resolution time is at or before initial forecast time, the Predicti
 
 Require:
 
-\[
+$$
 T>t_0
-\]
+$$
 
 A zero-duration or negative-duration scoring window is invalid.
 
@@ -840,9 +840,9 @@ A zero-duration or negative-duration scoring window is invalid.
 
 If:
 
-\[
+$$
 R=T
-\]
+$$
 
 there is no neutral truncation.
 
@@ -852,15 +852,15 @@ Actual standing forecasts score through the deadline.
 
 A revision committed at:
 
-\[
+$$
 t=T
-\]
+$$
 
 is rejected.
 
 ### 27.5 Resolution recorded long after effective resolution
 
-Use \(R\), not recorded-at, for trajectory scoring.
+Use $R$, not recorded-at, for trajectory scoring.
 
 ### 27.6 Outcome corrected after scoring
 
@@ -891,9 +891,9 @@ The existing Binary reliability/calibration view may remain as a **final-scoring
 
 It should use the final valid standing probability immediately before:
 
-\[
+$$
 C=\min(R,T)
-\]
+$$
 
 and should remain conceptually separate from Trajectory Brier.
 
@@ -1021,7 +1021,7 @@ The v0.7.0 implementation should not be considered complete until tests demonstr
 
 ### Diagnostics
 - Initial Brier uses the initial ForecastRevision
-- Final Brier uses the final standing forecast before \(\min(R,T)\)
+- Final Brier uses the final standing forecast before $\min(R,T)$
 - Hold-initial uses the same predetermined window and truncation semantics
 - Updating Gain equals hold-initial minus actual Trajectory Brier
 - Active Forecast Fraction is calculated correctly

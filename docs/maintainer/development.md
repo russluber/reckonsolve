@@ -72,6 +72,10 @@ The checker requires a Git checkout and Git on PATH. It reads tracked and new un
 
 Heading anchors follow the basic [GitHub rules](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#section-links), including duplicate-heading suffixes. Unusual Markdown/HTML still needs rendered review. External URLs and bare/backticked file paths are outside the check; use `rg` for obsolete paths and review external destinations separately.
 
+Use `$...$` for inline mathematics and `$$` on separate lines for equation blocks, with blank lines around each block. These delimiters work in [GitHub Markdown](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/writing-mathematical-expressions) and [VS Code's built-in preview](https://code.visualstudio.com/docs/languages/markdown#math-formula-rendering). Keep mathematical meaning unchanged when fixing rendering. Use plain text or code formatting for command syntax and simple calculations intended to appear literally. Preview complex equations as well as running the link checker; it does not validate mathematics.
+
+In mathematics, set named scores/operators such as `\operatorname{WIS}` and `\operatorname{Brier}` upright with `\operatorname{...}`. Put word subscripts and superscripts in `\text{...}`, for example `\operatorname{WIS}_{\text{initial}}` and `t_{\text{revision}}`. Keep variable indices and numeric indices in ordinary math notation.
+
 ## Private Windows build
 
 ```powershell
