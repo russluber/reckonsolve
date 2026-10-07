@@ -4,7 +4,7 @@
 
 **Status:** Accepted v0.7 design reference for the current Adaptive contract.
 
-**Applicability:** The [current specification](../../product-spec.md) governs implementation. Its Section 35.3 and [ADR 0019](../../decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) supersede the legacy-coexistence promises below. [One-Shot](../../reckonsolve-one-shot-rulebook-v0.8.md) has separate timing/scoring semantics. Preserve the derivations; do not restore retired workflows from this historical design.
+**Applicability:** The [current specification](../../product-spec.md) governs implementation. Its Section 35.3 and [ADR 0019](../../decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) supersede the legacy-coexistence promises below. [One-Shot](../../forecasting-guide.md#one-shot-forecasting-rules) has separate timing/scoring semantics. Preserve the derivations; do not restore retired workflows from this historical design.
 
 **Historical design baseline:** Reckonsolve v0.6.0 uses a legacy Numeric forecast model consisting of one user-selected-confidence central interval plus a median.
 

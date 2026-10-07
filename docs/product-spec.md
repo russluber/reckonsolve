@@ -650,7 +650,7 @@ workflows; the user-approved 2026-09-20 amendment retires those workflows before
 release, without rewriting or deleting their records. It incorporates the
 following accepted design inputs:
 
-- [Forecasting Rulebook v0.7](reckonsolve-forecasting-rulebook-v0.7.md);
+- [Adaptive forecasting rules](forecasting-guide.md#forecasting-rulebook);
 - [Binary Trajectory Scoring Design v0.7](maintainer/design/binary-trajectory-v0.7.md); and
 - [Numeric Forecasting Design v0.7](maintainer/design/numeric-forecasting-v0.7.md).
 
@@ -752,8 +752,8 @@ This classification is guidance rather than a persisted product field.
 v0.7 adds no A/B/C database column, scoring split, archive filter, or required
 attestation. Desktop New Prediction omits the "Choosing a forecasting commitment"
 expander following the v0.8 closeout review. Admissibility and Deadline-selection
-advice remain in the Rulebook and forecasting guide; optional CLI guidance remains available.
-The complete Rulebook remains the durable reference.
+advice remain in the forecasting guide; optional CLI guidance remains available.
+The [complete Rulebook](forecasting-guide.md#forecasting-rulebook) remains the durable reference within that guide.
 Creation copy uses sentence case while retaining "Forecast Deadline · Required".
 The unset shortcut prompt and explanatory Deadline footer are omitted; a chosen
 date/time summary and validation messages remain available.
@@ -1532,9 +1532,8 @@ This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durab
 scoring contracts, a versioned SQLite migration, creation and Detail workflows, GUI/CLI
 operations, separate analytics, and a new relational export format. It adds a mode
 within the existing Binary and Numeric Prediction types; it does not replace their v0.7
-Adaptive workflows or add a third forecast type. The [v0.8 One-Shot Rulebook
-addendum](reckonsolve-one-shot-rulebook-v0.8.md) supplies user-facing guidance. This
-section governs behavior if the addendum or older sections appear to conflict.
+Adaptive workflows or add a third forecast type. The [One-Shot forecasting rules](forecasting-guide.md#one-shot-forecasting-rules) supply user-facing guidance. This
+section governs behavior if the guide or older sections appear to conflict.
 
 ### 36.1 Purpose, admission, and boundaries
 
