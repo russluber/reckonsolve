@@ -2689,7 +2689,7 @@ workflows; the user-approved 2026-09-20 amendment retires those workflows before
 release, without rewriting or deleting their records. It incorporates the
 following accepted design inputs:
 
-- [Adaptive forecasting rules](../forecasting-guide.md#forecasting-rulebook);
+- [Adaptive forecasting rules](../guides/forecasting-guide.md#forecasting-rulebook);
 - [Binary Trajectory Scoring Design v0.7](../maintainer/design/binary-trajectory-v0.7.md); and
 - [Numeric Forecasting Design v0.7](../maintainer/design/numeric-forecasting-v0.7.md).
 
@@ -3901,7 +3901,7 @@ This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durab
 scoring contracts, a versioned SQLite migration, creation and Detail workflows, GUI/CLI
 operations, separate analytics, and a new relational export format. It adds a mode
 within the existing Binary and Numeric Prediction types; it does not replace their v0.7
-Adaptive workflows or add a third forecast type. The [One-Shot forecasting rules](../forecasting-guide.md#one-shot-forecasting-rules) supply user-facing guidance. This
+Adaptive workflows or add a third forecast type. The [One-Shot forecasting rules](../guides/forecasting-guide.md#one-shot-forecasting-rules) supply user-facing guidance. This
 section governs behavior if the guide or older sections appear to conflict.
 
 ### 36.1 Purpose, admission, and boundaries
@@ -4231,7 +4231,7 @@ including answers entered later. Reported times never select observations. Share
 calibration helpers preserve the existing bins, exact Numeric comparisons, ties, and
 Wilson intervals. Type, tag, and exact-unit filtering, empty states, responsive chart/table
 pairs, and accessible text alternatives are implemented. Schema 20 and the format-4 CSV
-refusal remain unchanged. See the [analytics section of the user guide](../user-guide.md#11-one-shot-analytics)
+refusal remain unchanged. See the [analytics section of the user guide](../guides/user-guide.md#11-one-shot-analytics)
 and [manual checklist](releases/v0.8-acceptance.md#v08-development-m59-manual-acceptance).
 
 - Add one combined One-Shot Analytics view with separate Binary and Numeric sections.

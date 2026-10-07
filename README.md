@@ -35,9 +35,9 @@ Immutable forecasts, audited corrections, Journals, and Postmortems preserve the
 
 ## Documentation
 
-- [User guide](docs/user-guide.md) - setup, forecasts, answers, corrections, analytics, and recovery.
-- [CLI guide](docs/cli-guide.md) - commands, examples, and interface boundaries.
-- [Forecasting guide](docs/forecasting-guide.md) - admissible questions and detailed Adaptive/One-Shot rules.
+- [User guide](docs/guides/user-guide.md) - setup, forecasts, answers, corrections, analytics, and recovery.
+- [CLI guide](docs/guides/cli-guide.md) - commands, examples, and interface boundaries.
+- [Forecasting guide](docs/guides/forecasting-guide.md) - admissible questions and detailed Adaptive/One-Shot rules.
 - [Documentation index](docs/README.md) - forecasting rules, maintainer references, and development history.
 - [Changelog](CHANGELOG.md) - release changes and compatibility notes.
 

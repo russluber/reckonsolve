@@ -42,7 +42,7 @@ Avoid picking a deadline solely to match the most likely answer date, adding a d
 
 ## One-Shot forecasting rules
 
-Use this section for a final guess made before checking an answer that already exists. The admission and historical-honesty principles in the detailed rulebook below also apply. Adaptive Deadline, revision, and trajectory rules do not apply to One-Shot. The [product specification](product-spec.md#36-one-shot-prediction-contract) governs the implemented contract.
+Use this section for a final guess made before checking an answer that already exists. The admission and historical-honesty principles in the detailed rulebook below also apply. Adaptive Deadline, revision, and trajectory rules do not apply to One-Shot. The [product specification](../product-spec.md#36-one-shot-prediction-contract) governs the implemented contract.
 
 ### What belongs in One-Shot
 
@@ -137,7 +137,7 @@ CSV cannot restore the application or its Saved Views and settings.
 
 These detailed principles incorporate the former Adaptive Rulebook and retain its rule numbers and worked examples. Admission, intervention-policy, and historical-honesty guidance applies across both modes. Principle 18 and ordinary revision/Review rules apply to Adaptive only. Principle 19's fixed Numeric representation applies to both modes; its updating comparisons apply only to Adaptive. The One-Shot section above defines the existing-answer exception.
 
-A/B/C are mental classifications for choosing a question, separate from the app's Adaptive/One-Shot mode selector. Reckonsolve does not persist these labels or require checklist attestation. Prose remains optional in the form; use it where the question's meaning needs clarification. The [product specification](product-spec.md) remains authoritative.
+A/B/C are mental classifications for choosing a question, separate from the app's Adaptive/One-Shot mode selector. Reckonsolve does not persist these labels or require checklist attestation. Prose remains optional in the form; use it where the question's meaning needs clarification. The [product specification](../product-spec.md) remains authoritative.
 
 | Principle | Topic |
 | --- | --- |

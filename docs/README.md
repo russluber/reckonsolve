@@ -2,16 +2,16 @@
 
 ## Using Reckonsolve
 
-Start with the [user guide](user-guide.md) for choosing a mode, entering forecasts, adding answers, correcting mistakes, interpreting results, and backing up your journal.
+Start with the [user guide](guides/user-guide.md) for choosing a mode, entering forecasts, adding answers, correcting mistakes, interpreting results, and backing up your journal.
 
 | Guide | Purpose |
 | --- | --- |
-| [User guide](user-guide.md) | Desktop workflows, scores, charts, uncertainty, worked examples, and data locations. |
-| [CLI guide](cli-guide.md) | Terminal commands and GUI/CLI boundaries. |
-| [Forecasting guide](forecasting-guide.md) | Admissible questions, forecasting windows, and detailed Adaptive/One-Shot rules. |
+| [User guide](guides/user-guide.md) | Desktop workflows, scores, charts, uncertainty, worked examples, and data locations. |
+| [CLI guide](guides/cli-guide.md) | Terminal commands and GUI/CLI boundaries. |
+| [Forecasting guide](guides/forecasting-guide.md) | Admissible questions, forecasting windows, and detailed Adaptive/One-Shot rules. |
 | [Changelog](../CHANGELOG.md) | Release changes and compatibility. |
 
-The forecasting guide contains the detailed Rulebook and One-Shot rules. The user guide's [analytics section](user-guide.md#learn-from-the-results) explains scores and calibration. Adaptive timing rules do not apply to One-Shot.
+The forecasting guide contains the detailed Rulebook and One-Shot rules. The user guide's [analytics section](guides/user-guide.md#learn-from-the-results) explains scores and calibration. Adaptive timing rules do not apply to One-Shot.
 
 ## Maintaining Reckonsolve
 

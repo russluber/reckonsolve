@@ -90,9 +90,9 @@ Before adding or moving documentation, read [the documentation index](docs/READM
 | --- | --- |
 | [README.md](README.md) | Short product introduction, installation/run commands, compatibility/recovery summary, and links. |
 | [docs/README.md](docs/README.md) | User and maintainer reading paths; update when adding, moving, or retiring an indexed document. |
-| [User guide](docs/user-guide.md) | Desktop workflows, data locations, recovery, score/chart interpretation, uncertainty, worked examples, and review habits. |
-| [CLI guide](docs/cli-guide.md) | Terminal workflows, command examples, and GUI/CLI boundaries. |
-| [Forecasting guide](docs/forecasting-guide.md) | Admissibility, question formulation, and detailed Adaptive/One-Shot forecasting rules. |
+| [User guide](docs/guides/user-guide.md) | Desktop workflows, data locations, recovery, score/chart interpretation, uncertainty, worked examples, and review habits. |
+| [CLI guide](docs/guides/cli-guide.md) | Terminal workflows, command examples, and GUI/CLI boundaries. |
+| [Forecasting guide](docs/guides/forecasting-guide.md) | Admissibility, question formulation, and detailed Adaptive/One-Shot forecasting rules. |
 | [Product specification](docs/product-spec.md) | Authoritative scope, invariants, acceptance criteria, unresolved choices, and active authorized plans. |
 | [Architecture](docs/architecture.md) | Current implemented modules, dependency direction, persistence, and transaction boundaries. |
 | [docs/decisions/](docs/decisions/README.md) | Consequential technical reasoning and current applicability/supersession notes. |
@@ -100,7 +100,7 @@ Before adding or moving documentation, read [the documentation index](docs/READM
 | [docs/archive/](docs/archive/README.md) | Completed plans, earlier contracts, dated validation/acceptance, and historical drafts. |
 | [CHANGELOG.md](CHANGELOG.md) | Maintained release summaries used to prepare GitHub release notes. |
 
-AGENTS.md contains working policy and essential safeguards. Link to the spec for detailed product rules and the archive for release history. Keep the authoritative spec/architecture/ADR paths stable. Use versionless filenames for maintained guides; versioned design/archive filenames identify their historical origins and do not require renaming for each app release.
+AGENTS.md contains working policy and essential safeguards. Link to the spec for detailed product rules and the archive for release history. Keep the authoritative spec/architecture/ADR paths stable. Maintain user-facing guides in docs/guides/ with versionless filenames; versioned design/archive filenames identify their historical origins and do not require renaming for each app release.
 
 ### Writing and updating
 

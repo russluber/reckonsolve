@@ -669,7 +669,7 @@ Milestone 45 closes the v0.6 source release without changing schema version 15. 
 
 ## 24. Evolution into v0.7
 
-Milestone 46 establishes only the shared compatibility and exact-time foundation. The [Forecasting Rulebook](../forecasting-guide.md#forecasting-rulebook) is linked as durable local guidance, while README offers a short optional admissibility check without persisting a classification or attestation. Forecast-model and scoring-contract identity is canonical and immutable; exact Deadline and effective Resolution semantics apply only to the explicit prospective cohorts. Pure domain code validates and dispatches these concepts without importing Qt, SQLite, analytics, or presentation code.
+Milestone 46 establishes only the shared compatibility and exact-time foundation. The [Forecasting Rulebook](../guides/forecasting-guide.md#forecasting-rulebook) is linked as durable local guidance, while README offers a short optional admissibility check without persisting a classification or attestation. Forecast-model and scoring-contract identity is canonical and immutable; exact Deadline and effective Resolution semantics apply only to the explicit prospective cohorts. Pure domain code validates and dispatches these concepts without importing Qt, SQLite, analytics, or presentation code.
 
 Public Binary and Numeric creation remained on legacy contracts during M46. M47 now switches the shared public Binary creation operation, desktop form, and CLI to the trajectory contract. The first revision, immutable identity, exact Deadline, metadata, and tags commit atomically in the existing schema-version-16 transaction. The private legacy seed is used only for migration/compatibility tests and disposable visual/private-build fixtures; it is not a normal application entry point. Numeric creation remains interval-v1 until its complete later slice.
 
@@ -952,7 +952,7 @@ no Binary uncertainty estimator or new score is introduced. The guide distinguis
 actionable calibration patterns from timing context and inventories the existing
 individual scorecards.
 
-[The analytics chapter of the user guide](../user-guide.md#learn-from-the-results), linked from README, now contains the longer explanatory
+[The analytics chapter of the user guide](../guides/user-guide.md#learn-from-the-results), linked from README, now contains the longer explanatory
 material outside the interface: a review routine, Binary and Numeric plot axes,
 score/calibration distinctions, early-resolution weighting, whole-number tie
 bands, pointwise Wilson uncertainty, safe update comparisons, legacy behavior,

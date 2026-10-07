@@ -24,7 +24,7 @@ uv tool update-shell
 
 Reopen the terminal and run `reckonsolve`. `rsc --help` opens help for its matching CLI. After updating the checkout, `uv tool install --force .` refreshes the installed commands; installed tools do not automatically follow source edits.
 
-For development, use `uv sync --locked`, then `uv run reckonsolve-dev` or `uv run rscd`. These use a separate development database. [Development and testing](maintainer/development.md) also describes disposable test profiles.
+For development, use `uv sync --locked`, then `uv run reckonsolve-dev` or `uv run rscd`. These use a separate development database. [Development and testing](../maintainer/development.md) also describes disposable test profiles.
 
 ## Choose a mode
 
@@ -934,10 +934,10 @@ Prediction; original rows and correction snapshots are history, not additional s
 Follow the included README for exact values and later-answer replay. Reported wall
 times do not select or weight observations. Use SQLite backup for application recovery.
 
-For the governing rules, see Sections 35–36 of the [Product specification](product-spec.md),
+For the governing rules, see Sections 35–36 of the [Product specification](../product-spec.md),
 the [Forecasting Rulebook](forecasting-guide.md#forecasting-rulebook), and the
 [One-Shot forecasting rules](forecasting-guide.md#one-shot-forecasting-rules).
-For implementation boundaries, see [Architecture](architecture.md).
+For implementation boundaries, see [Architecture](../architecture.md).
 
 ## Back up and export
 
