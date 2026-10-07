@@ -123,14 +123,6 @@ class ExactDeadlineInput(QWidget):
         layout.addWidget(self.summary)
         layout.addWidget(self.use_offset)
         layout.addWidget(self.offset)
-        note = QLabel(
-            "Last moment you can revise or review this forecast. Permanent after "
-            "creation; separate from Expected Resolution.",
-            self,
-        )
-        note.setWordWrap(True)
-        apply_text_role(note, TextRole.SECONDARY)
-        layout.addWidget(note)
 
         self.editor.dateTimeChanged.connect(self._refresh)
         self.use_offset.toggled.connect(self._refresh)
@@ -245,6 +237,7 @@ class ExactDeadlineInput(QWidget):
         )
 
     def _refresh(self, *_args: object) -> None:
+        self.summary.setVisible(self._chosen)
         self.edit_controls.setVisible(self._chosen)
         self.use_offset.setVisible(self._chosen)
         self.offset.setVisible(self._chosen and self.use_offset.isChecked())
@@ -266,7 +259,7 @@ class ExactDeadlineInput(QWidget):
                     )
             self.occurrence.blockSignals(False)
         if not self._chosen:
-            self.summary.setText("Not set — choose a shortcut or Custom.")
+            self.summary.clear()
             return
         try:
             instant, zone_label = self._resolve()

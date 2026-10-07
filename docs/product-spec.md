@@ -2,7 +2,7 @@
 
 ## v0.1 Baseline and v0.2/v0.3/v0.4/v0.5/v0.6/v0.7/v0.8 Product Specifications
 
-Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56–M59 implemented and M57–M59 manually accepted; M60 remains planned; source release publication is a separate repository step
+Status: v0.7.0 implementation and manual acceptance complete; v0.8 M56–M60 implemented and M57–M60 manually accepted; release closure remains; source release publication is a separate repository step
 Platform: Windows desktop  
 Working relationship to Predlog: Fresh successor project, not an extension of the existing CLI codebase
 
@@ -2797,9 +2797,13 @@ The Rulebook recognizes three mental classifications:
 
 This classification is guidance rather than a persisted product field.
 v0.7 adds no A/B/C database column, scoring split, archive filter, or required
-attestation. The application may present concise, collapsible pre-commit
-guidance, but it must not turn quick capture into a mandatory questionnaire.
+attestation. Desktop New Prediction omits the "Choosing a forecasting commitment"
+expander following the v0.8 closeout review. Admissibility and Deadline-selection
+advice remain in the Rulebook and README; optional CLI guidance remains available.
 The complete Rulebook remains the durable reference.
+Creation copy uses sentence case while retaining "Forecast Deadline · Required".
+The unset shortcut prompt and explanatory Deadline footer are omitted; a chosen
+date/time summary and validation messages remain available.
 
 Prefer uncertain consequences after major discretionary choices have already
 been made or frozen. Do not pretend a forecast is observational merely
@@ -3883,19 +3887,19 @@ v0.7 is not complete unless all of the following are true:
 
 ## 36. Planned v0.8.0 One-Shot Prediction contract and milestone plan
 
-Status: M56–M59 are implemented following explicit user authorization. Schema 19
+Status: M56–M60 are implemented following explicit user authorization. Schema 19
 supports individual One-Shot creation, later answering, transcription correction, and
 post-save Brier/WIS in the desktop and CLI; schema 20 retains the mode filter in
 dynamic Saved Views. M57–M59 have manual acceptance. M59 adds separate
-One-Shot aggregate Analytics without a migration. M60 requires separate explicit
-authorization. The deadline-based
+One-Shot aggregate Analytics without a migration. M60 adds format-5 CSV and release
+validation without a migration; manual acceptance is complete; release closure remains. The Adaptive
 contract in Section 35 remains the default.
 
 This is a **v0.8.0** feature rather than a v0.7.1 patch: it introduces new durable
 scoring contracts, a versioned SQLite migration, creation and Detail workflows, GUI/CLI
 operations, separate analytics, and a new relational export format. It adds a mode
 within the existing Binary and Numeric Prediction types; it does not replace their v0.7
-deadline-based workflows or add a third forecast type. The [v0.8 One-Shot Rulebook
+Adaptive workflows or add a third forecast type. The [v0.8 One-Shot Rulebook
 addendum](reckonsolve-one-shot-rulebook-v0.8.md) supplies user-facing guidance. This
 section governs behavior if the addendum or older sections appear to conflict.
 
@@ -3913,7 +3917,7 @@ The answer's physical state may predate the forecast. For this mode, *reveal* me
 user first checked the previously unknown answer using the chosen source or method; it
 does not mean the quantity first came into existence. This is a deliberately different
 contract from Section 35's `R = earliest fixed and ascertainable` rule and `R <= t0`
-exclusion. Those exact-time rules continue to govern deadline-based Predictions only.
+exclusion. Those exact-time rules continue to govern Adaptive Predictions only.
 One-Shot is for observational uncertainty, not goals, controllable results, general
 future-event forecasts, or a way to avoid a Deadline on an ongoing question. “Soon” is
 guidance, not a hard elapsed-time or scoring limit.
@@ -3930,7 +3934,7 @@ non-intervention principles.
 ### 36.2 Durable model, recorded history, and time
 
 Each One-Shot Prediction has one immutable mode/model and scoring-contract identity,
-separate from both deadline-based cohorts and the retired legacy identities. The Binary
+separate from both Adaptive cohorts and the retired legacy identities. The Binary
 forecast is one whole-number Yes probability from 0% through 100%. The Numeric forecast
 uses the same exact fixed unit, precision, continuous-style or whole-number constraint,
 and ordered q05/q25/q50/q75/q95 values as the supported v0.7 Numeric representation. It
@@ -3957,7 +3961,7 @@ reported reveal time. A One-Shot entered after the answer is known may save its 
 forecast and answer in one transaction; a One-Shot entered before checking may save
 without an answer and add it later. The first path does not create a fictitious in-app
 forecasting interval or backdate the canonical entry instant. The second path uses the
-app's actual entry time for its audit trail but does not gain deadline-based updating or
+app's actual entry time for its audit trail but does not gain Adaptive updating or
 trajectory scoring. Neither path requires an exact elapsed duration, and the existence
 or absence of reported times cannot alone make an otherwise valid One-Shot score or fail
 to score.
@@ -3977,7 +3981,7 @@ transactions are atomic and reject stale context.
 
 ### 36.3 Creation, Detail, and lifecycle
 
-New Prediction continues to open on the current Deadline-based form. A prominent
+New Prediction continues to open on the current Adaptive form. A prominent
 **One-Shot** action opens a tailored screen using the existing Binary or Numeric input
 controls. Required fields are Question and the type-appropriate forecast values, plus
 unit, precision, and value constraint for Numeric. The answer is optional at creation.
@@ -3995,8 +3999,13 @@ convention before looking belongs in the Rulebook, not in the form placeholder.
 Expected Resolution is not offered in One-Shot creation or editing, including
 the CLI; any value already stored is preserved as historical metadata.
 Both creation modes use the same page background and card placement, with reciprocal
-top-right One-Shot / With Deadline switches. Switching modes retains unsaved drafts.
-Deadline-based New Prediction also supplies optional Background and Resolution Criteria
+top-right One-Shot / Adaptive switches. Switching modes retains unsaved drafts.
+The user-approved name **Adaptive** replaces With Deadline / Deadline-based in current
+presentation. Adaptive forecasts allow revisions and Reviews until their permanent
+Forecast Deadline. This is presentation terminology only: the immutable model/scoring
+identities, Deadline rules, and stored `deadline` mode retain their meaning. CLI `list`
+and `search` accept `--mode adaptive`; `--mode deadline` remains a compatible alias.
+Adaptive New Prediction also supplies optional Background and Resolution Criteria
 placeholders explaining context and how the question will be settled. These prompts are
 placeholder text only and are never saved as user content.
 Reported times use separate date and time controls: a calendar date picker defaults to
@@ -4034,7 +4043,7 @@ history, Journal history, terminal facts, scorecard, and reflection. Its languag
 probability history as an updating path, initial-versus-final comparisons, trajectory
 timing, and “keep current forecast” actions.
 
-The One-Shot Timeline uses the same Journal-card pattern as deadline-based Detail:
+The One-Shot Timeline uses the same Journal-card pattern as Adaptive Detail:
 each entry appears once at its original recording position with its current corrected
 text. An unchecked Edit history control reveals the original and earlier versions;
 matched search results for superseded Journal text open that history and highlight the
@@ -4067,14 +4076,14 @@ section reuses the five elicited-level and 50%/90% interval calibration rules, w
 continuous-style and whole-number results separate, count and uncertainty visible, and
 exact-unit filtering retained. One-Shot Numeric WIS is a per-Prediction score, not a
 cross-question mean; raw WIS is never pooled merely because unit labels match. One-Shot
-and deadline-based records never share a score mean or calibration denominator.
+and Adaptive records never share a score mean or calibration denominator.
 Individual Detail and export distinguish app-recorded times from optional user-reported
 times; no phone-versus-app aggregate split, source selector, or filter is required.
 Analytics should briefly note that externally transcribed results rely on the user's
 record and that selectively entering exercises can bias apparent calibration; this is
 interpretation guidance, not a proof or attestation flow.
 
-The Analytics **Prediction mode** selector defaults to **With Deadline** and offers
+The Analytics **Prediction mode** selector defaults to **Adaptive** and offers
 **One-Shot**. Forecast type and tag filters apply within the selected mode; choosing
 Numeric enables the exact-unit filter. Binary bins remain 0–9%, 10–19%, through
 90–100%, with count, mean forecast, observed Yes frequency, and a pointwise 95% Wilson
@@ -4088,8 +4097,11 @@ strict/inclusive whole-number tie bands. Every chart has a text-table alternativ
 Dashboard, Predictions, search, Saved Views, tags, and Detail include supported One-Shot
 records rather than silently omitting them. Rows show Binary/Numeric type, One-Shot
 mode, current effective forecast, Waiting for answer or terminal state, and relevant
-attention labels without a fabricated Deadline. An explicit mode filter lets users find
-One-Shot or Deadline-based Predictions and may be saved dynamically; date filters do not
+attention labels without a fabricated Deadline. One-Shot Waiting for answer badges use
+the shared yellow warning tone in Predictions (including search results) and Dashboard;
+Needs Postmortem uses the blue informational tone, and Resolved retains its green
+success tone. An explicit mode filter lets users find One-Shot or
+Adaptive Predictions and may be saved dynamically; date filters do not
 invent a Forecast Deadline for One-Shot. Search keeps grouped text provenance and
 indexes effective text and transparent superseded corrections under existing repair
 rules, not numeric values or scores as prose.
@@ -4104,7 +4116,7 @@ correction history are sufficient for v0.8; no new CLI correction or metadata co
 implied. Both launchers enforce the closed supported contract set before any migration
 or derived repair.
 
-Plan schema version **19** to add One-Shot model/scoring pairs, optional reported-time
+Schema version **19** adds One-Shot model/scoring pairs, optional reported-time
 facts, and append-only forecast/answer transcription corrections while preserving every
 supported schema-18 row and all earlier canonical history. Do not reuse the retired
 `binary-final-v1` identity or make old legacy archives loadable. Existing valid
@@ -4113,9 +4125,18 @@ score, tag, search, or Saved View meaning. Legacy-only, mixed-with-legacy, unkno
 mismatched archives continue to fail without mutation. SQLite backup remains the
 complete recovery artifact. Relational CSV advances to **format 5** to export One-Shot
 identity, original/effective values, reported versus app times, correction chain, and
-data dictionary; it remains analytical, not restorable. Until that export exists,
-format-4 export must refuse an archive containing One-Shot records rather than omit
-them.
+data dictionary; it remains analytical, not restorable. M60 replaces the earlier
+format-4 refusal with complete format-5 export. The existing format-4 files retain their
+column layouts. Three additional files provide `one_shot_original_facts.csv`,
+`one_shot_effective_facts.csv`, and `one_shot_corrections.csv`. These retain the original
+forecast and first answer, app-entry instants, optional wall-minute reports with
+approximation and offset context, and every correction's complete before/after values,
+sequence, note, and app timestamp. The effective snapshot is explicitly derived, not a
+second scored observation. Shared forecast, resolution, Journal, Definition, tag, and
+Postmortem files retain their original relationships. Empty archives still export all
+headers. One consistent checked read produces each ZIP; failures preserve an existing
+destination. The dictionary explains later-answer replay without treating an earlier
+correction's blank answer as deletion of a later original answer.
 
 The user-approved M58 amendment adds schema version **20** solely to retain an optional
 `deadline` or `one_shot` mode in each dynamic Saved View. Existing views migrate with a
@@ -4132,7 +4153,7 @@ older Prediction.
 ### 36.6 Proposed implementation milestones
 
 M56–M59 are implemented under their separate authorizations. M57–M59 have manual
-acceptance. M60 remains a plan, not authorization to implement it.
+acceptance. M60 is implemented under explicit authorization and has manual acceptance; release closure remains.
 
 #### Milestone 56: One-Shot contract, exact values, and schema foundation
 
@@ -4165,7 +4186,7 @@ integration are M58 work; aggregate One-Shot Analytics remains M59. Schema 19 an
 format-4 CSV refusal are unchanged.
 
 - Add the One-Shot action and tailored Binary/Numeric New Prediction screen while
-  leaving Deadline-based creation the default. Implement both save-with-answer and
+  leaving Adaptive creation the default. Implement both save-with-answer and
   save-then-Add-answer paths through shared atomic application operations.
 - Add matching interactive CLI creation and later Resolution, Waiting for answer Detail,
   individual Binary/WIS scorecards, optional notes/metadata, and clear rejection of
@@ -4202,7 +4223,7 @@ the exact prior version.
 
 #### Milestone 59: Separate One-Shot calibration
 
-Status: implemented and manually accepted. Analytics opens in With Deadline mode;
+Status: implemented and manually accepted. Analytics opens in Adaptive mode;
 the One-Shot selection displays separate Binary and Numeric summaries from one checked
 database snapshot. The current corrected forecast and answer contribute exactly once,
 including answers entered later. Reported times never select observations. Shared pure
@@ -4215,7 +4236,7 @@ and [manual checklist](release-checklist.md#v08-development-m59-manual-acceptanc
 - Add one combined One-Shot Analytics view with separate Binary and Numeric sections.
   Reuse pure individual scorers and established Binary bins and five-quantile
   continuous/whole-number calibration semantics, but keep cohort denominators and means
-  separate from deadline-based analytics.
+  separate from Adaptive analytics.
 - Show counts, uncertainty and the external-entry/selective-capture interpretation
   caution. Do not add trajectory, revision-improvement, or raw cross-question WIS
   aggregates.
@@ -4224,6 +4245,14 @@ and [manual checklist](release-checklist.md#v08-development-m59-manual-acceptanc
   chart rendering.
 
 #### Milestone 60: v0.8 portability, release validation, and documentation
+
+Status: implemented and manually accepted; release closure pending. Format-5 export is shared by
+Settings and CLI. Source and private-build checks cover all four supported contracts,
+One-Shot correction/answer history, mode-filtered Saved Views, separate analytics,
+search repair, backup/restart, and unchanged supported Adaptive data. The source
+candidate is version 0.8.0 on schema 20. See the [release notes](v0.8-release-notes.md)
+and [final checklist](release-checklist.md#v08-development-m60-final-manual-acceptance).
+Publication and a release tag remain user-owned steps after acceptance.
 
 - Advance relational CSV to format 5 with complete One-Shot facts and a data dictionary;
   verify guarded format-4 behavior until replacement and preserve complete SQLite
@@ -4240,7 +4269,7 @@ and [manual checklist](release-checklist.md#v08-development-m59-manual-acceptanc
 
 ### 36.7 v0.8 acceptance criteria
 
-1. Default New Prediction still creates the current deadline-based contract; the
+1. Default New Prediction still creates the current Adaptive contract; the
    One-Shot action opens its tailored Binary/Numeric form and never stores a fabricated
    Deadline.
 2. One-Shot forecast and optional answer save atomically; cancel, invalid input, lock
@@ -4255,7 +4284,7 @@ and [manual checklist](release-checklist.md#v08-development-m59-manual-acceptanc
    effective score deterministically, and cannot silently redefine the question.
 6. Binary individual and aggregate scores use one ordinary Brier observation; Numeric
    individual score uses one exact five-quantile WIS and aggregate calibration never
-   pools raw WIS. Neither mode enters deadline-based aggregates.
+   pools raw WIS. Neither mode enters Adaptive aggregates.
 7. GUI and CLI create, answer, retrieve, and show the same one-shot record. Search,
    Saved Views, tags, Dashboard, Postmortems, backup, and format-5 CSV include it
    without data loss or unsupported-cohort omission.

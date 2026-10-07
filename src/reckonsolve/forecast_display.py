@@ -14,7 +14,7 @@ def lifecycle_label(status: PredictionStatus, contract: ForecastContract | None)
 
 
 def mode_label(contract: ForecastContract | None) -> str:
-    return "One-Shot" if contract and contract.is_one_shot else "Deadline-based"
+    return "One-Shot" if contract and contract.is_one_shot else "Adaptive"
 
 
 def format_local_deadline(value: datetime) -> str:

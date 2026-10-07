@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from io import StringIO
 from pathlib import Path
 from shutil import copyfile
 from zipfile import ZipFile
@@ -24,12 +25,14 @@ from PySide6.QtWidgets import (
 from reckonsolve.app import create_runtime
 from reckonsolve.application.errors import SearchUnavailableError
 from reckonsolve.application.predictions import PredictionOperations
+from reckonsolve.cli import run as run_cli
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS
-from reckonsolve.domain.browser import ArchiveQuery, ArchiveTagMatchMode
-from reckonsolve.domain.predictions import BinaryOutcome
-from reckonsolve.domain.quantiles import NumericValueConstraint
+from reckonsolve.domain.browser import ArchiveMode, ArchiveQuery, ArchiveTagMatchMode
+from reckonsolve.domain.one_shot import OneShotDetail, ReportedTime
+from reckonsolve.domain.predictions import BinaryOutcome, FixedPrecisionValue
+from reckonsolve.domain.quantiles import FiveQuantiles, NumericValueConstraint
 from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.ui.presentation_settings import MINIMUM_WINDOW_SIZE
@@ -43,6 +46,8 @@ class _SmokeState:
     numeric_prediction_id: int
     needs_postmortem_id: int
     saved_view_id: int
+    one_shots: tuple[OneShotDetail, ...]
+    one_shot_view_id: int
 
 
 def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
@@ -322,6 +327,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             raise RuntimeError("The frozen search repair lost canonical text.")
         runtime.database.check_search_index()
 
+        one_shots, one_shot_view_id = _create_one_shot_smoke(runtime, operations)
         before_presentation = _sqlite_logical_snapshot(database_path)
         _exercise_supported_presentation(
             runtime,
@@ -329,9 +335,21 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             binary_prediction_id=binary_prediction.prediction_id,
             numeric_prediction_id=numeric_prediction.prediction_id,
         )
+        for shot in one_shots:
+            runtime.window._show_selected_prediction(shot)
+            runtime.qt_app.processEvents()
+            if not runtime.window._prediction_detail_host._one_shot_detail.isVisible():
+                raise RuntimeError("Frozen One-Shot Detail did not load.")
+        runtime.window.navigate_to("Analytics")
+        analytics_screen = runtime.window._analytics_screen
+        analytics_screen.mode_filter.setCurrentIndex(1)
+        runtime.qt_app.processEvents()
+        if analytics_screen.one_shot_content.isHidden():
+            raise RuntimeError("Frozen One-Shot Analytics did not load.")
+        analytics_screen.mode_filter.setCurrentIndex(0)
         if _sqlite_logical_snapshot(database_path) != before_presentation:
             raise RuntimeError(
-                "Using the presentation rewrote supported schema-version-18 data."
+                "Using the presentation rewrote supported schema-version-20 data."
             )
 
         operations.create_backup(backup_path)
@@ -342,20 +360,31 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             )
         operations.export_csv_bundle(export_path)
         with ZipFile(export_path) as archive:
-            if "Format version: 4" not in archive.read("README.txt").decode("utf-8"):
-                raise RuntimeError("Frozen CSV export did not use format 4.")
+            if "Format version: 5" not in archive.read("README.txt").decode("utf-8"):
+                raise RuntimeError("Frozen CSV export did not use format 5.")
             predictions_csv = archive.read("predictions.csv").decode("utf-8")
             if not all(
                 model in predictions_csv
-                for model in ("binary-trajectory-v1", "numeric-quantiles-5-v2")
+                for model in (
+                    "binary-trajectory-v1",
+                    "numeric-quantiles-5-v2",
+                    "binary-one-shot-v1",
+                    "numeric-one-shot-5-v1",
+                )
             ):
                 raise RuntimeError("Frozen CSV export omitted a supported model.")
+            if "Frozen corrected observation" not in archive.read(
+                "one_shot_corrections.csv"
+            ).decode("utf-8"):
+                raise RuntimeError("Frozen CSV export omitted One-Shot corrections.")
         state = _SmokeState(
             previous_prediction_id=previous_prediction_id,
             binary_prediction_id=binary_prediction.prediction_id,
             numeric_prediction_id=numeric_prediction.prediction_id,
             needs_postmortem_id=needs_postmortem.prediction_id,
             saved_view_id=saved_view.saved_view_id,
+            one_shots=one_shots,
+            one_shot_view_id=one_shot_view_id,
         )
     finally:
         runtime.close()
@@ -364,6 +393,104 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
     _verify_smoke_database(backup_path, state)
     _verify_frozen_restart(database_path, state)
     _verify_frozen_unsupported_refusal(backup_path)
+
+
+def _create_one_shot_smoke(
+    runtime, operations: PredictionOperations
+) -> tuple[tuple[OneShotDetail, ...], int]:
+    """Exercise both packaged creation forms, later answer, corrections and CLI reads."""
+    saved = []
+    screen = runtime.window._one_shot_creation_screen
+    screen.prediction_created.connect(saved.append)
+    # A reported wall minute deliberately has no time zone.
+    reported = ReportedTime(datetime(2026, 9, 26, 12, 5), True, -420)  # noqa: DTZ001
+    for numeric in (False, True):
+        runtime.window.navigate_to("New Prediction")
+        runtime.window.findChild(QPushButton, "newOneShotButton").click()
+        screen.question.setText(
+            "Frozen Numeric field estimate?"
+            if numeric
+            else "Frozen Binary field estimate?"
+        )
+        screen.background.setPlainText("Compare with a measured reference.")
+        form = screen.form
+        form.forecast_time.set_value(reported)
+        if numeric:
+            form.type_input.setCurrentIndex(1)
+            form.unit.setText("m")
+            form.precision.setValue(2)
+            form.constraint.setCurrentIndex(2)
+            form.quantiles.set_quantiles(
+                FiveQuantiles.from_values({5: -2, 25: -1, 50: 0, 75: 1, 95: 2}, 2)
+            )
+        else:
+            form.probability.setValue(80)
+            form.has_answer.setChecked(True)
+            form.outcome.setCurrentIndex(1)
+            form.reveal_time.set_value(reported)
+        screen.submit()
+        runtime.qt_app.processEvents()
+        if len(saved) != (2 if numeric else 1):
+            raise RuntimeError(
+                f"Frozen One-Shot creation failed: {screen.error.text()}"
+            )
+    screen.prediction_created.disconnect(saved.append)
+    binary, numeric = saved
+    numeric = operations.one_shots.add_journal(numeric, "Frozen field notebook")
+    numeric = operations.one_shots.correct(
+        numeric,
+        replace(
+            numeric.record.effective,
+            quantiles=FiveQuantiles.from_values({5: -1, 25: 0, 50: 1, 75: 2, 95: 3}, 2),
+        ),
+        note="Copied forecast before adding answer",
+    )
+    numeric = operations.one_shots.add_answer(
+        numeric,
+        replace(
+            numeric.record.effective,
+            answer=FixedPrecisionValue(200, 2),
+            reveal_reported=reported,
+        ),
+    )
+    binary = operations.one_shots.correct(
+        binary,
+        replace(
+            binary.record.effective,
+            probability_percent=70,
+            answer=BinaryOutcome.NO,
+            resolution_notes="Frozen corrected observation",
+        ),
+        note="Frozen transcription correction",
+    )
+    binary = operations.one_shots.skip_postmortem(binary)
+    numeric = operations.one_shots.skip_postmortem(numeric)
+    view = operations.create_saved_view(
+        "Frozen One-Shots",
+        SavedViewConfiguration(
+            "Frozen",
+            SearchMatchMode.ALL,
+            False,
+            ArchiveQuery(mode=ArchiveMode.ONE_SHOT),
+        ),
+    )
+    operations.repair_search_index()
+    if _search_prediction_ids(operations, "Frozen corrected observation") != (
+        binary.prediction_id,
+    ):
+        raise RuntimeError("Frozen One-Shot repair omitted effective text.")
+    for shot in (binary, numeric):
+        output, errors = StringIO(), StringIO()
+        result = run_cli(
+            ["show", str(shot.prediction_id)],
+            database_path=runtime.database.path,
+            stdin=StringIO(),
+            stdout=output,
+            stderr=errors,
+        )
+        if result != 0 or "One-Shot" not in output.getvalue():
+            raise RuntimeError(f"Frozen CLI One-Shot read failed: {errors.getvalue()}")
+    return (binary, numeric), view.saved_view_id
 
 
 def _verify_frozen_unsupported_refusal(backup_path: Path) -> None:
@@ -587,6 +714,20 @@ def _verify_smoke_database(
     try:
         operations = PredictionOperations(database)
         database.check_search_index()
+        for expected in state.one_shots:
+            if operations.one_shots.get(expected.prediction_id) != expected:
+                raise RuntimeError(
+                    "One-Shot original/effective history did not survive backup/restart."
+                )
+        snapshot = operations.get_one_shot_analytics()
+        if snapshot.binary.resolved_count != 1 or snapshot.numeric.resolved_count != 1:
+            raise RuntimeError("One-Shot analytics did not survive backup/restart.")
+        if set(_saved_view_prediction_ids(operations, state.one_shot_view_id)) != {
+            s.prediction_id for s in state.one_shots
+        }:
+            raise RuntimeError(
+                "One-Shot Saved View mode did not survive backup/restart."
+            )
         previous_prediction = operations.get_prediction(state.previous_prediction_id)
         binary_prediction = operations.get_prediction(state.binary_prediction_id)
         numeric_prediction = operations.get_numeric_prediction(
@@ -730,6 +871,7 @@ def _saved_view_prediction_ids(
             include_superseded=configuration.include_superseded,
             status=query.status,
             prediction_type=query.prediction_type,
+            mode=query.mode,
             tags=query.tags,
             tag_match_mode=query.tag_match_mode,
             attention=query.attention,

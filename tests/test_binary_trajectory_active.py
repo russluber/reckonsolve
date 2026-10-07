@@ -351,4 +351,4 @@ def test_backup_retains_contract_and_old_csv_cannot_silently_drop_it(active, tmp
     export_path = tmp_path / "format-four.zip"
     operations.export_csv_bundle(export_path)
     with ZipFile(export_path) as archive:
-        assert "Format version: 4" in archive.read("README.txt").decode("utf-8")
+        assert "Format version: 5" in archive.read("README.txt").decode("utf-8")

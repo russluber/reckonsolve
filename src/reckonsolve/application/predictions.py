@@ -1986,7 +1986,7 @@ class PredictionOperations:
     def require_deadline_operation(self, prediction_id: int) -> None:
         if self.one_shots.repository.find_detail(prediction_id) is not None:
             raise ApplicationError(
-                "One-Shot Predictions do not accept revisions or Reviews or deadline-based terminal operations. Use Add answer or desktop Correct transcription."
+                "One-Shot Predictions do not accept revisions or Reviews or Adaptive terminal operations. Use Add answer or desktop Correct transcription."
             )
 
     def update_metadata(

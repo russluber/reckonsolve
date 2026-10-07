@@ -453,7 +453,7 @@ class DashboardScreen(QWidget):
                 )
                 + (
                     ("RESOLVED", StatusTone.SUCCESS),
-                    ("NEEDS POSTMORTEM", StatusTone.WARNING),
+                    ("NEEDS POSTMORTEM", StatusTone.INFO),
                 ),
                 timing_text=(
                     f"Resolved {_format_local_timestamp(prediction.resolved_at)}"
@@ -565,6 +565,10 @@ class DashboardScreen(QWidget):
         lifecycle_tone = (
             StatusTone.WARNING
             if prediction.status.value == "locked"
+            or (
+                prediction.forecast_contract
+                and prediction.forecast_contract.is_one_shot
+            )
             else StatusTone.ACCENT
         )
         badges: list[tuple[str, StatusTone]] = [

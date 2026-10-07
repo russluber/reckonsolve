@@ -1,13 +1,13 @@
 # Reckonsolve Analytics: A Practical User's Guide
 
-This guide explains deadline-based and One-Shot Analytics in plain language. You do not need
+This guide explains Adaptive and One-Shot Analytics in plain language. You do not need
 to memorize formulas. Start with the routine below; use the later sections when
 a particular label or chart is confusing.
 
 **New to Numeric forecasts?** Read Sections 6 → 7 → 8 in order. They build from
 entering your five numbers, through interpreting outcomes, to judging revisions.
 For Binary basics, start with Section 4. For One-Shot exercises, start with Section 11;
-timing and updating guidance elsewhere applies to deadline-based predictions.
+timing and updating guidance elsewhere applies to Adaptive predictions.
 
 The cards intentionally keep explanations out of the way. Hover a card title for
 its scope or a timing value for its meaning; this guide contains the longer
@@ -70,7 +70,7 @@ solve that problem.
 
 ## 1. A useful five-minute review
 
-1. **Choose the forecasts you mean to study.** Choose With Deadline or One-Shot,
+1. **Choose the forecasts you mean to study.** Choose Adaptive or One-Shot,
    then All types, Binary, or Numeric. Use a
    meaningful tag if you want to study one subject. Avoid choosing a subset only
    because it makes your results look good.
@@ -94,7 +94,7 @@ The app does not automatically recommend or modify probabilities or percentiles.
 
 ## 2. Know which forecasts you are looking at
 
-**Prediction mode** starts at **With Deadline**. Choose **One-Shot** for exercises
+**Prediction mode** starts at **Adaptive**. Choose **One-Shot** for exercises
 where you settled a forecast before checking an answer that already existed.
 Within either mode, “All types” displays separate Binary and Numeric sections;
 it does not calculate one universal score or combine modes.
@@ -808,6 +808,12 @@ make calibration misleading. A large count cannot fix that selection bias, and r
 questions may provide less independent evidence than their count suggests. Use tags to
 compare meaningful topics, inspect individual records, and treat sparse groups as a
 reason to collect more examples. Charts and text tables describe the same observations.
+
+For your own analysis, CSV format 5 provides separate original/effective One-Shot files
+and full correction history. Use the effective row once per answered, non-Invalid
+Prediction; original rows and correction snapshots are history, not additional samples.
+Follow the included README for exact values and later-answer replay. Reported wall
+times do not select or weight observations. Use SQLite backup for application recovery.
 
 For the governing rules, see Sections 35–36 of the [Product specification](product-spec.md),
 the [Forecasting Rulebook](reckonsolve-forecasting-rulebook-v0.7.md), and the

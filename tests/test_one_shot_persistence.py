@@ -324,14 +324,13 @@ def test_missing_reported_metadata_is_rejected_before_commit(storage):
         assert c.execute("SELECT COUNT(*) FROM predictions").fetchone()[0] == 0
 
 
-def test_format_four_refuses_while_public_archive_includes_one_shots(storage, tmp_path):
+def test_format_five_exports_while_public_archive_includes_one_shots(storage, tmp_path):
     database, clock, repo = storage
     repo.create_prediction(request())
     destination = tmp_path / "existing.zip"
     destination.write_bytes(b"keep this artifact")
-    with pytest.raises(ValueError, match="format 4"):
-        DataTransferRepository(database).export_csv_bundle(destination, exported_at=NOW)
-    assert destination.read_bytes() == b"keep this artifact"
+    DataTransferRepository(database).export_csv_bundle(destination, exported_at=NOW)
+    assert destination.read_bytes().startswith(b"PK")
     assert (
         len(PredictionOperations(database, clock, UTC).browse_predictions().predictions)
         == 1

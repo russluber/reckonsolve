@@ -399,7 +399,7 @@ class PredictionBrowserScreen(QWidget):
         self.mode_filter.setObjectName("predictionModeFilter")
         self.mode_filter.setAccessibleName("Filter predictions by mode")
         self.mode_filter.addItem("All modes", None)
-        self.mode_filter.addItem("With Deadline", ArchiveMode.DEADLINE.value)
+        self.mode_filter.addItem("Adaptive", ArchiveMode.DEADLINE.value)
         self.mode_filter.addItem("One-Shot", ArchiveMode.ONE_SHOT.value)
         mode_label.setBuddy(self.mode_filter)
 
@@ -1725,7 +1725,11 @@ class PredictionBrowserScreen(QWidget):
         forecast_type.setObjectName(f"predictionResultType{prediction.prediction_id}")
         lifecycle = StatusBadge(
             lifecycle_label(prediction.status, prediction.forecast_contract).upper(),
-            _status_tone(prediction.status),
+            StatusTone.WARNING
+            if prediction.status is PredictionStatus.OPEN
+            and prediction.forecast_contract
+            and prediction.forecast_contract.is_one_shot
+            else _status_tone(prediction.status),
             parent=row,
         )
         lifecycle.setObjectName(f"predictionResultStatus{prediction.prediction_id}")

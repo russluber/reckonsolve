@@ -399,7 +399,7 @@ class OneShotCreationScreen(QWidget):
             "Record your final guess from before you checked an existing answer.",
             parent=self,
         )
-        self.deadline_button = QPushButton("With Deadline", self)
+        self.deadline_button = QPushButton("Adaptive", self)
         self.deadline_button.setObjectName("newDeadlineBasedButton")
         self.deadline_button.setToolTip(
             "Switch to a prediction with a forecast deadline and updates."

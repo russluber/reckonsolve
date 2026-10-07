@@ -4092,7 +4092,7 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
     assert supporting.property(TEXT_ROLE_PROPERTY) == TextRole.SECONDARY.value
     assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
     assert panel.supporting_label.text() == (
-        "Binary forecasts need a Question, Probability, and permanent exact Deadline."
+        "Binary forecasts need a question, probability, and permanent exact deadline."
     )
     assert create.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
     assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
@@ -4103,7 +4103,7 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
     )
 
     assert panel.supporting_label.text() == (
-        "Numeric forecasts need a Question, unit, precision, value constraint, five percentiles, and permanent exact Deadline."
+        "Numeric forecasts need a question, unit, precision, value constraint, five percentiles, and permanent exact deadline."
     )
 
 

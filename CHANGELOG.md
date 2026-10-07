@@ -2,6 +2,47 @@
 
 All notable changes to Reckonsolve are documented here.
 
+## 0.8.0 - Unreleased
+
+### Added
+
+- One-Shot Binary and five-quantile Numeric Predictions for judgments made before
+  checking an already-existing answer. Desktop and CLI support immediate or later
+  answers, optional documentary times, and individual ordinary Brier/WIS scores.
+- Append-only transcription corrections preserve original forecasts, answers, and
+  reported times. One-Shot Detail includes causal history, Journals with collapsed edit
+  history, metadata, search matches, and Postmortem/Skip workflows.
+- One-Shot/Adaptive archive and search filters, retained in dynamic Saved Views.
+- Separate One-Shot Analytics with mean Binary Brier, probability/quantile/interval
+  calibration, counts, uncertainty, exact-unit/tag/type filters, and text alternatives.
+- Relational CSV format 5 exports all four contracts and adds One-Shot original/effective
+  facts and complete correction snapshots, with a bundled data dictionary.
+
+### Changed
+
+- The regular forecasting mode is now named Adaptive across the desktop, CLI output,
+  and current guides. CLI filters accept `--mode adaptive`; `--mode deadline` remains
+  compatible. Stored mode/model identities, Saved Views, and scoring rules are unchanged.
+- Schema 19 adds the two One-Shot identities and history; schema 20 adds the Saved View
+  mode filter. Supported v0.7 history survives unchanged. M60 adds no migration.
+- Improved One-Shot creation layout, segmented time entry, readable date labels, Journal
+  history, archive card sizing, and distinct orange Mark Invalid actions.
+- Yellow Waiting for answer badges distinguish unanswered One-Shots; Needs Postmortem
+  uses blue. New Prediction copy uses consistent sentence case and omits the unset
+  Deadline prompt and explanatory footer, retaining its required heading.
+  Removed the desktop creation commitment-guidance expander; advice remains in the docs.
+- Expanded disposable source and relocated private-build checks cover One-Shots,
+  cross-interface reads, format-5 export, repair, backup/restart, and compatibility refusal.
+
+### Compatibility
+
+- Adaptive forecasting remains the default. One-Shot has no Deadline, ordinary
+  revisions, Reviews, trajectory score, or updating metrics; raw WIS is never pooled.
+- Retired-only and mixed-with-retired archives, missing identities, and unknown or
+  mismatched contracts remain refused without conversion, deletion, or partial loading.
+- SQLite backup remains the recovery format. CSV is analytical; Saved Views, settings,
+  and search indexes are excluded. M60 manual acceptance is complete; release closure and source publication are pending.
+
 ## 0.7.0 - 2026-09-23
 
 ### Added

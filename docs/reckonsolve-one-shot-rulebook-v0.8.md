@@ -1,12 +1,12 @@
-# Reckonsolve One-Shot Rulebook Addendum (planned v0.8)
+# Reckonsolve One-Shot Rulebook Addendum (v0.8)
 
-Status: v0.8 guidance; M57 individual workflows and M58 retrieval/reflection have manual
-acceptance. M59 aggregate Analytics is implemented and manually accepted;
-M60 export/release work remains planned. This is not part of the v0.7 release. This
+Status: v0.8 guidance; M57 individual workflows, M58 retrieval/reflection, and M59
+aggregate Analytics have manual acceptance. M60 export/release validation is implemented
+and manually accepted; release closure remains. This is not part of the v0.7 release. This
 addendum applies only to the new One-Shot mode described in [product-spec Section
 36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan).
 The [v0.7 Forecasting Rulebook](reckonsolve-forecasting-rulebook-v0.7.md) remains the
-guidance for existing Deadline-based Predictions. Its observational-judgment and
+guidance for existing Adaptive Predictions. Its observational-judgment and
 historical-honesty principles continue to apply here, but its Rule 18 requirement for an
 exact Forecast Deadline does not apply to One-Shot.
 
@@ -26,7 +26,7 @@ the earlier decision. If Reckonsolve is available before you check, you may save
 forecast first and enter the answer afterward.
 
 One-Shot is not a shortcut for a question whose answer does not exist yet and may evolve
-while you learn more. Use the ordinary Deadline-based mode for that kind of ongoing
+while you learn more. Use the ordinary Adaptive mode for that kind of ongoing
 uncertainty. Questions you can substantially steer remain subject to the Rulebook's
 observational or policy-conditioned admission test; a short wait does not turn a goal
 into an observational forecast.
@@ -82,10 +82,19 @@ In Analytics, choose **Prediction mode → One-Shot**. The combined view has sep
 Binary and Numeric sections, with ordinary mean Binary Brier and probability calibration,
 plus Numeric quantile/interval calibration. Each answered Prediction counts once using
 its current corrected facts. Waiting for answer and Invalid records do not count.
-Reported times do not change eligibility or weight. Deadline-based results remain in
+Reported times do not change eligibility or weight. Adaptive results remain in
 their own view, and raw Numeric WIS is never averaged across questions.
 
 A single result does not prove calibration, and choosing which phone-note
 exercises to enter can bias a collection. Record misses as well as hits if you want the
 summary to teach you something. See the [Analytics guide](analytics-guide.md#11-one-shot-analytics)
 for examples, filters, uncertainty, and whole-number ties.
+
+## Keep a recoverable copy
+
+Use **Settings → Back Up Now** or the CLI `backup` command for a complete SQLite
+recovery file. CSV format 5, available through Settings or `export-csv`, is for analysis.
+It includes original and effective One-Shot facts, reported and app-recorded times, and
+every transcription correction with a data dictionary. A copied external note is still
+an external note; export does not turn its reported time into proof of commitment.
+CSV cannot restore the application or its Saved Views and settings.

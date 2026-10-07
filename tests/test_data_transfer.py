@@ -186,7 +186,7 @@ def test_backup_remains_usable_if_recording_its_success_time_fails(
     recovered.close()
 
 
-def test_format_four_exports_complete_supported_history_without_mutating_source(
+def test_format_five_exports_complete_supported_history_without_mutating_source(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
@@ -200,7 +200,7 @@ def test_format_four_exports_complete_supported_history_without_mutating_source(
     assert result.csv_file_count == len(EXPORT_ARCHIVE_NAMES) - 1
     with ZipFile(destination) as archive:
         assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
-        assert "Format version: 4" in archive.read("README.txt").decode("utf-8")
+        assert "Format version: 5" in archive.read("README.txt").decode("utf-8")
         predictions = _read_csv(archive, "predictions.csv")
         by_id = {int(row["prediction_id"]): row for row in predictions}
         assert by_id[binary.prediction_id]["forecast_model"] == "binary-trajectory-v1"

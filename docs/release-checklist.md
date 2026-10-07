@@ -18,8 +18,8 @@ This checklist closes a Reckonsolve source release. It does not publish an insta
    ```
 
 4. Run `uv run rscd --version` and confirm the release version.
-5. Complete the release's manual acceptance record. For v0.7, use [the disposable visual-verification profiles](v0.6-visual-verification.md) for palette, scaling, window size, sidebar, and keyboard checks, then exercise current Binary and Numeric creation, revision, Review, Resolution, correction, scorecards, Analytics, and export. Do not use the stable database for test data.
-6. Confirm schema version 18 and CSV export format 4. Verify a complete SQLite backup can reopen with both supported models and a repaired search index. Confirm generated `build\`, `dist\`, caches, temporary databases, presentation files, backups, and exports remain untracked.
+5. Complete the release's manual acceptance record below. Use [the disposable visual-verification profiles](v0.6-visual-verification.md) for palette, scaling, window size, sidebar, and keyboard checks, then exercise Adaptive and One-Shot Binary/Numeric workflows. Do not use the stable database for test data.
+6. Confirm schema version 20 and CSV export format 5. Verify a complete SQLite backup can reopen with all four supported contracts and a repaired search index. Confirm generated `build\`, `dist\`, caches, temporary databases, presentation files, backups, and exports remain untracked.
 
 ## Publish the source release
 
@@ -46,11 +46,11 @@ This refreshes `reckonsolve`, `reckonsolve-cli`, `rsc`, and their development co
 M59 is implemented and manually accepted. The user confirmed all checks below passed.
 Use `uv run reckonsolve-dev` and development records. The v0.7 release checks above
 describe that historical release. Current development uses schema 20; M59 adds no
-migration. Format-5 export and v0.8 release/build validation remain M60 work.
+migration. Format-5 export and v0.8 release/build validation were assigned to M60.
 
-- [x] Open Analytics: With Deadline is selected initially and existing deadline-based
+- [x] Open Analytics: Adaptive is selected initially and existing Adaptive
   results are unchanged. Select One-Shot and confirm its Binary and Numeric sections
-  are clearly identified; switching back restores the deadline-based view.
+  are clearly identified; switching back restores the Adaptive view.
 - [x] Check answered Binary One-Shots against their Detail Brier scores. For two 80%
   forecasts with one Yes and one No, mean Brier is 0.340, answered count is 2, and the
   80–89% bin shows count 2, mean forecast 80%, and observed Yes 50%. The table includes
@@ -69,3 +69,35 @@ migration. Format-5 export and v0.8 release/build validation remain M60 work.
 
 Manual acceptance is complete; M59 is ready to commit. No stable-database test data or public release
 is needed for these checks.
+
+## v0.8 development: M60 final manual acceptance
+
+M60 implements format-5 export and the v0.8.0 source candidate on schema 20. Automated
+validation is recorded in [the validation record](v0.8-validation.md). M57–M59 are
+already accepted; these final checks focus on portability and the assembled release.
+
+The user confirmed all M60 checks passed. Closeout refinements use yellow Waiting for
+answer badges and blue Needs Postmortem badges, remove the desktop commitment-guidance
+expander and extra Deadline explanations, and use sentence case in creation copy.
+The user selected Adaptive for the regular mode; the interface and current docs use
+that name. Stored identities and mode filters are unchanged; CLI `--mode adaptive`
+also accepts `--mode deadline` for compatibility.
+
+- [x] In `uv run reckonsolve-dev`, export a development archive containing Adaptive
+  and One-Shot Binary/Numeric records from Settings. Open the ZIP: README says format 5;
+  the three `one_shot_*.csv` files contain originals, effective facts, and corrections.
+  Check one corrected record against Detail, including reported times and exact values.
+- [x] Export the same development archive with `uv run rscd export-csv PATH.zip`.
+  Confirm the CLI reports format 5 and agrees with the desktop export's history.
+- [x] Create a SQLite backup from Settings and confirm its destination is clearly shown.
+  The automated disposable recovery checks reopen backups; do not replace your real
+  database for this review. Confirm cancellation leaves an existing destination alone.
+- [x] Check the assembled application at your normal scaling and preferred palette:
+  both creation modes, reported-time entry, One-Shot Detail/history, Predictions filters,
+  Analytics mode switch, Settings export, and keyboard navigation. Existing M57–M59
+  acceptance covers their detailed behavior; report any regression in this candidate.
+- [x] Confirm `uv run rscd --version` reports 0.8.0 and review the
+  [v0.8 release notes](v0.8-release-notes.md). Accept M60 before changing the changelog's
+  Unreleased heading to the actual release date and publishing a tag/source release.
+
+No installer or private frozen artifact is published by this milestone.

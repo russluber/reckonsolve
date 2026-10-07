@@ -1,11 +1,11 @@
 # Reckonsolve Architecture
 
-Status: v0.7 complete through M55; v0.8 M56–M59 implemented and M57–M59 manually accepted; M60 planned
+Status: v0.7 complete through M55; v0.8 M56–M60 implemented and M57–M60 manually accepted; release closure pending
 Last reviewed: 2026-09-27
 
-This document describes the implemented structure from the binary v0.1 baseline through v0.7 and the v0.8 M56–M59 One-Shot work, with remaining work identified in Section 25. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+This document describes the implemented structure from the binary v0.1 baseline through v0.7 and the v0.8 M56–M60 One-Shot work, with release acceptance identified in Section 25. The [product specification](product-spec.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
 
-**Current support boundary:** trajectory Binary and deadline-based five-quantile Numeric remain the default. M57 exposes individual Binary and Numeric One-Shot workflows on schema 19, described in Section 25 and [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md); M58 adds a schema-20 Saved View mode filter. Retired-only or mixed-with-retired archives, and missing/unknown/mismatched contracts, still fail before migration, repair, or ordinary transaction work. No conversion or deletion occurs. Supported v0.7 history remains intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the earlier retirement boundary.
+**Current support boundary:** trajectory Binary and Adaptive five-quantile Numeric remain the default. M57 exposes individual Binary and Numeric One-Shot workflows on schema 19, described in Section 25 and [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md); M58 adds a schema-20 Saved View mode filter. Retired-only or mixed-with-retired archives, and missing/unknown/mismatched contracts, still fail before migration, repair, or ordinary transaction work. No conversion or deletion occurs. Supported v0.7 history remains intact. [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the earlier retirement boundary.
 
 **Reading historical sections:** Sections 2–23 and the M46–M54A subsections record the system's evolution. Their legacy editors, calculations, compatibility promises, and old creation paths are superseded by M54B below; they are not instructions to restore those paths. Historical migration SQL remains unchanged as storage infrastructure, not runtime compatibility. Live database cleanup requires separate authorization.
 
@@ -26,7 +26,7 @@ Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutabl
 | Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
 | Schema | Version 19 expands the immutable contract table and adds One-Shot reported times and correction snapshots; version 20 adds an optional mode column to dynamic Saved Views. All supported schema-18 canonical facts remain unchanged. Historical SQL is unchanged and retired tables provide no supported legacy workflow |
 | Domain and application operations | Exact-Deadline trajectory Binary and five-quantile Numeric remain available. M57 adds shared individual One-Shot creation, later answers, metadata, Journals, guarded lifecycle actions, and transcription corrections over the M56 foundation. Retired workflows remain absent |
-| Analytics | Separate queries supply deadline-based and One-Shot aggregate snapshots. One-Shot reuses pure individual Brier/WIS without time selection and shares calibration helpers with the deadline-based calculations. Binary receives equal per-Prediction votes, Numeric continuous/whole-number calibration stays separate, and raw WIS is never pooled. No legacy calculators or UI sections remain |
+| Analytics | Separate queries supply Adaptive and One-Shot aggregate snapshots. One-Shot reuses pure individual Brier/WIS without time selection and shares calibration helpers with the Adaptive calculations. Binary receives equal per-Prediction votes, Numeric continuous/whole-number calibration stays separate, and raw WIS is never pooled. No legacy calculators or UI sections remain |
 | Automated tests | Disposable supported-model workflows, byte-preserving whole-database refusal, supported schema-16/17 upgrades and rollback, history/anchor ownership, backup/restart, search/Saved Views/tags, independent connections, and GUI/CLI parity. Empty historical schemas exercise migration DDL; populated retired schemas test refusal |
 | Windows distribution | A private PyInstaller `onedir` build is repeatable and relocated-smoke validated across local styles/icons, safe shell defaults, expanded/compact navigation, primary screens, both Detail types, keyboard navigation, responsive sizes, the v0.5 data boundary, search, backup, and GUI restart; original icon artwork, installer, signing, installer-created shortcuts, uninstall, updates, and public distribution remain deferred |
 
@@ -1016,16 +1016,22 @@ unsupported archive. No new schema or production dependency is introduced.
 
 ## 25. Evolution into v0.8: One-Shot Predictions
 
+Adaptive is the user-facing name for the regular forecasts previously labeled With
+Deadline / Deadline-based. This presentation rename preserves the `deadline` archive,
+Analytics, and Saved View keys, immutable model/scoring identities, and permanent
+Deadline rules. CLI `--mode adaptive` maps to `ArchiveMode.DEADLINE`; the existing
+`--mode deadline` spelling remains valid. No schema or search projection change is needed.
+
 M56's foundation and M57's individual workflows are implemented. [Product-spec Section
 36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan)
 owns the behavior and M56–M60 sequencing. M57–M59 have manual acceptance. M59 is
-complete; M60 owns the remaining export/release work.
+complete; M60 implements format-5 export and release validation, with manual acceptance complete; release closure remains.
 
 ### Contract and dependency boundary
 
 One-Shot is an explicit creation mode for the existing Binary and Numeric forecast
 types. M56 adds two closed, durable model/scoring pairs that dispatch independently from the
-trajectory Binary and deadline-based five-quantile Numeric pairs. Do not reuse the
+trajectory Binary and Adaptive five-quantile Numeric pairs. Do not reuse the
 retired `binary-final-v1` identity or make it pass the M54B compatibility gate. Reuse
 the existing probability and exact five-quantile value validation, Brier and WIS
 arithmetic, tag and note operations, and visual components where they have the same
@@ -1080,10 +1086,9 @@ clarifications, while material target changes lead to Invalid/new-Prediction gui
 All migration, normal read/write, backup, and repair entry points must validate the
 expanded closed support matrix without relaxing M54B refusal of retired, missing,
 unknown, or mismatched identities. Search projection remains rebuildable derived state.
-Format-4 CSV cannot silently omit One-Shot facts: it rejects populated One-Shot archives
-until M60 adds format 5 with original/effective values, reported/system times, complete
-corrections, and a dictionary. SQLite online backup continues to copy the complete
-database.
+M60 replaces the earlier format-4 One-Shot refusal with format 5, retaining complete
+original/effective values, reported/system times, corrections, and a dictionary.
+SQLite online backup continues to copy the complete database.
 
 M57 replaces the temporary foundation-only transaction guard with explicit model
 dispatch. Both compatibility checks still surround every transaction. Its repository
@@ -1103,7 +1108,7 @@ Postmortem queue now includes eligible Resolved One-Shots.
 
 ### Implemented M57 presentation
 
-New Prediction still defaults to its current Deadline-based form. A One-Shot action
+New Prediction still defaults to its current Adaptive form. A One-Shot action
 opens a tailored Binary/Numeric form that can save with an answer or without one, never
 previews a score before Save, and asks for optional documentary times and an optional
 visible Background field for context and the checking method. Unanswered Detail presents Waiting for answer and Add
@@ -1177,13 +1182,24 @@ Journal panel is removed. Superseded Journal search targets expand the card's hi
 before scrolling to and emphasizing the original or intermediate correction; current
 matches target the visible body. Corrections remain in canonical append-only history.
 
+The v0.8 closeout review uses the shared palette-aware yellow warning tone for
+One-Shot Waiting for answer badges in archive/search and Dashboard rows. Needs
+Postmortem uses the blue informational tone, while Resolved uses the existing green
+success tone. Desktop Binary and Numeric creation remove the optional
+commitment-guidance expander; the Rulebook and README retain the advice, and the CLI's
+optional guidance remains available. Keyboard order connects the Numeric q95 input
+directly to the first Deadline control.
+Creation copy uses sentence case, preserving the Forecast Deadline · Required heading.
+The Deadline summary is hidden until a choice is made; the explanatory footer is
+removed. Selected-time context and validation messages remain visible.
+
 Schema 20 adds nullable `forecast_mode` to the existing strict `saved_views` table,
 constrained to `deadline` or `one_shot`. Null preserves All modes for existing views.
 The repository reads and writes this field with the other filters; desktop controls
 and CLI execution use the stored mode in the normal archive query. The atomic upgrade
 preserves existing view rows and stable tag references; forced failure rolls back the
 column. Saved Views still store configurations rather than Prediction membership.
-M60 remains separately authorized work.
+M60 is implemented under separate explicit authorization.
 
 Shared archive, Dashboard, search, and Saved View reads carry the stored One-Shot
 identity and no fabricated Deadline. An explicit mode filter is dynamic Saved View
@@ -1197,8 +1213,8 @@ Ready to Resolve applies to One-Shot.
 `AnalyticsRepository.get_one_shot_source()` reads resolved One-Shot contracts, replayed
 original/effective facts, and current tags inside one checked SQLite transaction.
 `PredictionOperations.get_one_shot_analytics()` validates the same type/tag/unit filters
-as deadline-based Analytics, then passes that source to the pure
-`analytics/one_shot_aggregate.py` summarizer. The existing deadline-based query retains
+as Adaptive Analytics, then passes that source to the pure
+`analytics/one_shot_aggregate.py` summarizer. The existing Adaptive query retains
 its separate two-source snapshot and never includes One-Shot observations.
 
 Each eligible record is scored by the individual `one_shot_score` dispatcher using its
@@ -1209,7 +1225,7 @@ and `quantile_calibration_group` helpers retain the existing bin boundaries, exa
 integer comparisons, continuous/whole-number split, outcome balances, and Wilson intervals.
 No raw WIS mean or updating statistic is produced. No score or aggregate is persisted.
 
-`AnalyticsScreen` defaults to With Deadline and dispatches the selected mode to its
+`AnalyticsScreen` defaults to Adaptive and dispatches the selected mode to its
 application query. `OneShotAnalyticsView` renders Binary count/mean Brier/calibration and
 Numeric calibration, reusing the chart/table layout and `QuantileCalibrationPanel`.
 Binary text tables include pointwise Wilson intervals for observed Yes frequency. Type,
@@ -1218,7 +1234,34 @@ last loaded results and their matching filter labels. The short external-note/se
 caution is visible; detailed interpretation belongs in the Analytics guide.
 
 Disposable tests cover corrected forecasts/answers, exactly-once counts, absent reported
-times, independent connections, unchanged deadline-based summaries, filters, ties, sparse
+times, independent connections, unchanged Adaptive summaries, filters, ties, sparse
 groups, read-only retrieval, restart, and GUI text alternatives. Schema 20, individual CLI
 scorecards, and the format-4 export guard are unchanged. M60 owns release-build validation
 and format-5 export.
+
+### M60 format-5 portability and release validation
+
+`data/transfer.py` retains the checked single-transaction read, fully quoted UTF-8 CSV,
+verified temporary ZIP, and atomic destination replacement. Format 5 retains every
+format-4 file and column and adds three One-Shot files. Original/effective facts are
+read from the validated schema-19 projections, joined to immutable app-entry instants;
+corrections export every stored before/after snapshot with its ID, sequence, note, and
+UTC timestamp. Numeric values remain scaled integers. Reported wall-minute text,
+approximation flags, and optional offsets are explicitly documentary, without UTC
+normalization. The dictionary documents replay across later first answers. Effective
+facts are a labeled convenience projection; scores remain derived and unexported.
+
+Settings and CLI share this export operation and format-5 contract. No schema migration
+or production dependency is added. Unsupported or malformed archives fail through the
+existing transaction checks before an artifact can replace an existing destination.
+SQLite backup retains settings and Saved Views; CSV excludes them and search state.
+
+The private-build smoke workflow now creates both One-Shot types through packaged
+forms, adds a later answer and transcription corrections, loads Detail and Analytics,
+reads through the CLI, repairs search, retains a mode-filtered Saved View, and exports
+all four contracts. Backup/reopen checks compare complete One-Shot Detail snapshots and
+separate aggregate counts. The existing staged schema-17 upgrade, Adaptive
+history, responsive shell, and byte-preserving unsupported-archive refusal checks remain.
+Generated artifacts stay under ignored build/test directories; real identity databases
+are never opened by these probes. Version metadata is 0.8.0; M60 human acceptance is complete; release closure and
+GitHub publication remain separate from automated validation.

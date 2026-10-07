@@ -21,7 +21,12 @@ from reckonsolve.domain.search import SearchMatchMode, SearchSourceKind
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 from reckonsolve.ui.main_window import MainWindow
 from reckonsolve.ui.screens import OneShotDetailScreen
-from reckonsolve.ui.visual_system import ACTION_ROLE_PROPERTY, ActionRole
+from reckonsolve.ui.visual_system import (
+    ACTION_ROLE_PROPERTY,
+    BADGE_TONE_PROPERTY,
+    ActionRole,
+    StatusTone,
+)
 
 
 @pytest.fixture
@@ -96,6 +101,29 @@ def test_mode_filter_and_corrected_text_are_shared_by_cli_and_desktop(journal):
         == 0
     )
     assert "transcription correction note" in stdout.getvalue().lower()
+
+
+@pytest.mark.parametrize("mode", ["adaptive", "deadline"])
+@pytest.mark.parametrize("command", [["list"], ["search", "Tomorrow"]])
+def test_adaptive_cli_mode_and_previous_alias_find_the_same_records(
+    journal, mode, command
+):
+    path, _, operations = journal
+    create_binary(operations, "Tomorrow?", 70)
+    operations.one_shots.create(request())
+    output, errors = StringIO(), StringIO()
+    assert (
+        run(
+            [*command, "--mode", mode],
+            database_path=path,
+            stdout=output,
+            stderr=errors,
+        )
+        == 0
+    )
+    assert not errors.getvalue()
+    assert "Tomorrow?" in output.getvalue()
+    assert "Tree height?" not in output.getvalue()
 
 
 @pytest.mark.parametrize("numeric", [False, True])
@@ -267,6 +295,12 @@ def test_one_shot_result_rows_fit_badges_and_wrapped_numeric_text(qtbot, journal
                 assert badge is not None
                 assert badge.mapTo(row, QPoint(0, badge.height())).y() <= row.height()
                 assert badge.contentsRect().height() >= badge.fontMetrics().height()
+            status = row.findChild(QLabel, f"predictionResultStatus{prediction_id}")
+            assert status.property(BADGE_TONE_PROPERTY) == (
+                StatusTone.WARNING.value
+                if prediction_id == binary.prediction_id
+                else StatusTone.SUCCESS.value
+            )
             extra_height = item.sizeHint().height() - row.layout().heightForWidth(
                 row.width()
             )
@@ -474,6 +508,9 @@ def test_saved_view_mode_round_trips_through_cli_restart_and_backup(journal, tmp
     )
     assert "Tomorrow?" in output.getvalue()
     assert "Tree height?" not in output.getvalue()
+    output = StringIO()
+    assert run(["saved-views"], database_path=path, stdout=output) == 0
+    assert "Mode: Adaptive" in output.getvalue()
     assert [
         item.prediction_id
         for item in operations.browse_predictions(

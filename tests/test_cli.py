@@ -2138,7 +2138,7 @@ def test_cli_export_prompt_writes_format_four_for_current_contract(
     assert "Destination [reckonsolve-export-" in output.getvalue()
     assert not errors.getvalue()
     with ZipFile(export_path) as archive:
-        assert "Format version: 4" in archive.read("README.txt").decode("utf-8")
+        assert "Format version: 5" in archive.read("README.txt").decode("utf-8")
         assert "binary-trajectory-v1" in archive.read("predictions.csv").decode("utf-8")
     reopened = Database.open(database_path)
     assert (

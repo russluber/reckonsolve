@@ -122,10 +122,8 @@ class AnalyticsScreen(QWidget):
         mode_label = QLabel("Prediction mode", filters_panel.body)
         self.mode_filter = QComboBox(filters_panel.body)
         self.mode_filter.setObjectName("analyticsModeFilter")
-        self.mode_filter.setAccessibleName(
-            "Choose deadline-based or One-Shot analytics"
-        )
-        self.mode_filter.addItem("With Deadline", "deadline")
+        self.mode_filter.setAccessibleName("Choose Adaptive or One-Shot analytics")
+        self.mode_filter.addItem("Adaptive", "deadline")
         self.mode_filter.addItem("One-Shot", "one_shot")
         mode_label.setBuddy(self.mode_filter)
 

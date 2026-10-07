@@ -316,9 +316,9 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
     )
     list_parser.add_argument(
         "--mode",
-        choices=("all", "deadline", "one-shot"),
+        choices=("all", "adaptive", "one-shot", "deadline"),
         default="all",
-        help="Filter by forecasting mode (default: all).",
+        help="Filter by forecasting mode (default: all; deadline is an alias for adaptive).",
     )
     list_parser.add_argument(
         "--tag",
@@ -538,9 +538,9 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
 
     export_parser = commands.add_parser(
         "export-csv",
-        help="Create a documented format-version-four CSV ZIP.",
+        help="Create a documented format-version-five CSV ZIP.",
         description=(
-            "Create the same format-version-four relational analytical CSV ZIP as the "
+            "Create the same format-version-five relational analytical CSV ZIP as the "
             "desktop application. This is not a recovery format."
         ),
     )
@@ -616,9 +616,9 @@ def _add_search_archive_filters(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=("all", "deadline", "one-shot"),
+        choices=("all", "adaptive", "one-shot", "deadline"),
         default="all",
-        help="Filter by forecasting mode (default: all).",
+        help="Filter by forecasting mode (default: all; deadline is an alias for adaptive).",
     )
     parser.add_argument(
         "--tag",
@@ -845,6 +845,8 @@ def _optional_prediction_type(value: str) -> PredictionType | None:
 
 
 def _optional_mode(value: str) -> ArchiveMode | None:
+    if value == "adaptive":
+        return ArchiveMode.DEADLINE
     return None if value == "all" else _archive_enum(ArchiveMode, value)
 
 
@@ -958,7 +960,7 @@ def _append_saved_view_configuration(
         "  Mode",
         "All"
         if query.mode is None
-        else ("One-Shot" if query.mode is ArchiveMode.ONE_SHOT else "With Deadline"),
+        else ("One-Shot" if query.mode is ArchiveMode.ONE_SHOT else "Adaptive"),
     )
     _append_field(
         lines,

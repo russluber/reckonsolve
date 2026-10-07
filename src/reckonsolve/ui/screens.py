@@ -75,7 +75,6 @@ from reckonsolve.forecast_display import (
     format_local_deadline,
     format_readable_local_deadline,
 )
-from reckonsolve.forecast_guidance import FORECAST_GUIDANCE
 from reckonsolve.one_shot_display import (
     forecast_text,
     score_lines,
@@ -632,7 +631,7 @@ class NewPredictionScreen(QWidget):
         self.prediction_type_input = QComboBox(self)
         self.prediction_type_input.setObjectName("predictionTypeInput")
         self.prediction_type_input.setAccessibleName("Forecast type")
-        self.prediction_type_input.addItem("Binary (Yes/No)", PredictionType.BINARY)
+        self.prediction_type_input.addItem("Binary (yes/no)", PredictionType.BINARY)
         self.prediction_type_input.addItem(
             "Numeric (five quantiles)", PredictionType.NUMERIC
         )
@@ -690,16 +689,6 @@ class NewPredictionScreen(QWidget):
         binary_fields_layout.addWidget(shortcuts)
         binary_fields_layout.addWidget(self.endpoint_note)
         self.exact_deadline = ExactDeadlineInput(self)
-        self.forecast_guidance = QGroupBox("Choosing a forecasting commitment", self)
-        self.forecast_guidance.setCheckable(True)
-        self.forecast_guidance.setChecked(False)
-        guidance_text = QLabel(FORECAST_GUIDANCE, self.forecast_guidance)
-        guidance_text.setWordWrap(True)
-        guidance_layout = QVBoxLayout(self.forecast_guidance)
-        guidance_layout.addWidget(guidance_text)
-        guidance_text.hide()
-        self.forecast_guidance.toggled.connect(guidance_text.setVisible)
-        binary_fields_layout.addWidget(self.forecast_guidance)
 
         self.numeric_forecast_fields = QWidget(self)
         self.numeric_forecast_fields.setObjectName("numericForecastFields")
@@ -748,18 +737,6 @@ class NewPredictionScreen(QWidget):
         numeric_fields_layout.addWidget(self.quantile_input)
         # Both forecast forms share one draft commitment, including Custom input.
         self.numeric_exact_deadline = self.exact_deadline
-        self.numeric_guidance = QGroupBox(
-            "Choosing a forecasting commitment", self.numeric_forecast_fields
-        )
-        self.numeric_guidance.setCheckable(True)
-        self.numeric_guidance.setChecked(False)
-        numeric_guidance = QLabel(FORECAST_GUIDANCE, self.numeric_guidance)
-        numeric_guidance.setWordWrap(True)
-        numeric_guidance.setTextFormat(Qt.TextFormat.PlainText)
-        QVBoxLayout(self.numeric_guidance).addWidget(numeric_guidance)
-        numeric_guidance.hide()
-        self.numeric_guidance.toggled.connect(numeric_guidance.setVisible)
-        numeric_fields_layout.addWidget(self.numeric_guidance)
 
         def update_quantile_preview() -> None:
             self.quantile_input.set_definition(
@@ -818,7 +795,7 @@ class NewPredictionScreen(QWidget):
         background_label.setBuddy(self.background_input)
 
         criteria_label = QLabel(
-            "Resolution Criteria (optional)",
+            "Resolution criteria (optional)",
             self.more_details_content,
         )
         apply_text_role(criteria_label, TextRole.LABEL)
@@ -892,7 +869,7 @@ class NewPredictionScreen(QWidget):
 
         self.forecast_panel = ContentPanel(
             "Forecast",
-            "Binary forecasts need only a Question and Probability.",
+            "Binary forecasts need a question, probability, and permanent exact deadline.",
             parent=self,
         )
         self.forecast_panel.setObjectName("newPredictionForecastPanel")
@@ -955,8 +932,9 @@ class NewPredictionScreen(QWidget):
         self.setTabOrder(self.numeric_unit_input, self.numeric_precision_input)
         self.setTabOrder(self.numeric_precision_input, self.numeric_constraint_input)
         self.setTabOrder(self.numeric_constraint_input, self.quantile_input.inputs[5])
-        self.setTabOrder(self.quantile_input.inputs[75], self.numeric_guidance)
-        self.setTabOrder(self.numeric_guidance, self.exact_deadline.preset_buttons[0])
+        self.setTabOrder(
+            self.quantile_input.inputs[95], self.exact_deadline.preset_buttons[0]
+        )
         deadline_controls = [
             *self.exact_deadline.preset_buttons.values(),
             self.exact_deadline.custom_button,
@@ -1048,12 +1026,10 @@ class NewPredictionScreen(QWidget):
         self.prediction_type_input.setCurrentIndex(0)
         self.probability_input.setValue(50)
         self.exact_deadline.reset()
-        self.forecast_guidance.setChecked(False)
         self.numeric_unit_input.clear()
         self.numeric_precision_input.setValue(0)
         self.quantile_input.clear()
         self.numeric_constraint_input.setCurrentIndex(0)
-        self.numeric_guidance.setChecked(False)
         self.rationale_input.clear()
         self.background_input.clear()
         self.resolution_criteria_input.clear()
@@ -1077,10 +1053,10 @@ class NewPredictionScreen(QWidget):
         self.binary_forecast_fields.setHidden(is_numeric)
         self.numeric_forecast_fields.setHidden(not is_numeric)
         self.forecast_panel.supporting_label.setText(
-            "Numeric forecasts need a Question, unit, precision, value constraint, "
-            "five percentiles, and permanent exact Deadline."
+            "Numeric forecasts need a question, unit, precision, value constraint, "
+            "five percentiles, and permanent exact deadline."
             if is_numeric
-            else "Binary forecasts need a Question, Probability, and permanent exact Deadline."
+            else "Binary forecasts need a question, probability, and permanent exact deadline."
         )
         self._update_endpoint_note(self.probability_input.value())
 

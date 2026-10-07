@@ -34,7 +34,7 @@ class OneShotAnalyticsView(QWidget):
         self.introduction = AnalyticsPanel(
             "One-Shot Analytics",
             "One effective forecast and answer per resolved Prediction. "
-            "These results are separate from deadline-based analytics.",
+            "These results are separate from Adaptive analytics.",
             parent=self,
         )
         self.caution = _label(

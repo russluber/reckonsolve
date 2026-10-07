@@ -93,6 +93,14 @@ the derived index; full retrieval and reflection integration remain M58. The two
 deadline-based aggregate sources explicitly exclude One-Shot. CSV format 4 continues
 to refuse these archives; SQLite backup remains complete.
 
+## M60 export follow-up
+
+M60 follow-up: format-5 export replaces the temporary format-4 refusal. Original and
+effective facts plus full correction snapshots are explicitly labeled; shared revision
+and resolution files retain the immutable originals and audit anchors. Exported reported
+times remain wall minutes with documentary flags/offsets. The same compatibility gate
+validates the source before export. This adds no canonical table or score authority.
+
 ## Alternatives considered
 
 - Reusing the retired final-Binary identity would conflate incompatible history

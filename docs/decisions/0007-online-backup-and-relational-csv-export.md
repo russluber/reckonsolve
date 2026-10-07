@@ -23,6 +23,15 @@ M55 advances the same consistent-read, verified-ZIP boundary to format 4. It exp
 
 ## Consequences
 
+M60 advances this boundary to format 5 without a database migration. Existing format-4
+files keep their columns. Three additional files contain One-Shot original facts,
+derived effective facts, and complete append-only transcription snapshots. Explicit
+app-entry instants remain separate from reported wall minutes, approximation flags, and
+offset context. The dictionary explains correction replay around a later first answer;
+an effective row is not another observation. All four supported contracts are exported
+from one checked transaction. The earlier One-Shot refusal is replaced only by this
+complete export. Settings and CLI share the implementation and failure guarantees.
+
 - Backup remains correct if the database is open and avoids dependence on SQLite journal mode or sidecar-file copying.
 - A failed backup or export leaves an existing destination untouched until a complete replacement is ready.
 - The SQLite artifact is the recovery contract; the CSV ZIP remains intentionally analytical.

@@ -2,13 +2,13 @@
 
 Reckonsolve is a local-first personal forecasting journal for Windows. Record probabilities and numeric forecasts, revise beliefs without rewriting history, resolve outcomes, and study calibration. Everything works offline for one user.
 
-> v0.7.0 is the current source version. Original app artwork, an installer, signing, and public binaries remain deferred.
+> v0.8.0 is the current source candidate, with M60 manually accepted and release closure pending. Original app artwork, an installer, signing, and public binaries remain deferred.
 
-**Compatibility:** This source supports trajectory Binary, deadline-based five-quantile Numeric, and the v0.8 One-Shot Binary and Numeric contracts. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
+**Compatibility:** This source supports trajectory Binary, Adaptive five-quantile Numeric, and the v0.8 One-Shot Binary and Numeric contracts. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
 
-Supported v0.7 history upgrades unchanged through schema 20, including supported Binary-only schema-16/17 archives. The v0.8 work includes M56 storage, manually accepted M57–M58 individual workflows and retrieval/history, and manually accepted M59 One-Shot Analytics; v0.8 is not released. Schema 20 saves One-Shot/With Deadline filters in dynamic Saved Views while existing views retain All modes. Complete SQLite backup includes One-Shots, while CSV format 4 refuses archives containing them until format 5 is implemented. See the [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity) and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
+Supported v0.7 history upgrades unchanged through schema 20, including supported Binary-only schema-16/17 archives. M56–M60 implement the v0.8 One-Shot addition; M57–M60 have manual acceptance; release closure is pending. Schema 20 saves One-Shot/Adaptive filters in dynamic Saved Views while existing views retain All modes. Complete SQLite backup includes One-Shots. CSV format 5 now exports all four supported contracts, including One-Shot originals, effective values, reported times, and corrections. See the [release notes](docs/v0.8-release-notes.md), [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity), and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
 
-### One-Shot preview (M57–M59)
+### One-Shot Predictions
 
 In **New Prediction**, choose **One-Shot** to record a final Binary probability or
 five Numeric quantiles made before checking an already-existing answer. Enter the
@@ -16,7 +16,7 @@ answer on the same screen, or save first and use **Add answer** later. Reported
 forecast and checking times are optional documentation; approximate or equal-minute
 times are fine. Scores appear after Save. **Correct transcription** preserves the
 original and each correction while recalculating the individual Brier or WIS.
-The top-right **With Deadline** action switches back. Both forms keep their drafts
+The top-right **Adaptive** action switches back. Both forms keep their drafts
 when switching. Background (including how you will check the answer), Rationale and
 Tags are visible in the Forecast card. Optional reported times use a calendar date
 picker beside one time field: type hours, Tab, minutes, Tab, then A or P. Up/Down
@@ -24,8 +24,11 @@ adjusts the selected section. It has no Expected Resolution field.
 
 CLI equivalents are `uv run rscd create binary --one-shot` and
 `uv run rscd create numeric --one-shot`, followed by `uv run rscd resolve ID` when
-needed. `show ID` includes original and corrected facts. Deadline-based creation
-remains the default; One-Shots reject `revise` and `review`.
+needed. `show ID` includes original and corrected facts. Adaptive creation
+remains the default; One-Shots reject `revise` and `review`. Adaptive forecasts can be
+revised or reviewed until their permanent Forecast Deadline. Filter them with
+`rscd list --mode adaptive` or `rscd search TEXT --mode adaptive`; `--mode deadline`
+remains a compatible alias, and existing Saved Views keep their filters.
 
 The archive and CLI support `--mode` filtering, and search can find effective or
 superseded history plus transcription-correction notes. Detail opens at the matched
@@ -50,7 +53,7 @@ sample. Corrected records count once, and reported times do not affect scores. S
 - **Learning:** separate Binary and Numeric analytics, continuous-style versus whole-number calibration, uncertainty ranges, outcome balances, and initial/final feedback. Numeric WIS comparisons stay within one Prediction; unrelated raw scores are never averaged. See the [Analytics guide](docs/analytics-guide.md) for worked examples and review habits.
 - **Archive:** explainable local full-text search, optional superseded history, rich filters, dynamic Saved Views, and transactional tag management. The search index is rebuildable from canonical history.
 - **Desktop and CLI:** both use the same application operations and matching SQLite database—no synchronization service. Metadata edits, terminal corrections, tag maintenance, and search repair remain desktop workflows.
-- **Recovery:** verified SQLite backups preserve the whole supported archive. Relational CSV format 4 exports current-model analytical history with exact deadlines, quantiles, correction chains, and an included data dictionary. CSV is not a restoration format.
+- **Recovery:** verified SQLite backups preserve the whole supported archive. Relational CSV format 5 exports Adaptive and One-Shot analytical history with exact values, original/effective facts, correction chains, separately labeled reported times, and an included data dictionary. CSV is not a restoration format.
 
 The desktop uses a shared palette-aware visual system, local Lucide icons, expanded or compact navigation, responsive workspaces, keyboard shortcuts, and identity-isolated window settings outside canonical history. The stable GUI/CLI share one data identity; the `-dev` pair share a separate development identity.
 
@@ -138,7 +141,7 @@ uv run reckonsolve-cli-dev export-csv C:\path\to\reckonsolve-export.zip
 
 `resolve`, `invalidate`, and `delete` likewise display the reviewed forecast and explain their consequence before an explicit confirmation. Resolution records a Yes/No or exact Numeric outcome, its effective time, and optional factual notes and Postmortem. The current revision is retained as recording context; scoring independently selects the eligible history before the effective cutoff. Invalid preserves complete history outside scoring. Delete permanently removes only a transaction-current untouched Open Prediction; meaningful or Locked history is directed toward Invalid. Blank or negative confirmation cancels without writing, and terminal decisions cannot be reopened or replaced.
 
-`backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` creates a format-4 ZIP of the supported analytical history with a complete data dictionary. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
+`backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` creates a format-5 ZIP of the supported analytical history with a complete data dictionary. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
 
 `list`, `show`, `search`, `saved-views`, and `saved-view` remain read-only. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
 

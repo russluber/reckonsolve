@@ -80,7 +80,8 @@ def test_custom_preserves_selection_and_reset_is_unset(picker, qtbot):
     qtbot.mouseClick(picker.custom_button, Qt.MouseButton.LeftButton)
     assert picker.value() == datetime(2027, 6, 21, 21, 37, tzinfo=UTC)
     picker.reset()
-    assert "Not set" in picker.summary.text()
+    assert not picker.summary.text()
+    assert picker.summary.isHidden()
     assert not picker.is_set
     with pytest.raises(ValidationError):
         picker.value()

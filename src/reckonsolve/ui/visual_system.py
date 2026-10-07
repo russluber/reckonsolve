@@ -98,6 +98,7 @@ class StatusTone(StrEnum):
     NEUTRAL = "neutral"
     ACCENT = "accent"
     SUCCESS = "success"
+    INFO = "info"
     WARNING = "warning"
     ERROR = "error"
     DESTRUCTIVE = "destructive"
@@ -122,6 +123,8 @@ class SemanticColors:
     accent_soft: str
     on_accent_soft: str
     focus: str
+    info: str
+    info_surface: str
     warning: str
     warning_surface: str
     caution: str
@@ -213,6 +216,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
             accent_soft="#193d30",
             on_accent_soft="#c7f4df",
             focus="#74e2ae",
+            info="#9fc8ff",
+            info_surface="#20344e",
             warning="#f0c66d",
             warning_surface="#3a2f17",
             caution="#ffb66e",
@@ -239,6 +244,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         accent_soft="#e3f2eb",
         on_accent_soft="#124f3a",
         focus="#0f7651",
+        info="#245c94",
+        info_surface="#e9f2ff",
         warning="#765200",
         warning_surface="#fff2c2",
         caution="#a64b00",
@@ -599,6 +606,11 @@ QLabel[reckonsolveBadgeTone="warning"] {{
     color: {color.warning};
     border: 1px solid {color.warning};
 }}
+QLabel[reckonsolveBadgeTone="info"] {{
+    background-color: {color.info_surface};
+    color: {color.info};
+    border: 1px solid {color.info};
+}}
 QLabel[reckonsolveBadgeTone="error"],
 QLabel[reckonsolveBadgeTone="destructive"] {{
     background-color: {color.error_surface};
@@ -625,6 +637,11 @@ QLabel[reckonsolveMessageTone="warning"] {{
     background-color: {color.warning_surface};
     color: {color.warning};
     border: 1px solid {color.warning};
+}}
+QLabel[reckonsolveMessageTone="info"] {{
+    background-color: {color.info_surface};
+    color: {color.info};
+    border: 1px solid {color.info};
 }}
 QLabel[reckonsolveMessageTone="error"],
 QLabel[reckonsolveMessageTone="destructive"] {{

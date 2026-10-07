@@ -1,6 +1,10 @@
 # Reckonsolve Forecasting Rulebook
 
-This is the v0.7 Rulebook for the implemented Deadline-based forecasting contract. The [planned v0.8 One-Shot addendum](reckonsolve-one-shot-rulebook-v0.8.md) describes a prospective exception for a single forecast made before checking an already-existing answer. Until that mode is implemented, Rule 18's Deadline requirement remains the application behavior.
+This is the v0.7 Rulebook for the implemented forecasting contract, named **Adaptive**
+in v0.8 (previously Deadline-based / With Deadline). These rules still govern Adaptive
+forecasts, including Rule 18's permanent Forecast Deadline. The implemented
+[v0.8 One-Shot addendum](reckonsolve-one-shot-rulebook-v0.8.md) describes the separate
+mode for a single forecast made before checking an already-existing answer.
 
 Reckonsolve is a personal forecasting journal. Its purpose is not to put probabilities on every goal, intention, plan, or future action in my life.
 

@@ -413,6 +413,68 @@ _CSV_TABLES += (
     ),
 )
 
+# Format 5 retains the format-4 files and adds explicitly labeled One-Shot
+# snapshots. The original forecast/answer rows and all correction links remain
+# in the bundle, so the effective projection is convenient rather than authority.
+_ONE_SHOT_VALUES = (
+    "probability_percent",
+    "q05_scaled",
+    "q25_scaled",
+    "q50_scaled",
+    "q75_scaled",
+    "q95_scaled",
+    "forecast_wall",
+    "forecast_approximate",
+    "forecast_offset",
+    "outcome",
+    "actual_scaled",
+    "reveal_wall",
+    "reveal_approximate",
+    "reveal_offset",
+    "resolution_notes",
+    "postmortem",
+)
+for _kind in ("original", "effective"):
+    _CSV_TABLES += (
+        _CsvTable(
+            f"one_shot_{_kind}_facts.csv",
+            (
+                "prediction_id",
+                "recorded_at_utc",
+                "answer_recorded_at_utc",
+                *_ONE_SHOT_VALUES,
+            ),
+            f"""SELECT f.prediction_id, p.created_at AS recorded_at_utc,
+                       COALESCE(b.resolved_at, n.resolved_at) AS answer_recorded_at_utc,
+                       {", ".join("f." + column for column in _ONE_SHOT_VALUES)}
+                FROM one_shot_{_kind}_facts AS f
+                JOIN predictions AS p ON p.id = f.prediction_id
+                LEFT JOIN resolutions AS b ON b.prediction_id = f.prediction_id
+                LEFT JOIN numeric_resolutions AS n ON n.prediction_id = f.prediction_id
+                ORDER BY f.prediction_id""",
+        ),
+    )
+_ONE_SHOT_CORRECTION_VALUES = tuple(
+    prefix + column for prefix in ("old_", "new_") for column in _ONE_SHOT_VALUES
+)
+_CSV_TABLES += (
+    _CsvTable(
+        "one_shot_corrections.csv",
+        (
+            "correction_id",
+            "prediction_id",
+            "sequence",
+            "corrected_at_utc",
+            "note",
+            *_ONE_SHOT_CORRECTION_VALUES,
+        ),
+        "SELECT id AS correction_id, prediction_id, sequence, "
+        "corrected_at AS corrected_at_utc, note, "
+        + ", ".join(_ONE_SHOT_CORRECTION_VALUES)
+        + " FROM one_shot_corrections ORDER BY prediction_id, sequence, id",
+    ),
+)
+
 CSV_FILE_NAMES = tuple(table.filename for table in _CSV_TABLES)
 EXPORT_ARCHIVE_NAMES = (*CSV_FILE_NAMES, "README.txt")
 
@@ -483,17 +545,6 @@ class DataTransferRepository:
 
     def _read_csv_contents(self) -> tuple[_CsvContents, ...]:
         with self._database.transaction() as connection:
-            if (
-                connection.execute(
-                    "SELECT 1 FROM prediction_forecast_contracts WHERE forecast_model IN "
-                    "('binary-one-shot-v1', 'numeric-one-shot-5-v1') LIMIT 1"
-                ).fetchone()
-                is not None
-            ):
-                raise ValueError(
-                    "CSV format 4 cannot export One-Shot history. Use a complete SQLite backup; "
-                    "One-Shot CSV export is planned for format 5."
-                )
             return tuple(
                 _CsvContents(
                     table=table,
@@ -566,16 +617,18 @@ def _export_readme(exported_at: datetime) -> str:
     return f"""Reckonsolve CSV Export Bundle
 ==============================
 
-Format version: 4
+Format version: 5
 Exported at (UTC): {format_utc(exported_at)}
 
 Purpose and limits
 ------------------
 This is a relational analytical export, not an import or a recovery artifact.
-Use a verified Reckonsolve .sqlite3 backup to recover the application. Format 4
-exports only the two supported v0.7 contracts; archives containing retired or
+Use a verified Reckonsolve .sqlite3 backup to recover the application. Format 5
+exports the four supported Adaptive and One-Shot contracts; archives containing retired or
 mismatched contracts are refused before this ZIP is created. It is not compatible
-with the format-3 column layout. Retired numeric_forecast_revisions.csv,
+with the format-3 column layout. Format-4 files retain their columns; three new
+One-Shot files are added, including header-only files when no One-Shots exist.
+Retired numeric_forecast_revisions.csv,
 resolution_corrections.csv, and numeric_resolution_corrections.csv are absent.
 Their supported replacements are named below. Legacy date-only forecast_deadline
 and old/new deadline columns are absent. The exact immutable Deadline lives in
@@ -597,13 +650,18 @@ beginning with =, +, -, or @ from being treated as formulas.
 Relationships and derivations
 -----------------------------
 prediction_id joins every Prediction-owned row to predictions.csv. forecast_model
-and scoring_contract identify the two closed supported pairs:
+and scoring_contract identify the four closed supported pairs:
   binary-trajectory-v1 / binary-trajectory-brier-v1
   numeric-quantiles-5-v2 / numeric-wis-v1
+  binary-one-shot-v1 / binary-one-shot-brier-v1
+  numeric-one-shot-5-v1 / numeric-one-shot-wis-v1
 Do not pool their scores. persisted_status is open, resolved, or invalid; Locked
 is derived from an open Prediction and its exact forecast_deadline_at_utc.
 Invalid and unresolved Predictions supply history but no scoring observation.
 
+Adaptive is the user-facing name for the existing deadline-based contracts. Model and
+scoring identities are unchanged; a stored mode of deadline still means Adaptive.
+The following trajectory and cutoff rules apply only to Adaptive contracts.
 forecast_revisions.csv has every immutable Binary revision, with contiguous
 sequence, saved instant, probability_percent (0-100), and optional rationale.
 To reconstruct the Binary standing trajectory, sort by sequence, let the initial
@@ -646,6 +704,48 @@ invalidation_reason_corrections.csv preserve the original invalidation and
 its later explanation history. postmortem_completions.csv records a deliberate
 Skip; a later Postmortem may coexist. tags.csv and prediction_tags.csv preserve
 stable tag identities and many-to-many membership.
+
+One-Shot facts and transcription history
+---------------------------------------
+One-Shot predictions have a blank forecast_deadline_at_utc and no effective
+resolution instant. Open means Waiting for answer; they never become Locked.
+The single sequence-one Binary/quantile revision is the original forecast,
+including its rationale. Original answers use the shared resolution files;
+their captured revision IDs are audit anchors, not the corrected scoring values.
+There are no One-Shot Forecast Reviews or ordinary forecast revisions.
+
+one_shot_original_facts.csv combines the immutable original forecast with the
+first answer, if any. The answer may have been entered later: recorded_at_utc
+is the app's forecast-entry instant and answer_recorded_at_utc is the app's
+answer-entry instant. Neither is a claimed time of an external phone note.
+one_shot_effective_facts.csv is a derived convenience snapshot of current facts,
+with the same immutable entry instants. It is not a second observation.
+one_shot_corrections.csv preserves each complete old_/new_ snapshot, contiguous
+per-Prediction sequence, immutable correction_id/corrected_at_utc, and optional note.
+These are transcription corrections, not forecast updates.
+
+To replay, start with the original forecast without an answer. Apply forecast
+corrections in sequence. Before the first correction whose old snapshot has an
+answer, attach the original answer/reveal/notes/Postmortem fields. If no such
+correction exists, attach those fields after all forecast-only corrections.
+This preserves a later first answer even when the last forecast-only correction
+has blank answer fields. The result must match one_shot_effective_facts.csv.
+
+Snapshot columns (also under old_/new_ in corrections): probability_percent is
+the whole Yes percentage for Binary; q05/q25/q50/q75/q95_scaled and actual_scaled
+are exact Numeric integers at the parent's precision. Inapplicable type fields
+are blank. outcome is yes or no. resolution_notes and postmortem are optional text.
+forecast_wall and reveal_wall are optional user-reported YYYY-MM-DDTHH:MM wall
+minutes, NOT UTC instants. The corresponding _approximate flags are 0/1; _offset
+is optional signed minutes east of UTC, documentary context only. A missing
+wall time has approximate=0 and blank offset. No time-zone conversion, cutoff,
+or elapsed weight may be inferred from these fields. All app timestamps are UTC.
+
+Score exactly once from the effective forecast and answer: ordinary Binary Brier
+or exact five-quantile Numeric WIS. Missing answers and Invalid records have no
+score. Do not use the deadline cutoff/trajectory rules above for One-Shot or pool
+its observations with Adaptive analytics. Do not average raw WIS across
+questions. Corrections retain original values; reported times never alter scores.
 
 Columns by file (all exported columns, in order)
 ------------------------------------------------
