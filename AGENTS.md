@@ -80,12 +80,57 @@ git diff --check
 
 See docs/maintainer/development.md for disposable visual profiles and private packaging, and docs/maintainer/release-checklist.md for source publication. Definition of done: authorized behavior/spec acceptance satisfied, invariants intact, relevant verification passed, safe migrations covered where applicable, documentation aligned, and final report states practical limits.
 
-## Documentation and hygiene
+## Documentation
 
-- README.md is a short installation/product entry point; docs/README.md routes users and maintainers. Keep workflows in user/CLI guides, interpretation in the Analytics guide, behavior in the spec, structure in architecture, and consequential technical reasoning in docs/decisions/.
-- Keep historical plans and dated evidence in docs/archive/. Clearly mark superseded promises; do not turn old milestone descriptions into active requirements or rewrite ADR reasoning.
-- Avoid duplicated tutorials/specifications and debug diaries in public guides. Update links when moving files.
+### Placement and authority
+
+Before adding or moving documentation, read [the documentation index](docs/README.md) and the existing reference for that topic. Update its established home instead of creating a competing guide.
+
+| Location | Responsibility |
+| --- | --- |
+| [README.md](README.md) | Short product introduction, installation/run commands, compatibility/recovery summary, and links. |
+| [docs/README.md](docs/README.md) | User and maintainer reading paths; update when adding, moving, or retiring an indexed document. |
+| [User guide](docs/user-guide.md) and [CLI guide](docs/cli-guide.md) | Current workflows, examples, data locations, and interface boundaries. |
+| [Forecasting guide](docs/forecasting-guide.md) and the indexed Rulebooks | Admissibility, question formulation, and forecasting commitments. |
+| [Analytics guide](docs/analytics-guide.md) | Score/chart interpretation, uncertainty, examples, and review habits. |
+| [Product specification](docs/product-spec.md) | Authoritative scope, invariants, acceptance criteria, unresolved choices, and active authorized plans. |
+| [Architecture](docs/architecture.md) | Current implemented modules, dependency direction, persistence, and transaction boundaries. |
+| [docs/decisions/](docs/decisions/README.md) | Consequential technical reasoning and current applicability/supersession notes. |
+| [docs/maintainer/](docs/README.md#maintaining-reckonsolve) | Repeatable development, testing, search evaluation, release procedures, and detailed design references. |
+| [docs/archive/](docs/archive/README.md) | Completed plans, earlier contracts, dated validation/acceptance, and historical drafts. |
+| [CHANGELOG.md](CHANGELOG.md) | Maintained release summaries used to prepare GitHub release notes. |
+
+AGENTS.md contains working policy and essential safeguards. Link to the spec for detailed product rules and the archive for release history. Keep the authoritative spec/architecture/ADR paths stable. Use versionless filenames for maintained guides; versioned Rulebook/design filenames identify their contract origins and do not require renaming for each app release.
+
+### Writing and updating
+
+- Update the affected guide when user behavior or commands change, the spec when an authorized product decision changes, and architecture when implemented structure changes. A documentation edit must not silently authorize a feature or override the spec.
+- Link to the owning reference instead of copying its full rules or tutorial. Keep user instructions task-oriented and in plain language; keep detailed mathematics/design rationale in their established references.
+- Document the actual interface: use current labels and valid command flags, distinguish Adaptive/One-Shot where their rules differ, and keep stable/development data identities explicit in examples.
+- Separate proposed, implemented, manually accepted, and published status. Never describe a plan as shipped or old test evidence as verification of later edits. Avoid conversational debugging diaries and unverified test counts in current guides.
+- Add a new guide only for a distinct audience or task that existing docs cannot reasonably cover. Do not add a docs framework, generated copies, or additional policy files without a demonstrated need.
+
+### Current guidance and historical records
+
+- Keep active plans with the governing specification. On completion, preserve any continuing requirements there and move historical planning/acceptance detail into the archive with a link. Completed milestones are not a new work queue or permission to implement.
+- Keep architecture focused on the current system. Preserve important earlier reasoning in ADRs or clearly labeled archive records; do not rebuild chronological milestone appendices in active docs.
+- Archive records must identify their version or stage and explain their historical scope. Retain relevant evidence and limits, including checks that preceded final changes. Avoid creating another full snapshot of active docs for routine edits; Git already retains file history.
+- Preserve ADR reasoning. For partial supersession, update the applicability notes in the ADR index; for a fully replaced decision, mark it Superseded and link its successor. Historical compatibility promises never restore retired runtime support.
+- Use CHANGELOG.md as the maintained release summary and prepare published notes from it. Keep reusable release steps in [the release checklist](docs/maintainer/release-checklist.md); put completed checklists and dated results in the archive. Historical note drafts are not parallel maintained release summaries.
+- Keep an unpublished entry Unreleased until publication is verified; use the actual publication date in UTC and remove stale candidate/pending wording from current guides after release. Publication remains separately authorized.
+- Archive files remain public and tracked on GitHub. Keep personal notes, generated audit reports, and runtime artifacts untracked. Rewriting Git history to remove previously published material requires separate explicit authorization.
+
+### Documentation verification
+
+- Check relative file links and heading anchors in changed documents and incoming references when moving/renaming files or headings. Use `rg` to find obsolete references, including bare/backticked paths that a Markdown-link check would miss.
+- Verify new or changed command examples against parser/help output or disposable fixtures. State when verification only checked syntax; do not execute data-changing examples against either personal database.
+- Review Markdown structure, readable headings, tables, and blank lines before lists. Use repository-relative links in tracked docs; avoid machine-specific absolute paths.
+- Run `git diff --check` and inspect the diff for intended changes. Documentation-only edits need targeted link/reference/example checks; run runtime tests only when executable behavior changes or a concrete verification risk requires them.
+
+## Repository hygiene
+
 - Commit source, tests, immutable migrations, docs, configuration, licenses/notices, and uv.lock. Do not commit environments, caches, bundles, databases, backups, exports, logs, secrets, machine-specific paths, or personal audit notes.
+- Preserve root and bundled licenses/attribution records in their established locations; documentation cleanup must not remove required notices.
 - Verify exact targets before destructive operations; avoid destructive Git/filesystem commands without explicit authorization.
 
 ## Outside current scope
