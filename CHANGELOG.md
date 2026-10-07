@@ -2,7 +2,9 @@
 
 All notable changes to Reckonsolve are documented here.
 
-## 0.8.0 - Unreleased
+## 0.8.0 - 2026-10-07
+
+[Published source release](https://github.com/russluber/reckonsolve/releases/tag/v0.8.0). Release dates use UTC; this publication was October 6 in Pacific time.
 
 ### Added
 
@@ -41,7 +43,7 @@ All notable changes to Reckonsolve are documented here.
 - Retired-only and mixed-with-retired archives, missing identities, and unknown or
   mismatched contracts remain refused without conversion, deletion, or partial loading.
 - SQLite backup remains the recovery format. CSV is analytical; Saved Views, settings,
-  and search indexes are excluded. M60 manual acceptance is complete; release closure and source publication are pending.
+  and search indexes are excluded. This is a source release; no installer, signed executable, public binary, importer, or database conversion is included.
 
 ## 0.7.0 - 2026-09-23
 

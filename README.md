@@ -1,186 +1,58 @@
 # Reckonsolve
 
-Reckonsolve is a local-first personal forecasting journal for Windows. Record probabilities and numeric forecasts, revise beliefs without rewriting history, resolve outcomes, and study calibration. Everything works offline for one user.
+A personal forecasting journal for Windows. Record uncertain judgments, preserve your reasoning, resolve answers, and study calibration. Reckonsolve works offline and stores your data locally.
 
-> v0.8.0 is the current source candidate, with M60 manually accepted and release closure pending. Original app artwork, an installer, signing, and public binaries remain deferred.
+## Run from source
 
-**Compatibility:** This source supports trajectory Binary, Adaptive five-quantile Numeric, and the v0.8 One-Shot Binary and Numeric contracts. A database or backup containing even one pre-v0.7 Binary or interval-v1 Numeric prediction is refused as a whole, before migration or search repair. Nothing is converted, deleted, or partially loaded. Missing, unknown, or mismatched forecast identities are also refused. Keep an unsupported original or backup for a compatible earlier Reckonsolve version. Do not reset your personal database just to test development code.
-
-Supported v0.7 history upgrades unchanged through schema 20, including supported Binary-only schema-16/17 archives. M56–M60 implement the v0.8 One-Shot addition; M57–M60 have manual acceptance; release closure is pending. Schema 20 saves One-Shot/Adaptive filters in dynamic Saved Views while existing views retain All modes. Complete SQLite backup includes One-Shots. CSV format 5 now exports all four supported contracts, including One-Shot originals, effective values, reported times, and corrections. See the [release notes](docs/v0.8-release-notes.md), [retirement contract](docs/product-spec.md#353-durable-model-and-cohort-identity), and [One-Shot storage decision](docs/decisions/0021-one-shot-originals-and-transcription-snapshots.md).
-
-### One-Shot Predictions
-
-In **New Prediction**, choose **One-Shot** to record a final Binary probability or
-five Numeric quantiles made before checking an already-existing answer. Enter the
-answer on the same screen, or save first and use **Add answer** later. Reported
-forecast and checking times are optional documentation; approximate or equal-minute
-times are fine. Scores appear after Save. **Correct transcription** preserves the
-original and each correction while recalculating the individual Brier or WIS.
-The top-right **Adaptive** action switches back. Both forms keep their drafts
-when switching. Background (including how you will check the answer), Rationale and
-Tags are visible in the Forecast card. Optional reported times use a calendar date
-picker beside one time field: type hours, Tab, minutes, Tab, then A or P. Up/Down
-adjusts the selected section. It has no Expected Resolution field.
-
-CLI equivalents are `uv run rscd create binary --one-shot` and
-`uv run rscd create numeric --one-shot`, followed by `uv run rscd resolve ID` when
-needed. `show ID` includes original and corrected facts. Adaptive creation
-remains the default; One-Shots reject `revise` and `review`. Adaptive forecasts can be
-revised or reviewed until their permanent Forecast Deadline. Filter them with
-`rscd list --mode adaptive` or `rscd search TEXT --mode adaptive`; `--mode deadline`
-remains a compatible alias, and existing Saved Views keep their filters.
-
-The archive and CLI support `--mode` filtering, and search can find effective or
-superseded history plus transcription-correction notes. Detail opens at the matched
-timeline event. Journal corrections preserve every prior body; Resolved One-Shots enter
-the Needs Postmortem queue, with Skip and later Add Postmortem actions. Saved Views retain
-the mode filter across restarts.
-
-In **Analytics**, choose **Prediction mode → One-Shot** for its separate Binary and
-Numeric summaries. Binary shows mean Brier and probability calibration; Numeric shows
-percentile and interval calibration with continuous-style and whole-number results
-separate. Counts, uncertainty, tags, and exact-unit filtering help you interpret the
-sample. Corrected records count once, and reported times do not affect scores. See the
-[Analytics guide](docs/analytics-guide.md#11-one-shot-analytics). Read the
-[One-Shot Rulebook](docs/reckonsolve-one-shot-rulebook-v0.8.md) for the intended use.
-
-## Current features
-
-- **Binary:** any whole percentage from 0% to 100%, with a permanent exact Forecast Deadline. Trajectory Brier scores the standing probabilities over time; final-probability calibration remains a separate diagnostic.
-- **Numeric:** five exact percentiles (q05/q25/q50/q75/q95), a permanent unit and precision, continuous-style or whole-number values, and a permanent exact Deadline. Detail shows the elicited central CDF without invented tails, and resolved forecasts have individual WIS scorecards.
-- **Honest history:** immutable revisions, reasoning-only Journals with transparent corrections, unchanged-forecast Reviews, definition history, and audited terminal corrections. Reviews refresh Needs Attention without creating a fake revision.
-- **Exact lifecycle:** revisions and Reviews stop at the Deadline; Locked predictions still accept Journals. Resolution distinguishes when the outcome became fixed and knowable from when it was recorded. Invalid predictions stay in history outside scoring. Only untouched Open predictions can be deleted after confirmation.
-- **Learning:** separate Binary and Numeric analytics, continuous-style versus whole-number calibration, uncertainty ranges, outcome balances, and initial/final feedback. Numeric WIS comparisons stay within one Prediction; unrelated raw scores are never averaged. See the [Analytics guide](docs/analytics-guide.md) for worked examples and review habits.
-- **Archive:** explainable local full-text search, optional superseded history, rich filters, dynamic Saved Views, and transactional tag management. The search index is rebuildable from canonical history.
-- **Desktop and CLI:** both use the same application operations and matching SQLite database—no synchronization service. Metadata edits, terminal corrections, tag maintenance, and search repair remain desktop workflows.
-- **Recovery:** verified SQLite backups preserve the whole supported archive. Relational CSV format 5 exports Adaptive and One-Shot analytical history with exact values, original/effective facts, correction chains, separately labeled reported times, and an included data dictionary. CSV is not a restoration format.
-
-The desktop uses a shared palette-aware visual system, local Lucide icons, expanded or compact navigation, responsive workspaces, keyboard shortcuts, and identity-isolated window settings outside canonical history. The stable GUI/CLI share one data identity; the `-dev` pair share a separate development identity.
-
-Desktop Deadline entry starts **Not set**. Choose **End of today**, **End of tomorrow**, **7 days**, **30 days**, or **Custom…**. Shortcuts select 11:59 PM on the corresponding local calendar date; inspect or edit the exact date/time before creating. The picker automatically uses that date's local UTC offset, asks which occurrence you mean during a repeated daylight-saving hour, and rejects nonexistent local times. **Use another UTC offset** permits an explicit override. Switching forecast type keeps the draft deadline; creating successfully clears it for the next prediction.
-
-Effective-time entry and CLI timestamps still require checking the UTC offset for the chosen date, including daylight saving time. Desktop labels normally show minutes while storage retains full precision. CLI accepts offset-bearing ISO timestamps, such as `2099-10-01T18:00:00-07:00`. Choose **use recording time** / `now` only when the outcome became knowable now; an effective time after recording is rejected. An outcome already fixed at or before the first forecast is explicitly unscored.
-
-## Documentation
-
-- [Analytics user's guide](docs/analytics-guide.md) — plain-language chart reading, worked examples, and practical forecasting follow-up
-- [Forecasting Rulebook](docs/reckonsolve-forecasting-rulebook-v0.7.md) — durable guidance for deciding whether and how to commit a Reckonsolve forecast
-- [Product specification](docs/product-spec.md) — implemented behavior plus the approved staged v0.7 contract and milestones
-- [Architecture](docs/architecture.md) — current implementation state and intended technical boundaries
-- [Architecture decision records](docs/decisions/README.md) — durable reasoning for consequential technical choices
-- [Search evaluation](docs/search-evaluation.md) — privacy-safe relevance coverage and the recorded large-corpus run
-- [v0.6 visual verification](docs/v0.6-visual-verification.md) — release-candidate matrix for palettes, scaling, window sizes, data shapes, and interaction states
-- [Source release checklist](docs/release-checklist.md) — repeatable verification and GitHub release steps
-- [v0.7 release notes](docs/v0.7-release-notes.md) — changes, recovery, and compatibility break
-
-## Before committing a forecast
-
-Use this short check as guidance, not as a required form or stored classification:
-
-- Am I mainly observing this outcome rather than steering it after I forecast?
-- If I can materially influence it, have I stated a concrete policy for what I will and will not do?
-- Is the question resolvable from a clear source, and is the forecasting cutoff chosen for the real decision window rather than for a preferred score?
-
-The [Forecasting Rulebook](docs/reckonsolve-forecasting-rulebook-v0.7.md) explains the boundary and examples in full. Reckonsolve does not record an A/B/C label or force a checklist attestation.
-
-## Development
-
-Reckonsolve uses Python 3.13, PySide6, SQLite, and `uv`.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run these commands from the repository root:
 
 ```powershell
 uv sync --locked
 uv run reckonsolve-dev
-uv run reckonsolve-cli-dev --help
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run python tools/evaluate_search.py --size 2000
 ```
 
-`uv run reckonsolve-dev` is the normal source-development command. Its window title says **Reckonsolve Dev**, and it creates or opens an isolated development database, applies pending schema migrations, and keeps that database available until shutdown. `uv run reckonsolve` remains the stable-channel entry point and must not be used as an interchangeable development command because it opens the stable database location.
-
-The desktop provides navigation-only global shortcuts: `Ctrl+N` opens New Prediction, `Ctrl+F` opens Predictions and focuses Search, `Ctrl+1`/`Ctrl+2`/`Ctrl+3` open Dashboard/Predictions/Analytics, `Ctrl+,` opens Settings, `Ctrl+B` toggles the sidebar, and `Alt+Left` returns from contextual Prediction Detail. Reckonsolve suppresses these shortcuts while a text editor, editable selector, numeric/date editor, or modal decision owns the input.
-
-For user-wide access from PowerShell, Command Prompt, Windows Terminal, or Git Bash, install one non-editable snapshot from the repository root:
+This opens the isolated development database. For everyday use, install the checkout as a local tool:
 
 ```powershell
 uv tool install .
 uv tool update-shell
 ```
 
-After reopening the shell, `reckonsolve` launches the stable GUI, while `rsc` is the short form of `reckonsolve-cli`. The development shorthand is `rscd` for `reckonsolve-cli-dev`. The long names remain available. Reinstall a later checked-out release with `uv tool install --force .`; a non-editable tool snapshot does not silently follow subsequent source changes.
+Reopen your terminal, then use `reckonsolve` for the desktop or `rsc` for the CLI. After updating your checkout, refresh installed commands with `uv tool install --force .`.
 
-The matching CLI reads and changes records in that same development data without opening a window:
+Reckonsolve uses Python 3.13, PySide6, and SQLite. [v0.8.0](https://github.com/russluber/reckonsolve/releases/tag/v0.8.0) is a source release; no installer or public executable is distributed.
 
-```powershell
-uv run reckonsolve-cli-dev list
-uv run reckonsolve-cli-dev list --search "temperature" --status open --type numeric --tag Personal
-uv run reckonsolve-cli-dev show 12
-uv run reckonsolve-cli-dev search "project evidence" --tag Work --tag Research --tag-mode all
-uv run reckonsolve-cli-dev search '"old wording"' --include-superseded-history
-uv run reckonsolve-cli-dev saved-views
-uv run reckonsolve-cli-dev saved-view --name "Work follow-up"
-uv run reckonsolve-cli-dev saved-view --id 3
-uv run reckonsolve-cli-dev create binary
-uv run reckonsolve-cli-dev create numeric
-uv run reckonsolve-cli-dev revise 12
-uv run reckonsolve-cli-dev journal 12
-uv run reckonsolve-cli-dev review 12
-uv run reckonsolve-cli-dev resolve 12
-uv run reckonsolve-cli-dev invalidate 12
-uv run reckonsolve-cli-dev delete 12
-uv run reckonsolve-cli-dev backup C:\path\to\reckonsolve-backup.sqlite3
-uv run reckonsolve-cli-dev export-csv C:\path\to\reckonsolve-export.zip
-```
+## Two ways to forecast
 
-`list` defaults to every Prediction and supports case-insensitive Question search plus combined status, forecast-type, and tag filters. `search QUERY` searches the full current/effective journal corpus and supports deliberate All/Any word modes, superseded-history inclusion, repeated tags with All/Any matching, status, type, attention, ISO date-range, and deterministic-sort filters. It prints one explainable row per Prediction, including the best source, a plain-text snippet, and additional-match count; a spelling suggestion or Any-word fallback is advice, never an automatic query change. `saved-views` lists each dynamic configuration, while `saved-view --name NAME` or `--id ID` reruns it against current data. These commands are read-only. `show` accepts one stable Prediction ID and prints current metadata, exact Binary or Numeric forecast history, Journal correction history, Forecast Reviews, and Definition history. For Resolved or Invalid records it also distinguishes the original terminal fact from the current effective value, lists every correction with before/after snapshots, reason and timestamp, preserves the complete Postmortem version chain, and shows any Skip Postmortem completion. Terminal corrections, Skip completion, Saved View mutation, tag-library maintenance, and search repair remain desktop workflows.
+| Mode | Use it for | How it works |
+| --- | --- | --- |
+| **Adaptive** | An uncertain outcome that will become knowable later | Set a permanent Forecast Deadline; revise or review before it passes. |
+| **One-Shot** | An answer that exists but you have not checked | Record your final guess and add the answer now or later. A phone note can be transcribed afterward. |
 
-`create binary` and `create numeric` are interactive and write the complete Prediction plus its first revision atomically. Binary probability defaults to 50%; Numeric decimal places default to 0. Numeric creation requires all five percentiles and an explicit value constraint; both types require an exact Deadline with UTC offset. Optional prompts collect a one-line initial rationale, Background, Resolution Criteria, Expected Resolution date, and comma-separated tags. Ctrl+C or end-of-input before creation saves nothing. Use `uv run reckonsolve-cli-dev --help` or a subcommand's `--help` for the complete syntax.
+Both support Binary Yes/No probabilities and Numeric q05/q25/q50/q75/q95 forecasts. Adaptive is the default in **New Prediction**; the top-right **One-Shot** button switches modes.
 
-`revise`, `journal`, and `review` accept a stable Prediction ID, display the exact current Binary or Numeric forecast, and prompt for one deliberate active-forecast action. Revisions append immutable changed forecasts while Open; Journal entries add reasoning while Open or Locked without changing the forecast or freshness; Forecast Reviews retain the current forecast while Open and refresh Needs Attention. CLI rationales, Journal bodies, and Review notes are intentionally one line for rapid capture, while the desktop app remains available for multiline writing. Ctrl+C or end-of-input saves nothing, and a concurrent change is rejected rather than attached to stale context.
+Immutable forecasts, audited corrections, Journals, and Postmortems preserve the learning record. Search, filters, tags, and Saved Views help you find it again. Analytics keeps modes separate; Numeric WIS is an individual score, never a pooled personal skill score.
 
-`resolve`, `invalidate`, and `delete` likewise display the reviewed forecast and explain their consequence before an explicit confirmation. Resolution records a Yes/No or exact Numeric outcome, its effective time, and optional factual notes and Postmortem. The current revision is retained as recording context; scoring independently selects the eligible history before the effective cutoff. Invalid preserves complete history outside scoring. Delete permanently removes only a transaction-current untouched Open Prediction; meaningful or Locked history is directed toward Invalid. Blank or negative confirmation cancels without writing, and terminal decisions cannot be reopened or replaced.
+## Documentation
 
-`backup` creates the same verified, recoverable SQLite artifact as Settings and records the last successful backup time only after installation succeeds. `export-csv` creates a format-5 ZIP of the supported analytical history with a complete data dictionary. Either command accepts a destination argument; omit it to receive a timestamped filename suggestion at an interactive prompt. Existing destination artifacts remain untouched if generation or installation fails. CSV is not a recovery format—use the SQLite backup for restoration.
+- [User guide](docs/user-guide.md) - setup, forecasts, answers, corrections, and recovery.
+- [CLI guide](docs/cli-guide.md) - commands, examples, and interface boundaries.
+- [Analytics guide](docs/analytics-guide.md) - scores, charts, uncertainty, and examples.
+- [Documentation index](docs/README.md) - forecasting rules, maintainer references, and development history.
+- [Changelog](CHANGELOG.md) - release changes and compatibility notes.
 
-`list`, `show`, `search`, `saved-views`, and `saved-view` remain read-only. As with the GUI, use the `-dev` command during source development: `uv run reckonsolve-cli` intentionally opens the stable database and is not interchangeable with `reckonsolve-cli-dev`.
+## Data and compatibility
 
-For the current checkout's One-Shot mode filters, run `uv run rscd list --mode one-shot`
-or `uv run reckonsolve-cli-dev list --mode one-shot`. A bare `rscd` from an earlier
-non-editable `uv tool install` is an older snapshot and does not follow source edits.
+The stable desktop and `rsc` share `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3`. Development desktop and `rscd` share a separate database under `%LOCALAPPDATA%\Reckonsolve Dev`. Switching commands never copies data between them.
 
-## Private Windows build
+Use verified **SQLite backups** for recovery. CSV format 5 is analytical history with a data dictionary; it cannot restore the application. Window/sidebar preferences live separately in `presentation.ini` and are excluded from SQLite backups.
 
-Reckonsolve includes a private smoke build, not an installer or public release:
+Supported v0.7 archives upgrade through schema 20 unchanged. Any pre-v0.7 Binary or interval-v1 Numeric prediction causes the whole archive to be refused before migration or repair. Missing, unknown, or mismatched identities are also refused. Nothing is converted, deleted, or partially loaded; preserve unsupported originals for a compatible earlier version.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1
-```
+## Development
 
-The script synchronizes the locked `packaging` dependency group, builds `dist\Reckonsolve\Reckonsolve.exe`, copies that onedir bundle to a disposable ignored directory, and runs the frozen executable through an offscreen smoke workflow. The workflow uses only temporary data and no source runtime. It upgrades a supported schema-17 Binary archive, exercises both current forecast models through revisions, Reviews, Resolution, corrections, scorecards, Analytics, search, CSV-4 export, backup, and restart, and refuses a disposable mixed unsupported archive unchanged. It also checks local icons, expanded/compact navigation, primary screens, shortcuts, and responsive sizes. `build\` and `dist\` remain untracked. The frozen app has no original Reckonsolve application icon yet.
-
-## Runtime data
-
-On Windows, Reckonsolve stores its canonical database outside the repository at:
-
-```text
-%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3
-```
-
-Source-development runs instead use:
-
-```text
-%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3
-```
-
-Each directory is selected through Qt's per-user local application-data location after its visible application identity is set. Reckonsolve never silently copies the stable database into the development location. Automated tests and frozen-build smoke checks inject temporary database paths and do not open either real user database. The application is local-only and does not require network access.
-
-Each identity also stores disposable shell preferences in a neighboring `presentation.ini`. This file remembers safe normal-window geometry, maximized state, and expanded/compact sidebar mode. It is not forecast data and is not included in SQLite backups or CSV exports.
-
-The paired CLI commands resolve these exact same locations. This is direct shared local data, not a background synchronization or replication system: a GUI change appears on the next matching CLI invocation, and a CLI-created Prediction appears when the matching GUI next opens or refreshes.
+See [development and testing](docs/maintainer/development.md) for quality checks, disposable visual profiles, and private builds. [The specification](docs/product-spec.md) governs scope; [AGENTS.md](AGENTS.md) contains repository working instructions.
 
 ## License
 
-Reckonsolve is licensed under the [MIT License](LICENSE).
-
-The selected Lucide resources retain their upstream notices in [Third-party notices](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE). Bundled Lucide resources retain their upstream [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -2,13 +2,15 @@
 
 ## Document Status
 
-**Status:** Accepted implementation contract for Reckonsolve v0.7.0
+**Status:** Accepted v0.7 design reference for the current Adaptive contract.
 
-**Current implementation baseline:** Reckonsolve v0.6.0 does not implement this trajectory-scoring model.
+**Applicability:** The [current specification](../../product-spec.md) governs implementation. Its Section 35.3 and [ADR 0019](../../decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) supersede the legacy-coexistence promises below. [One-Shot](../../reckonsolve-one-shot-rulebook-v0.8.md) has separate timing/scoring semantics. Preserve the derivations; do not restore retired workflows from this historical design.
+
+**Historical design baseline:** Reckonsolve v0.6.0 does not implement this trajectory-scoring model.
 
 **Target release:** Reckonsolve v0.7.0 Forecasting Model Overhaul.
 
-This document is normative for the v0.7.0 Binary trajectory-scoring implementation unless a later explicitly accepted design decision supersedes it.
+The mathematical design remains applicable subject to the current specification and later accepted decisions.
 
 This document specifies the intended Binary trajectory-scoring contract for Reckonsolve.
 

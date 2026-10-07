@@ -1,0 +1,1269 @@
+# Reckonsolve Architecture
+
+> Historical snapshot retained during the v0.8 documentation cleanup. Completed plans, staged compatibility promises, and candidate statuses below describe earlier work. Follow the [current authority](../architecture.md) for new implementation; this snapshot does not restore retired runtime support or authorize new work.
+
+Status: v0.7 complete through M55; v0.8 M56–M60 implemented and M57–M60 manually accepted; release closure pending
+Last reviewed: 2026-09-27
+
+This document describes the implemented structure from the binary v0.1 baseline through v0.7 and the v0.8 M56–M60 One-Shot work, with release acceptance identified in Section 25. The [product specification](product-spec-through-v0.8.md) governs product behavior, scope, terminology, invariants, and acceptance criteria. This document translates those requirements into technical boundaries without replacing them.
+
+**Current support boundary:** trajectory Binary and Adaptive five-quantile Numeric remain the default. M57 exposes individual Binary and Numeric One-Shot workflows on schema 19, described in Section 25 and [ADR 0021](../decisions/0021-one-shot-originals-and-transcription-snapshots.md); M58 adds a schema-20 Saved View mode filter. Retired-only or mixed-with-retired archives, and missing/unknown/mismatched contracts, still fail before migration, repair, or ordinary transaction work. No conversion or deletion occurs. Supported v0.7 history remains intact. [ADR 0019](../decisions/0019-retire-legacy-runtime-without-rebuilding-history.md) records the earlier retirement boundary.
+
+**Reading historical sections:** Sections 2–23 and the M46–M54A subsections record the system's evolution. Their legacy editors, calculations, compatibility promises, and old creation paths are superseded by M54B below; they are not instructions to restore those paths. Historical migration SQL remains unchanged as storage infrastructure, not runtime compatibility. Live database cleanup requires separate authorization.
+
+## 1. Current implementation
+
+Milestones 26 through 45 complete v0.4, v0.5, and v0.6. M46 establishes immutable model/scoring identities without inventing facts for legacy records. M47–M49 implement prospective Binary creation, exact-Deadline history, effective-time Resolution and corrections, individual Trajectory Brier, and separate aggregate feedback. M50 adds schema-18 five-quantile Numeric storage and pure exact WIS. M51 switches public Numeric creation and active GUI/CLI workflows to that model while preserving legacy interval editors. M52 completes Numeric v2 Resolution, corrections, and individual WIS scorecards without a new migration. M53 adds separate five-quantile calibration and scale-free update direction counts.
+
+| Area | Current state |
+|---|---|
+| Project management | `uv` project with Python 3.13 pinned in `.python-version` |
+| Runtime dependency | PySide6 |
+| Development tools | pytest, pytest-qt, and Ruff; pinned PyInstaller exists only in the separate `packaging` dependency group |
+| Python package | `src/reckonsolve/` |
+| Entry points | `reckonsolve` and `python -m reckonsolve` use the stable GUI identity; `reckonsolve-dev` uses the development GUI identity; `reckonsolve-cli`/`rsc` and `reckonsolve-cli-dev`/`rscd` provide matching v0.5 source CLI search, Saved View retrieval, and existing v0.4 commands; the private frozen entry adds only its disposable build-smoke path |
+| Application runtime | `ApplicationRuntime` owns the GUI application, `Database`, identity-scoped presentation settings, and `MainWindow`; `CliRuntime` owns one command's database and operations without constructing the desktop UI; both close persistence deterministically |
+| UI | The six existing screen routes remain functional over one centralized palette-aware visual foundation, while the M40 shell distinguishes one creation action, three permanent primary destinations, one bottom utility, and contextual Prediction Detail; the sidebar has complete expanded and icon-only compact modes, and Detail return preserves the originating primary context without refreshing the Predictions query; M41 gives Dashboard and Settings the shared page/panel/message grammar and routes only disposable success acknowledgments through one non-reflowing shell overlay; M42 gives creation, both Detail variants, their timelines, and focused dialogs the same hierarchy while preserving every workflow; M42A gives Numeric Detail the shared Edit Details dialog with immutable unit and precision shown as context; M43 gives Predictions stable grouped controls, readable detailed filters, type-aware structured rows, direct row activation, and consistently styled tag management; M44 gives Analytics the same page/panel/message hierarchy, keeps its filter frame stable above responsive scrollable results, and adds guarded global navigation shortcuts plus visible shortcut reference, logical focus order, and stronger accessible descriptions; selected navigation and action icons remain local, palette-aware Lucide SVGs rendered through QtSvg while visible or accessible names remain authoritative |
+| Runtime path | Stable uses `%LOCALAPPDATA%\Reckonsolve`; source development uses `%LOCALAPPDATA%\Reckonsolve Dev`; each identity keeps `presentation.ini` beside its database; tests and private smoke inject explicit disposable paths |
+| Persistence | One standard-library `sqlite3` connection with foreign keys enabled, a five-second busy timeout, explicit immediate transactions, and an atomic pre-commit refresh of dirty derived search documents |
+| Schema | Version 19 expands the immutable contract table and adds One-Shot reported times and correction snapshots; version 20 adds an optional mode column to dynamic Saved Views. All supported schema-18 canonical facts remain unchanged. Historical SQL is unchanged and retired tables provide no supported legacy workflow |
+| Domain and application operations | Exact-Deadline trajectory Binary and five-quantile Numeric remain available. M57 adds shared individual One-Shot creation, later answers, metadata, Journals, guarded lifecycle actions, and transcription corrections over the M56 foundation. Retired workflows remain absent |
+| Analytics | Separate queries supply Adaptive and One-Shot aggregate snapshots. One-Shot reuses pure individual Brier/WIS without time selection and shares calibration helpers with the Adaptive calculations. Binary receives equal per-Prediction votes, Numeric continuous/whole-number calibration stays separate, and raw WIS is never pooled. No legacy calculators or UI sections remain |
+| Automated tests | Disposable supported-model workflows, byte-preserving whole-database refusal, supported schema-16/17 upgrades and rollback, history/anchor ownership, backup/restart, search/Saved Views/tags, independent connections, and GUI/CLI parity. Empty historical schemas exercise migration DDL; populated retired schemas test refusal |
+| Windows distribution | A private PyInstaller `onedir` build is repeatable and relocated-smoke validated across local styles/icons, safe shell defaults, expanded/compact navigation, primary screens, both Detail types, keyboard navigation, responsive sizes, the v0.5 data boundary, search, backup, and GUI restart; original icon artwork, installer, signing, installer-created shortcuts, uninstall, updates, and public distribution remain deferred |
+
+The sections below preserve the implemented boundaries and historical evolution of the completed v0.1, v0.2, and v0.3 source releases.
+
+## 2. Target v0.1 system context
+
+Reckonsolve is a single-process Windows desktop application for one local user. It must remain fully functional without a network connection.
+
+```text
+User
+  |
+  v
+PySide6 desktop UI
+  |
+  v
+Application operations
+  |          |          |
+  v          v          v
+Domain    Analytics   SQLite data access
+ rules      rules           |
+                             v
+                   Per-user SQLite database
+```
+
+SQLite is the canonical store. Backup files and CSV exports are outputs derived from that store; neither replaces it. There is no server, browser frontend, remote API, authentication layer, cloud database, or synchronization service.
+
+## 3. Architectural principles
+
+### Historical integrity first
+
+The architecture must make the honest path the easy path. Forecast changes append immutable revisions, and Journal corrections append immutable body versions while retaining the original entry context. Current state, lifecycle classifications, timelines, and analytics are derived from preserved records rather than maintained through destructive updates.
+
+### Thin UI, testable core
+
+Qt widgets collect input, display state, and invoke application operations. They do not own transaction boundaries, lifecycle rules, revision selection, scoring logic, or database queries. Core behavior must be testable without constructing a `QApplication`.
+
+### Explicit persistence boundary
+
+All SQLite access lives behind a small, explicit data-access boundary. The rest of the application should not scatter SQL across widgets or domain code. Reckonsolve does not need an ORM or a generic repository framework.
+
+### Deterministic behavior
+
+Revision ordering, scoring selection, lifecycle boundaries, and attention classifications must be deterministic. Time acquisition is centralized so tests can supply a fixed clock.
+
+### Proportionate structure
+
+This is a local, single-user desktop application. Prefer direct calls, small modules, explicit data flow, and transaction-focused operations over dependency-injection containers, event buses, plugin systems, background services, or infrastructure for hypothetical scale.
+
+## 4. Target v0.1 logical boundaries
+
+### UI
+
+The PySide6 layer owns windows, screens, dialogs, Qt models, presentation formatting, and user interaction. It may validate basic form shape for immediate feedback, but authoritative validation and state transitions belong below the UI.
+
+The desktop keeps six named screen routes, but M40 no longer presents all six as equal destinations. Dashboard, Predictions, and Analytics are the permanent primary navigation; New Prediction is a prominent action; Settings is a bottom utility; and Prediction Detail is contextual content reached from a source and exited through an explicit Back action. Revision, journal, resolution, invalidation, deletion, and metadata editing remain focused dialogs or secondary views.
+
+M12 keeps the native Qt/Windows visual system rather than adding a theme framework. M39 adds one palette-relative Qt stylesheet and semantic presentation helpers on top of that native base; it does not add a theme selector, external theme package, proxy style, bundled font, or custom window frame. Navigation and high-value actions use a small selected set of local Lucide 1.33.0 SVGs rendered through QtSvg in normal, disabled, and selected palette colors. Visible action text is retained, accessible names remain meaningful, and palette changes re-resolve both semantic colors and remembered button/navigation icons. Font-aware chart sizing, existing scrollable forms, keyboard-native controls, and a minimum resizable main-window size avoid fixed-pixel screen layouts. [ADR 0008](../decisions/0008-private-onedir-and-local-icons.md) records the resource and private-build approach.
+
+The Prediction Detail probability-history widget is presentation code. It projects immutable revisions onto elapsed stored time, paints the fixed probability scale and sequence-ordered step geometry, and supplies an accessibility summary. It does not select scoring observations, infer probabilities, or persist chart state. [ADR 0004](../decisions/0004-native-probability-history-chart.md) records the native rendering approach.
+
+### Application operations
+
+This layer coordinates complete user actions. An operation validates a request, applies domain rules, opens the required transaction through the data-access boundary, and returns either a result suitable for presentation or an expected application error.
+
+Representative operations include:
+
+- creating a prediction and its first revision;
+- appending a forecast revision;
+- adding a journal entry tied to the current revision;
+- recording a Forecast Review tied to the unchanged current revision;
+- appending a transparent correction to an existing journal entry;
+- reading immutable forecast revisions in sequence order;
+- reading a unified causal timeline;
+- editing permitted prediction metadata;
+- resolving or invalidating a prediction;
+- appending and reading terminal correction history without changing lifecycle;
+- recording a deliberate blank-Postmortem completion fact;
+- listing and filtering predictions;
+- searching grouped Predictions through explainable current or historical text fragments;
+- rebuilding the derived local search index without modifying canonical history;
+- producing analytics inputs;
+- deriving one resolved Prediction's type-aware scorecard from its scoring observation;
+- creating a consistent backup; and
+- exporting CSV data.
+
+An operation should describe a real use case rather than expose arbitrary table-level CRUD.
+
+### Domain
+
+The domain layer owns concepts and rules that can be evaluated independently of Qt and SQLite, including:
+
+- probability validation;
+- current-revision selection;
+- Open, Locked, Resolved, and Invalid behavior;
+- revision eligibility at a forecast deadline;
+- Needs Attention and Ready to Resolve classification;
+- permitted state transitions; and
+- errors for disallowed actions.
+
+Domain code must not import PySide6 or open database connections.
+
+### Data access
+
+The data layer owns connections, schema creation, migrations, SQL, row mapping, foreign-key behavior, and transactions. It provides purpose-specific reads and writes needed by application operations.
+
+No normal data-access operation may update or delete a saved forecast revision, Journal entry, Journal correction, terminal record, terminal correction, or Postmortem completion. Migration code is the exceptional maintenance path and must preserve legitimate history. A deliberate future deletion of a parent Prediction may cascade to its complete child history transactionally.
+
+### Analytics
+
+Analytics code owns scoring selection and aggregation, separate from chart rendering. Its input is candidate prediction, resolution, and revision data obtained through the data-access boundary. It constructs exactly one scoring observation for each included resolved prediction by selecting that prediction's final eligible revision according to the product specification.
+
+The analytics boundary contains:
+
+- final-eligible-revision selection;
+- per-prediction Brier calculation;
+- mean Brier calculation;
+- calibration bin assignment and aggregation;
+- the explicitly labeled Brier-over-time series;
+- inclusive Numeric interval containment and fixed confidence-bin aggregation;
+- Numeric median absolute error, interval width, and proper interval score; and
+- an exact-unit guard that prevents raw quantities from being averaged across unlike units.
+
+Trajectory Binary aggregation receives complete contract, revision, tag, and
+effective terminal-history records from one read transaction. It reuses the pure
+individual trajectory scorer, excludes no-score records from every score and
+calibration observation, and averages the resulting Prediction-level Fractions
+with one equal contribution per eligible Prediction. Resolution-before-Deadline
+counts, mean Active Forecast Fraction, Initial/Final/Hold-initial means, and
+Updating Gain direction counts remain diagnostics. A separate ten-bin reliability
+view uses each Prediction's final standing probability strictly before its
+effective cutoff; it is never called trajectory calibration and contains no
+synthetic neutral-truncation observation.
+
+Analytics chart code consumes analytics results; it does not decide which forecasts count. The Prediction Detail probability-history chart is separate: it consumes every immutable revision for one Prediction through the existing application query and performs presentation-only projection.
+
+### Platform support
+
+Small platform-facing modules should centralize concerns such as application-data paths, time acquisition, and application startup. Platform code must not become a second domain layer.
+
+## 5. Dependency direction
+
+Dependencies flow inward from presentation and orchestration toward rules and explicit infrastructure adapters:
+
+```text
+UI --> Application operations --> Domain
+               |
+               +-------------> Data access --> SQLite
+               |
+               +-------------> Analytics --> Domain values
+```
+
+Key restrictions:
+
+- Domain and analytics modules do not depend on PySide6.
+- Domain modules do not depend on SQLite or data-access modules.
+- Widgets do not execute SQL or calculate scores.
+- Data-access modules do not import UI modules.
+- Shared types must live at the lowest sensible layer, not in the UI.
+- Circular imports are architecture defects, not something to mask with late imports.
+
+The application may use concrete data-access classes directly while the program remains small. Introduce protocols or interfaces only when they improve testing or allow a real alternative implementation; do not create them mechanically for every class.
+
+## 6. Package shape
+
+Milestone 14 implements this package structure:
+
+```text
+src/reckonsolve/
+  __init__.py          paired stable/development GUI and CLI entry-point delegates
+  __main__.py          `python -m reckonsolve` entry point
+  app.py               QApplication composition, runtime ownership, and startup errors
+  cli.py               argparse composition, paired CLI runtime, and command dispatch
+  cli_creation.py      injectable prompts and atomic Binary/Numeric M22 creation orchestration
+  cli_mutations.py     M23/M24 active-forecast and terminal prompt orchestration
+  cli_text.py          shared terminal-control escaping for stored plain text
+  cli_transfer.py      M25 destination prompting and verified transfer presentation
+  clock.py             injectable clock and canonical UTC instant conversion
+  identity.py          stable and visible development application identities
+  paths.py             per-user and explicitly injected database paths
+  private_build_smoke.py
+                       disposable frozen UI, core-loop, backup, and restart probe
+  application/
+    errors.py          expected user-presentable operation and concurrency errors
+    predictions.py     Binary workflows plus complete staged Numeric lifecycle operations
+  analytics/
+    numeric.py         pure Numeric containment, error, width, and interval-score calculations
+    overview.py        type-aware composition without cross-type or cross-unit scores
+    scoring.py         pure exactly-once Brier, calibration, and trend calculations
+  domain/
+    analytics.py       captured resolved-forecast facts shared by data and analytics
+    attention.py       stale-threshold validation and derived Dashboard values/rules
+    browser.py         current prediction summaries and archive-query results
+    forecast_contracts.py
+                       immutable model/scoring identity and prospective exact-time rules
+    predictions.py     binary and numeric prediction, revision, resolution, metadata, status, and validation values
+    saved_views.py     named mutable dynamic archive-configuration values and validation
+    tags.py            retained tag-library items and reviewed rename/merge/delete consequences
+    transfer.py        backup/export status and result values
+  data/
+    __init__.py        persistence package surface
+    analytics.py       one-snapshot Binary and Numeric captured-scoring-revision source
+    database.py        connection ownership and transaction boundary
+    forecast_contracts.py
+                       immutable contract assignment and validated identity loading
+    migrations.py      ordered schema registry, validation, and migration runner
+    numeric_predictions.py
+                       Numeric Prediction, interval/Journal history, terminal records, and guarded deletion
+    predictions.py     purpose-specific prediction, history, terminal, tag, and deletion persistence
+    saved_views.py     mutable Saved View configurations and stable tag-reference persistence
+    tags.py            transactional global tag rename, merge, deletion, and relationship counts
+    terminal_history.py
+                       type-aware append-only terminal corrections, completion, and effective replay
+    settings.py        singleton attention and backup-status setting access
+    transfer.py        verified SQLite backup and relational CSV ZIP creation
+  ui/
+    __init__.py        UI package surface
+    analytics_charts.py
+                       native Binary reliability, Numeric containment, and Brier-trend painting
+    analytics_screen.py
+                       separate type views plus common type/tag and Numeric-unit filters
+    dashboard.py       action buckets plus attention, backup, and export settings
+    components.py      shared page headers, content panels, badges, empty states, and persistent messages
+    icons.py           palette-aware rendering for the selected Lucide resources
+    main_window.py     application-shell hierarchy, contextual routing, and screen coordination
+    notifications.py   shell-level transient success overlay, coalescing, timing, and accessibility announcement
+    presentation_settings.py
+                       identity-scoped disposable sidebar and safe window-state persistence
+    prediction_browser.py
+                       type-aware full-text search, rich archive controls, and archive navigation
+    probability_history_chart.py
+                       native probability-history projection and painting
+    numeric_history_chart.py
+                       native Numeric interval-band and median-history painting
+    screens.py         Binary/Numeric creation, type-specific Detail, history, lifecycle, deletion, and metadata UI
+    tag_manager.py     secondary filtered tag library and confirmed global-maintenance dialogs
+    visual_system.py   centralized palette colors, stylesheet, shared visual tokens, and semantic widget-role helpers
+    assets/icons/      pinned selected Lucide SVGs and their upstream license
+```
+
+The checked-in `packaging/Reckonsolve.spec` and `tools/build_windows.ps1` live outside the import package. The spec defines only the private onedir bundle and explicitly collects UI resources and notices. Generated `build/` and `dist/` trees remain ignored.
+
+Later milestones can extend these boundaries when real behavior requires it. Empty abstractions are not added merely to complete a diagram.
+
+Tests should live under `tests/` and generally mirror the behavior boundary they exercise rather than mirror every source file mechanically.
+
+## 7. Application composition and startup
+
+The package-level entry point delegates immediately to `app.py`. Startup currently:
+
+1. sets the supplied stable or development identity before creating or reusing the `QApplication`;
+2. resolves that identity's Qt `AppLocalDataLocation`, unless an explicit database path was supplied;
+3. opens one long-lived SQLite connection, enables foreign keys and the busy timeout, and applies pending migrations;
+4. composes `PredictionOperations` with that database and a system UTC clock;
+5. composes an identity-scoped `presentation.ini` store beside the database and constructs the six-route `MainWindow` with those operations, disposable shell settings, and its presentation-only notification host;
+6. returns an `ApplicationRuntime` that owns the Qt application, database, and window; and
+7. shows the window and enters the Qt event loop.
+
+The production runner catches expected path, migration, operating-system, and SQLite startup failures and presents a fatal database error. It does not replace or silently recreate an existing database. The runner's `finally` cleanup closes the database after the Qt event loop ends or if showing the window fails; close is idempotent.
+
+`create_runtime()` accepts both an explicit identity and database path. Normal source work uses `reckonsolve-dev`, whose title and application name are **Reckonsolve Dev**; stable entry points retain **Reckonsolve**. Because path resolution happens only after setting that identity, Qt supplies distinct per-user directories without an ad hoc environment override. M40 derives `presentation.ini` from that already-resolved directory, so sidebar and window preferences are isolated by the same stable/development identities without entering SQLite, backups, exports, or CLI behavior. No startup path copies or migrates data between those channels. Tests never discover or open either real user database. The clock and application operations are composed at this boundary rather than through global state or widget-side service lookup; later operations should follow the same pattern.
+
+M21 adds a parallel console composition in `cli.py`. `reckonsolve-cli` selects the stable **Reckonsolve** identity, while `reckonsolve-cli-dev` selects **Reckonsolve Dev**; each then resolves the same path its matching GUI uses. One invocation opens and migrates a `Database`, constructs `PredictionOperations`, dispatches one parsed command, and closes the database in `finally`. Help and version reporting finish before runtime composition and therefore open no database. Expected application, path, migration, operating-system, and SQLite failures return a clear nonzero result without replacing existing data.
+
+The additional `rsc` and `rscd` package scripts point to those same stable and development CLI delegates. They are executable-name conveniences rather than new identities, parsers, command surfaces, or data locations. A non-editable `uv tool install .` can expose all package scripts user-wide without making an in-progress source checkout the implementation behind the installed stable commands.
+
+The CLI uses the standard-library `argparse` module rather than adding a production dependency. Its presentation functions consume the existing archive, Dashboard-attention, type-aware Detail, timeline, and Definition-history read models. `list` combines the same Question, derived-status, forecast-type, and tag filters as the desktop browser, then adds Needs Attention and Ready to Resolve labels from the existing Dashboard query. `show` selects Binary or Numeric detail by stable Prediction identifier and renders optional metadata, terminal facts, exact fixed-precision values, every timeline event, Journal correction history, Reviews, and Definition changes. M37 adds `search QUERY`: it maps readable CLI choices for All/Any words, historical scope, repeated tag mode, status, type, attention, local-calendar range, and sort into the existing `search_predictions` application operation, then renders one grouped result per Prediction with the existing source label and a plain safe snippet. The CLI never compiles FTS syntax or ranks fragments itself. `saved-views` lists complete dynamic configurations; `saved-view --id` or `--name` resolves one retained configuration and calls the same `search_predictions` or `browse_predictions` operation that its saved text state requires. Terminal control characters in stored free text are escaped before output; stored instants use local ISO text with their offset and microsecond precision. No CLI function executes SQL or persists presentation state.
+
+M22 adds `cli_creation.py` as an interactive presentation helper rather than placing prompt logic in application operations. Its injectable line-oriented session asks for all required values, optionally collects initial details, and calls exactly one existing Binary or Numeric creation operation after prompt-level validation. Binary probability defaults to 50; Numeric precision and confidence default to 0 and 80. Numeric input is validated through the existing fixed-precision domain values before persistence, while the application operation remains authoritative and revalidates the complete request. EOF or Ctrl+C raises a presentation-level cancellation before any creation operation runs. Expected domain failure returns nonzero, and the existing transaction guarantees that no parent or first revision is left behind. Successful output contains the stable Prediction identifier and exact type-appropriate current forecast.
+
+M23 adds `cli_mutations.py` for active-forecast changes. `revise`, `journal`, and `review` load one current Binary or Numeric detail, print its Question, derived lifecycle status, and exact forecast, then retain its type-appropriate revision identifier and metadata version throughout input. Revision prompts reject unchanged values before submission; Numeric fields default individually to the exact current fixed-precision values. Journal text is required, Review notes and revision rationales are optional, and these CLI prose fields deliberately accept one terminal line while the desktop and canonical model retain multiline support. The completed prompt invokes the corresponding existing operation, whose immediate transaction rechecks lifecycle, deadline, revision, and metadata context. A concurrent GUI or CLI change therefore fails visibly without attaching content to stale context or appending an unintended revision. [ADR 0011](../decisions/0011-line-oriented-cli-mutations.md) records this boundary.
+
+M24 extends that orchestration with `resolve`, `invalidate`, and `delete`. Resolution validates a Yes/No outcome or exact Numeric actual value, collects separate optional factual notes and Postmortem, explains scoring-revision capture and terminal permanence, and confirms before submitting. Invalidation explains preservation plus scoring exclusion, accepts an optional reason, and confirms. Delete rejects ineligible current state before prompting, explains permanent erasure, confirms, and passes the explicit permanent-deletion token only to the existing guarded operation. Blank or negative confirmation raises the same side-effect-free CLI cancellation used by earlier prompts. Application operations and immediate repository transactions recheck revision, metadata, lifecycle, deadline, and deletion history after the prompt, so a competing mutation or write lock returns an error without false terminal history. Canonical Numeric resolution output is formatted from the saved fixed-precision result rather than the user's raw spelling. [ADR 0005](../decisions/0005-immutable-terminal-lifecycle-records.md) remains the governing terminal-record design, while [ADR 0011](../decisions/0011-line-oriented-cli-mutations.md) governs CLI composition.
+
+M25 adds `cli_transfer.py` as another presentation helper. `backup` and `export-csv` accept an optional `Path`; when absent, they query the existing data-management model only to show its timestamped filename suggestion, and a blank response accepts that filename in the current directory. The helper then invokes `create_backup` or `export_csv_bundle` exactly once and renders the canonical result. It performs no file copying, SQL, transaction control, ZIP construction, or destination installation. Expected path and artifact failures therefore retain the existing nonzero CLI boundary and atomic cleanup, while a successfully installed backup reports whether its completion timestamp was also recorded.
+
+## 8. Persistence model
+
+The minimum conceptual entities are defined by the product specification:
+
+- predictions;
+- forecast revisions;
+- prediction definition changes;
+- journal entries;
+- resolutions;
+- prediction invalidations;
+- presentation-neutral search queries, source-classified fragments, grouped hits, and deterministic ranking;
+- tags; and
+- prediction-tag associations; and
+- named dynamic Saved View configurations and their stable tag references.
+
+The v0.2 Numeric foundation introduces Numeric Predictions, Numeric ForecastRevisions, and Numeric Resolutions as type-specific concepts. M16 persists an immutable Numeric Resolution with its exact realized fixed-precision value and transaction-current scoring revision; M17 consumes the current type-appropriate revision in Dashboard and archive read models without duplicating forecast state.
+
+Milestone 1 established the migration ledger. Milestone 2 added `predictions` and `forecast_revisions`. A prediction stores identity, question, binary type, persisted lifecycle state (`open`, with terminal states used by later milestones), and UTC creation/update instants; it does not store probability. Every forecast revision stores its own 0–100 whole-number probability, UTC creation instant, and per-prediction sequence. A uniqueness constraint makes sequence deterministic, a foreign key protects ownership, and a trigger prevents in-place revision updates.
+
+Milestone 3 migrates the database to version 3. Nullable Background and Resolution Criteria are normalized text, while Forecast Deadline and Expected Resolution are ISO calendar dates rather than instants. The supported metadata-date range is `1752-09-14` through `9999-12-31`, matching the native Qt editor; these fields model current and future forecasting workflow dates rather than historical chronology. Reusable `tags` connect through `prediction_tags`. Python `casefold()` values provide case-insensitive identity, and the first stored display spelling is retained even when a tag temporarily has no prediction associations. Commas and line breaks are excluded from labels because the v0.1 editor uses a comma-separated entry field. A constrained metadata version on each prediction provides optimistic concurrency control for whole-form edits.
+
+Milestone 4 migrates the database to version 4 by adding a nullable normalized rationale to every forecast revision. Existing revisions receive no invented rationale. Revision identity and per-prediction sequence remain deterministic; database triggers reject direct updates, direct child deletion while the parent exists, and replacement through either an existing revision identifier or sequence. A deliberate parent-prediction deletion can still cascade transactionally. The application derives the current forecast from the highest revision sequence and reads forecast history in sequence order, even if two revisions share the same stored instant.
+
+Milestone 5 migrates the database to version 5 with `journal_entries` and `journal_entry_corrections`. A Journal entry stores its original normalized body, original UTC timestamp, and a composite foreign-key reference to a ForecastRevision owned by the same Prediction. Insert-time guards require that reference to be the current revision and reject new entries after a persisted terminal status. Derived Locked predictions remain eligible because Locked is represented by an otherwise-open Prediction whose inclusive deadline has passed.
+
+Journal corrections are separate immutable rows with a per-entry contiguous sequence, normalized replacement body, and UTC correction timestamp. The latest correction supplies the displayed body; the base entry and all correction rows supply the complete edit history. Database triggers reject unchanged correction bodies, sequence gaps, direct updates, direct child deletion while the parent exists, and replacement of saved entry or correction identities. Corrections do not change the entry's original timestamp or forecast anchor and remain possible after a terminal lifecycle decision. A deliberate parent-Prediction deletion can still cascade through entries and corrections.
+
+The unified timeline is a derived read model rather than another persisted event table. Forecasts are ordered by revision sequence. Each Journal entry or Review is placed after its anchored revision and before the next revision. The shared domain timeline merge interleaves Journal and Review streams by their exact original timestamps instead of grouping all Journals before Reviews. Each stream retains insertion order by stable identifier even if the clock regresses; tied stream heads use Journal-before-Review kind order and stable identifiers. This preserves causal anchors and deterministic ordering without fabricating times. Desktop timestamps display local dates and minutes; stored precision remains intact, and correcting an entry never moves it in the timeline.
+
+Milestone 6 requires no schema change. Probability history is another derived presentation of the existing `forecast_revisions` rows returned in immutable sequence order. Each row contributes one chart marker. Stored UTC instants determine horizontal position and render in local time, while sequence determines connection order and which marker is current. Journal rows never enter this read product.
+
+Milestone 7 migrates the database to version 6 with `resolutions` and `prediction_invalidations` following [ADR 0005](../decisions/0005-immutable-terminal-lifecycle-records.md). Each table permits at most one row per Prediction. A Resolution stores a Yes/No outcome, canonical UTC resolution instant, optional factual notes and postmortem, and a composite foreign-key reference to the ForecastRevision owned by that Prediction that was current when resolution committed. That reference is the canonical scoring revision for later analytics. An Invalidation stores its canonical UTC instant and optional reason and has no scoring revision because Invalid predictions are excluded from analytics.
+
+The released v5 application exposed no terminal transition operation. The v6 migration therefore requires every pre-upgrade Prediction to retain its normal persisted `open` state. If a database was manually altered to contain a legacy terminal status with no outcome or invalidation facts, the migration rolls back and leaves v5 data untouched rather than inventing those missing facts.
+
+Insert guards require a nonterminal persisted Prediction and, for Resolution, the transaction-current revision. After-insert triggers couple the immutable terminal record to the persisted `resolved` or `invalid` status and use the same instant for `updated_at`. Status guards prevent terminal state without its corresponding record and prevent reopening or changing a terminal state. Terminal-row triggers reject direct update, identity replacement, and direct deletion while the parent exists; deliberate parent deletion can still cascade. Normal v0.1 operations expose no terminal correction or reopen path.
+
+Delete eligibility is derived rather than stored. An Open Prediction is eligible only when its current revision remains sequence one, its metadata version remains one, and no Journal, Definition, or Forecast Review history exists. The application additionally derives the current deadline status, so a now-Locked record is never treated as deletable. The delete operation rechecks revision and metadata tokens plus every eligibility condition inside one immediate transaction before cascading the parent. Initial rationale, metadata, and tag associations do not by themselves make an otherwise untouched creation ineligible.
+
+Milestone 8 migrates the database to version 7 with one `app_settings` row. Its constrained whole-number `stale_threshold_days` value defaults to 14 and is the only persisted preference needed by this slice. Dashboard membership itself remains derived and is never written back to Predictions. Keeping this setting in SQLite makes it part of normal backup/recovery state without introducing a general preference registry or platform-specific settings store.
+
+Milestone 9 requires no schema change. The archive is a purpose-specific read model over every Prediction, its highest-sequence ForecastRevision, and associated tags. Stored terminal status remains canonical, while Locked is derived in the application against the current local calendar date before status filtering. Associated tag choices come from current `prediction_tags` relationships, so retained tag rows with no Prediction do not create empty filter choices. Results use deterministic newest-created-first order; filtering never mutates or reorders history.
+
+Milestone 10 also requires no schema change. Resolution's immutable composite reference to its owned `scoring_revision_id` is the canonical final eligible forecast. The analytics source joins that exact row rather than every revision or a newly derived latest row, requires persisted Resolved status, and returns one observation per Resolution. Tags offered by Analytics come only from scored Predictions. Brier scores, calibration bins, and cumulative points remain derived and are never written back to SQLite. [ADR 0006](../decisions/0006-fixed-calibration-and-cumulative-brier.md) records the analytical construction.
+
+Milestone 11 migrates the database to version 8 by adding a nullable canonical UTC `last_successful_backup_at` to the singleton settings row. It records only an artifact that has already been installed successfully; cancellation and artifact failure leave the prior value intact. No export metadata or analytical copy is persisted. [ADR 0007](../decisions/0007-online-backup-and-relational-csv-export.md) records the transfer approach.
+
+Milestone 13 migrates the database to version 9 while preserving the existing binary schema and every historical row. `predictions.prediction_type` now admits `binary` and `numeric`; Numeric Predictions require an immutable unit label and decimal precision from zero through six, while Binary Predictions require both fields to remain null. Numeric interval revisions live in the parallel `numeric_forecast_revisions` table so the released binary table and its Journal and Resolution references remain untouched. Lower bound, central estimate, and upper bound are exact signed scaled integers at the parent Prediction's precision, with inclusive ordering and whole-number confidence from 1% through 99%. Type guards prevent revisions from crossing Prediction types, and the numeric table applies the same sequence, timestamp, update, direct-delete, and replacement protections as binary history. [ADR 0009](../decisions/0009-scaled-integer-numeric-values.md) records the representation and migration boundary.
+
+Milestone 14 needs no schema migration because the existing parent `predictions` columns already hold the optional Background, Resolution Criteria, Forecast Deadline, Expected Resolution, and reusable tag associations. Numeric creation writes the parent row, complete optional initial details, normalized tags, and sequence-one interval in one `BEGIN IMMEDIATE` transaction. Numeric reads map the same canonical metadata and tags, derive the inclusive date-only Locked display state, and return the latest interval by immutable sequence. The UI selects Binary by default, then routes a successfully created Numeric Prediction to a type-specific Detail screen. That screen deliberately exposes no Numeric revise, Journal, lifecycle, archive, chart, or analytics action before its owning milestone.
+
+Milestone 15 migrates to version 10 because the existing Journal schema could reference only a Binary ForecastRevision. The upgrade rebuilds the two Journal tables in one migration transaction, preserves every existing Binary entry and correction, and adds one nullable Numeric revision anchor with a constraint requiring exactly one type-appropriate anchor. Composite foreign keys and insert guards keep an entry owned by its Prediction and bound to that Prediction's transaction-current revision. Numeric revisions recheck their reviewed current-revision and metadata tokens, lifecycle, and changed interval inside `BEGIN IMMEDIATE`; an unchanged complete interval is rejected rather than becoming a fake revision. Numeric Detail uses the same application operations for revisions, Journals, transparent corrections, and a causal text timeline. Its native `QPainter` interval chart is presentation-only: it has one sample per immutable Numeric ForecastRevision, paints lower/upper bounds as a band and medians as a separate line, and never incorporates Journal activity.
+
+Milestone 16 migrates to version 11 with a separate `numeric_resolutions` table. It stores the exact fixed-precision realized value, canonical UTC resolution instant, optional notes and Postmortem, and a composite reference to the Numeric ForecastRevision owned by that Prediction and current when the transaction commits. Type-aware status guards require the appropriate Binary or Numeric terminal record before changing persisted status. Numeric Resolution rows reject update, direct delete, identity replacement, and a second outcome while still permitting deliberate parent cascade. Numeric invalidation reuses the already type-neutral immutable invalidation table. Resolve, Invalid, and delete operations recheck current-revision and metadata tokens inside `BEGIN IMMEDIATE`; deletion additionally requires untouched Open state, while Locked predictions remain resolvable or invalidatable but not revisable or deletable.
+
+Milestone 17 needs no schema migration. The Dashboard and browser use type-aware, read-only projections that join each Binary Prediction to its highest-sequence `forecast_revisions` row and each Numeric Prediction to its highest-sequence `numeric_forecast_revisions` row. Both carry a forecast-type discriminant and either the Binary probability or the complete Numeric interval/median/confidence/unit summary. Application filtering derives Locked once against one local current date, then combines question, lifecycle, forecast type, and tag predicates without mutating persisted history. Type-aware navigation reloads the selected current record and sends it to the appropriate Detail widget.
+
+Milestone 18 also needs no schema migration. Binary `resolutions` and Numeric `numeric_resolutions` already own immutable composite references to their type-appropriate scoring revisions. The analytics repository reads both sources and their tag associations inside one SQLite transaction. Numeric fixed-precision scaled integers map back to exact `Decimal` values before pure calculations; no derived score is persisted. Containment and confidence are unitless, while raw Numeric means are emitted only after an exact stored unit label filters the source.
+
+Milestone 19 migrates to version 12 with one `forecast_reviews` table. Exactly one nullable Binary or Numeric composite revision reference must be present, and insert guards require it to be the current revision of an Open Prediction of the matching type. Saved rows reject update, direct delete, and identity replacement while permitting deliberate parent cascade. Application operations also recheck the reviewed revision, metadata version, and derived deadline status inside `BEGIN IMMEDIATE`, preventing a Review from being attached to stale forecast or proposition context. The optional note and canonical UTC timestamp are immutable. [ADR 0010](../decisions/0010-type-aware-forecast-reviews.md) records this boundary.
+
+Milestone 26 migrates to version 13 without modifying any released terminal row. `resolution_corrections` and `numeric_resolution_corrections` retain complete before/after snapshots of every correctable type-specific Resolution field, explicit changed-field flags, a contiguous per-Resolution sequence, canonical UTC correction time, and a required explanation for an outcome or actual-value change. `invalidation_reason_corrections` applies the same snapshot and sequence discipline to the optional reason. Composite foreign keys preserve ownership; triggers require each insert to continue the current effective snapshot and reject update, replacement, sequence gaps, and direct child deletion while the parent exists.
+
+Milestone 35 migrates to version 15 without modifying version-14 canonical records or the rebuildable search projection. `saved_views` stores one required trimmed display name, a Python-casefolded unique name key, every validated archive-control value, and no Prediction-result membership. `saved_view_tags` joins each Saved View to `tags.id`, preserving stable tag identity while the current display label is loaded on demand. Mutable Saved View create, replace-configuration, rename, and delete operations run in their own immediate transactions; they never append forecast, Journal, terminal, or analytical history, and they do not change the search projection.
+
+Milestone 36 needs no schema migration. `data/tags.py` reads every retained `tags` row with current Prediction and Saved View counts and applies reviewed global actions inside one immediate transaction. Rename preserves the selected `tags.id`; merge unions source relationships into a selected target before removing source identities; deletion removes only the selected identity and its current joins. Database uniqueness and `INSERT OR IGNORE` retain case-insensitive identity and deduplicate many-to-one joins. Each action replays its preview inside the write transaction, advances `metadata_version` and `updated_at` once for every affected Prediction, and relies on the existing tag-association and tag-label dirty triggers to rebuild all affected search documents before commit. Stable Saved View references follow rename automatically and are explicitly retargeted or removed for merge and deletion. These preference/metadata operations append no Definition, forecast, Journal, Review, terminal, freshness, or scoring history.
+
+Milestone 46 migrates to version 16 by adding `prediction_forecast_contracts`, an immutable one-to-one cohort identity for every Prediction. Its closed model/scoring pairs distinguish legacy Binary final Brier, new Binary trajectory Brier, legacy Numeric interval-v1, and new Numeric quantiles-5-v2/WIS. The migration mechanically assigns every existing Prediction its matching legacy pair and a null prospective exact Deadline. Current creation repositories make the same assignment atomically when version 16 is present, while retaining compatibility with historical migration-test schemas. `data/forecast_contracts.py` treats a missing or inconsistent identity as an integrity error and never infers one from revision tables. [ADR 0014](../decisions/0014-store-immutable-forecast-contract-identities.md) records the cohort boundary.
+
+The same migration adds nullable `effective_resolution_at` fields to both Resolution tables. They remain null for every legacy row and are constrained to remain null for later legacy Resolutions; future new-model Resolutions must supply an exact canonical UTC value no later than immutable `resolved_at`, whose meaning is now explicitly recorded-at for those cohorts. New `binary_trajectory_resolution_corrections` and `numeric_quantile_resolution_corrections` tables preserve complete type-specific before/after snapshots, including effective time, with contiguous append-only guards and required reasons for score-affecting changes. The released legacy correction tables remain unchanged and reject use by new-model contracts. No new-model application path writes these prospective fields during M46. [ADR 0015](../decisions/0015-store-prospective-exact-forecast-times.md) records the exact-time and correction boundary.
+
+`postmortem_completions` stores one immutable timestamped **Skip Postmortem** fact per Resolved Prediction. Its insert guard requires the currently effective Postmortem to be blank. A later Postmortem correction may still append without deleting that completion fact. `terminal_history.py` reads original facts and correction rows separately, then pure domain replay derives the effective value while preserving the original terminal timestamp and captured scoring revision. Application correction operations carry the latest correction identifier as their optimistic token and recheck it inside `BEGIN IMMEDIATE`. [ADR 0012](../decisions/0012-append-only-terminal-correction-chains.md) records this design. M26 deliberately exposes no desktop or CLI mutation control; those workflows belong to later v0.4 milestones.
+
+Historically consequential edits use `prediction_definition_changes` as described in [ADR 0003](../decisions/0003-immutable-definition-snapshots.md). Question and Resolution Criteria confirmations address possible changes to proposition meaning and recommend a new Prediction for a materially different proposition. Forecast Deadline confirmations instead describe changes to the forecast cutoff and derived locking. One confirmed save stores one immutable row containing complete before/after snapshots of Question, Resolution Criteria, and Forecast Deadline plus a canonical UTC instant. Expected Resolution remains outside this history. The current prediction remains the canonical source for current metadata; Definition history preserves interpretive context rather than event-sourcing the prediction. Deliberate future parent deletion can cascade to its revisions, tag associations, and definition history transactionally. Later schema additions arrive with the slice that needs them.
+
+### Canonical and derived data
+
+Canonical facts include the prediction, its immutable forecast-model and scoring-contract identity, any prospective exact Forecast Deadline, every saved binary or numeric forecast revision, every immutable Forecast Review, every definition-change snapshot, every Journal entry and correction version, original immutable Resolutions and Invalidations, any prospective effective Resolution time, every cohort-appropriate terminal correction snapshot, Postmortem completion, tag relationships, and mutable Saved View configurations. Derived values normally include:
+
+- current forecast;
+- current displayed Journal body and unified timeline ordering;
+- effective Resolution outcome, notes, and Postmortem;
+- effective Invalidation reason;
+- time-dependent Locked status;
+- Needs Attention;
+- Ready to Resolve;
+- individual Binary and Numeric resolved-prediction scorecards;
+- one-pair initial-versus-final update summaries with separate unrevised counts;
+- Brier summaries; and
+- calibration aggregates.
+
+Derived values should not be stored merely for display convenience unless a demonstrated correctness or performance need justifies it.
+
+### Runtime location
+
+Qt's `AppLocalDataLocation`, after the application identity is set, provides the corresponding per-user directory. On Windows the stable canonical database is:
+
+```text
+%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3
+```
+
+The normal source-development command uses a visibly different identity and path:
+
+```text
+%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3
+```
+
+The database parent directory is created when needed. There is no automatic copying, migration, or fallback between stable and development data. Backups and exports live at destinations explicitly chosen by the user. Tests and private frozen-build smoke checks always inject temporary paths and never discover or open either real user database.
+
+## 9. Transaction boundaries
+
+`Database` owns one standard-library SQLite connection for the application lifetime. The connection runs in autocommit mode so transaction boundaries are always explicit. Its transaction context rejects nesting, starts with `BEGIN IMMEDIATE`, commits on success, and rolls back on any exception. Foreign-key enforcement is verified when the connection opens, and a five-second busy timeout allows brief external lock contention without waiting indefinitely.
+
+Transactions protect operations that must not leave partial history:
+
+- Creating a prediction, all supplied initial metadata and tag associations, and its first forecast revision with optional rationale is one transaction. Initial values do not append Definition history.
+- Editing metadata and tag associations, plus the definition snapshot when required, is one transaction.
+- Appending a revision rechecks the reviewed current-revision and metadata-version tokens, lifecycle eligibility, deadline, and changed probability inside one immediate transaction, then inserts exactly one new row without editing prior rows.
+- Adding a Journal entry rechecks the reviewed current-revision and metadata-version tokens plus persisted lifecycle eligibility inside one immediate transaction, then captures that transaction-current revision without changing forecast or prediction state.
+- Recording a Forecast Review rechecks the type-appropriate current-revision and metadata-version tokens plus derived Open eligibility inside one immediate transaction, then captures the unchanged revision without modifying forecast or scoring state.
+- Correcting a Journal entry rechecks its reviewed latest-correction token inside one immediate transaction and appends one changed body version. An effective no-op returns the existing entry without acquiring a new timestamp or writing.
+- Resolution rechecks the reviewed type-appropriate revision and metadata version, records the Binary outcome or exact Numeric actual value plus the exact scoring revision, and persists terminal status atomically.
+- Invalidation rechecks the same type-appropriate reviewed context and records terminal state, timestamp, and optional reason atomically.
+- A terminal correction rechecks the reviewed latest-correction identifier, derives the transaction-current effective snapshot, rejects no-op or unexplained score-affecting changes, and appends exactly one complete before/after record without updating the original terminal row.
+- Postmortem completion rechecks the latest correction identifier, Resolved state, blank effective Postmortem, and absence of an earlier completion before appending one immutable timestamped fact.
+- Deletion requires explicit confirmation, rechecks untouched Open eligibility for the Prediction's forecast type, and cascades the eligible parent and its initial child state atomically.
+- Updating the stale threshold validates the value and replaces the singleton setting in one transaction; it does not mutate any Prediction or history row.
+- Backup uses SQLite's online backup API to capture a consistent snapshot, verifies a temporary database, atomically installs it, and only then records the successful time in the source settings.
+- CSV export reads all twelve type-aware related tables inside one immediate transaction, closes that transaction, then serializes and validates a temporary ZIP before atomically installing it. It never updates canonical state.
+- Saved View creation, explicit configuration replacement, rename, and deletion update only the mutable preference rows and their tag-reference rows inside one immediate transaction. Applying a Saved View only sets desktop controls and reruns the existing read-only archive query; changed controls never persist back until an explicit update action succeeds.
+- Global tag rename, merge, and deletion first capture exact Prediction and Saved View relationship contexts for confirmation, then recheck those contexts in one immediate transaction. The canonical joins, retained tag identities, affected Prediction metadata tokens, and rebuildable search documents commit or roll back together; cancellation writes nothing.
+
+Expected domain or validation failures roll back the operation and are translated into clear user-facing messages. Unexpected persistence failures are not silently swallowed.
+
+## 10. Time and lifecycle
+
+Terminal states—Resolved and Invalid—are persisted one-way v0.1 decisions backed by immutable terminal records. Locked is derived from the Forecast Deadline and the computer's local calendar date, so it remains correct after the application has been closed across the boundary. The deadline date is inclusive: an otherwise Open prediction becomes Locked only when the local date is later than its Forecast Deadline. Open predictions without a deadline remain Open until a terminal decision.
+
+Open and derived Locked predictions accept new Journal entries; Resolved and Invalid predictions reject them. Forecast Reviews are stricter: only Open Predictions accept them, while Locked and terminal Predictions reject them. Transparent corrections to existing Journal entries remain allowed in every lifecycle state because they preserve the original assertion rather than create a backdated one.
+
+Needs Attention and Ready to Resolve are derived classifications, not stored lifecycle states. They may overlap and must not mutate a forecast. Needs Attention begins when at least the configured number of complete 24-hour periods has elapsed since the later of the latest ForecastRevision or Forecast Review canonical UTC instant; the persisted default is 14 days. Journal creation and correction do not reset it. Ready to Resolve begins when the computer's local date is later than the inclusive Expected Resolution date. Terminal Predictions participate in neither classification.
+
+System-generated instants follow [ADR 0002](../decisions/0002-canonical-utc-instants.md): application operations obtain one aware instant from an injectable clock, normalize it to UTC, and the data layer stores canonical RFC 3339 text ending in `Z`. Definition, Forecast, Review, Journal, and correction history render stored instants in the computer's local time. Date-only values retain calendar semantics and are not converted between time zones.
+
+## 11. Analytics flow
+
+The implemented ordinary scoring pipeline is:
+
+```text
+resolved Prediction and captured type-appropriate scoring revision
+  -> exclude Invalid and unresolved predictions
+  -> validate exactly one observation per Prediction and Resolution
+  -> Binary: pair probability with outcome -> Brier/reliability/trend
+  -> Numeric: pair interval with actual -> containment/error/interval score
+  -> apply forecast-type, tag, and optional exact-unit filters
+  -> aggregate only type-compatible and unit-compatible measures
+  -> render in the Analytics UI
+```
+
+Selection logic and calculation logic require tests independent of chart widgets. Tag filtering should constrain the observation set before aggregation. Probability-history charts use all revisions for one prediction, while scoring uses exactly one eligible revision; these are separate data products and must not share misleading selection behavior.
+
+One read transaction returns each Binary and Numeric Resolution's captured scoring revision, latest effective outcome after its correction chain, and associated tags in original canonical resolution-time and identifier order. Pure analytics validate unique Prediction and Resolution contributions. Binary calculations map Yes to 1 and No to 0, calculate Brier on the 0-through-1 scale, use fixed `0-9%` through `90-100%` probability bands, and retain the cumulative resolution-time trend. Numeric calculations treat both interval endpoints as inclusive, reuse the same ten bands for whole-number confidence, and report actual mean confidence, observed containment, and count. Median absolute error and interval width use exact base-ten values; proper interval score applies the confidence-dependent penalty on only the missed side. A corrected outcome changes the values calculated for that one observation; it never changes its captured ForecastRevision, original Resolution time, or observation count.
+
+The type and tag filters apply before every type-specific output. Numeric **All units** may combine unitless containment observations but produces no raw-error summary. Selecting one exact unit filters the Numeric headline, table, chart, and mean raw metrics together. The **All types** view renders Binary and Numeric sections separately, and the unit selector is available only after choosing Numeric. Native UI charts consume calculated bins and cannot select observations or calculate scores.
+
+## 12. UI data flow
+
+M39 adds a presentation-only layer above the existing screen coordination. `MainWindow` installs one stylesheet generated from its effective `QPalette`; palette or application-font changes rebuild semantic colors/fonts and re-render remembered Lucide icons. New and M39-converted widgets state visual intent with dynamic properties and small helpers instead of adding more embedded color declarations or screen-specific font increments. The shared boundary defines compact/ordinary/section/page spacing, control/panel radii, short motion limits governed by Qt's `SH_Widget_Animate` preference, relative native-font roles, palette-derived base/raised/input/selected surfaces, light/dark green accents, focus and disabled treatment, shared action roles including the M58 caution role, text badges, and persistent message tones. It imports no domain, analytics, application, or data module, persists nothing, and does not participate in any operation or query. The boundary is an ordinary UI implementation detail rather than a new framework or architecture constraint, so M39 requires no new decision record.
+
+M42 completes the first core-workflow rollout of that presentation boundary. New Prediction uses a bounded raised Forecast panel, type-aware guidance, a collapsed optional-details panel, one persistent inline error, and one primary create action while retaining the exact Binary and Numeric control sequence and atomic operation calls. Both Detail variants now compose the same ordered regions: type/status and full Question with the current forecast, common forecast actions, secondary lifecycle actions, nonempty metadata, effective terminal facts and correction history, the causal text timeline, and the type-specific history chart. Timeline and correction records use nested base surfaces and selectable plain text; absent optional metadata stays hidden and history groups stay collapsed. A small dialog superclass applies shared spacing, headings, field labels, reviewed-context surfaces, inline error tones, and Save/Cancel roles only after each existing dialog has built its controls. This layer does not intercept signals, change focus order, select scoring data, create history, or participate in transactions.
+
+M42A routes Numeric **Edit Details** through that same dialog and the existing application operation. The dialog exposes only shared mutable metadata and presents unit plus decimal precision as selectable, immutable context. The operation loads the correct Binary or Numeric detail, performs the same normalized no-op and protected-field checks, and delegates one type-neutral repository transaction that updates the parent metadata row, tag relationships, metadata version, required Definition snapshot, and trigger-maintained search projection together. It then reloads the matching detail type. Forecast revisions and freshness, Journal and Review anchors, terminal records, scoring capture, unit, and precision are never inputs to this update. Optimistic metadata-version and complete reviewed-snapshot checks reject stale dialogs before older context can overwrite newer state.
+
+M43 composes Predictions inside the shared page and content-panel grammar without changing its query construction. Primary search, two-column common filters, compact detailed tag/date filters, and Saved View controls occupy separate labeled regions in that reading order within one controls pane. Entering Predictions leaves the primary Search field unfocused until the user deliberately engages it. The maximized layout fits those controls without scrolling; spare viewport height remains below the controls rather than stretching headings, and the pane scrolls independently only when height is constrained. In that narrow stacked mode, each closed archive combo box and From/To date editor forwards wheel input to the controls scroll-area viewport instead of changing its current value. These controls also exchange Qt's wheel-focus policy for ordinary strong focus while stacked, preventing incidental scrolling from painting the deliberate green focus treatment; pointer hover remains distinct. Deliberately opened popups and every control in the wide layout retain native wheel behavior, while click and keyboard focus continue to work in both layouts. Detailed tag filtering replaces the bulky multi-select list with a UI-only searchable picker backed by the same available-tag tuple and selected-tag query values. Engaging its empty field reveals all available unselected tags, typing narrows them case-insensitively, and completion selects the canonical display name before clearing the query. Selected tags wrap as removable text chips; one stable chip row is reserved in the empty state, and removing a chip returns focus to the tag field rather than advancing into Saved Views. All/Any remains the established archive query field. A splitter keeps Results visible beside the controls at normal widths, enforces minimum widths on both panes, and stacks them at narrow widths; the results region retains its own list scrolling and its in-memory selection and position. Archive and search results share a complete row hierarchy for Question, explicit forecast type and lifecycle badges, current forecast or effective terminal value, tags, date context, and—when searching—best-source label, safely emphasized snippet, and additional-source count. A pointer click activates the row body directly, while Qt keyboard activation still opens the same stored result and no row is automatically selected. Tag management uses the same heading, panel, action-role, and persistent status treatments while continuing to call only its established previewed application operations.
+
+M44 composes Analytics with the same page header, raised panels, semantic text roles, quiet Refresh action, persistent failure region, and explicit empty state already used elsewhere. Forecast type, tag, and exact Numeric unit remain one coherent fixed filter frame above a scrollable result region. Binary and Numeric headline panels sit beside each other when font-aware space permits and stack at smaller logical widths; calibration tables and chart accessibility descriptions retain the complete nonvisual analytical meaning. The widgets continue to consume only the existing type-safe analytics snapshot, so the visual change cannot select observations or calculate a score.
+
+`MainWindow` now also owns eight application-scoped, navigation-only `QShortcut` objects. One guard declines every shortcut while a modal window is active or an editable text, multiline, numeric, date, or editable-combo control owns focus. Ctrl+N and Ctrl+F explicitly focus Question and Search after navigation; the numbered destinations, Settings, sidebar toggle, and contextual Back action perform only their established shell operations. Expanded and compact shell tooltips and a Settings reference expose the bindings. Predictions and Analytics declare tab chains in visual reading order, while tag management and Settings strengthen names, descriptions, and initiating-control order without changing an operation or persistence boundary.
+
+`MainWindow` owns navigation and screen coordination. New Prediction keeps Question and whole-number Probability primary and places optional initial rationale, metadata, dates, and tags in a collapsed, scrollable **More details** section. One operation saves all supplied initial state atomically and navigates to Prediction Detail. Because these values establish the initial definition rather than edit an existing one, they require no metadata confirmation and append no definition-change record. An initial Forecast Deadline earlier than the current local calendar date is rejected; today is valid because the deadline is inclusive. Expected Resolution is independent and may be in the past or on either side of the deadline.
+
+Prediction Detail displays the question, current forecast, derived status, tags, and nonempty optional metadata. It refreshes when entered so date-derived status and external edits do not remain stale across navigation. Its edit dialog refreshes the prediction before opening, accepts optional text, date-only fields, and comma-separated tags, and carries that refreshed metadata version through any confirmation prompt. An unset date is shown as blank or **Not set**, never as though today's date were stored; enabling it may seed today's date as the editable choice. Background, Expected Resolution, and tags save normally without confirmation or history. Question and Resolution Criteria changes prompt about proposition meaning and advise creating a new Prediction when the proposition changed materially. Forecast Deadline additions, changes, and removals receive tailored confirmation about the cutoff and Locked behavior, without characterizing the edit as a proposition change. A confirmed protected-field save updates metadata and tags, advances the metadata version, and appends exactly one complete definition snapshot atomically. Effective no-ops and cancelled dialogs perform no write, do not advance the version, and create no history. A version mismatch before or during the transaction rejects a stale edit for review rather than overwriting newer values.
+
+Definition history is hidden when empty and collapsed by default when present. It shows only the protected fields that changed in each snapshot and renders the UTC change instant in local time.
+
+For an Open prediction, **Revise Forecast** opens a side-effect-free dialog showing the reviewed current probability, a whole-number replacement probability, and optional **What changed?** rationale. The new value must differ from the current revision; returning to an older, non-current probability is valid. A successful save refreshes Current Forecast and the unified timeline, whose Forecast entries show each probability transition and any rationale as plain text. The dialog carries both the reviewed revision identifier and prediction metadata version, and the application rechecks both plus lifecycle eligibility inside the append transaction. A stale form is rejected rather than appending against a forecast or definition the user did not review. The action is disabled for derived Locked and persisted terminal states, with the application operation remaining authoritative if state changes while the dialog is open.
+
+For an Open or Locked prediction, **Add Journal Entry** opens a side-effect-free dialog showing the reviewed forecast and accepting a required multiline body; ordinary Enter inserts a newline and Ctrl+Enter saves. It carries the reviewed current-revision and metadata-version tokens, and stale context is rejected rather than attaching reasoning to a forecast or definition the user did not review. The action is disabled for Resolved and Invalid predictions, with the application operation remaining authoritative.
+
+Prediction Detail displays Forecast and Journal events in one causal timeline. Journal entries show their original local timestamp, current body, and **Forecast at the time**. **Correct Entry** is available in every lifecycle state and opens the latest body in a transparent correction dialog. After a changed save, the entry remains at its original timeline position, gains an **Edited** timestamp, and exposes the original plus superseded versions in a collapsed **Edit history**. No individual Journal Delete action exists. Timeline text uses plain-text rendering.
+
+For an Open Binary Prediction, **Still at N%** opens a side-effect-free Forecast Review dialog; the Numeric equivalent is **Keep this interval**. The dialog displays the exact reviewed forecast, accepts an optional note, and carries revision and metadata tokens. A saved Review renders as a distinct plain-text timeline event with its retained context. Locked, Resolved, and Invalid Detail views disable the action. Cancel creates nothing, and success refreshes the timeline without adding a history-chart observation.
+
+Below the timeline, Prediction Detail reuses `list_forecast_revisions` to populate a native, theme-aware probability-history widget. The chart paints exactly one marker per revision on a fixed 0% through 100% vertical scale. Actual stored instants determine elapsed horizontal position and display in local time. Revisions connect in immutable sequence order using step-after geometry, so a probability stays level until the next revision; equal instants share one horizontal position, and a regressing system clock may cause the line to travel backward rather than trigger timestamp re-sorting or synthetic offsets. A single marker receives symmetric horizontal padding. The widget's accessible summary and the exact textual Forecast entries in the timeline make the same history available without relying on the visual plot. Journal events never enter the chart.
+
+The chart is implemented with a dedicated `QPainter` widget and the active Qt palette as recorded in [ADR 0004](../decisions/0004-native-probability-history-chart.md). It introduces no external chart library, schema state, or analytics calculation.
+
+For an Open or Locked prediction, **Resolve** opens a deliberate terminal dialog requiring Yes or No or one exact Numeric actual value and accepting optional factual Resolution notes and reflective Postmortem text. The dialog shows the reviewed scoring forecast and carries revision and metadata-version tokens. A successful transaction captures that exact transaction-current revision, persists the outcome, and refreshes Detail with outcome, local resolution time, scoring forecast, and nonempty notes. **Mark Invalid** follows the same refresh and token discipline, accepts an optional reason, and displays the preserved non-scored terminal decision. Both dialogs explain that the terminal state cannot reopen while an honest factual or text mistake can later be corrected with visible history. Terminal predictions disable both actions as well as revisions and new Journal entries; audited correction of an existing Journal entry remains available.
+
+M27 adds **Correct Resolution** inside a Resolved Binary or Numeric terminal section and **Correct Reason** inside an Invalid section. Detail first loads the corresponding complete history through the application boundary and renders only its effective outcome, notes, Postmortem, or reason as the calm current summary. Once at least one correction exists, a collapsed correction-history group contains the original terminal snapshot and every timestamped before/after change, including any outcome-correction explanation. The correction dialog is prefilled from the effective snapshot and carries the latest correction identifier. A no-op stays inline; an outcome or actual-value change reveals its score impact and requires a short explanation; every changed proposal receives an explicit confirmation before the single application operation runs. A text-only save uses the same confirmation without imposing an extra reason. This same Resolution dialog permits an omitted Postmortem to be added later and an existing Postmortem to be corrected or cleared. Success re-queries Detail, while cancellation or an expected stale/lifecycle error leaves the reviewed dialog and canonical history intact.
+
+M28 adds a compact **Scorecard** inside each Resolved Detail section. Binary shows the scored Yes probability, effective Yes or No outcome, individual Brier score, and a lower-is-better reminder. Numeric shows its captured interval, confidence, median, exact unit, effective actual value, inclusive containment, median absolute error, interval width, and proper interval score with lower-is-better guidance for error and interval score. The application asks analytics data access for the canonical resolved observation, then passes it to a pure type-specific projection; Detail only formats the result. A scorecard is absent for Open, Locked, and Invalid Predictions. When an effective score-affecting terminal correction exists, the refreshed card recomputes its one metric set and calls out that correction history exists without altering its original scoring revision or creating another observation.
+
+M30 extends Dashboard with a distinct **Needs Postmortem** section outside the nonterminal attention buckets. Its type-aware query selects exactly Resolved Binary and Numeric Predictions with a blank effective Postmortem and no `postmortem_completions` row, uses the latest effective outcome or exact actual value for display, preserves original resolution-time ordering, and carries the current correction token. Each row opens current Detail or offers **Skip Postmortem**. The confirmation explains that Skip appends one immutable completion fact without changing the Resolution, score, or lifecycle; cancellation is side-effect free, and a stale correction token cannot append a completion. A successful Skip removes the row after refresh and displays a calm success message. Resolved Detail displays the timestamped skipped-completion fact independently of later Postmortem text, so adding prose later never hides that earlier decision.
+
+**Delete** is enabled only when the refreshed Detail query reports an untouched Open prediction. It presents a permanent-action confirmation without mutating on Cancel. The confirmed operation rechecks all eligibility and concurrency facts inside its transaction. Locked or meaningful nonterminal history instead exposes **Mark Invalid**, while terminal history cannot be deleted through the normal interface. Widgets perform no SQL and own no transactions.
+
+Dashboard refreshes at startup, whenever it is entered, and once per minute while it remains visible; the timer stops on other screens. It queries all nonterminal Predictions with their type-appropriate current ForecastRevision and latest Forecast Review instant, derives deadline status and attention against one current instant, then renders four counted sections. Open and Locked are lifecycle views; Needs Attention and Ready to Resolve are overlapping action views, so a Prediction may appear in several sections with all applicable labels intact. Each row says **Forecast last considered**, explicitly labels Binary or Numeric, shows the matching probability or interval/median/unit summary, and opens freshly queried type-appropriate Prediction Detail. Empty sections remain explicit rather than disappearing. Settings currently exposes only the persisted Needs Attention threshold; saving it immediately refreshes Dashboard without adding a general settings framework.
+
+Predictions refreshes whenever it is entered and once per minute while visible so its Open and Locked views remain correct across local-date boundaries. Question search trims surrounding whitespace and uses Unicode-aware case-insensitive substring matching over Question only; v0.1 does not silently extend this to Background, rationales, or Journal bodies. Status choices are All, Open, Locked, Resolved, and Invalid; forecast-type choices are All types, Binary, and Numeric. The single tag filter uses stable stored display spelling. All four filters combine using logical AND. Results show a type-appropriate current forecast, derived lifecycle status, associated tags, and latest forecast time, use explicit new-database and no-match empty states, and load current type-appropriate Prediction Detail before navigation. A failed initial query is not presented as an empty archive; a failed refresh retains earlier rows only with an explicit warning.
+
+Analytics refreshes whenever it is entered and on explicit refresh or forecast-type, tag, or unit change. **All types** keeps Binary and Numeric results in separate labeled sections. Binary retains its scored count, mean Brier, reliability table/chart, and cumulative trend. Numeric shows scored count, overall containment, a complete confidence-bin table and native containment chart, and explanatory sparse-data language. The exact-unit selector is disabled outside the Numeric view; **All units** explicitly withholds raw averages, while one unit reveals mean median absolute error, interval width, and interval score with that unit printed beside every value. Empty bins remain visible with count zero but add no chart point. Charts expose nonvisual summaries, expected read failures are not shown as zero scores, and a failed refresh retains prior results only with a warning.
+
+M29 adds separate Binary and Numeric **Retrospective update feedback** sections beneath those ordinary scoring views. The data query joins sequence-one revision context to the Resolution's immutable captured scoring revision, and the pure analytics layer emits at most one pair per revised-and-resolved Prediction. Unrevised Resolutions are counted separately; intermediate revisions, Invalid Predictions, and unresolved Predictions never enter the paired population. Binary reports paired mean initial Brier, final Brier, and initial-minus-final improvement. Numeric reports unitless initial/final confidence and containment across units, while exact-unit selection reveals paired median error, width, narrowing, and proper interval-score comparisons. Every result follows the same forecast-type, tag, and optional exact-unit filters and carries sparse-sample and noncausal language. Effective outcome corrections recompute both sides against the corrected value but retain the original resolution time.
+
+Settings displays the canonical database path and last successful backup time alongside the existing attention threshold. **Back Up Now** and **Export CSV Bundle** use native save dialogs with timestamped suggestions. Cancel is side-effect free. Expected path, file, SQLite, or archive failures remain visible without replacing a previous destination artifact. Backup success updates the displayed time; CSV success reports the sixteen generated tables while continuing to label the ZIP as non-restorable analytical data.
+
+M41 composes Dashboard and Settings from `PageHeader`, `ContentPanel`, `StatusBadge`, `EmptyStateLabel`, and `PersistentMessageLabel`. These small UI-only widgets express recurring structure and semantic intent through the M39 visual system; they do not query data, dispatch operations, or introduce a component framework. Dashboard keeps the exact existing section tuples and ordering, while each panel renders its count separately from its title and each wrap-safe keyboard-native row retains its complete Question, type-aware forecast or effective outcome, lifecycle, every applicable overlapping attention label, and timing context. Settings keeps its two existing concerns but separates their explanatory text, controls, selectable database/backup facts, and persistent result regions. Backup/export destinations, partial-backup warnings, repair results, and all expected failures remain inline and do not expire.
+
+`NotificationHost` is one child overlay of the main shell, not a page-layout item. Dashboard and Settings emit a plain routine-success signal only after their application operation has completed and the owning view has refreshed; `MainWindow` then asks the host to present it. The host keeps at most one message visible, coalesces identical repeats, follows parent resizing without changing page geometry, exposes an explicit keyboard-accessible Dismiss control, pauses dismissal during pointer or keyboard interaction, and defers presentation while a modal dialog is active. Qt accessibility receives an Alert event in addition to stable accessible names. Every notification call contains its own presentation failures, so loss of a transient acknowledgment cannot change a committed operation or replace a persistent error. M41 initially routes only saved attention-threshold and completed Postmortem-skip acknowledgments through this boundary; persistent artifact paths and search-repair results remain inline because their information is not otherwise visible in the current page.
+
+A screen requests view data through an application query, renders it, and invokes a complete operation in response to user intent. After a successful mutation, the relevant view is re-queried or updated from the operation result. Widgets should not maintain an independent canonical copy of prediction state.
+
+Dialog cancellation has no side effect. In particular, opening and closing a revision, Journal, correction, Resolution, or Invalidation dialog cannot create history or terminal state.
+
+Expected failures—such as attempting a revision after the deadline—are shown in plain language. Unexpected exceptions should remain visible to the application error boundary during development rather than being suppressed in individual signal handlers.
+
+## 13. Migrations and compatibility
+
+Database evolution uses the lightweight mechanism recorded in [ADR 0001](../decisions/0001-lightweight-sqlite-migrations.md). `data/migrations.py` contains an immutable, contiguous sequence of numbered and uniquely named migrations. The `schema_migrations` table records each applied version and name rather than relying on `PRAGMA user_version`.
+
+Startup opens an explicit `BEGIN IMMEDIATE` transaction, validates the bundled registry and the database's complete recorded history, applies all pending SQL statements in order, checks foreign-key integrity, and commits. Any failure rolls back the whole pending migration set. Running startup again when nothing is pending is idempotent.
+
+An empty database can receive the baseline. A nonempty SQLite database without Reckonsolve migration history is unrecognized and rejected. An empty, malformed, gapped, renamed, or otherwise inconsistent migration history is rejected, as is a schema version newer than the running application understands. These failures never trigger database deletion or recreation.
+
+Each future migration must be tested against the prior schema state, preserve existing user data, and leave the database reopenable. Version 9 preserves Binary data while adding the Numeric foundation; version 10 preserves Binary Journal history while adding type-aware anchors; version 11 preserves both types and existing Binary terminal records while adding Numeric Resolution and type-aware terminal-status guards; version 12 preserves both forecast types while adding immutable type-aware Reviews; version 13 preserves every original terminal row while adding audited correction and Postmortem-completion history; version 14 preserves all version-13 data while adding only rebuildable search structures and invalidation triggers; version 15 preserves all version-14 data while adding mutable Saved View configuration and stable tag-reference tables; and version 16 preserves every version-15 fact while adding explicit legacy/new contracts and empty prospective exact-time structures without backfilling an exact time. Every migration has a forced-failure rollback test pinned to its preceding schema. Earlier version-specific tests remain pinned to their historical targets. Already completed migrations are historical records and must not be edited. A third-party migration framework still requires a demonstrated need.
+
+### Derived search projection
+
+SQLite remains canonical; `prediction_search` is a contentful FTS5 projection with one row per source fragment. Each row carries its Prediction identifier, stable source classification, canonical record and optional correction/version identifiers, sequence and time context, a superseded flag, and the indexed user-authored body. The projection covers current Question, tags, Background, current Resolution Criteria, every immutable forecast rationale and Forecast Review note, effective Journal text, effective Resolution notes and Postmortem, effective Invalidation reason, and every required score-affecting correction explanation. Distinct superseded Question, Resolution Criteria, Journal, Resolution, Postmortem, and Invalidation text is retained as historical-only projection rows.
+
+Small schema triggers add affected Prediction identifiers to `search_dirty_predictions`; they never derive or duplicate canonical text rules. The outer `Database.transaction()` deterministically replaces those Predictions' complete documents immediately before commit. Any projection exception rolls back both derived and canonical changes. Deletion projects an absent Prediction to zero rows. Startup requires FTS5, consumes a retained dirty queue, and rebuilds when the separate projection algorithm version or recorded document count is incompatible. Full integrity checking replays every canonical Prediction and compares the resulting document set; repair discards only derived rows and rebuilds them. [ADR 0013](../decisions/0013-rebuildable-sqlite-fts5-search-index.md) records this boundary.
+
+`domain/search.py` parses ordinary words and fragment-local quoted phrases without exposing raw FTS syntax, provides incremental final-token prefix matching, normalizes case and common diacritics, applies pure deterministic grouping and source-aware ranking, and derives plain snippet text plus source-indexed emphasis spans. `data/search.py` issues parameterized FTS queries, preserves current-Question literal substring behavior, derives conservative single-edit suggestions from the user's own corpus, and supplies current type-aware forecast or effective terminal summary fields without making the projection canonical. The application operation derives Locked and attention values once for each query, then applies status, type, multiple-tag All/Any, attention, and local-calendar date constraints before ranking. It reports rather than silently applies an available Any-word fallback, applies a requested deterministic non-relevance sort only after grouped hits exist, and converts repair failures into an explicit expected error. `domain/browser.py` owns reusable archive-query values, validation, matching, local-date projection, and null-last identity-stable sorting so blank browsing and full-text results cannot drift apart.
+
+The M33/M34 Predictions UI keeps blank text on the established archive query and sends nonblank text through the shared grouped search operation after a short debounce. It exposes a multiple-selection tag list with All/Any mode, one derived attention choice, optional From/To date endpoints for a selected meaning, and every deterministic sort. Relevance is disabled without text and selected by default while text is active; Created newest is the ordinary default. It escapes every source character before applying controlled snippet emphasis, retains one accessible row per Prediction, labels historical-only hits unmistakably, and preserves previously loaded rows behind a visible warning when an expected query failure occurs. Activating a hit reloads the current Prediction through the ordinary type-aware navigation query, then expands and scrolls to its matching metadata, immutable timeline, Definition history, Journal edit history, or terminal-history context; widgets retain provenance only as transient navigation data and never query SQLite directly.
+
+M35 adds a compact Saved View control row inside that same screen. The picker holds named configurations only; choosing one blocks intermediate control signals, restores every text, history, filter, date, attention, tag-mode, and sort control, and reruns the normal query against present data. A loaded view reports **Saved** or **Modified** by structural comparison with the current controls. **Update Saved View** is disabled unless the configuration differs, so applying or changing a control cannot silently replace a saved preference. Create, Save as new, rename, and delete call dedicated application operations; cancellation writes nothing, and delete confirms that only the preference will be removed.
+
+M36 adds **Manage Tags** beneath the Predictions archive controls as a secondary modal workflow rather than a seventh primary screen. It lists retained tags with Prediction/Saved View counts, filters labels by case-insensitive substring, and requires row selection for rename, merge, or deletion. Rename confirmation shows old/new labels and affected Predictions; merge makes the retained target explicit and shows both affected counts; deletion warns when removing a condition may broaden a Saved View. The dialog invokes preview and mutation application operations rather than SQL, refreshes current counts only after success, and leaves the browser to reload Saved Views and ordinary query results through their established paths.
+
+M37 leaves desktop presentation unchanged and extends only `cli.py`. The `search` parser owns command-line spelling and ISO-date parsing, while the application operation remains authoritative for query parsing, filter validation, lifecycle/attention derivation, grouping, ranking, suggestion generation, and index failures. Readable output labels explicit Any-word guidance and spelling suggestions as advice, never as an altered command. `saved-view` deliberately separates `--id` and `--name`, avoiding ambiguity for a Saved View whose display name is numeric. Both Saved View command paths are read-only and rerun configurations dynamically rather than storing or exposing fixed Prediction membership.
+
+## 14. Backup and export
+
+Backup and CSV export have separate implemented contracts:
+
+- Backup produces a consistent artifact sufficient to recover the full application state.
+- CSV export produces documented, portable analytical data and may use several related files to preserve historical structure honestly.
+
+Backup uses the standard-library binding to SQLite's online backup API. It writes to a unique temporary database beside the chosen destination; runs SQLite quick, foreign-key, and schema-version checks; closes the temporary connection; then uses same-directory atomic replacement. The canonical database path, including an equivalent hard link, is rejected as a destination. Failure cleanup targets only the owned temporary file, and an existing destination remains untouched until installation succeeds. Backup copies the complete current database, including forecast contracts, prospective exact-time structures, canonical correction/completion history, mutable Saved Views, and the disposable search projection; search can still be rebuilt solely from the copied canonical tables.
+
+CSV export reads all sixteen format-version-three relationships in one transaction. It retains the twelve format-version-two files unchanged and adds separate Binary Resolution-correction, Numeric Resolution-correction, Invalidation-reason-correction, and Postmortem-completion files. Stable parent identifiers and contiguous correction sequences preserve every join. The included data dictionary explains effective-value replay, changed-field flags, score-affecting correction reasons, exact Numeric scaled values, and every v0.5 exclusion. Serialization, archive validation, and same-directory atomic replacement retain the prior destination-safety contract. SQLite backup remains the complete current recovery artifact; CSV remains the guarded historical analytical format until Milestone 55 and does not yet expose version-16 forecast contracts or prospective exact-time structures.
+
+## 15. Private Windows build
+
+PyInstaller 6.22.2 is an exact, locked build-only dependency in the `packaging` dependency group. It is not imported by the application, included as a runtime library, or required for normal development. The checked-in spec produces a windowed `onedir` bundle, collects only the application's imported code plus selected UI resources and license notices, and deliberately supplies no invented Reckonsolve icon. `onedir` keeps the first private build inspectable and gives clearer missing-resource diagnostics than a self-extracting executable.
+
+`tools/build_windows.ps1` synchronizes the locked group, replaces only generated PyInstaller output under ignored `build/` and `dist/` directories, and then copies the completed bundle to a unique ignored smoke directory. It launches the copied executable with an internal private-smoke argument and an offscreen Qt platform from that relocated working directory. The executable verifies that it is actually frozen, creates a disposable real v0.4 schema-version-13 database with append-only terminal history, constructs the real main window so startup migrates it through version 15 and loads every local resource, and proves FTS5 capability plus effective/history search, Saved View execution, transactional tag rename/merge/delete, an independent CLI-compatible canonical read, visible index failure, explicit repair, verified backup, and restart of both source and recovery databases. It retains the earlier Binary and Numeric revision, Review, correction, later-Postmortem, scorecard, paired-update, and Needs Postmortem coverage. The source checkout, Python interpreter, and `uv` are used to build but are not used by the smoke process.
+
+This artifact is a development validation output, not a supported release. There is no installer, Start menu integration, shortcut ownership, uninstaller, code signature, update channel, or public download contract. [ADR 0008](../decisions/0008-private-onedir-and-local-icons.md) records why this narrow build exists.
+
+## 16. Testing strategy
+
+The suite covers package entry points, GUI and CLI runtime composition, paths, database/migrations, clocks, domain validation, prediction operations, pure analytics and search ranking, data transfer, and Qt screens. It uses explicit temporary databases for initialization, upgrades through schema version 15, atomicity, restart, and cleanup scenarios, and pytest-qt only for GUI behavior. M3 through M25 retain their completed historical, desktop, CLI, analytics, transfer, packaging, migration, identity, concurrency, and failure-safety coverage. M26 adds pure snapshot-replay tests plus temporary-database coverage for version-12 migration, forced rollback, database immutability and sequence guards, Binary and exact Numeric corrections, score-affecting explanation requirements, text-only changes, Invalidation reasons, Postmortem completion, corrected-outcome analytics, independent-connection stale tokens, restart, and transaction rollback. M28 adds pure scorecard projections and real-database Qt rendering coverage. M29 covers revision-one/final selection, separate unrevised counts, omitted intermediate revisions, filters, unit boundaries, corrected effective outcomes, and preserved original resolution time. M30 covers queue membership, effective terminal facts, cancellation, Skip completion, stale context, later Postmortems, Detail rendering, and restart. M31 adds side-effect-free complete CLI terminal-history reads, all four format-version-three relationships and their data dictionary, schema-12 frozen migration, complete backup recovery, simultaneous reads, sequential cross-interface writes, artifact safety, and full v0.4 smoke verification. M32 adds pure safe-query and deterministic-ranking tests plus a synthetic source-priority corpus; schema-13 upgrade and forced-failure coverage; comprehensive Binary/Numeric current and superseded source projection; prefix, phrase, Unicode, punctuation, substring, All/Any, suggestion, grouping, deletion, restart, independent-connection, stable/development isolation, corruption, repair, and projection-failure rollback scenarios. M33 adds safe snippet-span and source-label tests; presentation-ready Binary/Numeric and effective corrected terminal summaries; existing archive-filter composition; desktop All/Any, history, suggestion, safe-markup, accessible-description, explicit-empty, and retained-results behavior; and exact superseded-Journal Detail navigation. M34 adds shared rich-filter composition across Binary, Numeric, Open, Resolved, Invalid, corrected terminal, missing-date, and attention records; inclusive date ranges; null-last sort behavior; relevance/default-sort behavior; and desktop multi-tag, attention, date, sort, and clear-reset controls. M35 adds mutable configuration validation, case-insensitive names, stable tag references, current-membership re-query, restart and backup recovery, identity isolation, version-14 upgrade and rollback, and saved/modified desktop workflow coverage. M36 adds retained zero-use tags, case-insensitive filtering, display-only rename, duplicate-name guidance, many-to-one Prediction/Saved View deduplication, broader-view deletion, metadata-token invalidation, search consistency, failure rollback, cancellation, restart, verified-backup recovery, independent-connection reads, and desktop confirmation coverage. M37 adds help without database startup, full-text filtering and grouped plain-text explanation, Any-word fallback, superseded-history labels, Saved View configuration listing, name/ID execution, empty and not-found paths, terminal safety, and proof that all new reads leave Prediction and Saved View data unchanged. M38 adds same-count projection mismatch recovery, explicit desktop repair, the named privacy-safe relevance corpus, the measured 2,000-Prediction/6,000-fragment completeness run, schema-13 frozen migration, effective/history search, Saved Views, tag-wide operations, independent reads, repair, backup, and recovery in the relocated executable. The recorded method and observations live in [Search evaluation](../maintainer/search-evaluation.md).
+
+M39 adds focused Qt coverage for the visual boundary's centralized tokens and imports, light/dark semantic contrast, role properties, accessible names, focus and disabled selectors, native-font relativity, platform animation hint, palette-triggered style/icon refresh, and representative New Prediction/Forecast Review integration. These tests assert semantic intent rather than pixel-perfect platform rendering; manual review remains responsible for evaluating the resulting native Windows composition in both system modes.
+
+M40 adds focused Qt and settings coverage for permanent-destination hierarchy, the prominent creation action, the bottom Settings utility, source-aware contextual Detail return, unchanged Predictions query/results/selection/scroll state on return, active-route treatment, compact-mode text completeness and accessible names, keyboard operation, stable/development preference isolation, INI corruption or write-failure tolerance, and safe recovery from removed-monitor or invalid window geometry. Window-state tests retain normal geometry and maximization but explicitly exclude minimized restoration. No test opens a real user database.
+
+M41 adds focused component and window coverage for page-header structure, raised content panels, text badges, explicit empty and persistent-message roles, wrap-safe long Dashboard Questions, overlapping attention labels, Settings action hierarchy and selectable recovery facts, persistent backup/export destinations, and success/error tone separation. Notification tests cover non-reflowing overlay position, identical-message coalescing, modal deferral, navigation while visible, automatic and keyboard dismissal, accessible text, and deliberate presenter failure after a successful setting write. Existing real-database Postmortem tests verify that the skip fact remains committed and visible after the transient acknowledgment is gone.
+
+M42 adds focused Qt coverage for the shared Binary/Numeric creation and Detail hierarchy, equal action layouts, selectable history surfaces, dialog roles, lifecycle visibility, and unchanged type-specific workflows. M42A adds temporary-database tests for ordinary, protected, no-op, invalid, stale, and forced-failure Numeric metadata edits across every lifecycle, including exact unit, precision, revision, terminal-history, Definition-history, search, and restart assertions. Focused Qt tests verify the Numeric action placement, immutable-definition context, successful refresh, and side-effect-free cancellation while the established shared-dialog tests continue to cover warning cancellation and inline application errors.
+
+M43 adds focused Qt coverage for labeled control-group order and non-expanding heading spacing, side-by-side and narrow stacked workspace modes, enforced pane minimums, independent control scrolling including closed combo/date wheel forwarding and stacked focus policies, discoverable tag completion, cleared completion text, stable empty/selected tag geometry, chip removal focus, date-editor dimensions, distinct Saved View action icons, neutral initial Search focus, action roles, single-painted structured type/status/forecast/tag/date rows, no automatic selection, and direct mouse plus keyboard activation. Existing Predictions tests continue to cover stable populated/empty/error geometry, multi-tag All/Any queries, removed-tag recovery, full Saved View configuration round trips, safe snippets, source provenance, suggestions, matched-history Detail navigation, and preserved archive context. The complete v0.5 search, rich-filter, Saved View, tag-transaction, and relevance suites remain the semantic regression boundary.
+
+M44 adds focused Qt coverage for shared Analytics composition, filtered Binary/Numeric presentation, persistent errors, responsive headline stacking, table and chart text alternatives, exact shortcut bindings, navigation-only activation, explicit Question/Search focus, modal and active-editor suppression, visible Settings documentation, and enriched archive, Settings, and tag-management accessibility. Pure analytics and chart-projection suites remain unchanged and continue to prove that presentation owns neither observation selection nor calculation.
+
+Most behavior should be verified below the GUI:
+
+- pure unit tests for probability, lifecycle, attention, revision selection, probability-history projection, and scoring rules;
+- temporary-SQLite integration tests for transactions, constraints, queries, migrations, restart persistence, and backup consistency;
+- pytest-qt tests only for behavior that genuinely depends on Qt signals, widgets, navigation, or dialog cancellation; and
+- application and private-build smoke tests against temporary data directories.
+
+Tests use fixed clocks, explicit temporary paths, and representative boundary cases. The normal verification commands are:
+
+```text
+uv sync
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+```
+
+## 17. Error handling
+
+Expected errors should use explicit application or domain error types that the UI can present without a traceback. Examples include invalid probability, missing question or Journal text, an action disallowed by lifecycle, stale forecast or metadata context, a concurrently corrected Journal entry, and a search projection that requires repair.
+
+Unexpected exceptions should not be converted into false success or empty data. Database failures must preserve the original database and provide enough context for diagnosis without exposing unrelated local information.
+
+## 18. Decisions intentionally deferred
+
+The M12 resource, identity, and private-build boundary is implemented. The original application icon remains pending because its artwork must be directed or supplied by the user; the current private executable therefore retains PyInstaller's generic default rather than pretending to establish Reckonsolve's permanent mark.
+
+A normal installer, uninstall policy, code signing, public distribution channel, and automatic updates remain Later decisions. When one becomes consequential, seek explicit user authorization before changing the product specification. Record durable technical reasoning in an [architecture decision record](../decisions/README.md) when appropriate.
+
+## 19. Evolution into v0.2
+
+The approved v0.2 product plan adds one central numeric prediction interval per revision and explicit Forecast Reviews through Milestones 13 through 20. M20 completes the plan: Open-only immutable Reviews preserve exact Binary or Numeric forecast context and refresh Needs Attention without altering revision history, charts, or scoring; version-two relational export and complete backup/migration/private-build recovery coverage preserve those records across every supported local path. The application now covers the complete type-aware forecasting, Journal, Review, lifecycle, Dashboard, archive, analytics, and portability loop.
+
+The architecture will continue through implemented vertical slices rather than prebuilding later scope. After each milestone, update this document to reflect actual modules, persistence behavior, and any recorded technical decisions; do not describe planned structures as already implemented.
+
+## 20. Evolution into v0.3
+
+The completed v0.3 plan adds a human-directed CLI companion through Milestones 21 through 25. M21 implements the shared-data foundation and read model: paired source entry points, identity-selected database composition, `--help`, `--version`, filtered `list`, and complete type-aware `show`. M22 adds interactive `create binary` and `create numeric` flows that preserve existing defaults, exactness, optional details, atomicity, and cancellation behavior. M23 adds type-aware `revise`, `journal`, and `review`, retaining existing immutable-history, forecast-anchor, freshness, lifecycle, deadline, and optimistic-concurrency semantics. M24 adds confirmed type-aware `resolve`, `invalidate`, and guarded `delete`, retaining final scoring-revision capture, exact Numeric outcomes, Invalid exclusion, one-way terminal state, and transaction-current deletion eligibility. M25 adds CLI backup and format-version-two CSV export through the existing verified transfer operations, hardens independent-connection and artifact-failure behavior, and closes the source release. Every milestone uses the existing version-12 schema and application operations, so both matching interfaces preserve one canonical history without a synchronization subsystem.
+
+The CLI remains source-distributed through `uv`; a separately frozen executable, installer integration, noninteractive scripting API, terminal analytics, live inter-process refresh, and logo work remain outside v0.3.
+
+## 21. Evolution into v0.4
+
+The completed v0.4 plan spans Milestones 26 through 31. M26 implements the domain and persistence foundation: original terminal rows remain immutable; complete Binary, Numeric, and Invalidation correction snapshots append in deterministic chains; one Postmortem completion fact can be recorded; and effective replay supplies corrected outcomes to ordinary analytics without changing scoring-revision capture, resolution-time ordering, or observation count. Schema version 13 migrates the completed v0.3 database forward and remains fully recoverable through SQLite backup.
+
+M27 exposes audited desktop correction and later-Postmortem workflows. Both type-specific Detail screens show effective terminal values and complete collapsed correction history, and their focused dialogs preserve the append-only, exactness, explanation, confirmation, and optimistic-concurrency contract. M28 adds individual Binary and Numeric scorecards that reuse the exactly-once analytics observation and visibly distinguish an effective corrected terminal value from immutable scoring context. M29 adds filtered one-pair initial-versus-final feedback with separate unrevised counts, unit-safe Numeric comparisons, corrected-outcome recomputation, and explicit retrospective/sparse-data cautions. M30 adds the Resolved-only Needs Postmortem queue and confirmed Skip completion while preserving later Postmortem eligibility and the completion fact on Detail. M31 adds historically complete CLI read parity, relational export format version 3, full portability and private-build coverage, and v0.4 source-release closure.
+
+## 22. Evolution into v0.5
+
+The completed v0.5 plan begins with Milestone 32's search foundation. SQLite FTS5 is a rebuildable, source-classified projection rather than canonical state. Version 14 preserves the v0.4 database, backfills all searchable current and historical text, and keeps every subsequent searchable write atomic with its projection refresh. Presentation-neutral queries accept ordinary words, local quoted phrases, final-token prefixes, current-Question substrings, explicit All/Any semantics, corpus-derived spelling guidance, and effective-versus-superseded scope. Pure ranking groups fragments into one result per Prediction and deterministically favors exact and literal current Question matches before source priority and FTS relevance.
+
+M33 completes the first user-facing search surface. The Predictions screen now switches cleanly between the established blank-query archive and grouped explainable full-text results, while preserving type and status filtering. Safe snippets and explicit source labels explain why each Prediction matched; All/Any and spelling alternatives remain user-chosen; historical text is opt-in; and result activation uses stored provenance only to reveal the corresponding current Detail context. M34 completes rich archive retrieval with multiple-tag All/Any filtering, derived attention, optional local-calendar date ranges, deterministic sorts, and one clear-reset path shared by blank and full-text browsing. M35 adds named dynamic Saved Views, stored as a complete validated archive configuration with stable tag identifiers and no result membership. Applying one uses the same query path; configuration changes become visibly modified and persist only through explicit update. M36 adds previewed transactional tag-library maintenance that preserves stable rename identity, deliberately merges into a selected target, explicitly warns before deleting Saved View conditions, invalidates stale Prediction metadata forms, and refreshes the derived search projection inside the canonical write. M37 completes CLI retrieval parity: full-text `search` maps terminal-friendly controls to the same query and explainable grouped result model, while `saved-views` and `saved-view --id/--name` inspect and dynamically rerun existing Saved Views without adding a CLI mutation path. M38 verifies final portability, relevance, recovery, cross-interface, and private-build behavior and closes the v0.5 source release without adding semantic search, Collections, a new forecast model, an installer, signing, updates, public binaries, or logo work.
+
+## 23. Evolution into v0.6
+
+Milestone 39 establishes the v0.6 presentation foundation without touching schema version 15 or any forecasting behavior. One UI-only module turns the effective Qt palette and native application font into shared semantic colors, typography, spacing, radii, interaction states, focus treatment, action hierarchy, status/message treatments, and restrained motion limits. The root window owns installation and theme refresh, while screens assign intent through reusable helpers. New Prediction and Forecast Review provide the first representative page/dialog application, destructive Delete actions receive an explicit role, and matched-search focus uses the same central selector. Later v0.6 milestones can propagate these roles and compose higher-level page/shell structures without importing presentation into the domain or persisting theme state.
+
+Milestone 40 implements the application shell while preserving every workflow and schema-version-15 boundary. New Prediction is an action rather than a peer destination; Dashboard, Predictions, and Analytics are the permanent primary routes; Settings is visually separated at the bottom; and Detail appears contextually with a Back label naming its source. Returning from Detail does not reconstruct the originating screen, which preserves the complete in-memory Predictions search, filter, Saved View, result, selection, and scroll context. The last primary route supplies the return target after creation. The sidebar can switch between complete expanded labels and complete icon-only controls with tooltips and accessible text; Qt's normal focus model remains usable in either mode.
+
+`presentation_settings.py` keeps the sidebar choice, safe normal geometry, and maximized flag in an identity-scoped INI file beside the canonical database. Geometry restoration fits the stored normal rectangle fully within the currently available screens or falls back to a centered safe default when a monitor disappeared, dimensions are invalid, or settings are corrupt. Minimized state is never restored. Read or write failure degrades to defaults rather than blocking startup or shutdown. This disposable shell state is deliberately absent from SQLite, backup/export artifacts, search, and the CLI.
+
+Milestone 41 applies the first shared page composition to Dashboard and Settings. Dashboard section membership, tuple ordering, minute refresh, lifecycle derivation, and navigation are untouched; presentation now separates titles from count badges, makes overlap explicit, wraps long Questions, and preserves every classification as text. Settings retains the same attention, backup, export, and repair operations while clarifying action roles and keeping paths, warnings, successes, and failures in selectable persistent regions.
+
+The main shell owns one `NotificationHost` overlay for routine acknowledgments whose result is already visible or recoverable. Threshold saves and Postmortem skips emit only after their operation and refresh succeed. The overlay never enters a page layout or canonical storage, coalesces repeats, defers around modal dialogs, and auto-dismisses unless being used. Backup/export destinations, repair results, and failures do not use it. This maintains a strict architectural separation between a committed application operation and optional feedback rendering.
+
+Milestone 42 carries the same presentation language through creation, both Detail variants, timelines, charts, and focused dialogs without changing their application operations. Milestone 42A closes Numeric metadata-edit parity through the shared dialog and type-neutral parent-metadata transaction while preserving the immutable Numeric definition and every historical forecast fact.
+
+Milestone 43 reorganizes Predictions into stable search, two-column common-filter, compact detailed-filter, Saved View, and results regions. The controls fit the normal maximized pane, scroll independently when height is constrained, sit beside the distinct Results collection at normal widths, and stack above it at narrow widths. The draggable splitter cannot shrink either pane below its usable minimum. Entering the route leaves primary Search neutral. Detailed tag selection reveals current unselected choices from an empty field, filters completion as the user types, and wraps selections as removable chips over the same canonical tag choices and All/Any query semantics. Structured archive/search rows are painted once through their custom widgets and support direct mouse and keyboard activation; they and the tag-management dialog use the central visual roles, while all retrieval, ranking, dynamic-view, tag-identity, and matched-context behavior remains the completed v0.5 implementation beneath that presentation.
+
+Milestone 44 completes the cross-application presentation pass before release hardening. Analytics now uses the shared page and panel grammar with responsive type-summary composition, stable filters, persistent failure treatment, and the same textual tables and accessible chart summaries as before. Eight guarded application shortcuts perform only shell navigation, explicit Question/Search focus, sidebar presentation toggling, or contextual Back; an active editor or modal dialog suppresses them. Their bindings are visible in Settings and shell tooltips. Explicit focus chains and accessible descriptions strengthen Predictions, Analytics, Settings, and tag management without introducing a migration, preference, application operation, or production dependency.
+
+Milestone 45 closes the v0.6 source release without changing schema version 15. One integration regression snapshots every ordinary, virtual, and derived application table before and after opening, navigating, displaying both forecast types, and changing external shell state; the snapshots must remain identical. The private frozen smoke retains the complete migration, canonical-history, search, Saved View, tag, recovery, cross-connection, and repair path, then additionally proves packaged semantic styling and icons, safe initial geometry, all primary routes, Binary and Numeric Detail, global keyboard navigation, expanded/compact accessibility, representative responsive sizes, external preference restart, and another all-table no-rewrite boundary from the relocated executable.
+
+`tools/run_visual_review.py` supplies empty, representative, and deliberately long-text temporary databases for the human release matrix. It launches them under the development identity, never resolves the stable or development application-data paths, and deletes both SQLite and presentation settings when the review window closes. The recorded matrix complements automated behavior checks across system palettes, Windows scaling, window sizes, shell modes, feedback states, responsive Predictions/Analytics arrangements, and keyboard use; it does not turn subjective visual acceptance into canonical application state.
+
+## 24. Evolution into v0.7
+
+Milestone 46 establishes only the shared compatibility and exact-time foundation. The [Forecasting Rulebook](../reckonsolve-forecasting-rulebook-v0.7.md) is linked as durable local guidance, while README offers a short optional admissibility check without persisting a classification or attestation. Forecast-model and scoring-contract identity is canonical and immutable; exact Deadline and effective Resolution semantics apply only to the explicit prospective cohorts. Pure domain code validates and dispatches these concepts without importing Qt, SQLite, analytics, or presentation code.
+
+Public Binary and Numeric creation remained on legacy contracts during M46. M47 now switches the shared public Binary creation operation, desktop form, and CLI to the trajectory contract. The first revision, immutable identity, exact Deadline, metadata, and tags commit atomically in the existing schema-version-16 transaction. The private legacy seed is used only for migration/compatibility tests and disposable visual/private-build fixtures; it is not a normal application entry point. Numeric creation remains interval-v1 until its complete later slice.
+
+Contract-bearing Binary Detail and mixed Dashboard/archive/search read models expose the stored identity rather than inferring it from application version or missing date metadata. One pure `contract_status` function dispatches the exact new-model cutoff versus legacy date-only locking. The archive's existing calendar-date filter uses the exact Deadline's local date. Revision and Review transactions recheck the injected clock after acquiring write access; revisions additionally validate strict ordering against the latest immutable revision. No timestamp is clamped or synthesized. See [ADR 0016](../decisions/0016-validate-active-commit-times-under-transaction.md).
+
+The desktop exact-deadline editor uses a native date/time control with a separate explicit UTC offset. A UTC Qt time-zone carrier avoids implicit DST normalization of wall-clock input; only the user's offset determines the stored UTC instant. The editor displays hours and minutes and commits zero seconds, so no invisible seconds affect the chosen cutoff. Empty/unset deadlines remain explicit, the initial wall-clock suggestion is not a fabricated future deadline, and optional guidance lives outside canonical data. The CLI accepts an offset-bearing ISO date/time and offers the same guidance through `?`. Desktop Deadline context displays through minutes with the UTC offset; timeline labels use local dates and minutes, with exact Binary event instants available in tooltips. Canonical storage, ordering, enforcement, and CLI audit timestamps retain full precision. Legacy editable date metadata stays separate.
+
+M47 initially staged trajectory Resolution until M48; M48 now supplies that complete individual terminal/scoring slice. CSV format 3 still cannot represent new-contract facts, so its existing export boundary refuses new-model databases before producing an artifact. Online SQLite backup remains complete. M55 replaces that guard with format-version-four portability; separate analytics and the five-quantile Numeric workflow proceed in specification order.
+
+### M48: trajectory terminal facts and individual scoring
+
+The application and Binary repository extend the existing Resolution transaction
+with explicit effective time and an under-transaction recorded-at sample. The
+desktop native time control uses the same explicit-offset wall-clock convention
+as Deadline entry; CLI `resolve` accepts `now` or an offset-bearing ISO instant.
+The optional seconds display does not truncate an unchanged saved time during
+a text-only correction. New time-aware dialogs reserve their wrapped form's
+width-dependent minimum height so explanatory text cannot compress inputs.
+
+`AnalyticsRepository.get_trajectory_source` takes one consistent contract,
+revision, and terminal-history snapshot. `analytics/trajectory.py` alone builds
+the standing segments, exact microsecond weights, neutral remainder, and
+Fraction-valued score/diagnostics. Detail progressively discloses diagnostics;
+CLI `show` retains explicit timestamps and terminal history. Both label excluded
+revisions, while the ordinary probability-history chart still contains every
+real revision. Unscored records retain their Resolution and history.
+
+Correction writes select the type-specific canonical chain, recheck optimistic
+context under transaction, and never change original recorded-at. The shared
+schema-17 union is only for terminal-text reads, search projection, and
+Postmortem completion. Search refresh stays inside the canonical transaction.
+Tests cover prior-version migration/rollback, exact-duration and offset cases,
+correction reselection, no-score transitions, stale context, projection failure,
+GUI/CLI parity, unchanged hidden precision, and backup/restart. See
+[ADR 0017](../decisions/0017-derive-trajectory-scores-from-terminal-facts.md).
+
+### M49: separate trajectory Binary aggregate analytics
+
+`AnalyticsRepository.get_forecast_sources` reads legacy Binary, legacy Numeric,
+and resolved trajectory Binary inputs under one SQLite snapshot. The trajectory
+source carries complete immutable revisions and the latest effective terminal
+history rather than a preselected final revision. `analytics/trajectory_aggregate.py`
+calls the existing pure individual scorer once per resolved candidate and derives
+exact equal-Prediction means, early-versus-Deadline counts, mean active-window
+share, updating direction counts, and one final-probability reliability
+observation per eligible Prediction. Records whose effective outcome predates or
+equals their first forecast remain visible as unscored candidates but contribute
+to no mean or calibration bin. Invalid records never enter the source.
+
+The Analytics screen gives the trajectory cohort its own primary panel and
+final-probability plot/table, labels every former Binary aggregate as legacy, and
+uses the existing Forecast type and tag controls across both cohorts. Sparse-data
+guidance avoids stable-skill claims, Updating Gain is explicitly mechanical
+hindsight rather than a causal effect, and neutral truncation is never displayed
+as a forecast. This slice changes no schema, stored score, dependency, Numeric
+behavior, or legacy observation selection.
+
+### M50: five-quantile Numeric foundation (not public creation)
+
+Schema 18 introduces `numeric_quantile_definitions` and
+`numeric_quantile_revisions`. The immutable definition adds the value constraint;
+unit and precision stay on the immutable parent. Each revision stores exactly five
+scaled integers in named columns, so completeness and ordering are enforced in a
+single insert. Whole-number values must be integral at the retained precision;
+whole-number is not inferred from zero decimal places.
+
+Journals, Reviews, and Numeric Resolutions gain a nullable `quantile_revision_id`
+with composite ownership references and an exactly-one-anchor constraint.
+Insert guards dispatch from the stored contract and require the current owned
+revision. For v2 Resolution this ID records input context, not scoring authority.
+The anchor tables and referencing correction tables are rebuilt transactionally,
+copying every old column unchanged and restoring their guards and indexes.
+`numeric_forecast_revisions` is never rebuilt or populated with invented quantiles.
+Foreign keys stay enabled, failed migrations roll back the copies and DDL, and
+startup integrity checks require a complete v2 definition and initial revision.
+
+`domain/quantiles.py` supplies immutable validated values; `data/quantiles.py`
+provides internal atomic creation/replacement and exact history reads for the next
+slice. It samples the injected clock only under transaction, rejects stale
+revision/metadata context, and never exposes a public model selector. The shared
+causal timeline merge orders v2 Journal/Review events by their real anchors and
+timestamps, including original and corrected Journal text. Derived search adds
+quantile rationale and anchored history, including effective terminal corrections,
+but indexes neither quantiles nor scores as prose. Shared Postmortem guards see
+the model-appropriate correction chain.
+
+`analytics/quantiles.py` has no Qt or SQLite dependency. It computes exact
+Fraction-valued interval loss, WIS and its contributions/decomposition, validates
+one complete ordered history, selects strictly before `min(R, T)`, and derives
+Initial/Final/Delta WIS. Outcome-at-or-before-initial records are explicitly
+unscored. No trajectory, neutral truncation, or cross-question raw aggregate is
+implemented for Numeric v2. Existing legacy calculators are unchanged.
+
+GUI/application/CLI Numeric creation remains interval-v1 until M51; v2 terminal
+workflows and visible scorecards remain M52. Backup already preserves all schema-18
+facts, and format-3 CSV continues to reject prospective cohorts until M55. See
+[ADR 0018](../decisions/0018-five-quantile-revisions-and-shared-anchors.md).
+
+### M51: public five-quantile active workflows
+
+The public Numeric creation operation now accepts exactly five values, the
+immutable unit/precision/value constraint, and an exact Deadline. There is no
+legacy creation selector. A private legacy seed remains solely for compatibility,
+migration, visual-review, and private-build fixtures.
+
+`application/quantiles.py` composes the model-specific operations behind the
+existing application facade. `data/quantiles.py` samples time under transaction,
+checks reviewed revision/metadata tokens, and returns creation/revision snapshots
+from that same transaction. Reviews and Journals use explicit quantile anchors;
+transparent Journal corrections retain original text. Deadline checks also govern
+guarded deletion. Shared metadata transactions preserve the immutable definition
+and Deadline while updating tags, Definition history, and derived search atomically.
+
+`data/quantile_archive.py` projects current five-quantile summaries using stored
+cohort identity in the caller's existing snapshot. Dashboard, archive, and search
+carry the complete five values without populating legacy interval/confidence
+fields. The existing attention and local-date query rules reuse the exact contract.
+
+`ui/quantile_input.py` provides one editable complete set and a native QPainter
+central CDF, with elicited markers, dashed inner interpolation, vertical jumps at
+ties, exact text alternatives, and no outer extrapolation. Invalid/incomplete sets
+have no preview and are never sorted automatically. Desktop Detail and focused
+dialogs dispatch by the loaded model, as do CLI prompts and full-history output.
+Qt and CLI share validation/persistence operations, not SQL or scoring rules.
+
+New-model Resolution is explicitly unavailable until M52 rather than falling into
+the legacy interval scorer. Legacy editors, interval history, and terminal paths
+remain intact. Schema 18, complete SQLite backup, and the CSV format-3 guard are
+unchanged. Tests exercise public creation/revision, stale and deadline boundaries,
+anchored notes/corrections, metadata/search, deletion, restart, both interfaces,
+and retained legacy behavior on disposable databases.
+
+### M52: five-quantile terminal facts and individual WIS
+
+`QuantilePredictionRepository.resolve_prediction` validates current revision and
+metadata context, terminal eligibility, exact precision, and the immutable value
+constraint under the existing immediate write transaction. Its recorded-at sample
+is acquired after transaction access; the explicit use-recording-time choice uses
+that same instant as effective time. A regressing recording clock cannot precede
+the latest revision. The existing schema-18 Resolution stores the current quantile
+revision as recording context only, never as final-scoring authority.
+
+`terminal_history.py` dispatches original and correction reads from stored cohort
+identity and replays effective actual value, notes, Postmortem, and time together.
+The quantile correction table already introduced by M46/M50 records complete
+before/after snapshots, changed-field flags, reasons, and under-transaction correction
+timestamps. Original recorded-at cannot change; actual/time changes require a
+reason, while text-only corrections retain the saved exact effective instant.
+Search refresh remains atomic. A read-only correction union supplies Dashboard
+Postmortem facts across both Numeric cohorts without mixing their scoring rules.
+
+`AnalyticsRepository.get_quantile_source` returns one consistent contract,
+definition, complete revision history, and terminal-history snapshot. The pure
+individual WIS scorer selects strictly before the effective cutoff, identifies
+excluded revisions, and computes exact Fraction-valued Initial/Final/Delta WIS.
+Outcome-at-or-before-initial records remain explicitly unscored. No derived score
+or replacement scoring pointer is written; legacy aggregate queries still admit
+only legacy interval observations.
+
+The existing desktop Resolution and correction dialogs gain the shared explicit
+effective-time control only for Numeric v2. The dedicated `QuantileScorecardPanel`
+shows primary WIS and progressively discloses interval/median contributions and
+within-Prediction comparisons; exact plain-text formatting is shared with CLI
+`show` through `quantile_display.py`. Neither presentation layer selects revisions
+or computes scores. Excluded revisions stay visible in the causal timeline.
+Tests cover boundary times, exact signed/tied outcomes, whole-number rejection,
+correction reselection, no-score transitions, cancellation, stale context, rollback,
+Postmortem completion, source/backup restart, and GUI/CLI rendering. Schema 18 and
+the format-3 export guard remain unchanged; M53 owns aggregate calibration.
+
+### M53: five-quantile calibration and scale-free update feedback
+
+`AnalyticsRepository.get_forecast_sources` now reads all four cohorts within one
+SQLite transaction. `QuantileScoringRecord` carries the explicit contract,
+measurement definition, complete revision sequence, effective terminal history,
+and current tags. The repository neither chooses a final revision nor calculates
+scores. Historical fixture schemas without quantile tables yield an empty new
+source, not invented observations.
+
+`analytics/quantile_aggregate.py` reuses `resolved_quantile_scorecard` exactly once
+per candidate. Duplicate Prediction or Resolution identifiers are rejected.
+Invalid and unresolved records never enter the source; outcome-at-or-before-first
+records contribute only to an explicit unscored count. The final scoring revision
+and latest effective actual supply every calibration comparison. Comparisons use
+scaled integers within each definition, retaining exact signed decimals and ties.
+No interpolation or individual intermediate revision becomes an observation.
+
+Continuous-style and whole-number definitions form separate calibration groups
+even if both use zero decimal places. Each group contains the five fixed nominal
+levels, strict and inclusive proportions, inclusive 50%/90% outcome balances, and
+median below/equal/above counts. Counts and empirical fractions are exact; a
+display-only 95% Wilson interval uses the standard normal 97.5th percentile and
+floating-point square root. These pointwise descriptive ranges are not a skill
+test or simultaneous confidence band. Whole-number tie bands represent observed
+endpoint mass, not uncertainty; their two Wilson ranges remain available in the
+table. Empty proportions have no fabricated zero estimate or uncertainty range.
+
+Initial/final feedback includes only scored revisions with a final sequence above
+one. Positive/zero/negative exact Delta WIS produces better/equal/worse counts;
+sequence-one scoring selections are reported separately as unrevised, including
+histories whose later revisions were excluded by an effective-time correction.
+The aggregate has no raw WIS, Delta, error, or width mean—even for matching units.
+The overview preserves case-insensitive tag and exact-unit filtering across both
+Numeric cohorts and leaves legacy interval and Binary calculations untouched.
+
+`ui/quantile_analytics.py` renders the new cohort with native five-level plots,
+complete text alternatives, tie-aware outcome tables, and direction-only update
+cards. It invokes no persistence or scoring operation. Shared metric and equal-width
+plot/table layouts moved unchanged into `ui/analytics_components.py`, avoiding a
+dependency from new components back to the Analytics screen. Charts and tables
+share the raised surface; pairs stack when narrow and tables expose all rows.
+Empty measurement groups remain explicit without empty plots. Legacy Numeric
+sections are labeled and never silently share v2 calibration membership.
+
+Tests cover exact endpoint and collapsed-interval ties, signed fixed precision,
+strict cutoff/correction reselection, revised versus unrevised direction counts,
+nonforecast-history exclusion, filters, duplicate rejection, one-transaction reads,
+restart and read-only data preservation, Wilson boundary cases, and responsive Qt
+rendering. Schema 18, complete SQLite backup, and the M55 CSV guard are unchanged.
+
+### M54: four-cohort cross-interface parity
+
+The existing application operations remain the sole mutation and scoring boundary
+for desktop and CLI. Numeric CLI `show` now names its scoring contract as Binary
+already did; reviewed mutation context also displays the scoring identity and
+Numeric unit, precision, and value constraint. Offset-bearing ISO input retains
+exact UTC instants, including microseconds, while detailed terminal facts display
+the equivalent local instant with an offset. No new command or scoring path was
+introduced.
+
+`data/forecast_contracts.py` validates the closed model/scoring pairs and exact
+Deadline presence at startup and before cohort-filtered collection reads. Archive
+and Dashboard quantile projection, full-text retrieval (including no-match reads),
+and the four-source aggregate snapshot reuse that check in their existing
+transaction. Unsupported records cannot disappear merely because SQL selected
+only known models. Old-schema migration fixtures retain their explicit no-contract
+compatibility path. Desktop and CLI startup report contract-integrity failures
+without replacing the database. This check adds no persisted state or migration.
+
+`tests/test_cohort_interface_parity.py` exercises all four cohorts with independent
+CLI connections while a desktop-operation connection remains open. It covers
+public new-model creation, legacy and new-model mutations, exact Deadline and
+effective/recorded times, dynamic Saved Views, stable tag rename/merge/deletion,
+corrected Journal and terminal search provenance, deterministic repair, unchanged
+canonical data during reads, stale reviewed contexts, and a lock acquired after
+the CLI prompt but before commit. Unsupported identities are tested both on live
+collection reads and reopen. M55 still owns CSV format 4 and release hardening;
+schema 18, complete SQLite backup, and the format-3 guard remain unchanged.
+
+### M54A: compact trajectory summary and Analytics interpretation guide
+
+The user-authorized visual follow-up replaces nine nested Trajectory Binary metric
+cards with three flat `CompactMetricGroup` widgets: Score, Timing, and Updating.
+They consume the same derived snapshot fields. Captions and selectable values
+sit beside each other; groups
+align at the top, keep their natural content height, and stack at narrow widths.
+Only this summary adopts the compact treatment; no global card style or scoring
+rule changes. Responsive tests cover two font sizes and three window widths and
+verify unchanged analytical values.
+
+The eligible count uses the shared neutral headline `METRIC` text role, matching
+the score's size without its accent color. Timing presents the mean forecast-used
+share alongside its neutral remainder, with a concrete explanation in accessible
+help and the guide. Both five-quantile calibration plots label their horizontal
+axes at the elicited 5/25/50/75/95 percentiles; the 0–100% geometry, vertical ticks,
+observations, uncertainty bars, and legacy chart defaults remain unchanged.
+
+Analytics-specific `AnalyticsPanel` cards use title-case headings and move static
+explanations into title tooltips and accessible descriptions, leaving the shared
+`ContentPanel` behavior elsewhere unchanged. Dynamic counts and empty/error states
+remain visible; interpretation cautions live in contextual help and the guide.
+Timing captions are Forecast Weight and Neutral Weight: calculation weights, not
+fractions of the resulting score. No observation or statistic is removed.
+
+The aggregate timing captions explicitly say Average Forecast Weight and Average
+Neutral Weight. Trajectory final-probability calibration opts into unconnected
+diamond markers in the shared native chart; legacy calibration retains its prior
+rendering. Bin means, observations, counts, and the diagonal reference are unchanged;
+no Binary uncertainty estimator or new score is introduced. The guide distinguishes
+actionable calibration patterns from timing context and inventories the existing
+individual scorecards.
+
+`docs/analytics-guide.md`, linked from README, provides the longer explanatory
+material outside the interface: a review routine, Binary and Numeric plot axes,
+score/calibration distinctions, early-resolution weighting, whole-number tie
+bands, pointwise Wilson uncertainty, safe update comparisons, legacy behavior,
+and worked examples. It guides human interpretation, not application decisions or
+automatic forecast changes. M55 portability/release work remains separate.
+
+The authorized individual-scorecard follow-up uses `ui/scorecard_components.py`
+for selectable, responsive caption/value groups in resolved Prediction Detail.
+Binary diagnostics separate probability scores, trajectory comparison, and timing
+weights; longer definitions remain in accessible tooltips. Numeric WIS retains
+the shared plain-text summary and correction/exclusion notices, while its expanded
+breakdown groups comparison, median, and interval facts. `ui/scorecard_chart.py`
+paints the final scoring revision's two intervals, median, and effective actual on
+one linear scale. It projects exact scaled differences before converting bounded
+ratios to pixels, includes outside outcomes, and preserves tied endpoints. Exact
+text is always available alongside the graphic. No scoring selection, score
+calculation, persistence, CLI formatting, or legacy presentation changes occur.
+
+### M54B: legacy retirement without data conversion
+
+- **Compatibility gate:** `data/forecast_contracts.py` performs read-only whole-database checks. Migration checks before DDL or derived repair; normal transactions check before work and before commit. Existing connections cannot silently accept an externally inserted unsupported record. Backup reads pass the same boundary.
+- **Accepted inputs:** an empty database, a supported schema-18 archive, or supported Binary-only schema-16/17 history that can follow the existing migration chain. Pre-contract populated, retired-only, mixed, or invalid-identity archives are rejected unchanged with recovery guidance.
+- **Canonical preservation:** retirement introduces no table rebuild. Immutable revisions, exact deadlines, recorded/effective times, correction chains, Journal/Review anchors, Postmortem completions, tags, Saved Views, and settings retain their stored values. Search maintenance occurs only after compatibility succeeds.
+- **Removed runtime:** old creation factories, date-only locking, arbitrary-confidence interval inputs/revisions, interval timeline/chart and scorecard rendering, legacy aggregate calculators, and old query/CLI branches. Shared fixed-precision values, Brier/calibration mathematics, SQLite migration history, and recovery primitives remain.
+- **Presentation:** one exact-deadline lifecycle function serves both models. Metadata exposes the permanent deadline without an editable date-only control. Numeric history and displays use complete five-quantile records. Binary trajectory math and Numeric WIS selection are unchanged.
+- **Exports and tooling:** format 3 remains guarded for populated current archives; SQLite backup is the recovery path until M55. Disposable visual-review fixtures and private-build smoke use supported forecasts. Source-level smoke covers staged Binary upgrade, both types, UI resources, backup, and restart; a new packaged Windows build is not claimed here.
+- **Tests:** shared behavior uses explicit supported contracts and five quantiles. Historical raw fixtures test refusal, not a hidden legacy creation API. No automated test opens either real user database.
+
+### M54C: shared local-calendar deadline picker
+
+`ui/exact_deadline_input.py` owns the initially unset draft, calendar shortcuts,
+native date/time editor, exact summary, and optional explicit-offset entry. One
+instance in New Prediction survives Binary/Numeric switches and resets after a
+successful atomic creation. Its clock and `QTimeZone` are injectable for tests.
+The editor still carries wall-clock fields in UTC to avoid implicit normalization;
+local resolution now uses the selected date's platform zone rules. Valid matching
+before/after candidates identify ordinary times, gaps, and repeated times. Gaps
+are rejected and repeated times require a first/second occurrence choice. The
+application receives the resulting UTC datetime and retains its under-transaction
+deadline validation. No schema, domain, CLI, or effective-resolution editor changes
+are involved. See [ADR 0020](../decisions/0020-resolve-local-deadlines-explicitly.md).
+
+### M55: current-model portability and source-release closure
+
+`data/transfer.py` now reads one compatible schema-18 snapshot and writes a
+format-4 relational CSV ZIP. Prediction rows carry the closed forecast/scoring
+identity and exact immutable Deadline; five-quantile definitions/revisions,
+type-appropriate Journal/Review anchors, original effective and recorded
+terminal times, and separate append-only correction chains retain the facts
+needed for independent analysis. Retired interval-only files and date-only
+Deadline columns are absent. The included README documents every exported
+column, joins, exact scaled-integer values, standing Binary segments, strict
+Numeric cutoff selection, and nulls. CSV remains analytical, never recovery.
+Atomic same-directory replacement and archive validation are unchanged.
+
+The complete SQLite backup remains the supported recovery artifact. Supported
+schema-16/17 Binary archives upgrade through schema 18 without rewriting history;
+schema-18 archives with both models reopen and reproduce scores and search.
+Pre-contract, retired-only, mixed, missing/mismatched, or future-schema inputs
+are refused before migration/repair/write. Frozen smoke now validates CSV-4,
+both current models, backup/restart, and a byte-preserving refusal of a disposable
+unsupported archive. No new schema or production dependency is introduced.
+
+## 25. Evolution into v0.8: One-Shot Predictions
+
+Adaptive is the user-facing name for the regular forecasts previously labeled With
+Deadline / Deadline-based. This presentation rename preserves the `deadline` archive,
+Analytics, and Saved View keys, immutable model/scoring identities, and permanent
+Deadline rules. CLI `--mode adaptive` maps to `ArchiveMode.DEADLINE`; the existing
+`--mode deadline` spelling remains valid. No schema or search projection change is needed.
+
+M56's foundation and M57's individual workflows are implemented. [Product-spec Section
+36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan)
+owns the behavior and M56–M60 sequencing. M57–M59 have manual acceptance. M59 is
+complete; M60 implements format-5 export and release validation, with manual acceptance complete; release closure remains.
+
+### Contract and dependency boundary
+
+One-Shot is an explicit creation mode for the existing Binary and Numeric forecast
+types. M56 adds two closed, durable model/scoring pairs that dispatch independently from the
+trajectory Binary and Adaptive five-quantile Numeric pairs. Do not reuse the
+retired `binary-final-v1` identity or make it pass the M54B compatibility gate. Reuse
+the existing probability and exact five-quantile value validation, Brier and WIS
+arithmetic, tag and note operations, and visual components where they have the same
+meaning. Keep one-shot commitment, pending-answer lifecycle, corrections, score
+selection, and aggregate dispatch in domain/application/analytics layers; Qt and CLI
+only collect and present values.
+
+The one-shot score consumes one effective forecast and one effective answer. It does not
+use a Deadline, `min(R, T)`, durations, the v0.7 `R <= t0` exclusion, or initial/final
+revision comparison. Optional user-reported final-forecast and answer-reveal times are
+documentary, stored as reported wall-clock values rather than exact UTC events. The
+system-generated app entry and correction instants remain canonical audit facts. Detail
+must distinguish those system facts from reported times without requiring a
+phone-versus-app source classification.
+
+### Implemented M56 persistence and transaction shape
+
+Schema 19 rebuilds the contract table with its expanded closed pairs and Deadline
+checks, preserving every supported prior row. Other existing forecast and answer rows
+stay in place. The upgrade uses the immediate migration transaction with foreign keys
+enabled, compatibility checks before DDL and commit, and forced-failure rollback tests.
+Historical migration SQL remains unchanged.
+
+`domain/one_shot.py` validates complete Binary or Numeric snapshots and reported wall
+minutes. `analytics/one_shot.py` dispatches pure exact Brier/WIS without reading time
+metadata. `data/one_shot.py` provides atomic creation, later answering, and
+transcription correction. `data/one_shot_facts.py` independently validates the original
+and complete correction replay; it does not own transactions or depend on Qt.
+
+Original forecasts reuse sequence one in the existing type-specific revision tables;
+original answers reuse the type-specific Resolution tables with null effective time.
+Separate `one_shot_forecast_times` and `one_shot_answer_times` retain the optional
+wall-clock minute, approximate flag, and documentary offset. `one_shot_corrections`
+stores full relational before/after snapshots with per-Prediction sequence, app time,
+and optional note. SQL enforces original immutability, single-forecast cardinality,
+no Reviews, current-before snapshots, and exact ordered/integral Numeric quantities.
+Read-only original/effective views handle a forecast corrected before its answer is
+added; an earlier blank answer cannot hide the later original answer.
+[ADR 0021](../decisions/0021-one-shot-originals-and-transcription-snapshots.md) records the
+layout and alternatives.
+
+One transaction creates the Prediction, identity, definition, tags, original forecast,
+and optional original answer. A forecast-only creation is pending until a later Add
+answer transaction. A Correct transcription operation appends a full before/after audit
+fact for any score-affecting forecast or answer change and for corrected reported times,
+retaining original values and the app correction instant. It is not routed through
+ordinary revise/review operations and does not reset freshness. Current effective values
+are derived in one consistent read snapshot; scores are never persisted. Existing
+protected Definition history continues to guard Question and Resolution Criteria
+clarifications, while material target changes lead to Invalid/new-Prediction guidance.
+
+All migration, normal read/write, backup, and repair entry points must validate the
+expanded closed support matrix without relaxing M54B refusal of retired, missing,
+unknown, or mismatched identities. Search projection remains rebuildable derived state.
+M60 replaces the earlier format-4 One-Shot refusal with format 5, retaining complete
+original/effective values, reported/system times, corrections, and a dictionary.
+SQLite online backup continues to copy the complete database.
+
+M57 replaces the temporary foundation-only transaction guard with explicit model
+dispatch. Both compatibility checks still surround every transaction. Its repository
+returns a complete `OneShotDetail` before the write commits, avoiding a second read
+that could fail after a successful save. Foundation record-returning methods delegate
+to those same transactions. `application/one_shot.py`, composed by
+`PredictionOperations`, translates expected persistence failures and supplies pure
+individual scores. The UI and CLI never select an original revision for scoring.
+
+Basic effective rows in Dashboard/Predictions/search allow saved records to reopen and
+exclude them from revision staleness. Search projection version 3 follows effective and
+superseded Resolution notes/Postmortems from the transcription chain, and indexes each
+immutable transcription-correction note; writes mark the Prediction dirty in their
+transaction. Existing indexes rebuild without changing canonical history.
+Deadline-specific Detail and aggregate loaders exclude One-Shot. The shared
+Postmortem queue now includes eligible Resolved One-Shots.
+
+### Implemented M57 presentation
+
+New Prediction still defaults to its current Adaptive form. A One-Shot action
+opens a tailored Binary/Numeric form that can save with an answer or without one, never
+previews a score before Save, and asks for optional documentary times and an optional
+visible Background field for context and the checking method. Unanswered Detail presents Waiting for answer and Add
+answer. It retains Journal entries, metadata, tags, terminal notes, Postmortem text,
+original/corrected facts and Definition history; revise/review and Deadline controls are absent. The CLI
+offers interactive one-shot creation, optional immediate answer, later Resolution, and
+complete read-only history through the same application operations. Existing
+desktop-only correction scope remains the v0.8 boundary unless separately expanded.
+
+The creation modes share the same canvas, centered column and card spacing, with
+reciprocal top-right mode switches. One-Shot Background, Rationale and Tags remain
+visible in that order in its Forecast card after reported-time controls. Creation uses
+Background for context and the checking method and does not offer separate Resolution
+Criteria. Existing criteria and their Definition history remain available without
+rewriting or merging stored text. Expected Resolution is absent from One-Shot creation,
+metadata editing and CLI prompts; existing stored values are preserved without
+contributing a Ready to Resolve classification. Optional reported-time input uses a
+calendar date picker and one segmented `hh:mm AP` time field. `ui/time_input.py` supplies
+a small `QTimeEdit` adapter for explicit section-by-section Tab entry, A/P selection,
+bounded overflow advance, and reset of pending digits after mouse/navigation actions.
+Qt retains native rendering, selection, accessibility, validation, and arrow-key stepping.
+The date and time use Qt's UTC zone solely as a carrier to avoid local normalization.
+Enabling a new time draft seeds today's date and the current local minute. The domain
+receives a naive documentary wall minute, with any explicit offset kept separate.
+No reported time is stored unless its Record date and time checkbox is selected.
+
+Interaction research: Super Productivity's [datetime-picker template](https://github.com/super-productivity/super-productivity/blob/master/src/app/ui/datetime-picker/datetime-picker.component.html)
+uses native HTML `input type="time"` with minute steps; its `spTimeStep` directive only
+adds modified-arrow shortcuts. The browser supplies ordinary section editing and bounds.
+Reckonsolve implements the requested interaction through Qt without a web runtime or
+third-party time-picker dependency.
+
+Shared spin-box styling reserves space for both native buttons, including the Windows
+11 side-by-side arrangement, so the embedded editor cannot intercept an arrow click.
+The shared stylesheet also gives date fields a font-relative minimum width and replaces
+native rectangular dropdown bevels with a transparent button and a packaged light/dark
+chevron inside the rounded border. Those SVG resources follow the existing UI resource
+packaging path. Source/measurement advice stays in the Rulebook; form placeholders are
+short prompts and never persisted as content.
+
+`ui/one_shot.py` owns the tailored creation and answer/correction forms; the Detail
+host selects `OneShotDetailScreen` by its read-model type. `cli_one_shot.py` owns
+interactive `create binary --one-shot` / `create numeric --one-shot` and later
+`resolve`, Journal, Invalidate, and guarded Delete prompts. Shared
+`one_shot_display.py` formats saved facts and Brier/WIS breakdowns. Creation and
+correction forms do not request scores. Mode is fixed at creation, and neither
+interface can add a second committed forecast or Forecast Review.
+
+### M58 retrieval and reflection
+
+The archive query now filters on the immutable deadline/One-Shot identity across
+desktop and CLI. Current One-Shot rows use effective facts, no fabricated Deadline,
+and no updating attention. One-Shot correction notes enter rebuildable search
+projection version 3. Search navigation reveals original or corrected text in a
+chronological Detail timeline. One-Shot Journal body corrections share the existing
+append-only correction table and search provenance; the one-shot operation checks
+the current entry and expected correction token in its write transaction. Resolved
+One-Shots enter the shared Needs Postmortem queue; Skip creates the existing immutable
+completion fact, and a later Postmortem remains possible. The Dashboard marks their
+mode and uses entry wording instead of update wording.
+
+The M58 visual follow-up adds a palette-aware orange Caution action role for Mark Invalid
+in all supported Detail types and their confirmation forms; Delete retains the red
+Destructive role. Predictions rows calculate height from the actual results-pane width
+after wrapping, with uniform row spacing and compact three-line Numeric summaries.
+One-Shot Journal, correction, and timeline timestamps use the existing local-minute
+formatter; the exact canonical instants and causal ordering are unchanged.
+The One-Shot Detail Timeline renders one Journal card per original entry, using the
+current corrected body and the shared collapsed edit-history widget. The separate
+Journal panel is removed. Superseded Journal search targets expand the card's history
+before scrolling to and emphasizing the original or intermediate correction; current
+matches target the visible body. Corrections remain in canonical append-only history.
+
+The v0.8 closeout review uses the shared palette-aware yellow warning tone for
+One-Shot Waiting for answer badges in archive/search and Dashboard rows. Needs
+Postmortem uses the blue informational tone, while Resolved uses the existing green
+success tone. Desktop Binary and Numeric creation remove the optional
+commitment-guidance expander; the Rulebook and README retain the advice, and the CLI's
+optional guidance remains available. Keyboard order connects the Numeric q95 input
+directly to the first Deadline control.
+Creation copy uses sentence case, preserving the Forecast Deadline · Required heading.
+The Deadline summary is hidden until a choice is made; the explanatory footer is
+removed. Selected-time context and validation messages remain visible.
+
+Schema 20 adds nullable `forecast_mode` to the existing strict `saved_views` table,
+constrained to `deadline` or `one_shot`. Null preserves All modes for existing views.
+The repository reads and writes this field with the other filters; desktop controls
+and CLI execution use the stored mode in the normal archive query. The atomic upgrade
+preserves existing view rows and stable tag references; forced failure rolls back the
+column. Saved Views still store configurations rather than Prediction membership.
+M60 is implemented under separate explicit authorization.
+
+Shared archive, Dashboard, search, and Saved View reads carry the stored One-Shot
+identity and no fabricated Deadline. An explicit mode filter is dynamic Saved View
+criteria, not stored membership. One-shot correction text follows the existing
+effective/superseded provenance rules; numeric values and scores are structured facts
+rather than FTS prose. Neither updating Needs Attention nor Expected Resolution-based
+Ready to Resolve applies to One-Shot.
+
+### M59 separate One-Shot aggregates
+
+`AnalyticsRepository.get_one_shot_source()` reads resolved One-Shot contracts, replayed
+original/effective facts, and current tags inside one checked SQLite transaction.
+`PredictionOperations.get_one_shot_analytics()` validates the same type/tag/unit filters
+as Adaptive Analytics, then passes that source to the pure
+`analytics/one_shot_aggregate.py` summarizer. The existing Adaptive query retains
+its separate two-source snapshot and never includes One-Shot observations.
+
+Each eligible record is scored by the individual `one_shot_score` dispatcher using its
+effective corrected forecast and answer. Duplicate Prediction IDs are rejected; missing
+answers and Invalid records are excluded. Documentary times never select observations.
+Binary mean Brier remains an exact Fraction until presentation. Shared `calibration_bins`
+and `quantile_calibration_group` helpers retain the existing bin boundaries, exact scaled
+integer comparisons, continuous/whole-number split, outcome balances, and Wilson intervals.
+No raw WIS mean or updating statistic is produced. No score or aggregate is persisted.
+
+`AnalyticsScreen` defaults to Adaptive and dispatches the selected mode to its
+application query. `OneShotAnalyticsView` renders Binary count/mean Brier/calibration and
+Numeric calibration, reusing the chart/table layout and `QuantileCalibrationPanel`.
+Binary text tables include pointwise Wilson intervals for observed Yes frequency. Type,
+tag, and exact-unit controls operate within the chosen mode; a failed refresh retains the
+last loaded results and their matching filter labels. The short external-note/selective-entry
+caution is visible; detailed interpretation belongs in the Analytics guide.
+
+Disposable tests cover corrected forecasts/answers, exactly-once counts, absent reported
+times, independent connections, unchanged Adaptive summaries, filters, ties, sparse
+groups, read-only retrieval, restart, and GUI text alternatives. Schema 20, individual CLI
+scorecards, and the format-4 export guard are unchanged. M60 owns release-build validation
+and format-5 export.
+
+### M60 format-5 portability and release validation
+
+`data/transfer.py` retains the checked single-transaction read, fully quoted UTF-8 CSV,
+verified temporary ZIP, and atomic destination replacement. Format 5 retains every
+format-4 file and column and adds three One-Shot files. Original/effective facts are
+read from the validated schema-19 projections, joined to immutable app-entry instants;
+corrections export every stored before/after snapshot with its ID, sequence, note, and
+UTC timestamp. Numeric values remain scaled integers. Reported wall-minute text,
+approximation flags, and optional offsets are explicitly documentary, without UTC
+normalization. The dictionary documents replay across later first answers. Effective
+facts are a labeled convenience projection; scores remain derived and unexported.
+
+Settings and CLI share this export operation and format-5 contract. No schema migration
+or production dependency is added. Unsupported or malformed archives fail through the
+existing transaction checks before an artifact can replace an existing destination.
+SQLite backup retains settings and Saved Views; CSV excludes them and search state.
+
+The private-build smoke workflow now creates both One-Shot types through packaged
+forms, adds a later answer and transcription corrections, loads Detail and Analytics,
+reads through the CLI, repairs search, retains a mode-filtered Saved View, and exports
+all four contracts. Backup/reopen checks compare complete One-Shot Detail snapshots and
+separate aggregate counts. The existing staged schema-17 upgrade, Adaptive
+history, responsive shell, and byte-preserving unsupported-archive refusal checks remain.
+Generated artifacts stay under ignored build/test directories; real identity databases
+are never opened by these probes. Version metadata is 0.8.0; M60 human acceptance is complete; release closure and
+GitHub publication remain separate from automated validation.

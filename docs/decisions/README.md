@@ -59,6 +59,11 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 
 ## Records
 
+Records retain the reasoning accepted at their original dates. The current product
+specification governs their applicability; an Accepted label does not preserve an old
+release's entire runtime support set. Use the scope notes below when following an
+earlier record.
+
 - [0001: Use lightweight transactional SQLite migrations](0001-lightweight-sqlite-migrations.md) — Accepted 2026-08-12
 - [0002: Store instants as canonical UTC text](0002-canonical-utc-instants.md) — Accepted 2026-08-12
 - [0003: Preserve definition changes as immutable snapshots](0003-immutable-definition-snapshots.md) — Accepted 2026-08-12
@@ -80,3 +85,23 @@ Update an ADR's status when it is replaced; preserve the original reasoning rath
 - [0019: Retire legacy runtime without rebuilding supported history](0019-retire-legacy-runtime-without-rebuilding-history.md) — Accepted 2026-09-20
 - [0020: Resolve local deadlines without silent clock changes](0020-resolve-local-deadlines-explicitly.md) — Accepted 2026-09-22
 - [0021: Preserve One-Shot originals with separate transcription snapshots](0021-one-shot-originals-and-transcription-snapshots.md) — Accepted 2026-09-26
+
+## Current applicability
+
+| Records | What remains current / what changed |
+| --- | --- |
+| 0001–0003 | Transactional migrations, canonical UTC event instants, and protected Definition history remain. Adaptive exact Deadlines are now immutable under 0014–0015; One-Shot reports are documentary under 0021. |
+| 0004 | Native history rendering remains for Adaptive. Strict event ordering follows 0016; One-Shot has no updating path. |
+| 0005 | Immutable one-way terminal records remain. A captured revision is audit context; Adaptive scoring selection follows 0017–0018, and One-Shot uses effective snapshots under 0021. |
+| 0006 | Fixed Binary calibration bins and one observation per Prediction remain. Retired final-only runtime analytics are superseded by 0017, 0019, and 0021; modes keep separate denominators. |
+| 0007–0008 | Online backup, relational analytical export, local icons, and private builds remain. Current CSV is format 5; old format descriptions are release history. |
+| 0009 | Exact scaled integers remain; the single chosen-confidence interval model is retired by 0018–0019. |
+| 0010–0012 | Adaptive unchanged-forecast Reviews, shared CLI operations, and append-only terminal corrections remain. Quantile anchors follow 0018; One-Shot excludes Reviews and adds transcription snapshots under 0021. |
+| 0013 | Canonical authority and rebuildable FTS5 remain; current projection is version 3 with One-Shot provenance. |
+| 0014–0016 | Immutable identities and transaction-time exact forecasting checks remain for Adaptive. The supported matrix excludes retired identities under 0019 and includes two One-Shot pairs under 0021. |
+| 0017–0018 | Current Adaptive trajectory/WIS selection, exact mathematics, quantile storage, and shared anchors. Do not restore historical coexistence promises. |
+| 0019–0020 | Current refusal-before-mutation boundary and explicit local Deadline resolution. |
+| 0021 | Current One-Shot originals, documentary reports, append-only correction replay, and pure individual Brier/WIS. |
+
+These notes narrow the scope of earlier reasoning without rewriting the records. When
+a future decision replaces one completely, mark it Superseded and link its successor.

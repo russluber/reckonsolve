@@ -1,10 +1,6 @@
 # Reckonsolve One-Shot Rulebook Addendum (v0.8)
 
-Status: v0.8 guidance; M57 individual workflows, M58 retrieval/reflection, and M59
-aggregate Analytics have manual acceptance. M60 export/release validation is implemented
-and manually accepted; release closure remains. This is not part of the v0.7 release. This
-addendum applies only to the new One-Shot mode described in [product-spec Section
-36](product-spec.md#36-planned-v080-one-shot-prediction-contract-and-milestone-plan).
+Applies to the implemented One-Shot mode in v0.8.0. The [product specification](product-spec.md#36-one-shot-prediction-contract) governs behavior.
 The [v0.7 Forecasting Rulebook](reckonsolve-forecasting-rulebook-v0.7.md) remains the
 guidance for existing Adaptive Predictions. Its observational-judgment and
 historical-honesty principles continue to apply here, but its Rule 18 requirement for an
