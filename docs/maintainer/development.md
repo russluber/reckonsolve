@@ -33,6 +33,18 @@ Test domain validation and exact analytics independently of Qt. Use temporary SQ
 
 The [search evaluation procedure](search-evaluation.md) supplies a disposable relevance and large-corpus check. Timings are evidence for a particular run, not machine-independent thresholds.
 
+### Main window tests
+
+`tests/test_main_window.py` covers the application shell, navigation, keyboard shortcuts, and themes. Workflow tests live in separate `test_*_ui.py` modules for creation, browsing, search, Dashboard, Detail, metadata, revisions, Journals, terminal actions, Settings, and tag management.
+
+Shared application fakes live in `tests/main_window_fakes.py`; widget helpers and function-scoped fixtures live in `tests/main_window_helpers.py`. Import fixtures explicitly into the modules that use them, keeping their scope local to those tests.
+
+Run the module for the workflow you are changing, for example:
+
+```powershell
+uv run pytest tests/test_prediction_creation_ui.py
+```
+
 ## Disposable visual review
 
 ```powershell
