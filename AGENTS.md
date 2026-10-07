@@ -130,6 +130,27 @@ AGENTS.md contains working policy and essential safeguards. Link to the spec for
 
 ## Repository hygiene
 
+### File placement
+
+Before creating any file, choose its established home. Extend an existing file when it already owns the topic, and follow the current package boundaries and documentation placement rules above.
+
+| Material | Home |
+| --- | --- |
+| Application code, bundled resources, and migrations | The appropriate existing package under `src/reckonsolve/`. |
+| Tests and reusable test fixtures/helpers | `tests/`. |
+| Reusable development, evaluation, and release tools | `tools/`. |
+| User instructions and explanations | Existing guides in `docs/guides/`. |
+| Reusable development/release checklists and procedures | The appropriate existing document in `docs/maintainer/`; detailed design references belong in `docs/maintainer/design/`. |
+| Active implementation plans and acceptance criteria | `docs/product-spec.md`. |
+| Consequential technical decisions | `docs/decisions/`. |
+| Completed release checklists and dated acceptance/validation evidence | `docs/archive/releases/`; other historical documentation belongs in `docs/archive/`. |
+| Temporary reports, logs, screenshots, scratch scripts, and disposable test data/exports | Ignored `build/<task>/` or a system temporary directory; keep these untracked. |
+| Persistent application data | The identity-scoped per-user application-data locations outside the repository, as defined by the architecture. |
+
+Keep the repository root for established project entry points, configuration, README/CHANGELOG, repository policy, and root licenses/notices. Do not create task-specific checklists, reports, logs, or temporary folders there. Existing tools may retain their standard cache/build locations. When a distinct new document is justified, place it in the owning documentation directory and update the documentation index.
+
+### Tracking and cleanup
+
 - Commit source, tests, immutable migrations, docs, configuration, licenses/notices, and uv.lock. Do not commit environments, caches, bundles, databases, backups, exports, logs, secrets, machine-specific paths, or personal audit notes.
 - Preserve root and bundled licenses/attribution records in their established locations; documentation cleanup must not remove required notices.
 - Verify exact targets before destructive operations; avoid destructive Git/filesystem commands without explicit authorization.

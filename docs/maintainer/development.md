@@ -27,7 +27,7 @@ uv run ruff format --check .
 git diff --check
 ```
 
-When default caches are restricted, use `uv --cache-dir .uv-cache ...`; pytest can use `--basetemp .pytest-tmp` and `-p no:cacheprovider`. Generated caches and test artifacts remain ignored.
+When default caches are restricted, use `uv --cache-dir .uv-cache ...`; pytest can use `--basetemp build/pytest-tmp` and `-p no:cacheprovider`. Keep temporary reports, logs, screenshots, scratch scripts, and disposable test data under ignored `build/<task>/` or a system temporary directory. Generated caches and test artifacts remain untracked.
 
 Test domain validation and exact analytics independently of Qt. Use temporary SQLite files for migrations, rollback, corrections, concurrency, search, backup, export, and restart. Use pytest-qt where actual widget interaction matters. Source and packaged launchers must enforce the same supported-contract boundary.
 
