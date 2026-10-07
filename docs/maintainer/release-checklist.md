@@ -13,6 +13,7 @@ Use this repeatable process for a source release. Completed acceptance and dated
    uv run ruff check .
    uv run ruff format --check .
    git diff --check
+   uv run python tools/check_docs.py
    uv run python tools/evaluate_search.py --size 2000
    powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1
    ```

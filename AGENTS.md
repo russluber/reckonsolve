@@ -124,6 +124,7 @@ AGENTS.md contains working policy and essential safeguards. Link to the spec for
 ### Documentation verification
 
 - Check relative file links and heading anchors in changed documents and incoming references when moving/renaming files or headings. Use `rg` to find obsolete references, including bare/backticked paths that a Markdown-link check would miss.
+- Run `uv run python tools/check_docs.py` after documentation changes. It checks local Markdown links and section anchors offline; external URLs and bare/backticked paths still need separate review.
 - Verify new or changed command examples against parser/help output or disposable fixtures. State when verification only checked syntax; do not execute data-changing examples against either personal database.
 - Review Markdown structure, readable headings, tables, and blank lines before lists. Use repository-relative links in tracked docs; avoid machine-specific absolute paths.
 - Run `git diff --check` and inspect the diff for intended changes. Documentation-only edits need targeted link/reference/example checks; run runtime tests only when executable behavior changes or a concrete verification risk requires them.
@@ -139,6 +140,7 @@ Before creating any file, choose its established home. Extend an existing file w
 | Application code, bundled resources, and migrations | The appropriate existing package under `src/reckonsolve/`. |
 | Tests and reusable test fixtures/helpers | `tests/`. |
 | Reusable development, evaluation, and release tools | `tools/`. |
+| PyInstaller specifications and frozen-build entry points | `packaging/`; build orchestration scripts belong in `tools/`. |
 | User instructions and explanations | Existing guides in `docs/guides/`. |
 | Reusable development/release checklists and procedures | The appropriate existing document in `docs/maintainer/`; detailed design references belong in `docs/maintainer/design/`. |
 | Active implementation plans and acceptance criteria | `docs/product-spec.md`. |

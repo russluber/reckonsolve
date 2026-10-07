@@ -27,7 +27,7 @@ uv run ruff format --check .
 git diff --check
 ```
 
-When default caches are restricted, use `uv --cache-dir .uv-cache ...`; pytest can use `--basetemp build/pytest-tmp` and `-p no:cacheprovider`. Keep temporary reports, logs, screenshots, scratch scripts, and disposable test data under ignored `build/<task>/` or a system temporary directory. Generated caches and test artifacts remain untracked.
+When default caches are restricted, use `uv --cache-dir .uv-cache ...`; pytest can use `--basetemp build/pytest-tmp` and `-p no:cacheprovider`. Create the parent `build/` directory first if it is absent. Keep temporary reports, logs, screenshots, scratch scripts, and disposable test data under ignored `build/<task>/` or a system temporary directory. Generated caches and test artifacts remain untracked.
 
 Test domain validation and exact analytics independently of Qt. Use temporary SQLite files for migrations, rollback, corrections, concurrency, search, backup, export, and restart. Use pytest-qt where actual widget interaction matters. Source and packaged launchers must enforce the same supported-contract boundary.
 
@@ -46,6 +46,19 @@ These profiles create temporary database and presentation files without opening 
 Review affected screens in light/dark palettes, relevant Windows scaling settings, normal/narrow widths, and expanded/compact sidebar modes. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
 
 Human visual acceptance is separate from offscreen Qt tests. Dated acceptance belongs in [the archive](../archive/README.md), not this repeatable procedure.
+
+## Documentation checks
+
+After editing or moving documentation, run:
+
+```powershell
+uv run python tools/check_docs.py
+git diff --check
+```
+
+The checker requires a Git checkout and Git on PATH. It reads tracked and new unignored Markdown files, including the archive and bundled attribution documents. It checks local inline/image/reference links, Markdown section anchors, and explicit HTML anchor tags, ignoring code examples and comments. Paths beginning with `/` resolve from the repository root. Failures include file/line locations and exit with status 1; discovery failures exit with status 2. It runs offline and changes no files.
+
+Heading anchors follow the basic [GitHub rules](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#section-links), including duplicate-heading suffixes. Unusual Markdown/HTML still needs rendered review. External URLs and bare/backticked file paths are outside the check; use `rg` for obsolete paths and review external destinations separately.
 
 ## Private Windows build
 
