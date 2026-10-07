@@ -2690,8 +2690,10 @@ release, without rewriting or deleting their records. It incorporates the
 following accepted design inputs:
 
 - [Adaptive forecasting rules](../guides/forecasting-guide.md#forecasting-rulebook);
-- [Binary Trajectory Scoring Design v0.7](../maintainer/design/binary-trajectory-v0.7.md); and
-- [Numeric Forecasting Design v0.7](../maintainer/design/numeric-forecasting-v0.7.md).
+- [Binary Trajectory Scoring Design v0.7](design/binary-trajectory-v0.7.md); and
+- [Numeric Forecasting Design v0.7](design/numeric-forecasting-v0.7.md).
+
+**Archive navigation note:** These design links now point to preserved planning excerpts. Their current mathematical content is maintained in [Binary scoring](../maintainer/design/binary-scoring.md) and [Numeric scoring](../maintainer/design/numeric-scoring.md). The following contract wording is historical.
 
 Those documents retain the complete rationale, examples, and mathematical
 derivations. This section is the repository's governing implementation

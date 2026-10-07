@@ -651,12 +651,13 @@ release, without rewriting or deleting their records. It incorporates the
 following accepted design inputs:
 
 - [Adaptive forecasting rules](guides/forecasting-guide.md#forecasting-rulebook);
-- [Binary Trajectory Scoring Design v0.7](maintainer/design/binary-trajectory-v0.7.md); and
-- [Numeric Forecasting Design v0.7](maintainer/design/numeric-forecasting-v0.7.md).
+- [Binary scoring](maintainer/design/binary-scoring.md); and
+- [Numeric scoring](maintainer/design/numeric-scoring.md).
 
-Those documents retain the complete rationale, examples, and mathematical
-derivations. This section is the repository's governing implementation
-contract. If later wording in a supporting document appears to conflict with
+Those maintained documents explain the current scoring rules, examples, and
+mathematical derivations. Release-specific design proposals are preserved in
+[the archive](archive/README.md#forecasting-design-history). This section is the
+repository's governing implementation contract. If later wording in a supporting document appears to conflict with
 this section, surface the conflict and revise this specification deliberately
 rather than choosing silently.
 

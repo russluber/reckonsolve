@@ -9,6 +9,13 @@ These public records preserve completed development work. They are historical co
 
 Older compatibility promises and legacy editors/scoring descriptions were superseded by legacy retirement. They do not authorize conversion, deletion, partial loading, or restoration of retired runtime models. Completed plans do not authorize new implementation.
 
+## Forecasting design history
+
+- [Binary trajectory planning excerpts](design/binary-trajectory-v0.7.md) — release-specific persistence/UI proposals, compatibility promises, acceptance criteria, and implementation planning from the earlier design.
+- [Numeric forecasting planning excerpts](design/numeric-forecasting-v0.7.md) — earlier representation/storage proposals, retired-model coexistence, export/import assumptions, acceptance criteria, and implementation planning.
+
+These excerpts retain original section numbers and historical wording. Legacy-coexistence promises were superseded; they do not describe current runtime support or authorize implementation. Current mathematics and mode-specific selection rules live in [Binary scoring](../maintainer/design/binary-scoring.md) and [Numeric scoring](../maintainer/design/numeric-scoring.md).
+
 ## Release evidence
 
 - [v0.6 visual verification](releases/v0.6-visual-verification.md) — dated palette, scaling, layout, and interaction acceptance.

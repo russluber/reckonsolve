@@ -24,10 +24,10 @@ The forecasting guide contains the detailed Rulebook and One-Shot rules. The use
 | [Development and testing](maintainer/development.md) | Setup, checks, disposable visual review, and private builds. |
 | [Search evaluation](maintainer/search-evaluation.md) | Relevance requirements and a reproducible benchmark. |
 | [Release checklist](maintainer/release-checklist.md) | Repeatable source-release verification and publication. |
-| [Binary scoring design](maintainer/design/binary-trajectory-v0.7.md) | Trajectory derivation and design rationale. |
-| [Numeric forecasting design](maintainer/design/numeric-forecasting-v0.7.md) | Quantile, WIS, and calibration derivations. |
+| [Binary scoring](maintainer/design/binary-scoring.md) | Ordinary and Trajectory Brier, diagnostics, calibration, and uncertainty. |
+| [Numeric scoring](maintainer/design/numeric-scoring.md) | Quantile semantics, WIS, calibration, and implied-distribution limits. |
 
-The specification governs behavior. Guides explain it; architecture and decisions explain implementation. Historical design promises are subject to the current compatibility boundary and One-Shot contract.
+The specification governs behavior. Guides explain it; the scoring references explain current mathematics for Adaptive and One-Shot; architecture and decisions explain implementation. Release-specific design proposals are preserved in the archive.
 
 ## Development history
 
