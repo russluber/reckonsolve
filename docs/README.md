@@ -29,6 +29,17 @@ The forecasting guide contains the detailed Rulebook and One-Shot rules. The use
 
 The specification governs behavior. Guides explain it; the scoring references explain current mathematics for Adaptive and One-Shot; architecture and decisions explain implementation. Release-specific design proposals are preserved in the archive.
 
+## Active UX redesign
+
+Follow this reading path for the single active redesign project:
+
+1. [Design charter](product-spec.md#active-ux-redesign-charter): scope, protected product rules, and the boundary between current behavior, proposed changes, and implementation authorization.
+2. [Master experience redesign](maintainer/design/reckonsolve-experience-redesign.md): exploratory v0.2 hub for preferred J-01–J-08 decisions, progress, the one overall roadmap, cross-cutting issues, and contract alignment. Start each design exercise here.
+3. [Prediction Detail chapter](maintainer/design/prediction-detail-redesign.md): v0.3 preferred directions and R-01–R-42, with local validation outstanding. R-33/R-34 remain withdrawn. Return to the master for priorities and shared dependencies.
+4. [UX design and review procedure](maintainer/development.md#ux-design-and-review): how to run an exercise, record maturity/evidence, review prototypes within their scope, and prepare a handoff.
+
+The design documents own proposals; the product specification owns the current contract and any explicitly approved future requirements. Design approval is separate from authorization to implement. Current scoring references above explain existing mathematics and are not exploratory redesign chapters. User guides and architecture continue to describe the implemented app.
+
 ## Development history
 
 [The archive](archive/README.md) preserves completed milestone plans, earlier architecture descriptions, release-note drafts, and dated validation evidence. These are context, not current implementation instructions. They remain public GitHub files; archiving does not make them private or remove Git history.

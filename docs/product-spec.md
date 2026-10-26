@@ -2,7 +2,7 @@
 
 Current contract: v0.8.0; schema 20; relational CSV format 5.
 
-This is the source of truth for product scope, terminology, invariants, and acceptance criteria. It describes implemented behavior, not authorization for new work. Supporting guides and designs explain these requirements. A conflict or unresolved product choice must be surfaced to the user before implementation.
+This is the source of truth for product scope, terminology, invariants, and acceptance criteria. The current contract describes implemented behavior. The active design charter and any explicitly labeled approved future requirements describe work at their stated status; they are not claims of implementation or permission to implement. Supporting guides explain the current product, while linked exploratory designs record proposed changes. A conflict or unresolved product choice must be resolved explicitly before implementation.
 
 Completed milestone plans and earlier contracts are preserved in the [historical specification](archive/product-spec-through-v0.8.md). Sections 33-36 keep their established numbers so existing contract references remain useful. Their release labels identify the origins of active requirements; Section 36 extends the Adaptive contract in Section 35. Retired-model promises in the archive do not grant runtime support.
 
@@ -13,6 +13,30 @@ Completed milestone plans and earlier contracts are preserved in the [historical
 - [Desktop presentation](#34-desktop-presentation-contract): visual system, navigation, accessibility, and responsive behavior.
 - [Adaptive forecasting](#35-adaptive-forecasting-contract): exact Deadlines, trajectory Binary, five-quantile Numeric, and compatibility.
 - [One-Shot forecasting](#36-one-shot-prediction-contract): existing answers, external notes, documentary time, transcription corrections, and separate scoring.
+
+## Active UX redesign charter
+
+**Scope and authorization:** Active documentation/design exploration of the whole Reckonsolve experience. The preferred direction is a Journal-centered experience replacing the feature-driven Dashboard / Predictions / Analytics arrangement. This charter records the design program and its workflow; it approves no target UX as final and authorizes no software implementation.
+
+Start with the [master redesign](maintainer/design/reckonsolve-experience-redesign.md) for scope, priorities, progress, preferred J-01–J-08 decisions, and open issues. Its [Prediction Detail chapter](maintainer/design/prediction-detail-redesign.md) owns R-01–R-42; R-33/R-34 remain withdrawn. Use the [shared design and review procedure](maintainer/development.md#ux-design-and-review) for maturity labels, review evidence, and handoff.
+
+### Current baseline and proposed replacements
+
+Sections 33–36 and the shared rules below remain the current product contract. Existing screen names, sidebar/navigation, attention presentation, browsing defaults, and creation landing paths describe that baseline. During this authorized exploration, those interface/workflow arrangements may be reconsidered and alternatives documented without treating each proposal as an already-approved contract amendment. Keep their differences in the master's [contract-alignment register](maintainer/design/reckonsolve-experience-redesign.md#contract-alignment-before-implementation).
+
+The exploration covers Journal browsing/retrieval and Saved Views, New Prediction composition, Prediction Detail, Performance, the shared app bar/UI and Settings, integration journeys, accessibility, responsiveness, focus, and draft safety. Documentation work may record journeys, alternatives, written wireframes, decisions, uncertainties, and review plans. Creating or running an executable prototype needs its own stated scope; this documentation update creates or runs none.
+
+### Protected product rules
+
+Preserve local/offline ownership and identity separation; supported mode/model/scoring contracts; exact values, time, and scoring eligibility; immutable history and audited corrections; terminal finality; atomic saves and stale-context safeguards; search provenance and historical navigation; dynamic Saved View meaning; and recovery/export guarantees. Required forecast inputs remain distinct from optional prose. The redesign adds no gamification, nudging, invented urgency, or automatic personalized advice. Presentation alternatives do not authorize changing these rules, schema, app code, CLI behavior, or personal data.
+
+Proposed changes to a protected rule or expansion beyond this scope must be surfaced for explicit resolution. Record inspection findings separately from intended behavior: the master's [cleared-Postmortem discrepancy](maintainer/design/reckonsolve-experience-redesign.md#known-discrepancy-cleared-postmortem) remains statically identified, unverified, and unfixed; no verification or repair is authorized by this charter.
+
+### Approval and transition to implementation
+
+Design maturity and implementation authorization are separate. Follow Exploring → Preferred → Validated → Approved design with evidence appropriate to the scope; keep withdrawn decisions visible. The master owns the overall sequence, and chapter validation backlogs do not create competing roadmaps. Current J directions are Preferred; Detail v0.3 records preferred directions with validation outstanding. This workflow update advances no item to Validated or Approved design.
+
+Before implementing a slice, resolve its open questions and contract differences, record explicitly approved future requirements and testable criteria here under a clearly labeled future section linked to the owning design, and obtain an explicit instruction authorizing that software slice. Until such a section is approved, the current contract stays in force. On implementation and acceptance, reconcile the current contract and affected guides/architecture, and retain dated evidence in the archive. Neither a design approval nor this charter is implementation authorization.
 
 ## Shared product rules
 
@@ -373,7 +397,7 @@ Reckonsolve stores no hidden query history, click profile, or behavioral ranking
 
 ## 34. Desktop presentation contract
 
-The native visual system, shared shell, metadata parity, responsive layouts, and accessibility requirements originated in v0.6. These remain current; Section 36 incorporates the v0.8 creation and badge refinements.
+The native visual system, shared shell, metadata parity, responsive layouts, and accessibility requirements originated in v0.6. These remain the current implemented baseline; Section 36 incorporates the v0.8 creation and badge refinements. The [active redesign charter](#active-ux-redesign-charter) permits exploring replacement interface/workflow arrangements while preserving protected product rules; it does not mark any replacement as implemented.
 
 The governing objective is:
 

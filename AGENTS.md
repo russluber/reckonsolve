@@ -5,12 +5,12 @@
 - Read docs/product-spec.md in full before planning or implementing product behavior. It is authoritative for scope, terminology, invariants, acceptance criteria, and unresolved choices.
 - Read docs/architecture.md before changing structure or dependency boundaries, and keep it aligned with implementation.
 - This file governs how to work in the repository. User instructions take precedence.
-- If a request conflicts with the specification, identify the conflict and ask whether it should change. Do not silently reinterpret it or bury an unresolved product choice in code.
+- For implementation or a change to protected product rules, identify specification conflicts and resolve them explicitly with the user before proceeding. During authorized UX exploration, record proposed interface/workflow differences in the owning design document and continue within the design scope; reconcile them before implementation. Never silently change a governing requirement or bury an unresolved choice in code.
 - Work only on the explicitly authorized milestone or coherent slice. Approval of a plan/specification is not implementation authorization.
 
 ## Current product boundary
 
-Reckonsolve v0.8.0 is a single-user, local-first Windows forecasting journal. M1-M60 are completed history, preserved in docs/archive/. New work requires separate authorization. Adaptive is the default; One-Shot is an additional mode within Binary/Numeric types.
+Reckonsolve v0.8.0 is a single-user, local-first Windows forecasting journal. M1-M60 are completed history, preserved in docs/archive/. New work requires separate authorization. The [active UX redesign charter](docs/product-spec.md#active-ux-redesign-charter) establishes the current documentation/design scope without authorizing implementation. Adaptive is the default; One-Shot is an additional mode within Binary/Numeric types.
 
 - Preserve schema 20, the four closed model/scoring pairs, and canonical deadline/one_shot mode keys. Adaptive is the presentation name; CLI --mode deadline remains an alias for --mode adaptive.
 - Refuse any archive containing a retired Binary-final or interval-v1 Numeric record, including mixed archives, before migration/repair/write. Missing, unknown, and mismatched identities are also refused without conversion, deletion, or partial loading.
@@ -52,8 +52,17 @@ The governing rule is: let the user change their mind freely, but never rewrite 
 - Preserve the shared visual system, source-aware Back, archive context, safe geometry, accessible labels/focus/keyboard flow, selectable history, responsive layouts, and text alternatives for charts.
 - Keep modes visually symmetric with reciprocal top-right actions. One-Shot language omits updating/deadline concepts.
 - Use plain language and human-readable dates without changing canonical precision. Confirm destructive/historically consequential actions.
-- For presentation work, implement a coherent slice, run focused checks, and give the user a focused manual checklist using development/disposable data. Human visual judgment is an acceptance input; fix agreed tuning before closing the slice.
+- For authorized presentation implementation, implement a coherent slice, run focused checks, and give the user a focused manual checklist using development/disposable data. Human visual judgment is an acceptance input; fix agreed tuning before closing the slice.
 - No stable personal data is needed to evaluate presentation. Routine visual tuning inside approved behavior does not require a spec change; workflow/persistence/meaning changes do.
+
+## Design workflow
+
+- Start UX work from the [design charter](docs/product-spec.md#active-ux-redesign-charter) and [master redesign](docs/maintainer/design/reckonsolve-experience-redesign.md). Read the relevant detailed chapter and current contract before extending a journey or decision. Reuse the shared [UX design and review procedure](docs/maintainer/development.md#ux-design-and-review) rather than creating a new workflow document for each discussion.
+- Within an authorized design exercise, document needs, alternatives, written wireframes, preferred decisions, open issues, and proposed contract changes. A proposal to replace current navigation or workflow is permitted exploration; it does not supersede the current contract. Surface any proposed change to protected invariants or expansion of scope for explicit resolution.
+- Keep one owner for each decision and issue. The master owns scope, priorities, progress, and cross-cutting dependencies; detailed chapters own their requirements and local validation cases. Preserve J/R identifiers, including withdrawn items, and update the owning files after each exercise rather than relying on chat history.
+- Use the shared design maturity labels, record supporting evidence, and track implementation authorization separately. Design approval alone never grants permission to change software. Creating/running an executable prototype requires its own stated scope; documentation-only work does not authorize it.
+- Before implementation, reconcile proposed contract changes in the specification, clearly separate approved future requirements from current behavior, and confirm the explicitly authorized slice. Update user guides and architecture with implemented changes; use ADRs for consequential technical reasoning.
+- For documentation-only passes, run documentation link/reference and diff checks. Prototype review and runtime acceptance are separate activities with evidence tied to the evaluated artifact and version.
 
 ## Working method
 
@@ -96,7 +105,7 @@ Before adding or moving documentation, read [the documentation index](docs/READM
 | [Product specification](docs/product-spec.md) | Authoritative scope, invariants, acceptance criteria, unresolved choices, and active authorized plans. |
 | [Architecture](docs/architecture.md) | Current implemented modules, dependency direction, persistence, and transaction boundaries. |
 | [docs/decisions/](docs/decisions/README.md) | Consequential technical reasoning and current applicability/supersession notes. |
-| [docs/maintainer/](docs/README.md#maintaining-reckonsolve) | Repeatable development, testing, search evaluation, release procedures, and detailed design references. |
+| [docs/maintainer/](docs/README.md#maintaining-reckonsolve) | Repeatable procedures and detailed references; the active redesign master owns exploratory UX scope, progress, and links to design chapters. |
 | [docs/archive/](docs/archive/README.md) | Completed plans, earlier contracts, dated validation/acceptance, and historical drafts. |
 | [CHANGELOG.md](CHANGELOG.md) | Maintained release summaries used to prepare GitHub release notes. |
 
@@ -122,7 +131,7 @@ Apply these conventions to all new or edited mathematics in repository Markdown 
 
 ### Current guidance and historical records
 
-- Keep active plans with the governing specification. On completion, preserve any continuing requirements there and move historical planning/acceptance detail into the archive with a link. Completed milestones are not a new work queue or permission to implement.
+- Keep the active redesign charter, explicitly approved future requirements, and authorized implementation plans with the governing specification. Detailed exploratory designs, alternatives, open issues, and their design roadmap live in the owning design documents linked from that charter. On implementation completion, reconcile the current contract and preserve historical planning/acceptance detail in the archive with a link. Completed milestones are not a new work queue or permission to implement.
 - Keep architecture focused on the current system. Preserve important earlier reasoning in ADRs or clearly labeled archive records; do not rebuild chronological milestone appendices in active docs.
 - Archive records must identify their version or stage and explain their historical scope. Retain relevant evidence and limits, including checks that preceded final changes. Avoid creating another full snapshot of active docs for routine edits; Git already retains file history.
 - Preserve ADR reasoning. For partial supersession, update the applicability notes in the ADR index; for a fully replaced decision, mark it Superseded and link its successor. Historical compatibility promises never restore retired runtime support.
@@ -152,7 +161,8 @@ Before creating any file, choose its established home. Extend an existing file w
 | PyInstaller specifications and frozen-build entry points | `packaging/`; build orchestration scripts belong in `tools/`. |
 | User instructions and explanations | Existing guides in `docs/guides/`. |
 | Reusable development/release checklists and procedures | The appropriate existing document in `docs/maintainer/`; detailed design references belong in `docs/maintainer/design/`. |
-| Active implementation plans and acceptance criteria | `docs/product-spec.md`. |
+| Design charter, approved future requirements, and authorized implementation plans/acceptance criteria | `docs/product-spec.md`, with current and future requirements clearly distinguished. |
+| Exploratory UX decisions, open issues, and design roadmap | The master redesign and its detailed chapters in `docs/maintainer/design/`. |
 | Consequential technical decisions | `docs/decisions/`. |
 | Completed release checklists and dated acceptance/validation evidence | `docs/archive/releases/`; other historical documentation belongs in `docs/archive/`. |
 | Temporary reports, logs, screenshots, scratch scripts, and disposable test data/exports | Ignored `build/<task>/` or a system temporary directory; keep these untracked. |
