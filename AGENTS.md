@@ -10,7 +10,7 @@
 
 ## Current product boundary
 
-Reckonsolve v0.8.0 is a single-user, local-first Windows forecasting journal. M1-M60 are completed history, preserved in docs/archive/. New work requires separate authorization. The [active UX redesign charter](docs/product-spec.md#active-ux-redesign-charter) establishes the current documentation/design scope without authorizing implementation. Adaptive is the default; One-Shot is an additional mode within Binary/Numeric types.
+Reckonsolve v0.8.0 is a single-user, local-first Windows forecasting journal. M1-M60 are completed history, preserved in docs/archive/. New work requires separate authorization. Optional private design work follows the notes policy below and does not authorize implementation. Adaptive is the default; One-Shot is an additional mode within Binary/Numeric types.
 
 - Preserve schema 20, the four closed model/scoring pairs, and canonical deadline/one_shot mode keys. Adaptive is the presentation name; CLI --mode deadline remains an alias for --mode adaptive.
 - Refuse any archive containing a retired Binary-final or interval-v1 Numeric record, including mixed archives, before migration/repair/write. Missing, unknown, and mismatched identities are also refused without conversion, deletion, or partial loading.
@@ -55,14 +55,14 @@ The governing rule is: let the user change their mind freely, but never rewrite 
 - For authorized presentation implementation, implement a coherent slice, run focused checks, and give the user a focused manual checklist using development/disposable data. Human visual judgment is an acceptance input; fix agreed tuning before closing the slice.
 - No stable personal data is needed to evaluate presentation. Routine visual tuning inside approved behavior does not require a spec change; workflow/persistence/meaning changes do.
 
-## Design workflow
+## Design workflow and private notes
 
-- Start UX work from the [design charter](docs/product-spec.md#active-ux-redesign-charter) and [master redesign](docs/maintainer/design/reckonsolve-experience-redesign.md). Read the relevant detailed chapter and current contract before extending a journey or decision. Reuse the shared [UX design and review procedure](docs/maintainer/development.md#ux-design-and-review) rather than creating a new workflow document for each discussion.
-- Within an authorized design exercise, document needs, alternatives, written wireframes, preferred decisions, open issues, and proposed contract changes. A proposal to replace current navigation or workflow is permitted exploration; it does not supersede the current contract. Surface any proposed change to protected invariants or expansion of scope for explicit resolution.
-- Keep one owner for each decision and issue. The master owns scope, priorities, progress, and cross-cutting dependencies; detailed chapters own their requirements and local validation cases. Preserve J/R identifiers, including withdrawn items, and update the owning files after each exercise rather than relying on chat history.
-- Use the shared design maturity labels, record supporting evidence, and track implementation authorization separately. Design approval alone never grants permission to change software. Creating/running an executable prototype requires its own stated scope; documentation-only work does not authorize it.
-- Before implementation, reconcile proposed contract changes in the specification, clearly separate approved future requirements from current behavior, and confirm the explicitly authorized slice. Update user guides and architecture with implemented changes; use ADRs for consequential technical reasoning.
-- For documentation-only passes, run documentation link/reference and diff checks. Prototype review and runtime acceptance are separate activities with evidence tied to the evaluated artifact and version.
+- Keep unpublished charters, UX workshops, alternatives, draft decisions, and roadmaps in the optional, Git-ignored `/notes/` folder. It may be a separate private Git repository and is absent from a fresh public clone. Do not recreate private workshop content in public docs or publish it without the user's instruction.
+- For authorized design work, read `notes/README.md` when present, then the relevant private charter, master, chapter, and procedure alongside the current public contract. If a requested exercise depends on unavailable private material, ask for that context rather than inventing replacement decisions. Normal builds, tests, and public documentation checks must not depend on notes.
+- Keep one owner for each decision and issue, preserve stable identifiers and withdrawn items, and update the owning private documents after each exercise. Track evidence, maturity, open questions, and implementation authorization separately. Documentation-only work does not authorize an executable prototype.
+- Before implementation, resolve the relevant open questions and contract differences, deliberately publish accepted future requirements and criteria in the specification, and confirm the explicitly authorized software slice. Design approval alone never grants implementation permission. Update guides and architecture with implemented changes; use ADRs for consequential technical reasoning.
+- The public project and private notes have separate Git histories and remotes. Keep `/notes/` ignored by the parent; do not force-add it, create a submodule, or include private content in public patches/releases. Commit or push either repository only when explicitly asked.
+- For documentation-only passes, run link/reference and diff checks on the affected public and private documents. Prototype review and runtime acceptance require separate evidence tied to the evaluated artifact and version.
 
 ## Working method
 
@@ -105,7 +105,8 @@ Before adding or moving documentation, read [the documentation index](docs/READM
 | [Product specification](docs/product-spec.md) | Authoritative scope, invariants, acceptance criteria, unresolved choices, and active authorized plans. |
 | [Architecture](docs/architecture.md) | Current implemented modules, dependency direction, persistence, and transaction boundaries. |
 | [docs/decisions/](docs/decisions/README.md) | Consequential technical reasoning and current applicability/supersession notes. |
-| [docs/maintainer/](docs/README.md#maintaining-reckonsolve) | Repeatable procedures and detailed references; the active redesign master owns exploratory UX scope, progress, and links to design chapters. |
+| [docs/maintainer/](docs/README.md#maintaining-reckonsolve) | Public development/release procedures and current technical references. |
+| `notes/` (optional, Git-ignored) | Private charters, workshops, exploratory decisions, roadmaps, and local review backlogs, maintained in a separate repository. |
 | [docs/archive/](docs/archive/README.md) | Completed plans, earlier contracts, dated validation/acceptance, and historical drafts. |
 | [CHANGELOG.md](CHANGELOG.md) | Maintained release summaries used to prepare GitHub release notes. |
 
@@ -131,13 +132,13 @@ Apply these conventions to all new or edited mathematics in repository Markdown 
 
 ### Current guidance and historical records
 
-- Keep the active redesign charter, explicitly approved future requirements, and authorized implementation plans with the governing specification. Detailed exploratory designs, alternatives, open issues, and their design roadmap live in the owning design documents linked from that charter. On implementation completion, reconcile the current contract and preserve historical planning/acceptance detail in the archive with a link. Completed milestones are not a new work queue or permission to implement.
+- Keep unpublished charters, exploratory designs, alternatives, open issues, and roadmaps in private notes. Deliberately publish accepted future requirements and authorized implementation criteria in the governing specification, clearly separated from current behavior. On implementation completion, reconcile the current contract and retain appropriate dated acceptance evidence in the public archive. Completed milestones are not a new work queue or implementation permission.
 - Keep architecture focused on the current system. Preserve important earlier reasoning in ADRs or clearly labeled archive records; do not rebuild chronological milestone appendices in active docs.
 - Archive records must identify their version or stage and explain their historical scope. Retain relevant evidence and limits, including checks that preceded final changes. Avoid creating another full snapshot of active docs for routine edits; Git already retains file history.
 - Preserve ADR reasoning. For partial supersession, update the applicability notes in the ADR index; for a fully replaced decision, mark it Superseded and link its successor. Historical compatibility promises never restore retired runtime support.
 - Use CHANGELOG.md as the maintained release summary and prepare published notes from it. Keep reusable release steps in [the release checklist](docs/maintainer/release-checklist.md); put completed checklists and dated results in the archive. Historical note drafts are not parallel maintained release summaries.
 - Keep an unpublished entry Unreleased until publication is verified; use the actual publication date in UTC and remove stale candidate/pending wording from current guides after release. Publication remains separately authorized.
-- Archive files remain public and tracked on GitHub. Keep personal notes, generated audit reports, and runtime artifacts untracked. Rewriting Git history to remove previously published material requires separate explicit authorization.
+- Archive files remain public and tracked on GitHub. Keep personal notes out of public tracking; the ignored notes folder may maintain its own private Git history. Generated audit reports and runtime artifacts remain untracked. Rewriting public Git history to remove previously published material requires separate explicit authorization.
 
 ### Documentation verification
 
@@ -160,9 +161,9 @@ Before creating any file, choose its established home. Extend an existing file w
 | Reusable development, evaluation, and release tools | `tools/`. |
 | PyInstaller specifications and frozen-build entry points | `packaging/`; build orchestration scripts belong in `tools/`. |
 | User instructions and explanations | Existing guides in `docs/guides/`. |
-| Reusable development/release checklists and procedures | The appropriate existing document in `docs/maintainer/`; detailed design references belong in `docs/maintainer/design/`. |
-| Design charter, approved future requirements, and authorized implementation plans/acceptance criteria | `docs/product-spec.md`, with current and future requirements clearly distinguished. |
-| Exploratory UX decisions, open issues, and design roadmap | The master redesign and its detailed chapters in `docs/maintainer/design/`. |
+| Reusable development/release checklists and current technical references | The appropriate existing document in `docs/maintainer/`; current scoring references remain in `docs/maintainer/design/`. |
+| Published approved future requirements and authorized implementation criteria | `docs/product-spec.md`, with current and future requirements clearly distinguished. |
+| Private charters, UX workshop procedures, exploratory decisions, open issues, and roadmap | Optional, Git-ignored `notes/`; follow its `README.md` when available. |
 | Consequential technical decisions | `docs/decisions/`. |
 | Completed release checklists and dated acceptance/validation evidence | `docs/archive/releases/`; other historical documentation belongs in `docs/archive/`. |
 | Temporary reports, logs, screenshots, scratch scripts, and disposable test data/exports | Ignored `build/<task>/` or a system temporary directory; keep these untracked. |
@@ -172,7 +173,7 @@ Keep the repository root for established project entry points, configuration, RE
 
 ### Tracking and cleanup
 
-- Commit source, tests, immutable migrations, docs, configuration, licenses/notices, and uv.lock. Do not commit environments, caches, bundles, databases, backups, exports, logs, secrets, machine-specific paths, or personal audit notes.
+- In this public repository, track source, tests, immutable migrations, public docs, configuration, licenses/notices, and uv.lock. Do not track environments, caches, bundles, databases, backups, exports, logs, secrets, machine-specific paths, or personal audit notes here. Private notes use their own repository and explicit commit/push authorization.
 - Preserve root and bundled licenses/attribution records in their established locations; documentation cleanup must not remove required notices.
 - Verify exact targets before destructive operations; avoid destructive Git/filesystem commands without explicit authorization.
 

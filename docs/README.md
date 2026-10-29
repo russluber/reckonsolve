@@ -29,16 +29,11 @@ The forecasting guide contains the detailed Rulebook and One-Shot rules. The use
 
 The specification governs behavior. Guides explain it; the scoring references explain current mathematics for Adaptive and One-Shot; architecture and decisions explain implementation. Release-specific design proposals are preserved in the archive.
 
-## Active UX redesign
+## Private working notes
 
-Follow this reading path for the single active redesign project:
+Exploratory planning, UX workshops, draft decisions, and roadmaps live in the optional, Git-ignored `notes/` folder, maintained separately from the public project. Its contents are not included in a public clone or required for builds, tests, or documentation checks. When available locally, its `README.md` provides the private reading path.
 
-1. [Design charter](product-spec.md#active-ux-redesign-charter): scope, protected product rules, and the boundary between current behavior, proposed changes, and implementation authorization.
-2. [Master experience redesign](maintainer/design/reckonsolve-experience-redesign.md): exploratory v0.4 hub owning preferred J-01–J-66 decisions, Journal retrieval/rows, sort/reset/search states, date/activity semantics, conditional continuous scrolling/counts, and proposed Saved View retirement, progress, the one overall roadmap, cross-cutting issues, and contract alignment. Start each design exercise here.
-3. [Prediction Detail chapter](maintainer/design/prediction-detail-redesign.md): v0.3 preferred directions and R-01–R-42, with local validation outstanding. R-33/R-34 remain withdrawn. Return to the master for priorities and shared dependencies.
-4. [UX design and review procedure](maintainer/development.md#ux-design-and-review): how to run an exercise, record maturity/evidence, review prototypes within their scope, and prepare a handoff.
-
-The design documents own proposals; the product specification owns the current contract and any explicitly approved future requirements. Design approval is separate from authorization to implement. Current scoring references above explain existing mathematics and are not exploratory redesign chapters. User guides and architecture continue to describe the implemented app.
+The [product specification](product-spec.md#proposed-changes-and-authorization) governs current behavior and any deliberately published, explicitly approved future requirements. Private preferences or design approval do not authorize implementation. User guides, architecture, and the scoring references above continue to describe the current product.
 
 ## Development history
 
