@@ -7,21 +7,49 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from reckonsolve.ui.visual_system import (
+    ActionRole,
     Spacing,
     StatusTone,
     SurfaceRole,
     TextRole,
+    apply_action_role,
     apply_badge_role,
     apply_message_role,
     apply_surface_role,
     apply_text_role,
 )
+
+
+class ProbabilityPresets(QWidget):
+    """The same direct-entry shortcuts for both Binary creation modes."""
+
+    def __init__(
+        self, editor: QSpinBox, parent: QWidget, *, name_prefix: str = "probability"
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName(f"{name_prefix}Shortcuts")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.COMPACT))
+        for value in range(10, 100, 10):
+            button = QPushButton(str(value), self)
+            button.setObjectName(f"{name_prefix}Shortcut{value}")
+            button.setProperty("reckonsolveProbabilityPreset", "true")
+            button.setAccessibleName(f"Set probability to {value}%")
+            apply_action_role(button, ActionRole.QUIET)
+            button.clicked.connect(
+                lambda _checked=False, probability=value: editor.setValue(probability)
+            )
+            layout.addWidget(button)
+        layout.addStretch()
 
 
 class PageHeader(QWidget):
@@ -201,5 +229,6 @@ __all__ = [
     "EmptyStateLabel",
     "PageHeader",
     "PersistentMessageLabel",
+    "ProbabilityPresets",
     "StatusBadge",
 ]

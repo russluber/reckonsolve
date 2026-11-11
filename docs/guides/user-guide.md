@@ -45,6 +45,8 @@ Choose **Binary** or **Numeric**:
 - **Binary:** write a Yes/No question and your probability of Yes, from 0% to 100% in whole percentages.
 - **Numeric:** write a question about one quantity; choose its unit, decimal precision, and continuous-style or whole-number constraint; then enter five percentiles.
 
+Both Adaptive and One-Shot Binary creation offer preset buttons from **10** through **90** in ten-point steps. Clicking one fills the probability input; you can adjust it before saving.
+
 | Value | Meaning |
 | --- | --- |
 | q05 | Your 5th percentile. |

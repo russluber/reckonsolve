@@ -55,6 +55,79 @@ def test_shared_toolbar_and_independent_performance_origin(workspace, qtbot):
     assert window.workspace.current.prediction_id == prediction.prediction_id
 
 
+@pytest.mark.parametrize("mode", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_new_button_fits_its_complete_label_with_and_without_focus(
+    workspace, qtbot, mode
+):
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionButton
+
+    window, _ = workspace
+    window.resize(760, 520)
+    window.activateWindow()
+    window.appearance.select(mode)
+    button = window._toolbar.new
+    original_font = QFont(button.font())
+    for size in (None, 11, 13):
+        if size is not None:
+            font = QFont(original_font)
+            font.setPointSize(size)
+            button.setFont(font)
+        widths = []
+        for focused in (button, window._journal_screen.search_input):
+            focused.setFocus()
+            QApplication.processEvents()
+            qtbot.wait(40)
+            option = QStyleOptionButton()
+            button.initStyleOption(option)
+            content = button.style().subElementRect(
+                QStyle.SubElement.SE_PushButtonContents, option, button
+            )
+            metrics = button.fontMetrics()
+            assert content.width() >= metrics.horizontalAdvance(button.text())
+            assert content.height() >= metrics.height()
+            widths.append(button.width())
+        assert widths[0] == widths[1]
+
+
+def test_one_shot_binary_presets_set_only_the_forecast_and_retain_it(workspace, qtbot):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QPushButton, QWidget
+
+    window, operations = workspace
+    window.navigate_to("New Prediction")
+    window._new_prediction_screen.one_shot_requested.emit()
+    screen = window._one_shot_creation_screen
+    screen.question.setText("A preset is entered work, not a saved prediction")
+    presets = screen.form.binary_fields.findChild(
+        QWidget, "oneShotProbabilityShortcuts"
+    )
+    assert presets is not None
+    buttons = presets.findChildren(QPushButton)
+    assert [button.text() for button in buttons] == [
+        str(value) for value in range(10, 100, 10)
+    ]
+    for expected, button in zip(range(10, 100, 10), buttons, strict=True):
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert screen.form.probability.value() == expected
+    screen.deadline_button.click()
+    window._new_prediction_screen.one_shot_requested.emit()
+    assert screen.form.probability.value() == 90
+    screen.form.type_input.setCurrentIndex(1)
+    assert not presets.isVisible()
+    screen.form.type_input.setCurrentIndex(0)
+    assert presets.isVisible() and screen.form.probability.value() == 90
+    assert (
+        operations.journal.query_independently(
+            window._journal_screen.state.request
+        ).total
+        == 0
+    )
+    for value in (0, 73, 100):
+        screen.form.probability.setValue(value)
+        assert screen.form.values().probability_percent == value
+
+
 def test_creation_switch_retains_work_and_appearance_retains_selection(
     workspace, qtbot
 ):

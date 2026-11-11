@@ -485,6 +485,15 @@ QPushButton:disabled {{
     border-color: {color.border};
 }}
 
+/* Reserve focus borders so compact actions never lose label space on focus. */
+QPushButton[reckonsolveProbabilityPreset="true"],
+QPushButton#newPredictionNavigationButton {{
+    border-width: 2px;
+}}
+QPushButton[reckonsolveProbabilityPreset="true"]:focus {{
+    border-color: {color.focus};
+}}
+
 QPushButton[reckonsolveDashboardRow="true"] {{
     text-align: left;
     padding: {ordinary}px;

@@ -46,7 +46,7 @@ from reckonsolve.domain.quantiles import (
 )
 from reckonsolve.one_shot_display import forecast_text
 from reckonsolve.reported_time import parse_reported_offset
-from reckonsolve.ui.components import ContentPanel, PageHeader
+from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
 from reckonsolve.ui.quantile_input import FiveQuantileInput
 from reckonsolve.ui.time_input import SegmentedTimeEdit
 from reckonsolve.ui.visual_system import (
@@ -414,6 +414,13 @@ class OneShotCreationScreen(QWidget):
         self.question.setPlaceholderText("What did you predict?")
         field(panel.body_layout, "Question", self.question)
         self.form = OneShotValueForm(self)
+        self.form.binary_fields.layout().addWidget(
+            ProbabilityPresets(
+                self.form.probability,
+                self.form.binary_fields,
+                name_prefix="oneShotProbability",
+            )
+        )
         panel.body_layout.addWidget(self.form)
         self.rationale, self.background = QPlainTextEdit(self), QPlainTextEdit(self)
         for title, editor in (

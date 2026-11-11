@@ -85,6 +85,7 @@ from reckonsolve.ui.components import (
     ContentPanel,
     EmptyStateLabel,
     PageHeader,
+    ProbabilityPresets,
     StatusBadge,
 )
 from reckonsolve.ui.effective_time_input import EffectiveTimeInput
@@ -655,23 +656,9 @@ class NewPredictionScreen(QWidget):
         self.probability_input.setValue(50)
         probability_label.setBuddy(self.probability_input)
 
-        shortcuts = QWidget(self.binary_forecast_fields)
-        shortcuts.setObjectName("probabilityShortcuts")
-        shortcuts_layout = QHBoxLayout(shortcuts)
-        shortcuts_layout.setContentsMargins(0, 0, 0, 0)
-        shortcuts_layout.setSpacing(int(Spacing.COMPACT))
-        for probability in range(10, 100, 10):
-            shortcut = QPushButton(str(probability), shortcuts)
-            shortcut.setObjectName(f"probabilityShortcut{probability}")
-            shortcut.setAccessibleName(f"Set probability to {probability}%")
-            apply_action_role(shortcut, ActionRole.QUIET)
-            shortcut.clicked.connect(
-                lambda _checked=False, value=probability: (
-                    self.probability_input.setValue(value)
-                )
-            )
-            shortcuts_layout.addWidget(shortcut)
-        shortcuts_layout.addStretch()
+        shortcuts = ProbabilityPresets(
+            self.probability_input, self.binary_forecast_fields
+        )
 
         self.endpoint_note = QLabel(
             "0% and 100% express absolute certainty.",

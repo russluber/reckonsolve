@@ -12,6 +12,7 @@ First Journal/workspace slice; implementation under native review, not a publish
 - CLI-only `settings attention-days [--set N]`; retired Saved View commands fail before data access.
 - Corrected effective-reflection classification and affected save-response reads without rewriting forecasting history.
 - Aligned Journal Question headings with row content and made them more prominent than Binary forecasts; removed duplicate style rebuilds during appearance switching.
+- Shared 10–90 probability presets across both Binary creation modes and reserved focus-border space for presets and the shared New action.
 
 ## 0.8.0 - 2026-10-07
 
