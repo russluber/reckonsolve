@@ -71,6 +71,7 @@ class QuestionLabel(QLabel):
         self.setAccessibleName(accessible)
         self.setTextFormat(Qt.TextFormat.RichText)
         self.setWordWrap(True)
+        self.setIndent(0)
         self.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
             | Qt.TextInteractionFlag.TextSelectableByKeyboard

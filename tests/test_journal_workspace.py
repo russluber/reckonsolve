@@ -182,6 +182,7 @@ def test_appearance_failure_keeps_page_filters_focus_and_forecasting_inputs(
 
 def test_actual_palette_and_readable_rows_follow_both_appearances(workspace, qtbot):
     from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QLabel
 
     from reckonsolve.ui.journal.rows import QuestionLabel
     from reckonsolve.ui.visual_system import semantic_colors
@@ -197,6 +198,14 @@ def test_actual_palette_and_readable_rows_follow_both_appearances(workspace, qtb
         colors = semantic_colors(window.palette())
         assert colors.is_dark == (mode is AppearanceMode.DARK)
         question = journal.cards[0].findChild(QuestionLabel)
+        forecast = next(
+            label
+            for label in journal.cards[0].findChildren(QLabel)
+            if label.text() == "60% Yes"
+        )
+        assert question.font().pointSizeF() >= forecast.font().pointSizeF()
+        assert question.indent() == 0
+        assert question.contentsRect().left() == forecast.contentsRect().left() == 0
         assert (
             question.palette().color(QPalette.ColorRole.WindowText).name()
             == colors.text
@@ -204,6 +213,39 @@ def test_actual_palette_and_readable_rows_follow_both_appearances(workspace, qtb
         assert question.height() >= question.heightForWidth(question.width())
         assert journal.scroll.horizontalScrollBar().maximum() == 0
         assert not window._toolbar.appearance.icon().isNull()
+
+
+def test_appearance_switch_updates_style_once_without_reloading_journal(
+    workspace, qtbot, monkeypatch
+):
+    from PySide6.QtWidgets import QApplication
+
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    window, operations = workspace
+    create_binary(operations, "Retain this card during appearance changes", 75)
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    window.appearance.select(AppearanceMode.LIGHT)
+    QApplication.processEvents()
+    card = journal.cards[0]
+    request = journal.state.request
+    styles = []
+    original = window.setStyleSheet
+
+    def record(stylesheet):
+        styles.append(stylesheet)
+        original(stylesheet)
+
+    monkeypatch.setattr(window, "setStyleSheet", record)
+    for expected_dark in (True, False):
+        window.appearance.toggle()
+        QApplication.processEvents()
+        assert semantic_colors(window.palette()).is_dark is expected_dark
+        assert journal.cards[0] is card and journal.state.request == request
+        assert not journal.loading
+    assert len(styles) == 2
 
 
 def test_render_failure_shows_no_partial_listing_or_false_count(

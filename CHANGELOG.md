@@ -11,6 +11,7 @@ First Journal/workspace slice; implementation under native review, not a publish
 - Recovery-backed schema 21 retires Saved Views after review where configurations exist, blocks stale writers and records explicit One-Shot reflection provenance. CSV format 6 includes that provenance.
 - CLI-only `settings attention-days [--set N]`; retired Saved View commands fail before data access.
 - Corrected effective-reflection classification and affected save-response reads without rewriting forecasting history.
+- Aligned Journal Question headings with row content and made them more prominent than Binary forecasts; removed duplicate style rebuilds during appearance switching.
 
 ## 0.8.0 - 2026-10-07
 

@@ -145,7 +145,7 @@ _TEXT_ROLE_DELTAS = {
     TextRole.SECONDARY: 0.0,
     TextRole.LABEL: 0.0,
     TextRole.SECTION_TITLE: 1.0,
-    TextRole.QUESTION: 3.0,
+    TextRole.QUESTION: 8.0,
     TextRole.PAGE_TITLE: 4.0,
     TextRole.METRIC: 7.0,
     TextRole.FORECAST: 7.0,
@@ -156,7 +156,7 @@ _TEXT_ROLE_WEIGHTS = {
     TextRole.SECONDARY: QFont.Weight.Normal,
     TextRole.LABEL: QFont.Weight.DemiBold,
     TextRole.SECTION_TITLE: QFont.Weight.DemiBold,
-    TextRole.QUESTION: QFont.Weight.DemiBold,
+    TextRole.QUESTION: QFont.Weight.Bold,
     TextRole.PAGE_TITLE: QFont.Weight.Bold,
     TextRole.METRIC: QFont.Weight.Bold,
     TextRole.FORECAST: QFont.Weight.Bold,
@@ -692,8 +692,9 @@ QGroupBox::title {{
 }}
 
 QLabel[reckonsolveQuestionLink="true"] {{
-    padding: 2px;
-    border: 1px solid transparent;
+    padding: 0;
+    border: none;
+    border-bottom: 2px solid transparent;
 }}
 QFrame#journalRowSeparator {{
     background-color: {color.border};
@@ -712,7 +713,7 @@ QPushButton[journalQuickView="true"]:focus {{
     border: 2px solid {color.focus};
 }}
 QLabel[reckonsolveQuestionLink="true"]:focus {{
-    border-color: {color.focus};
+    border-bottom-color: {color.focus};
 }}
 
 QListWidget {{
@@ -777,7 +778,11 @@ def install_visual_system(root: QWidget, *, palette: QPalette | None = None) -> 
     """Install or refresh the visual system on one top-level widget tree."""
 
     root.setProperty(VISUAL_SYSTEM_PROPERTY, True)
-    root.setStyleSheet(build_stylesheet(root.palette() if palette is None else palette))
+    stylesheet = build_stylesheet(root.palette() if palette is None else palette)
+    # Palette propagation can request this repeatedly during one appearance
+    # change. Qt repolishes the entire tree even for identical stylesheet text.
+    if root.styleSheet() != stylesheet:
+        root.setStyleSheet(stylesheet)
     refresh_semantic_fonts(root)
 
 
