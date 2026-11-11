@@ -10,7 +10,6 @@ from reckonsolve.application.errors import ConcurrentTerminalCorrectionError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
-from reckonsolve.ui.components import ContentPanel
 from reckonsolve.ui.main_window import MainWindow
 from reckonsolve.ui.notifications import NotificationHost
 
@@ -142,7 +141,7 @@ def test_needs_postmortem_queue_uses_effective_terminal_facts_and_skip_is_stable
     reopened.close()
 
 
-def test_dashboard_skip_confirmation_and_detail_completion_display(
+def test_journal_to_detail_skip_confirmation_and_completion_display(
     qtbot,
     tmp_path,
     monkeypatch,
@@ -172,54 +171,40 @@ def test_dashboard_skip_confirmation_and_detail_completion_display(
     window = MainWindow(operations)
     qtbot.addWidget(window)
     window.show()
-    window.navigate_to("Dashboard")
+    from reckonsolve.domain.journal import JournalView
 
-    section = _child(window, ContentPanel, "dashboardNeedsPostmortemSection")
-    assert section.title_label.text() == "Needs Postmortem"
-    assert section.count_badge.text() == "1"
-    row = _child(
-        window,
-        QPushButton,
-        f"dashboardNeedsPostmortemPrediction{created.prediction_id}",
-    )
-    assert "NUMERIC | Actual: 2 days" in row.text()
-    skip = _child(
-        window,
-        QPushButton,
-        f"skipPostmortemPrediction{created.prediction_id}",
-    )
+    journal = window._journal_screen
+    journal._change(view=JournalView.NEEDS_POSTMORTEM)
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    assert journal.page.total == 1
+    journal._open(created.prediction_id, None)
+    skip = _child(window, QPushButton, "numericSkipPostmortemButton")
+    assert skip.isVisible()
     monkeypatch.setattr(
-        QMessageBox,
-        "warning",
-        lambda *_args: QMessageBox.StandardButton.Cancel,
+        QMessageBox, "warning", lambda *_args: QMessageBox.StandardButton.Cancel
     )
     qtbot.mouseClick(skip, Qt.MouseButton.LeftButton)
-    assert section.count_badge.text() == "1"
     assert (
         operations.get_numeric_resolution_history(
             created.prediction_id
         ).postmortem_completion
         is None
     )
-
     monkeypatch.setattr(
-        QMessageBox,
-        "warning",
-        lambda *_args: QMessageBox.StandardButton.Yes,
+        QMessageBox, "warning", lambda *_args: QMessageBox.StandardButton.Yes
     )
     qtbot.mouseClick(skip, Qt.MouseButton.LeftButton)
-    assert section.count_badge.text() == "0"
+    assert not skip.isVisible()
+    completion = _child(window, QLabel, "numericPostmortemCompletion")
+    assert (
+        not completion.isHidden()
+        and "Postmortem completion: Skipped" in completion.text()
+    )
     notification = _child(window, NotificationHost, "notificationHost")
     assert notification.current_message.startswith("Postmortem skipped.")
-    assert notification.isVisible()
-    assert _child(window, QLabel, "dashboardNeedsPostmortemEmpty").text() == (
-        "No Resolved Predictions need a Postmortem decision."
-    )
-
-    window.navigate_to("Prediction Detail")
-    completion = _child(window, QLabel, "numericPostmortemCompletion")
-    assert not completion.isHidden()
-    assert "Postmortem completion: Skipped" in completion.text()
+    window.return_from_detail()
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    assert journal.page.total == 0
     window.close()
     database.close()
 

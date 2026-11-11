@@ -11,15 +11,8 @@ from pathlib import Path
 from shutil import copyfile
 from zipfile import ZipFile
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QShortcut
 from PySide6.QtWidgets import (
-    QApplication,
-    QFrame,
-    QLineEdit,
-    QListWidget,
     QPushButton,
-    QWidget,
 )
 
 from reckonsolve.app import create_runtime
@@ -29,13 +22,12 @@ from reckonsolve.cli import run as run_cli
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS
-from reckonsolve.domain.browser import ArchiveMode, ArchiveQuery, ArchiveTagMatchMode
+from reckonsolve.data.writer_contract import register_writer
+from reckonsolve.domain.browser import ArchiveMode
 from reckonsolve.domain.one_shot import OneShotDetail, ReportedTime
 from reckonsolve.domain.predictions import BinaryOutcome, FixedPrecisionValue
 from reckonsolve.domain.quantiles import FiveQuantiles, NumericValueConstraint
-from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
-from reckonsolve.domain.search import SearchMatchMode
-from reckonsolve.ui.presentation_settings import MINIMUM_WINDOW_SIZE
+from reckonsolve.ui.presentation_settings import MINIMUM_WINDOW_SIZE, AppearanceMode
 from reckonsolve.ui.visual_system import VISUAL_SYSTEM_PROPERTY
 
 
@@ -45,9 +37,7 @@ class _SmokeState:
     binary_prediction_id: int
     numeric_prediction_id: int
     needs_postmortem_id: int
-    saved_view_id: int
     one_shots: tuple[OneShotDetail, ...]
-    one_shot_view_id: int
 
 
 def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
@@ -258,18 +248,6 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         if queued_ids != {needs_postmortem.prediction_id}:
             raise RuntimeError("The frozen Needs Postmortem queue was incorrect.")
 
-        saved_view = operations.create_saved_view(
-            "Frozen weather view",
-            SavedViewConfiguration(
-                search_text="confirmed weather",
-                match_mode=SearchMatchMode.ALL,
-                include_superseded=False,
-                archive_query=ArchiveQuery(
-                    tags=("Rename Source", "Merge Source", "Delete Source"),
-                    tag_match_mode=ArchiveTagMatchMode.ANY,
-                ),
-            ),
-        )
         tag_ids = {tag.display_name: tag.tag_id for tag in operations.list_tags()}
         operations.rename_tag(
             operations.preview_tag_rename(tag_ids["Rename Source"], "Renamed Source")
@@ -281,10 +259,6 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             )
         )
         operations.delete_tag(operations.preview_tag_delete(tag_ids["Delete Source"]))
-        if _saved_view_prediction_ids(operations, saved_view.saved_view_id) != (
-            binary_prediction.prediction_id,
-        ):
-            raise RuntimeError("The frozen Saved View did not rerun dynamically.")
         if _search_prediction_ids(operations, "renamed source") != (
             binary_prediction.prediction_id,
         ):
@@ -327,7 +301,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             raise RuntimeError("The frozen search repair lost canonical text.")
         runtime.database.check_search_index()
 
-        one_shots, one_shot_view_id = _create_one_shot_smoke(runtime, operations)
+        one_shots = _create_one_shot_smoke(runtime, operations)
         before_presentation = _sqlite_logical_snapshot(database_path)
         _exercise_supported_presentation(
             runtime,
@@ -336,7 +310,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             numeric_prediction_id=numeric_prediction.prediction_id,
         )
         for shot in one_shots:
-            runtime.window._show_selected_prediction(shot)
+            runtime.window._open_prediction(shot.prediction_id)
             runtime.qt_app.processEvents()
             if not runtime.window._prediction_detail_host._one_shot_detail.isVisible():
                 raise RuntimeError("Frozen One-Shot Detail did not load.")
@@ -360,7 +334,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             )
         operations.export_csv_bundle(export_path)
         with ZipFile(export_path) as archive:
-            if "Format version: 5" not in archive.read("README.txt").decode("utf-8"):
+            if "Format version: 6" not in archive.read("README.txt").decode("utf-8"):
                 raise RuntimeError("Frozen CSV export did not use format 5.")
             predictions_csv = archive.read("predictions.csv").decode("utf-8")
             if not all(
@@ -382,9 +356,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             binary_prediction_id=binary_prediction.prediction_id,
             numeric_prediction_id=numeric_prediction.prediction_id,
             needs_postmortem_id=needs_postmortem.prediction_id,
-            saved_view_id=saved_view.saved_view_id,
             one_shots=one_shots,
-            one_shot_view_id=one_shot_view_id,
         )
     finally:
         runtime.close()
@@ -397,7 +369,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
 
 def _create_one_shot_smoke(
     runtime, operations: PredictionOperations
-) -> tuple[tuple[OneShotDetail, ...], int]:
+) -> tuple[OneShotDetail, ...]:
     """Exercise both packaged creation forms, later answer, corrections and CLI reads."""
     saved = []
     screen = runtime.window._one_shot_creation_screen
@@ -465,15 +437,6 @@ def _create_one_shot_smoke(
     )
     binary = operations.one_shots.skip_postmortem(binary)
     numeric = operations.one_shots.skip_postmortem(numeric)
-    view = operations.create_saved_view(
-        "Frozen One-Shots",
-        SavedViewConfiguration(
-            "Frozen",
-            SearchMatchMode.ALL,
-            False,
-            ArchiveQuery(mode=ArchiveMode.ONE_SHOT),
-        ),
-    )
     operations.repair_search_index()
     if _search_prediction_ids(operations, "Frozen corrected observation") != (
         binary.prediction_id,
@@ -490,7 +453,7 @@ def _create_one_shot_smoke(
         )
         if result != 0 or "One-Shot" not in output.getvalue():
             raise RuntimeError(f"Frozen CLI One-Shot read failed: {errors.getvalue()}")
-    return (binary, numeric), view.saved_view_id
+    return (binary, numeric)
 
 
 def _verify_frozen_unsupported_refusal(backup_path: Path) -> None:
@@ -503,6 +466,7 @@ def _verify_frozen_unsupported_refusal(backup_path: Path) -> None:
         )
     copyfile(backup_path, unsupported_path)
     with sqlite3.connect(unsupported_path) as connection:
+        register_writer(connection)
         connection.execute("DROP TRIGGER prediction_forecast_contracts_are_immutable")
         connection.execute(
             """UPDATE prediction_forecast_contracts
@@ -527,116 +491,38 @@ def _verify_frozen_unsupported_refusal(backup_path: Path) -> None:
 
 
 def _exercise_supported_presentation(
-    runtime,
-    operations: PredictionOperations,
-    *,
-    binary_prediction_id: int,
-    numeric_prediction_id: int,
-) -> None:
-    """Load the frozen style resources, shell states, routes, and forecast views."""
-
+    runtime, operations, *, binary_prediction_id, numeric_prediction_id
+):
+    """Exercise current source/backup presentation; this does not build a bundle."""
     window = runtime.window
     if window.property(VISUAL_SYSTEM_PROPERTY) is not True or not window.styleSheet():
-        raise RuntimeError("The frozen v0.6 visual system did not load.")
-    if window.sidebar_compact:
-        raise RuntimeError("A fresh frozen presentation did not use safe defaults.")
-    if (
-        window.minimumWidth() != MINIMUM_WINDOW_SIZE.width()
-        or window.minimumHeight() != MINIMUM_WINDOW_SIZE.height()
-        or window.windowState() & Qt.WindowState.WindowMinimized
-    ):
-        raise RuntimeError("The frozen window did not use safe presentation bounds.")
-
-    new_prediction = window.findChild(QPushButton, "newPredictionNavigationButton")
-    settings = window.findChild(QPushButton, "settingsNavigationButton")
-    navigation = window.findChild(QListWidget, "primaryNavigation")
-    sidebar = window.findChild(QFrame, "applicationSidebar")
-    if None in (new_prediction, settings, navigation, sidebar):
-        raise RuntimeError("The frozen application shell is incomplete.")
-    if new_prediction.icon().isNull() or settings.icon().isNull():
-        raise RuntimeError("Frozen shell button icons were not rendered.")
-    if navigation.count() != 3 or any(
-        navigation.item(row).icon().isNull() for row in range(navigation.count())
-    ):
-        raise RuntimeError("Frozen primary navigation icons were not rendered.")
-
-    route_objects = {
-        "Dashboard": "dashboardScreen",
-        "Predictions": "predictionsScreen",
-        "Analytics": "analyticsScreen",
-        "Settings": "settingsScreen",
-        "New Prediction": "newPredictionScreen",
-    }
-    for route, object_name in route_objects.items():
-        window.navigate_to(route)
-        runtime.qt_app.processEvents()
-        if (
-            window.current_screen_name != route
-            or window.findChild(
-                QWidget,
-                object_name,
-            )
-            is None
-        ):
-            raise RuntimeError(f"The frozen {route} screen did not load.")
-
-    window._show_selected_prediction(operations.get_prediction(binary_prediction_id))
-    runtime.qt_app.processEvents()
-    if window.findChild(QWidget, "predictionDetailScreen") is None:
-        raise RuntimeError("Frozen Binary Prediction Detail did not load.")
-    window._show_selected_prediction(
-        operations.get_numeric_prediction(numeric_prediction_id)
-    )
-    runtime.qt_app.processEvents()
-    if window.findChild(QWidget, "numericPredictionDetailScreen") is None:
-        raise RuntimeError("Frozen Numeric Prediction Detail did not load.")
-
-    focused = QApplication.focusWidget()
-    if focused is not None:
-        focused.clearFocus()
-    window.activateWindow()
-    navigation.setFocus(Qt.FocusReason.ShortcutFocusReason)
-    runtime.qt_app.processEvents()
-    predictions_shortcut = window.findChild(QShortcut, "globalShortcutPredictions")
-    compact_shortcut = window.findChild(QShortcut, "globalShortcutToggleSidebar")
-    if predictions_shortcut is None or compact_shortcut is None:
-        raise RuntimeError("Frozen global keyboard shortcuts are missing.")
-    shared_test_modal = QApplication.activeModalWidget()
-    if shared_test_modal is None:
-        predictions_shortcut.activated.emit()
-    else:
-        # A real frozen-smoke process has no foreign modal. The source-suite test
-        # reuses pytest-qt's one QApplication, where an earlier test may still own
-        # a deliberate modal and the production shortcut guard must respect it.
-        window.navigate_to("Predictions")
-    runtime.qt_app.processEvents()
-    if window.current_screen_name != "Predictions":
-        raise RuntimeError("Frozen keyboard navigation did not reach Predictions.")
-    if shared_test_modal is None:
-        compact_shortcut.activated.emit()
-    else:
-        window.toggle_sidebar()
-    runtime.qt_app.processEvents()
-    if not window.sidebar_compact:
-        raise RuntimeError("Frozen keyboard navigation did not enter compact mode.")
-    if any(
-        navigation.item(row).icon().isNull()
-        or not navigation.item(row).toolTip()
-        or not navigation.item(row).data(Qt.ItemDataRole.AccessibleTextRole)
-        for row in range(navigation.count())
-    ):
-        raise RuntimeError("Frozen compact navigation lost accessible icon controls.")
-
-    for width, height in ((760, 520), (960, 640), (1440, 900)):
-        window.resize(width, height)
-        runtime.qt_app.processEvents()
-        if sidebar.width() <= 0 or window.centralWidget().width() <= sidebar.width():
-            raise RuntimeError("The frozen shell failed a responsive window size.")
+        raise RuntimeError("The shared visual system did not load.")
+    if window.minimumSize() != MINIMUM_WINDOW_SIZE:
+        raise RuntimeError("The workspace lost its safe minimum size.")
+    for identifier in (binary_prediction_id, numeric_prediction_id):
+        window._open_prediction(identifier)
+        if window.current_screen_name != "Prediction Detail":
+            raise RuntimeError("Type-aware Detail did not open.")
+        window.navigate_to("Performance")
+        window.navigate_to("Settings")
+        window.return_to_source()
+        window.return_to_source()
+        if window.workspace.current.prediction_id != identifier:
+            raise RuntimeError("Performance lost its independent source.")
+        window.return_from_detail()
+    window.appearance.select(AppearanceMode.DARK)
+    if not window.appearance.dark:
+        raise RuntimeError("The dark appearance did not apply.")
+    if set(window._global_shortcuts) != {
+        "globalShortcutNewPrediction",
+        "globalShortcutFindPredictions",
+        "globalShortcutSettings",
+    }:
+        raise RuntimeError("The minimal shortcut set did not load.")
+    _wait_for_journal(runtime)
 
 
 def _verify_frozen_restart(database_path: Path, state: _SmokeState) -> None:
-    """Restart the frozen GUI with its external presentation preference."""
-
     before_restart = _sqlite_logical_snapshot(database_path)
     runtime = create_runtime(
         argv=["Reckonsolve.exe", "--private-build-smoke-restart"],
@@ -644,25 +530,20 @@ def _verify_frozen_restart(database_path: Path, state: _SmokeState) -> None:
     )
     try:
         runtime.window.show()
-        runtime.qt_app.processEvents()
-        if not runtime.window.sidebar_compact:
-            raise RuntimeError("The frozen compact sidebar preference did not restart.")
-        runtime.window.navigate_to("Predictions")
-        search = runtime.window.findChild(QLineEdit, "predictionSearchInput")
-        if search is None:
-            raise RuntimeError("The frozen Predictions search control did not restart.")
+        if (
+            runtime.window.current_screen_name != "Journal"
+            or runtime.window.appearance.mode is not AppearanceMode.DARK
+        ):
+            raise RuntimeError("Journal/appearance did not restart as expected.")
+        _wait_for_journal(runtime)
         if _search_prediction_ids(
-            PredictionOperations(runtime.database),
-            "confirmed weather",
+            PredictionOperations(runtime.database), "confirmed weather"
         ) != (state.binary_prediction_id,):
-            raise RuntimeError("Frozen search did not remain usable after GUI restart.")
-        runtime.window.toggle_sidebar()
-        if runtime.window.sidebar_compact:
-            raise RuntimeError("The restarted frozen sidebar did not expand.")
+            raise RuntimeError("Search did not remain usable after restart.")
     finally:
         runtime.close()
     if _sqlite_logical_snapshot(database_path) != before_restart:
-        raise RuntimeError("Restarting the frozen shell rewrote canonical data.")
+        raise RuntimeError("Restart rewrote canonical data.")
 
 
 def _sqlite_logical_snapshot(
@@ -722,12 +603,13 @@ def _verify_smoke_database(
         snapshot = operations.get_one_shot_analytics()
         if snapshot.binary.resolved_count != 1 or snapshot.numeric.resolved_count != 1:
             raise RuntimeError("One-Shot analytics did not survive backup/restart.")
-        if set(_saved_view_prediction_ids(operations, state.one_shot_view_id)) != {
-            s.prediction_id for s in state.one_shots
-        }:
-            raise RuntimeError(
-                "One-Shot Saved View mode did not survive backup/restart."
-            )
+        if {
+            item.prediction_id
+            for item in operations.browse_predictions(
+                mode=ArchiveMode.ONE_SHOT
+            ).predictions
+        } != {shot.prediction_id for shot in state.one_shots}:
+            raise RuntimeError("One-Shot scope did not survive backup/restart.")
         previous_prediction = operations.get_prediction(state.previous_prediction_id)
         binary_prediction = operations.get_prediction(state.binary_prediction_id)
         numeric_prediction = operations.get_numeric_prediction(
@@ -812,10 +694,6 @@ def _verify_smoke_database(
             raise RuntimeError("The frozen tag-library changes did not survive.")
         if {"Rename Source", "Merge Source", "Delete Source"} & tag_names:
             raise RuntimeError("A removed frozen tag unexpectedly survived.")
-        if _saved_view_prediction_ids(operations, state.saved_view_id) != (
-            state.binary_prediction_id,
-        ):
-            raise RuntimeError("The frozen Saved View did not survive restart.")
         if _search_prediction_ids(operations, "confirmed weather") != (
             state.binary_prediction_id,
         ):
@@ -847,40 +725,15 @@ def _search_prediction_ids(
     )
 
 
-def _saved_view_prediction_ids(
-    operations: PredictionOperations,
-    saved_view_id: int,
-) -> tuple[int, ...]:
-    view: SavedView | None = next(
-        (
-            candidate
-            for candidate in operations.list_saved_views()
-            if candidate.saved_view_id == saved_view_id
-        ),
-        None,
-    )
-    if view is None:
-        raise RuntimeError("The frozen Saved View is missing.")
-    configuration = view.configuration
-    query = configuration.archive_query
-    return tuple(
-        hit.prediction.prediction_id
-        for hit in operations.search_predictions(
-            configuration.search_text,
-            match_mode=configuration.match_mode,
-            include_superseded=configuration.include_superseded,
-            status=query.status,
-            prediction_type=query.prediction_type,
-            mode=query.mode,
-            tags=query.tags,
-            tag_match_mode=query.tag_match_mode,
-            attention=query.attention,
-            date_meaning=query.date_meaning,
-            date_start=query.date_start,
-            date_end=query.date_end,
-            sort=query.sort,
-        ).hits
-    )
-
-
 __all__ = ["run_private_build_smoke"]
+
+
+def _wait_for_journal(runtime):
+    import time
+
+    deadline = time.monotonic() + 15
+    while runtime.window._journal_screen.loading and time.monotonic() < deadline:
+        runtime.qt_app.processEvents()
+        time.sleep(0.005)
+    if runtime.window._journal_screen.loading:
+        raise RuntimeError("Journal retrieval did not finish.")

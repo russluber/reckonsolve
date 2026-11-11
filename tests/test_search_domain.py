@@ -18,6 +18,28 @@ from reckonsolve.domain.search import (
 NOW = datetime(2026, 8, 27, 12, tzinfo=UTC)
 
 
+def test_ascii_token_fast_path_keeps_unicode_and_punctuation_meanings():
+    assert search_tokens("".join(chr(value) for value in range(128))) == (
+        "0123456789",
+        "abcdefghijklmnopqrstuvwxyz",
+        "abcdefghijklmnopqrstuvwxyz",
+    )
+    assert search_tokens("Forecast_42 / Yes-No 0.75") == (
+        "forecast",
+        "42",
+        "yes",
+        "no",
+        "0",
+        "75",
+    )
+    assert search_tokens("Café Ångström １２３ \ue000") == (
+        "cafe",
+        "angstrom",
+        "123",
+        "\ue000",
+    )
+
+
 def _prediction(prediction_id: int, question: str) -> SearchPrediction:
     return SearchPrediction(
         prediction_id=prediction_id,

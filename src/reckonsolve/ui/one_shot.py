@@ -508,6 +508,9 @@ class OneShotCreationScreen(QWidget):
                 self.background.toPlainText(),
                 tags=tuple(t.strip() for t in self.tags.text().split(",") if t.strip()),
             )
+            guard = getattr(self, "save_guard", None)
+            if guard is not None and not guard():
+                return
             saved = self.operations.one_shots.create(request)
         except (ApplicationError, ValueError, sqlite3.Error) as error:
             self.error.setText(str(error))

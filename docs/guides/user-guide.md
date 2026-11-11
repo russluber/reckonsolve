@@ -1,5 +1,7 @@
 # User guide
 
+This checkout includes the unreleased first Journal/workspace slice, pending native acceptance. Journal and the shared toolbar use the new workflow below; creation, Detail, Performance and Settings retain working body adapters while their full redesigns remain separate.
+
 ## In this guide
 
 - [Install and open the app](#install-and-open-the-app).
@@ -79,7 +81,9 @@ One-Shot has no Forecast Deadline, Expected Resolution, ordinary forecast update
 
 ## Revisit a prediction
 
-Open a prediction from **Dashboard**, **Predictions**, or search. Detail shows the forecast, lifecycle, metadata, and causal Timeline. Back returns to the source view with browsing context.
+Open a Question from **Journal**. Detail shows the forecast, lifecycle, metadata and causal Timeline. **Back to Journal** refreshes the preserved retrieval and returns near the area you were browsing. A changed or removed result is not temporarily forced into that view.
+
+**+ New** is available from Journal, Detail and Performance. Creation hides Performance and Settings. Back returns to its origin; entered work offers Keep editing or explicit discard across both retained modes. Ordinary Adaptive and unanswered One-Shot saves clear the creation task and return to Journal with a quiet confirmation. An answered One-Shot opens its Detail. Performance returns to its own origin even after a Settings detour.
 
 An Open Adaptive prediction offers:
 
@@ -111,15 +115,23 @@ Journal corrections show the latest body at the original Timeline position. Open
 
 ## Find and organize your journal
 
-In **Predictions**, combine search with mode, type, lifecycle, tags, attention, dates, and sorting. Mode offers All, Adaptive, and One-Shot. Deadline filters do not invent dates for One-Shots.
+Journal is home. **All**, **Unresolved** and **Needs postmortem** are quiet views without counters. Unresolved includes Open/Locked Adaptive and One-Shot Waiting for answer. Needs postmortem includes Resolved records with blank effective reflection and no explicit Skip.
 
-Search uses ordinary words. All words is the default; quoted phrases match within one source. Results explain their matches and group them into one row per prediction. **Include superseded history** searches earlier audited text and labels it accordingly. Opening a historical match reveals the corresponding Timeline or history section.
+Enter ordinary words in **Search predictions**, then press **Enter** or **Search**. Editing text removes the prior listing/count until you submit, so old rows cannot be mistaken for the new query. Clearing text retrieves the blank-search view. All words is the default; quoted phrases match within one source. Search narrows the selected view and filters. Results explain non-Question matches; extra passages are behind a disclosure. **Include superseded history** permits clearly labeled earlier versions and opens their exact source in Detail. A formerly current Journal passage that changes is opened at its original entry with current text and a changed-text explanation, without false match emphasis.
 
-Save a useful configuration as a **Saved View**. It remains dynamic: new matching predictions appear automatically. Changed controls do not alter the saved configuration until you explicitly update it. Tag management can rename, merge, or delete tags with confirmation without rewriting forecast history.
+**Filters** edits one draft: mode/type, searchable existing tags with All/Any matching, optional inclusive From/Through dates, word matching and history inclusion. Each date boundary has its own checkbox. Unchecked boundaries are ignored; incomplete or reversed enabled dates apply nothing. Apply commits the complete draft; Cancel changes nothing. Clear filters clears only that draft. Applied constraints appear as removable chips. **Reset View** restores the complete Journal default, including text, view, constraints and sort.
+
+Automatic sort is **Recently active** for blank text and **Relevance** for search. An applicable manual sort persists until changed/reset; clearing text discards manual Relevance. Last active reflects substantive committed work, not reading, automatic locking, ordinary repairs or Skip. Numeric rows retain five exact horizontal values with their unit once. Resolved Adaptive rows identify the scoring-eligible forecast and excluded later revisions; Invalid and unscored cases remain explicit. Load more continues the same retrieval.
+
+The full matching-Prediction count accompanies text/advanced results; ordinary browsing, a quick view alone or a manual sort alone has no count. Loading, successful zero results and failure have different messages. Try again is offered for an identified temporary read failure; Repair search opens Settings only for an identified rebuildable projection problem.
+
+**Manage Tags** is in Settings and confirms rename, merge and removal. Saved Views are retired. Upgrading an older supported journal preserves a verified complete recovery copy and requires confirmation where configurations exist; forecasting history remains intact. CLI opening directs review-dependent upgrades to the desktop.
+
+Use the quiet sun/moon control to select the opposite appearance without leaving the page or clearing work. Settings offers **Follow Windows / Light / Dark** for the same remembered preference. Only Ctrl+N, Journal-only Ctrl+F and eligible Ctrl+, remain as app navigation shortcuts; native modal dialogs keep control of their own keys.
 
 ## Learn from the results
 
-This section explains Adaptive and One-Shot Analytics in plain language. Its numbered subsections below refer to this analytics chapter. You do not need
+This section explains Adaptive and One-Shot Performance in plain language. Its numbered subsections below refer to this analytics chapter. You do not need
 to memorize formulas. Start with the routine below; use the later sections when
 a particular label or chart is confusing.
 
@@ -140,7 +152,7 @@ Quick navigation: [Binary calibration](#4-binary-calibration-read-the-table-firs
 [WIS and updates](#8-numeric-scores-and-updating-what-you-can-compare),
 [older databases](#9-older-databases-and-retired-models),
 [individual scorecards](#what-can-i-see-for-one-prediction),
-[One-Shot Analytics](#11-one-shot-analytics).
+[One-Shot Performance](#11-one-shot-analytics).
 
 **The purpose is to improve your next forecast, not to make every chart look perfect.**
 One surprising outcome is not evidence that your method is broken. Look for
@@ -181,7 +193,7 @@ experiment is to account for handoffs—not to add an arbitrary amount to every
 forecast. If the archive is still mostly test data, none of its patterns diagnose
 your real forecasting habits.
 
-That is the purpose of Analytics: finding questions worth investigating and
+That is the purpose of Performance: finding questions worth investigating and
 tracking the consequences of your forecasts. It is not an automatic coach. For a
 small personal archive, the individual scorecards and Postmortems can be more
 useful than the headline averages. More summary metrics would not, by themselves,
@@ -232,7 +244,7 @@ Numeric unit is an exact unit-label filter, not a conversion tool. Choose Numeri
 before selecting a unit. `days` and `hours` do not become comparable automatically.
 All visible analytical results follow the selected filters, but each section still
 uses its own eligible model and measurement group. Counts in different sections
-therefore need not match. Analytics has no date-range control; date filtering in
+therefore need not match. Performance has no date-range control; date filtering in
 Predictions is a separate browsing feature.
 
 **What does not count:** Open, Locked, and Invalid predictions do not score.
@@ -553,7 +565,7 @@ does not measure calibration. Its interpolation adds no calibration observations
 
 #### Step 6: Judge the ranges using Below / Inside / Above
 
-**Coverage** is simply the fraction of actuals inside an interval. In Analytics,
+**Coverage** is simply the fraction of actuals inside an interval. In Performance,
 the 50% Interval and 90% Interval tables show coverage alongside the two kinds
 of miss. Median Balance shows Below / Equal / Above the median.
 
@@ -783,7 +795,7 @@ effective time can legitimately change the score and comparison.
 
 #### Read aggregate updating feedback without pooling unlike scores
 
-Analytics does **not** average raw WIS across unrelated Numeric questions, even
+Performance does **not** average raw WIS across unrelated Numeric questions, even
 when their unit labels match. A 2-day error on a one-week repair and a 2-day error
 on a ten-year project do not have the same practical meaning.
 
@@ -805,7 +817,7 @@ Neither a good WIS nor a high better-pair percentage tells you to revise more of
 #### What can I see for one prediction?
 
 Yes—open a **resolved** prediction from Predictions (or another existing entry
-point) and scroll to its resolution/scorecard area. Analytics summarizes groups;
+point) and scroll to its resolution/scorecard area. Performance summarizes groups;
 these scorecards describe that one prediction. There is no meaningful
 single-prediction calibration curve: one observation cannot tell you whether your
 stated probabilities are reliable over repeated forecasts.
@@ -848,7 +860,7 @@ all future intervals should change.
 
 ### 9. Older databases and retired models
 
-The pre-v0.7 Binary and single-interval Numeric models are retired. They no longer have editors, scorecards, or Analytics sections in this source version.
+The pre-v0.7 Binary and single-interval Numeric models are retired. They no longer have editors, scorecards, or Performance sections in this source version.
 
 An archive containing any retired prediction is refused before it is changed—even if it also contains supported v0.7 predictions. The app does not convert forecasts, invent missing quantiles or exact times, erase history, or display only the supported subset. Keep the original database or backup and use a compatible earlier version to inspect it. A backup is not a conversion mechanism.
 
@@ -868,7 +880,7 @@ Before deciding “I need to change my forecasting,” ask:
 Do not invalidate an honestly resolved prediction because it scored badly, change
 its meaning after the outcome, or adjust effective time for a better result. Use
 corrections only for genuine errors. Scores can legitimately change after those
-audited corrections; reopening Analytics alone must not change history.
+audited corrections; reopening Performance alone must not change history.
 
 Useful Postmortem template:
 
@@ -879,7 +891,7 @@ Useful Postmortem template:
 
 ### 11. One-Shot Analytics
 
-Open **Analytics → Prediction mode → One-Shot**. All types shows separate Binary and
+Open **Performance → Prediction mode → One-Shot**. All types shows separate Binary and
 Numeric sections. Choose a type and a tag to study a topic. Choosing Numeric also enables
 the unit filter, which matches the exact saved label: `m` and `cm` are different, and
 Reckonsolve does not convert between them. All units can share calibration frequencies
@@ -928,7 +940,7 @@ questions may provide less independent evidence than their count suggests. Use t
 compare meaningful topics, inspect individual records, and treat sparse groups as a
 reason to collect more examples. Charts and text tables describe the same observations.
 
-For your own analysis, CSV format 5 provides separate original/effective One-Shot files
+For your own analysis, CSV format 6 provides separate original/effective One-Shot files
 and full correction history. Use the effective row once per answered, non-Invalid
 Prediction; original rows and correction snapshots are history, not additional samples.
 Follow the included README for exact values and later-answer replay. Reported wall
@@ -941,9 +953,9 @@ For implementation boundaries, see [Architecture](../architecture.md).
 
 ## Back up and export
 
-Use **Settings → Backup** or the matching CLI for a verified SQLite backup. It preserves the complete supported archive, corrections, tags, Saved Views, and database settings. Keep backups outside generated development/build directories.
+Use **Settings → Back Up Now** or the matching CLI for a verified SQLite backup. It preserves the complete current journal, corrections, tags, provenance and database settings. The separately verified pre-upgrade copy retains retired Saved View configurations. Keep recovery backups outside generated development/build directories.
 
-**Export CSV** creates a format-5 ZIP with relational history and a data dictionary. It includes both modes, exact Numeric values, originals, and corrections. Saved Views, settings, and search-index rows are excluded. CSV is for analysis, not restoration.
+**Export CSV Bundle** creates a format-6 ZIP with relational history and a data dictionary. It includes both modes, exact Numeric values, originals and complete corrections, including One-Shot source_action. Settings and search-index rows are excluded. CSV is for analysis, not restoration.
 
 For recovery, close the app and matching CLI, preserve the current database, and restore a verified compatible SQLite backup to that identity's database path. Reopen and check the archive; use Settings search repair if the derived index needs rebuilding. Do not restore CSV files as a database or replace stable data with test data.
 
@@ -954,6 +966,6 @@ For recovery, close the app and matching CLI, preserve the current database, and
 | Stable | `reckonsolve` / `rsc` | `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3` |
 | Development | `reckonsolve-dev` / `rscd` | `%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3` |
 
-Each identity has a separate `presentation.ini` for window/sidebar preferences outside canonical history and excluded from backups/exports. GUI and CLI share the matching database directly; refresh or reopen the GUI after a CLI change. They do not sync across identities.
+Each identity has a separate `presentation.ini` for window/appearance preferences outside canonical history and excluded from backups/exports. GUI and CLI share the matching database directly; refresh or reopen the GUI after a CLI change. They do not sync across identities.
 
 Any pre-v0.7 Binary-final or interval-v1 Numeric record prevents an archive from opening in v0.8.0. Mixed archives and missing, unknown, or mismatched identities are also refused before mutation. Nothing is converted or deleted; preserve the original for a compatible earlier version.

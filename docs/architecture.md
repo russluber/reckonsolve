@@ -1,7 +1,7 @@
 # Reckonsolve architecture
 
-Current implementation: v0.8.0, schema 20, search projection 3, CSV format 5.
-Last reviewed: 2026-10-06.
+Unreleased working tree: first Journal/workspace slice, schema 21, search projection 3, CSV format 6; native acceptance pending. Released v0.8.0 remains the schema-20/format-5 baseline.
+Last reviewed: 2026-11-10.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
 
@@ -47,7 +47,10 @@ Paths below are relative to src/reckonsolve/.
 | Domain | domain/forecast_contracts.py, domain/predictions.py, domain/quantiles.py, domain/one_shot.py | Closed identities, lifecycle/time rules, exact values, complete statements and documentary times. |
 | Persistence | data/database.py, data/migrations.py, data/predictions.py, data/quantiles.py, data/one_shot.py | Connections, immutable schema history, model-aware transactions and reads. |
 | One-Shot replay | data/one_shot_facts.py, data/one_shot_archive.py | Independently checked original/correction replay and effective archive facts. |
-| Retrieval | data/search_index.py, data/search.py, data/saved_views.py, data/tags.py | Derived projection, grouped hits, dynamic preferences and tag transactions. |
+| Retrieval | application/journal.py, data/journal.py, domain/journal.py, data/search_index.py, data/search.py, data/tags.py | Checked Journal facts, faithful matching/order/counts, derived projection and tag transactions. |
+| Workspace | ui/main_window.py, ui/workspace_state.py, ui/workspace_toolbar.py, ui/creation_task.py, ui/appearance.py | Composition, task sources, eligible controls, retained creation and presentation preference. |
+| Journal widgets | ui/journal/ | Separate applied state, filter drafts, one-worker request coordination, controls and rows/excerpts. |
+| Upgrade | data/upgrade.py, data/journal_migration.py, data/writer_contract.py | Protected recovery/review, ordered schema 21 and persistent stale-writer exclusion. |
 | Analytics | analytics/trajectory.py, analytics/quantiles.py, analytics/one_shot.py and aggregate modules | Exact selection/scoring and separate observation populations. |
 | Transfers | data/transfer.py | Verified online backup and snapshot-based CSV ZIP. |
 | Desktop | ui/ | Screens/dialogs, shared styles/icons, charts/text alternatives, notifications and preferences. |
@@ -70,13 +73,16 @@ Adaptive is presentation terminology; canonical mode deadline remains unchanged.
 
 Startup, migrations, ordinary reads/writes, repair, backup, and export enforce compatible identities. Any retired-only or mixed-with-retired archive, missing/unknown/mismatched pair, unsupported schema, or malformed history fails clearly without conversion, deletion, repair, or partial loading. Compatibility checks occur before mutation and surround shared transactions. No startup failure silently replaces an existing database. See [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md).
 
-Migrations are lightweight, ordered, history-validated, transactional, foreign-key checked, and covered by rollback tests. Already-applied migration SQL is never edited. Supported Binary schema-16/17 and supported schema-18/19 archives upgrade through schema 20 preserving canonical facts.
+Migrations are lightweight, ordered, history-validated, transactional, foreign-key checked, and covered by rollback tests. Already-applied migration SQL is never edited. Supported Binary schema-16/17 and supported schema-18/19 archives upgrade through schema 21 preserving forecasting history; deprecated Saved View configurations use the recovery/review boundary below.
 
 - Schema 16 stores immutable contracts and prospective exact times.
 - Schema 17 supports trajectory terminal correction/read integration.
 - Schema 18 adds immutable five-quantile definitions/revisions and explicit shared anchors.
 - Schema 19 adds two One-Shot pairs, documentary times, and transcription snapshots.
-- Schema 20 adds only nullable, constrained Saved View forecast_mode; null preserves All modes.
+- Schema 20 historically adds nullable, constrained Saved View forecast_mode.
+- Schema 21 retires those configurations after verified recovery/review and adds closed One-Shot correction source_action.
+
+[ADR 0022](decisions/0022-reviewed-journal-upgrades-and-writer-guards.md) records exclusive transition/recovery, persistent per-connection writer guards, cancellation and failure behavior. No personal upgrade or journal relocation is implied by the local implementation.
 
 Historical tables needed for supported storage/migration are not extra supported runtime contracts.
 
@@ -99,7 +105,7 @@ Atomic units include:
 - Tag maintenance: confirmed relationships, stable references, metadata tokens, and all affected search documents.
 - Guarded Delete: revalidated untouched Open parent and its eligible child rows, without orphans.
 
-Expected errors are translated to clear application failures; unexpected exceptions are not suppressed. One-Shot writes return a complete OneShotDetail before commit, avoiding a second read that might fail after a successful save. Creation and correction forms never request scores before Save.
+Expected errors are translated to clear application failures; unexpected exceptions are not suppressed. One-Shot writes, metadata saves, Numeric Journal corrections and Numeric invalidation construct their complete responses before commit, avoiding a later read that could fail after a successful save. Creation and correction forms never request scores before Save.
 
 ## 6. Adaptive history and scoring
 
@@ -117,7 +123,7 @@ Continuous-style calibration uses inclusive frequencies and pointwise 95% Wilson
 
 One-Shot records one final guess before checking an existing answer. There is no Deadline, normal revision/Review, cutoff selection, trajectory, or updating metric. Reported forecast/reveal wall minutes, approximation flags, and optional offsets are documentary. System app-entry/correction instants are separate audit facts. Neither timing source selects score observations.
 
-Original forecasts reuse sequence one in supported revision tables. Original answers reuse type-specific Resolution tables with null effective time. one_shot_forecast_times and one_shot_answer_times store optional reports. one_shot_corrections stores full relational before/after snapshots with per-Prediction sequence, app time, and optional note.
+Original forecasts reuse sequence one in supported revision tables. Original answers reuse type-specific Resolution tables with null effective time. one_shot_forecast_times and one_shot_answer_times store optional reports. one_shot_corrections stores full relational before/after snapshots with per-Prediction sequence, app time, optional note and immutable source_action. Historical/default transcription repairs never create Journal recency. Only the dedicated reflection-only Postmortem operation can mark a blank-to-nonblank reflection as new work; edits and clears remain repairs.
 
 SQL/domain guards enforce immutable originals, single-forecast cardinality, no Reviews, current-before snapshots, and exact ordered/integral quantities. Checked read-only original/effective projections replay corrections, including a forecast corrected before a later first answer. A blank answer in an earlier correction cannot erase that later answer. [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md) records the layout.
 
@@ -129,7 +135,9 @@ Search projection 3 uses SQLite FTS5 fragments with stable source provenance. Ca
 
 The query boundary parses ordinary text, applies structured filters, evaluates same-Prediction word coverage, ranks explainably, and groups one row per Prediction. History-only matches are labeled and navigate to the correct source/version in Detail. Missing/stale/damaged derived state is a visible repair condition, never a false empty result. Repair changes no canonical history/time.
 
-Saved Views store dynamic query/filter/sort configurations, not result membership. Stable tag references survive explicit rename/merge. Schema-20 mode persistence is nullable and constrained. Search/mode/date/attention filters are read-only; One-Shot has no fabricated Deadline or updating attention.
+Saved Views have no runtime model, GUI, CLI or active tables after schema 21; the protected pre-upgrade copy retains earlier configurations. Tags remain reusable current relationships. Search/mode/date/attention filters are read-only; One-Shot has no fabricated Deadline or updating attention. The attention threshold remains configurable through CLI settings attention-days.
+
+Journal reads admit the whole archive before filtering, reuse the existing corpus/ranking and build scoring-eligible summaries with shared score functions. Last active is derived from qualifying committed events and explicit reflection provenance. The current request publishes bounded rows and its full matching-Prediction count together. Enter/Search submits text; one worker owns its read-only connection, coalesces requests and discards obsolete completions. Edited text makes prior results unavailable; temporary failure, projection failure, archive refusal and successful zero results stay distinct.
 
 Journals appear once at their original causal Timeline position, displaying current corrected text with collapsed edit history. Superseded matches open that history. Answered One-Shots share the Resolved-only Postmortem queue, Skip, and later reflection. All terminal originals and corrections stay inspectable.
 
@@ -137,7 +145,9 @@ Journals appear once at their original causal Timeline position, displaying curr
 
 ui/visual_system.py owns palette-relative typography, semantic colors, spacing, surfaces, badges, focus/disabled states, action roles, and restrained motion. No widget-local theme framework or domain/data dependency is introduced. Local Lucide assets and dropdown chevrons follow the packaged resource path; palette changes refresh colors and icons.
 
-New Prediction is the prominent action; Dashboard, Predictions, and Analytics are permanent destinations; Settings is a bottom utility; Detail is contextual with source-aware Back. Return preserves Predictions query, filters, Saved View, results, selection, and scroll. Responsive controls/results panes and Analytics chart/table pairs stack when narrow. User/history text remains selectable, with explicit empty/error states.
+Journal replaces Dashboard and the old browser. A compact shared toolbar offers prominent New, quiet Performance, appearance and Settings controls only on eligible pages. One task-source coordinator owns New/Performance/Settings origins; returning through Settings never overwrites Performance's independent origin. Detail returns to a refreshed Journal retrieval and a useful nearby anchor. No sidebar, peer tabs or general navigation stack remains.
+
+Creation, Detail, Performance and Settings retain working body adapters for this slice; their complete body redesigns are separate work. Existing creation capabilities remain, with whole-task discard/save guards, retained mode inputs and the approved Journal/answered-Detail success landings. Adaptive Skip remains reachable in Detail beside existing reflection content while its full body is deferred. User/history text stays selectable; complete Numeric row values remain horizontal with readable wrapping.
 
 Creation modes share canvas/card placement and reciprocal top-right One-Shot/Adaptive actions with draft retention. One-Shot shows Background/Rationale/Tags in the main card and optional separate date/segmented time input. ui/time_input.py adapts native QTimeEdit section entry, Tab/Shift+Tab, A/P, and Up/Down. UTC is a neutral Qt carrier for documentary wall time, not normalization of a reported event.
 
@@ -145,15 +155,15 @@ ui/exact_deadline_input.py resolves Adaptive local shortcuts/custom times using 
 
 Waiting for answer uses warning yellow, Needs Postmortem informational blue, Resolved success green. Mark Invalid is orange Caution; Delete is red Destructive. Human-readable local-minute labels do not alter exact canonical instants.
 
-Identity-scoped presentation.ini stores safe geometry/maximized state and sidebar mode outside SQLite. Never restore a minimized/off-screen window. Notifications carry only already-verifiable routine success; errors/decisions remain persistent. Keyboard shortcuts are suppressed during editing/modal decisions. Icons and charts retain accessible names and text alternatives.
+Identity-scoped presentation.ini stores safe geometry/maximized state and Follow Windows / Light / Dark outside SQLite; obsolete sidebar preferences have no visible effect. Never restore a minimized/off-screen window. Notifications carry only already-verifiable routine success; errors/decisions remain persistent. Ctrl+N, Journal-only Ctrl+F and eligible Ctrl+, respect native modal decisions; creation hides unrelated destinations. Retired global navigation shortcuts are absent. Appearance updates the existing widget tree without rebuilding tasks or losing focus/selection; failed preference persistence is explicit. Icons and charts retain accessible names and text alternatives.
 
 ## 10. Backup, export, and private packaging
 
-Online SQLite backup captures and verifies a temporary complete database before atomic installation, then records success metadata. It includes database settings, Saved Views, and derived search state; presentation.ini remains separate. Supported recovery verifies migration history and derived projection. Unsupported originals remain unchanged.
+Online SQLite backup captures and verifies a temporary complete database before atomic installation, then records success metadata. It includes current settings, history, provenance and derived search state; presentation.ini remains separate. Supported recovery verifies migration history and derived projection. Unsupported originals remain unchanged.
 
-CSV format 5 uses one checked read snapshot, fully quoted UTF-8 CSV, a verified temporary ZIP, and atomic replacement. It retains the 17 format-4 CSV layouts and adds one_shot_original_facts.csv, one_shot_effective_facts.csv, and one_shot_corrections.csv, plus the dictionary. Numeric values remain scaled integers. Optional wall minutes/offsets are documentary; effective facts are a labeled derived convenience, not another observation. Empty exports retain all headers.
+CSV format 6 uses one checked read snapshot, fully quoted UTF-8 CSV, a verified temporary ZIP, and atomic replacement. It retains the 17 format-4 CSV layouts and adds one_shot_original_facts.csv, one_shot_effective_facts.csv, and one_shot_corrections.csv, plus the dictionary. Format 6 extends one_shot_corrections.csv with source_action; other file meanings and exact quantities remain. Numeric values remain scaled integers. Optional wall minutes/offsets are documentary; effective facts are a labeled derived convenience, not another observation. Empty exports retain all headers.
 
-The dictionary explains relationships, nulls, exact quantities, model/scoring dispatch, correction replay, and later-answer handling. Scores, CDF points, Saved Views, settings, preferences, and search rows are excluded. CSV is analytical, not restorable. Failure cannot replace a prior destination. Desktop and CLI share data/transfer.py.
+The dictionary explains relationships, nulls, exact quantities, model/scoring dispatch, correction replay, and later-answer handling. Scores, CDF points, settings, preferences and search rows are excluded. CSV is analytical, not restorable. Failure cannot replace a prior destination. Desktop and CLI share data/transfer.py.
 
 Private Windows onedir builds include local styles/icons and run relocated disposable smoke checks with the bundled runtime. Public source releases ship no installer, signing, public executable, import API, or updater. Generated artifacts remain ignored.
 

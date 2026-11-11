@@ -1,5 +1,7 @@
 # Reckonsolve
 
+The checkout includes the unreleased first Journal/workspace slice under native review. The installed/published v0.8.0 release is unchanged.
+
 A personal forecasting journal for Windows. Record uncertain judgments, preserve your reasoning, resolve answers, and study calibration. Reckonsolve works offline and stores your data locally.
 
 ## Run from source
@@ -31,7 +33,7 @@ Reckonsolve uses Python 3.13, PySide6, and SQLite. [v0.8.0](https://github.com/r
 
 Both support Binary Yes/No probabilities and Numeric q05/q25/q50/q75/q95 forecasts. Adaptive is the default in **New Prediction**; the top-right **One-Shot** button switches modes.
 
-Immutable forecasts, audited corrections, Journals, and Postmortems preserve the learning record. Search, filters, tags, and Saved Views help you find it again. Analytics keeps modes separate; Numeric WIS is an individual score, never a pooled personal skill score.
+Immutable forecasts, audited corrections, Journals, and Postmortems preserve the learning record. The Journal home, search, filters and tags help you find it again. Analytics keeps modes separate; Numeric WIS is an individual score, never a pooled personal skill score.
 
 ## Documentation
 
@@ -45,9 +47,9 @@ Immutable forecasts, audited corrections, Journals, and Postmortems preserve the
 
 The stable desktop and `rsc` share `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3`. Development desktop and `rscd` share a separate database under `%LOCALAPPDATA%\Reckonsolve Dev`. Switching commands never copies data between them.
 
-Use verified **SQLite backups** for recovery. CSV format 5 is analytical history with a data dictionary; it cannot restore the application. Window/sidebar preferences live separately in `presentation.ini` and are excluded from SQLite backups.
+Use verified **SQLite backups** for recovery. CSV format 6 is analytical history with a data dictionary; it cannot restore the application. Window/appearance preferences live separately in `presentation.ini` and are excluded from SQLite backups.
 
-Supported v0.7 archives upgrade through schema 20 unchanged. Any pre-v0.7 Binary or interval-v1 Numeric prediction causes the whole archive to be refused before migration or repair. Missing, unknown, or mismatched identities are also refused. Nothing is converted, deleted, or partially loaded; preserve unsupported originals for a compatible earlier version.
+Supported v0.7 forecasting history upgrades through schema 21. Before upgrading an older journal, the app preserves a verified complete recovery copy. Existing Saved View configurations require confirmation before retirement; the original configurations remain in that recovery copy. Any pre-v0.7 Binary or interval-v1 Numeric prediction causes the whole archive to be refused before migration or repair. Missing, unknown, or mismatched identities are also refused. Nothing is converted, deleted, or partially loaded; preserve unsupported originals for a compatible earlier version.
 
 ## Development
 

@@ -35,6 +35,10 @@ The [search evaluation procedure](search-evaluation.md) supplies a disposable re
 
 ### Main window tests
 
+Journal/workspace regressions use injected temporary journals in `test_journal_workspace.py`, `test_journal_controls.py`, `test_journal_retrieval.py` and the 2,000-record `test_journal_response_budget.py`. Recovery/writer exclusion lives in `test_upgrade_protocol.py`. Older browser/Dashboard UI assertions were replaced by these current journeys; historical migration tests still exercise their original schemas.
+
+On Windows, Qt's offscreen plugin may expose no fonts. `tests/conftest.py` then loads installed Segoe UI faces for genuine metrics; missing-glyph-box measurements are not UI evidence. This adds no bundled font or production dependency. Human Windows/scaling acceptance remains required.
+
 `tests/test_main_window.py` covers the application shell, navigation, keyboard shortcuts, and themes. Workflow tests live in separate `test_*_ui.py` modules for creation, browsing, search, Dashboard, Detail, metadata, revisions, Journals, terminal actions, Settings, and tag management.
 
 Shared application fakes live in `tests/main_window_fakes.py`; widget helpers and function-scoped fixtures live in `tests/main_window_helpers.py`. Import fixtures explicitly into the modules that use them, keeping their scope local to those tests.
@@ -57,9 +61,9 @@ uv run python tools/run_visual_review.py representative
 uv run python tools/run_visual_review.py long-text
 ```
 
-These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. The profiles cover their seeded records; exercise additional One-Shot scenarios with disposable paths or development records when a change affects them.
+These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. Representative and long-text profiles include all four forecasting contracts. Use these injected profiles for first-slice review; no personal upgrade or installed-tool replacement is needed.
 
-Review affected screens in light/dark palettes, relevant Windows scaling settings, normal/narrow widths, and expanded/compact sidebar modes. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
+Review affected screens in Follow Windows, Light and Dark, relevant Windows scaling settings and normal/minimum supported widths. There is no sidebar in the first Journal/workspace slice. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
 
 Human visual acceptance is separate from offscreen Qt tests. Dated acceptance belongs in [the archive](../archive/README.md), not this repeatable procedure.
 
@@ -86,7 +90,7 @@ In mathematics, set named scores/operators such as `\operatorname{WIS}` and `\op
 powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1
 ```
 
-The script uses pinned PyInstaller in the separate `packaging` group and creates a private `onedir` GUI bundle. It verifies local styles/icons and runs disposable frozen smoke checks covering all four contracts, supported upgrades, unsupported refusal, search repair, mode-filtered Saved Views, analytics, format-5 export, backup, and restart.
+The script uses pinned PyInstaller in the separate `packaging` group and creates a private `onedir` GUI bundle. It verifies local styles/icons and runs disposable frozen smoke checks covering all four contracts, supported upgrades, unsupported refusal, search repair, mode-filtered retrieval, analytics, format-6 export, backup, and restart.
 
 Builds and smoke artifacts stay in ignored `build/` and `dist/`. Relocation checks run the copied bundle with its bundled runtime and explicit disposable data. Private artifacts are not public release assets, installers, or signed distributions.
 

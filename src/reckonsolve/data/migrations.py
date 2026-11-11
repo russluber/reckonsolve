@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .forecast_contracts import check_forecast_contract_integrity
+from .journal_migration import build_journal_statements
 from .m48_migration import M48_STATEMENTS
 from .m50_migration import build_m50_statements
 from .m56_migration import build_m56_statements
@@ -3403,6 +3404,21 @@ MIGRATIONS += (
 )
 
 
+MIGRATIONS += (
+    Migration(
+        version=21,
+        name="retire Saved Views and record One-Shot action provenance",
+        statements=build_journal_statements(
+            tuple(
+                statement
+                for migration in MIGRATIONS
+                for statement in migration.statements
+            )
+        ),
+    ),
+)
+
+
 def apply_migrations(
     connection: sqlite3.Connection,
     migrations: Sequence[Migration] = MIGRATIONS,
@@ -3412,34 +3428,54 @@ def apply_migrations(
     ordered_migrations = tuple(migrations)
     _validate_registry(ordered_migrations)
 
+    if any(migration.version == 21 for migration in ordered_migrations):
+        validate_migration_source(connection, ordered_migrations)
+        raise MigrationError(
+            "Schema 21 requires the recovery-backed desktop upgrade boundary."
+        )
+
     if connection.in_transaction:
         raise MigrationError("Migrations cannot run inside another transaction.")
 
     connection.execute("BEGIN IMMEDIATE")
     try:
-        applied_count = _validated_applied_count(connection, ordered_migrations)
-        # Compatibility must be established before any pending DDL, identity
-        # backfill, or derived-index work can alter an existing database.
-        check_forecast_contract_integrity(connection)
-        for migration in ordered_migrations[applied_count:]:
-            for statement in migration.statements:
-                connection.execute(statement)
-            connection.execute(
-                "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
-                (migration.version, migration.name),
-            )
-
-        foreign_key_violations = connection.execute(
-            "PRAGMA foreign_key_check"
-        ).fetchall()
-        if foreign_key_violations:
-            raise MigrationError("A migration introduced a foreign-key violation.")
-        check_forecast_contract_integrity(connection)
+        _apply_migrations_in_transaction(connection, ordered_migrations)
         connection.execute("COMMIT")
     except BaseException:
         if connection.in_transaction:
             connection.execute("ROLLBACK")
         raise
+
+
+def validate_migration_source(
+    connection: sqlite3.Connection, migrations: Sequence[Migration]
+) -> int:
+    """Read-only preflight before backup, confirmation or pending DDL."""
+    ordered = tuple(migrations)
+    _validate_registry(ordered)
+    applied = _validated_applied_count(connection, ordered)
+    check_forecast_contract_integrity(connection)
+    return applied
+
+
+def _apply_migrations_in_transaction(
+    connection: sqlite3.Connection, migrations: Sequence[Migration]
+) -> None:
+    """Apply checked DDL under the caller's already-held upgrade lock."""
+    if not connection.in_transaction:
+        raise MigrationError("An upgrade requires an owned transaction.")
+    ordered = tuple(migrations)
+    applied_count = validate_migration_source(connection, ordered)
+    for migration in ordered[applied_count:]:
+        for statement in migration.statements:
+            connection.execute(statement)
+        connection.execute(
+            "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+            (migration.version, migration.name),
+        )
+    if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        raise MigrationError("A migration introduced a foreign-key violation.")
+    check_forecast_contract_integrity(connection)
 
 
 def current_schema_version(connection: sqlite3.Connection) -> int:

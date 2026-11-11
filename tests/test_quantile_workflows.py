@@ -394,7 +394,8 @@ def test_complete_quantile_form_and_detail_layout(qtbot, tmp_path, width):
     assert not form.quantile_input.preview.isHidden()
     assert window.grab().save(str(tmp_path / "quantile-create.png"))
     form.submit()
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     clock_ops = PredictionOperations(runtime.database)
     created = clock_ops.get_numeric_prediction(1)
     clock_ops.add_numeric_journal_entry(

@@ -13,6 +13,7 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MigrationError
+from reckonsolve.data.upgrade import UpgradeCancelledError, UpgradeReview
 from reckonsolve.identity import STABLE_APPLICATION, ApplicationIdentity
 from reckonsolve.paths import ApplicationDataPathError, resolve_database_path
 from reckonsolve.ui.main_window import MainWindow
@@ -34,8 +35,11 @@ class ApplicationRuntime:
         """Close the window and persistence resources deterministically."""
 
         try:
-            self.window.close()
-        finally:
+            closed = self.window.close()
+        except BaseException:
+            self.database.close()
+            raise
+        if closed is not False:
             self.database.close()
 
 
@@ -49,7 +53,7 @@ def create_runtime(
 
     qt_app = _get_or_create_qapplication(argv, identity)
     resolved_database_path = resolve_database_path(database_path)
-    database = Database.open(resolved_database_path)
+    database = Database.open(resolved_database_path, confirm_upgrade=_confirm_upgrade)
     try:
         operations = PredictionOperations(database)
         window = MainWindow(
@@ -85,6 +89,8 @@ def run(
             database_path=database_path,
             identity=identity,
         )
+    except UpgradeCancelledError:
+        return 0
     except (
         ApplicationDataPathError,
         ForecastContractIntegrityError,
@@ -123,3 +129,22 @@ def _get_or_create_qapplication(
 
     arguments = list(sys.argv if argv is None else argv)
     return QApplication(arguments)
+
+
+def _confirm_upgrade(review: UpgradeReview) -> bool:
+    """Review the already verified copy while SQLite exclusion is still held."""
+    return (
+        QMessageBox.question(
+            None,
+            "Upgrade Journal and retire Saved Views?",
+            f"A verified complete recovery backup has been saved to:\n{review.recovery}\n\n"
+            f"This journal contains {review.saved_view_count} Saved View configuration(s). "
+            "The upgrade removes those configurations from the active journal. "
+            "Predictions, forecasting history and tags are retained. "
+            "The recovery copy preserves the complete earlier journal.\n\n"
+            "Continue with the upgrade?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        == QMessageBox.StandardButton.Yes
+    )

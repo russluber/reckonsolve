@@ -13,10 +13,7 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.settings import SettingsRepository
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
-from reckonsolve.domain.browser import ArchiveQuery
 from reckonsolve.domain.predictions import BinaryOutcome
-from reckonsolve.domain.saved_views import SavedViewConfiguration
-from reckonsolve.domain.search import SearchMatchMode
 
 NOW = datetime(2026, 8, 20, 18, 30, 45, 123456, tzinfo=UTC)
 
@@ -38,15 +35,6 @@ def test_backup_is_recoverable_and_records_success_across_restart(tmp_path) -> N
     expected = _create_complete_history(operations)
     expected_numeric = _create_complete_numeric_history(operations)
     operations.set_stale_threshold_days(21)
-    operations.create_saved_view(
-        "Recovery work",
-        SavedViewConfiguration(
-            search_text="history",
-            match_mode=SearchMatchMode.ALL,
-            include_superseded=False,
-            archive_query=ArchiveQuery(tags=("Research",)),
-        ),
-    )
 
     result = operations.create_backup(backup_path)
 
@@ -86,9 +74,6 @@ def test_backup_is_recoverable_and_records_success_across_restart(tmp_path) -> N
         len(recovered_operations.list_definition_changes(expected.prediction_id)) == 1
     )
     assert recovered_operations.get_stale_threshold_days() == 21
-    assert [view.name for view in recovered_operations.list_saved_views()] == [
-        "Recovery work"
-    ]
     assert recovered_numeric.unit == "days"
     assert recovered_numeric.current_revision.quantiles.q05.decimal_value == Decimal(
         "0.0"
@@ -186,7 +171,7 @@ def test_backup_remains_usable_if_recording_its_success_time_fails(
     recovered.close()
 
 
-def test_format_five_exports_complete_supported_history_without_mutating_source(
+def test_format_six_exports_complete_supported_history_without_mutating_source(
     tmp_path,
 ) -> None:
     database = Database.open(tmp_path / "source.sqlite3")
@@ -200,7 +185,7 @@ def test_format_five_exports_complete_supported_history_without_mutating_source(
     assert result.csv_file_count == len(EXPORT_ARCHIVE_NAMES) - 1
     with ZipFile(destination) as archive:
         assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
-        assert "Format version: 5" in archive.read("README.txt").decode("utf-8")
+        assert "Format version: 6" in archive.read("README.txt").decode("utf-8")
         predictions = _read_csv(archive, "predictions.csv")
         by_id = {int(row["prediction_id"]): row for row in predictions}
         assert by_id[binary.prediction_id]["forecast_model"] == "binary-trajectory-v1"

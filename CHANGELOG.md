@@ -2,6 +2,16 @@
 
 All notable changes to Reckonsolve are documented here.
 
+## Unreleased
+
+First Journal/workspace slice; implementation under native review, not a published release.
+
+- Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
+- Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Existing destination bodies remain adapters for later slices.
+- Recovery-backed schema 21 retires Saved Views after review where configurations exist, blocks stale writers and records explicit One-Shot reflection provenance. CSV format 6 includes that provenance.
+- CLI-only `settings attention-days [--set N]`; retired Saved View commands fail before data access.
+- Corrected effective-reflection classification and affected save-response reads without rewriting forecasting history.
+
 ## 0.8.0 - 2026-10-07
 
 [Published source release](https://github.com/russluber/reckonsolve/releases/tag/v0.8.0). Release dates use UTC; this publication was October 6 in Pacific time.

@@ -151,7 +151,8 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
     screen.numeric_exact_deadline.offset.setText("+00:00")
     screen.tags_input.setText("offer, timing")
     screen.submit()
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     assert (
         _required_child(window, QLabel, "numericCurrentInterval").text()
         == "90% interval: 3.0 to 21.0 days"
@@ -288,7 +289,8 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
             tags=("release", "desktop"),
         )
     ]
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     assert (
         _required_child(window, QLabel, "forecastRevisionRationale1").text()
         == "Initial evidence"
@@ -480,7 +482,8 @@ def test_successful_creation_accepts_probability_bounds_and_opens_detail(
             tags=(),
         )
     ]
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
         "Will the UI preserve history?"
     )
@@ -518,4 +521,5 @@ def test_enter_submits_new_prediction(
             tags=(),
         )
     ]
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")

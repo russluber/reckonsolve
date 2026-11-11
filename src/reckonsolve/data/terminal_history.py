@@ -32,7 +32,37 @@ from reckonsolve.domain.predictions import (
 from reckonsolve.domain.quantiles import NumericValueConstraint, QuantileDefinition
 
 from .database import Database
-from .forecast_contracts import select_supported_contract
+from .forecast_contracts import (
+    binary_corrections_relation,
+    numeric_corrections_relation,
+    select_supported_contract,
+)
+
+
+def effective_postmortem_sql(
+    connection: sqlite3.Connection, *, numeric: bool = False
+) -> str:
+    """Select reflection for an outer ``resolution`` row, retaining null clears.
+
+    Absence of a correction and an explicit cleared value have different
+    meanings. COALESCE would incorrectly resurrect original prose after clear.
+    Relations and identifiers here are internal schema choices, not user input.
+    """
+    relation = (
+        numeric_corrections_relation(connection)
+        if numeric
+        else binary_corrections_relation(connection)
+    )
+    foreign_key = "numeric_resolution_id" if numeric else "resolution_id"
+    return f"""CASE WHEN EXISTS (
+        SELECT 1 FROM {relation} AS reflection_correction
+        WHERE reflection_correction.{foreign_key} = resolution.id
+    ) THEN (
+        SELECT reflection_correction.new_postmortem
+        FROM {relation} AS reflection_correction
+        WHERE reflection_correction.{foreign_key} = resolution.id
+        ORDER BY reflection_correction.sequence DESC LIMIT 1
+    ) ELSE resolution.postmortem END"""
 
 
 class TerminalCorrectionContextChangedError(RuntimeError):

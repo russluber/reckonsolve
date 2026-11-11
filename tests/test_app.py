@@ -8,7 +8,6 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
-    QComboBox,
     QDateEdit,
     QDialog,
     QDialogButtonBox,
@@ -16,7 +15,6 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QLineEdit,
-    QListWidget,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -33,13 +31,9 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS, MigrationError
-from reckonsolve.domain.browser import ArchiveQuery
-from reckonsolve.domain.saved_views import SavedViewConfiguration
-from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
-from reckonsolve.ui.tag_filter_picker import TagFilterPicker
 
 
 def _sqlite_logical_snapshot(
@@ -137,15 +131,6 @@ def test_presentation_use_does_not_rewrite_current_schema_data(
         rationale="Preserve the Numeric rationale.",
         tags=("Compatibility", "Numeric"),
     )
-    operations.create_saved_view(
-        "Compatibility records",
-        SavedViewConfiguration(
-            search_text="preserve",
-            match_mode=SearchMatchMode.ALL,
-            include_superseded=False,
-            archive_query=ArchiveQuery(tags=("Compatibility",)),
-        ),
-    )
     operations.set_stale_threshold_days(23)
     database.check_search_index()
     assert database.schema_version == len(MIGRATIONS)
@@ -159,20 +144,18 @@ def test_presentation_use_does_not_rewrite_current_schema_data(
     qtbot.addWidget(runtime.window)
     runtime.window.show()
     for route in (
-        "Dashboard",
-        "Predictions",
-        "Analytics",
-        "Settings",
+        "Journal",
+        "Performance",
         "New Prediction",
+        "Journal",
+        "Settings",
     ):
         runtime.window.navigate_to(route)
         assert runtime.window.current_screen_name == route
-    runtime.window._show_selected_prediction(binary)
+    runtime.window._open_prediction(binary.prediction_id)
     assert runtime.window.current_screen_name == "Prediction Detail"
-    runtime.window._show_selected_prediction(numeric)
+    runtime.window._open_prediction(numeric.prediction_id)
     assert runtime.window.current_screen_name == "Prediction Detail"
-    runtime.window.toggle_sidebar()
-    assert runtime.window.sidebar_compact
     assert runtime.database.schema_version == len(MIGRATIONS)
     runtime.close()
 
@@ -200,8 +183,10 @@ def test_development_runtime_has_visible_isolated_identity(
     assert development.database.path == (
         tmp_path / "Reckonsolve Dev" / "reckonsolve.sqlite3"
     )
-    development.window.toggle_sidebar()
-    assert development.window.sidebar_compact
+    from reckonsolve.ui.presentation_settings import AppearanceMode
+
+    development.window.appearance.select(AppearanceMode.DARK)
+    assert development.window.appearance.dark
     development.close()
 
     stable = create_runtime(identity=STABLE_APPLICATION)
@@ -209,12 +194,12 @@ def test_development_runtime_has_visible_isolated_identity(
     assert stable.window.windowTitle() == "Reckonsolve"
     assert stable.database.path == tmp_path / "Reckonsolve" / "reckonsolve.sqlite3"
     assert stable.database.path != development.database.path
-    assert not stable.window.sidebar_compact
+    assert stable.window.appearance.mode is AppearanceMode.FOLLOW_WINDOWS
     stable.close()
 
     reopened_development = create_runtime(identity=DEVELOPMENT_APPLICATION)
     qtbot.addWidget(reopened_development.window)
-    assert reopened_development.window.sidebar_compact
+    assert reopened_development.window.appearance.mode is AppearanceMode.DARK
     assert (tmp_path / "Reckonsolve Dev" / "presentation.ini").is_file()
     assert (tmp_path / "Reckonsolve" / "presentation.ini").is_file()
     reopened_development.close()
@@ -259,7 +244,7 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
     assert backup_path.is_file()
     assert export_path.is_file()
     with ZipFile(export_path) as archive:
-        assert "Format version: 5" in archive.read("README.txt").decode("utf-8")
+        assert "Format version: 6" in archive.read("README.txt").decode("utf-8")
         assert "binary-trajectory-v1" in archive.read("predictions.csv").decode("utf-8")
     runtime.close()
 
@@ -284,119 +269,69 @@ def test_settings_backup_and_export_work_end_to_end_across_restart(
     reopened.close()
 
 
-def test_dashboard_and_attention_setting_survive_restart(qtbot, tmp_path) -> None:
-    path = tmp_path / "reckonsolve.sqlite3"
+def test_cli_attention_setting_and_journal_survive_restart(qtbot, tmp_path):
+    from io import StringIO
+
+    from reckonsolve.cli import run
+
+    path = tmp_path / "journal.sqlite3"
     first = create_runtime(database_path=path)
     qtbot.addWidget(first.window)
-    first.window.show()
-    first.window.navigate_to("New Prediction")
-    question = first.window.findChild(QLineEdit, "questionInput")
-    create = first.window.findChild(QPushButton, "createPredictionButton")
-    assert question is not None
-    assert create is not None
-    question.setText("Will the M8 Dashboard survive restart?")
-    _set_exact_deadline(create.window())
-    qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
-
-    first.window.navigate_to("Settings")
-    threshold = first.window.findChild(QSpinBox, "staleThresholdInput")
-    save = first.window.findChild(QPushButton, "saveStaleThresholdButton")
-    assert threshold is not None
-    assert save is not None
-    threshold.setValue(21)
-    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
+    prediction = create_binary(
+        PredictionOperations(first.database), "Journal restart", 60
+    )
     first.close()
-
+    assert (
+        run(
+            ["settings", "attention-days", "--set", "21"],
+            database_path=path,
+            stdout=StringIO(),
+        )
+        == 0
+    )
     second = create_runtime(database_path=path)
     qtbot.addWidget(second.window)
     second.window.show()
-    second.window.navigate_to("Settings")
-    reopened_threshold = second.window.findChild(QSpinBox, "staleThresholdInput")
-    assert reopened_threshold is not None
-    assert reopened_threshold.value() == 21
-    second.window.navigate_to("Dashboard")
-    row = second.window.findChild(QPushButton, "dashboardOpenPrediction1")
-    dashboard_threshold = second.window.findChild(QLabel, "dashboardThreshold")
-    assert row is not None
-    assert dashboard_threshold is not None
-    assert "M8 Dashboard" in row.text()
-    assert dashboard_threshold.text() == "Needs Attention threshold: 21 days"
+    journal = second.window._journal_screen
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    assert journal.cards[0].prediction_id == prediction.prediction_id
+    assert PredictionOperations(second.database).get_stale_threshold_days() == 21
+    assert second.window.findChild(QWidget, "staleThresholdInput") is None
     second.close()
 
 
-def test_prediction_browser_filters_and_opens_persisted_archive_after_restart(
-    qtbot,
-    tmp_path,
-) -> None:
-    path = tmp_path / "reckonsolve.sqlite3"
+def test_journal_search_and_filters_open_current_detail_after_restart(qtbot, tmp_path):
+    from reckonsolve.domain.browser import ArchiveQuery
+
+    path = tmp_path / "journal.sqlite3"
     first = create_runtime(database_path=path)
     qtbot.addWidget(first.window)
     operations = PredictionOperations(first.database)
-    create_binary(
-        operations,
-        "Will the open archive item survive?",
-        35,
-        tags=("Durability",),
-    )
+    create_binary(operations, "Open archive item", 35, tags=("Durability",))
     invalid = create_binary(
-        operations,
-        "Will the Invalid archive item survive?",
-        65,
-        tags=("Durability", "Review"),
+        operations, "Invalid archive item", 65, tags=("Durability", "Review")
     )
     operations.invalidate_prediction(
         invalid.prediction_id,
-        reason="Test the terminal archive filter.",
+        reason="Fixture terminal record",
         expected_revision_id=invalid.current_revision_id,
         expected_metadata_version=invalid.metadata_version,
     )
     first.close()
-
     second = create_runtime(database_path=path)
     qtbot.addWidget(second.window)
     second.window.show()
-    second.window.navigate_to("Predictions")
-    search = second.window.findChild(QLineEdit, "predictionSearchInput")
-    status_filter = second.window.findChild(QComboBox, "predictionStatusFilter")
-    tag_filter = second.window.findChild(TagFilterPicker, "predictionTagFilter")
-    apply_filters = second.window.findChild(
-        QPushButton,
-        "applyPredictionFiltersButton",
-    )
-    results = second.window.findChild(QListWidget, "predictionBrowserResults")
-    assert search is not None
-    assert status_filter is not None
-    assert tag_filter is not None
-    assert apply_filters is not None
-    assert results is not None
-    assert results.count() == 2
-
-    search.setText("INVALID ARCHIVE")
-    status_filter.setCurrentIndex(status_filter.findData("invalid"))
-    tag_filter.select_tag("Durability")
-    qtbot.mouseClick(apply_filters, Qt.MouseButton.LeftButton)
-
-    assert results.count() == 1
-    result_status = second.window.findChild(
-        QLabel,
-        f"predictionResultStatus{invalid.prediction_id}",
-    )
-    result_tags = second.window.findChild(
-        QLabel,
-        f"predictionResultTags{invalid.prediction_id}",
-    )
-    assert result_status is not None
-    assert result_tags is not None
-    assert result_status.text() == "INVALID"
-    assert result_tags.text() == "Tags · Durability, Review"
-    results.itemActivated.emit(results.item(0))
+    journal = second.window._journal_screen
+    journal._change(text="INVALID ARCHIVE", filters=ArchiveQuery(tags=("Durability",)))
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    assert journal.page.total == 1
+    assert journal.cards[0].prediction_id == invalid.prediction_id
+    journal._open(invalid.prediction_id, None)
     assert second.window.current_screen_name == "Prediction Detail"
-    detail_question = second.window.findChild(QLabel, "predictionDetailQuestion")
-    detail_status = second.window.findChild(QLabel, "predictionDetailStatus")
-    assert detail_question is not None
-    assert detail_status is not None
-    assert detail_question.text() == invalid.question
-    assert detail_status.text() == "INVALID"
+    assert (
+        second.window.findChild(QLabel, "predictionDetailQuestion").text()
+        == invalid.question
+    )
     second.close()
 
 
@@ -420,6 +355,7 @@ def test_resolve_through_ui_survives_restart_with_scoring_context(
     create_binary(
         PredictionOperations(first.database), question.text(), probability.value()
     )
+    first.window.creation_task.reset()
     first.window.navigate_to("Prediction Detail")
 
     resolve = first.window.findChild(QPushButton, "resolvePredictionButton")
@@ -452,6 +388,7 @@ def test_resolve_through_ui_survives_restart_with_scoring_context(
     second = create_runtime(database_path=path)
     qtbot.addWidget(second.window)
     second.window.show()
+    second.window.creation_task.reset()
     second.window.navigate_to("Prediction Detail")
     reopened_status = second.window.findChild(QLabel, "predictionDetailStatus")
     reopened_outcome = second.window.findChild(QLabel, "predictionResolutionOutcome")
@@ -481,6 +418,7 @@ def test_mark_invalid_through_ui_survives_restart(qtbot, tmp_path) -> None:
     question.setText("Will this cancelled event happen?")
     _set_exact_deadline(create.window())
     qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+    create.window().navigate_to("Prediction Detail")
 
     mark_invalid = first.window.findChild(QPushButton, "markInvalidButton")
     assert mark_invalid is not None
@@ -499,6 +437,7 @@ def test_mark_invalid_through_ui_survives_restart(qtbot, tmp_path) -> None:
     second = create_runtime(database_path=path)
     qtbot.addWidget(second.window)
     second.window.show()
+    second.window.creation_task.reset()
     second.window.navigate_to("Prediction Detail")
     status = second.window.findChild(QLabel, "predictionDetailStatus")
     reopened_reason = second.window.findChild(QLabel, "predictionInvalidationReason")
@@ -526,6 +465,7 @@ def test_confirmed_untouched_delete_through_ui_remains_deleted_after_restart(
     question.setText("Accidental duplicate")
     _set_exact_deadline(create.window())
     qtbot.mouseClick(create, Qt.MouseButton.LeftButton)
+    create.window().navigate_to("Prediction Detail")
     monkeypatch.setattr(
         QMessageBox,
         "warning",
@@ -542,6 +482,7 @@ def test_confirmed_untouched_delete_through_ui_remains_deleted_after_restart(
     second = create_runtime(database_path=path)
     qtbot.addWidget(second.window)
     second.window.show()
+    second.window.creation_task.reset()
     second.window.navigate_to("Prediction Detail")
     empty = second.window.findChild(QLabel, "predictionDetailEmptyState")
     assert empty is not None
@@ -569,12 +510,15 @@ def test_create_close_reopen_displays_persisted_prediction(qtbot, tmp_path) -> N
     _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
-    assert first_runtime.window.current_screen_name == "Prediction Detail"
+    assert first_runtime.window.current_screen_name == "Journal"
+    first_runtime.window.creation_task.reset()
+    first_runtime.window.navigate_to("Prediction Detail")
     first_runtime.close()
 
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
+    second_runtime.window.creation_task.reset()
     second_runtime.window.navigate_to("Prediction Detail")
     question = second_runtime.window.findChild(QLabel, "predictionDetailQuestion")
     probability = second_runtime.window.findChild(QLabel, "predictionDetailProbability")
@@ -607,7 +551,9 @@ def test_numeric_create_close_reopen_displays_the_complete_interval(qtbot, tmp_p
     screen.numeric_exact_deadline.editor.setDate(QDate(2099, 12, 30))
     screen.numeric_exact_deadline.offset.setText("+00:00")
     screen.submit()
-    assert first_runtime.window.current_screen_name == "Prediction Detail"
+    assert first_runtime.window.current_screen_name == "Journal"
+    first_runtime.window.creation_task.reset()
+    first_runtime.window.navigate_to("Prediction Detail")
     assert (
         first_runtime.window.findChild(QLabel, "numericCurrentInterval").text()
         == "90% interval: 120 to 240 pages"
@@ -616,6 +562,7 @@ def test_numeric_create_close_reopen_displays_the_complete_interval(qtbot, tmp_p
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
+    second_runtime.window.creation_task.reset()
     second_runtime.window.navigate_to("Prediction Detail")
     assert (
         second_runtime.window.findChild(QLabel, "numericPredictionQuestion").text()
@@ -650,6 +597,7 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     )
     runtime.window.show()
     runtime.window._prediction_detail_host.show_numeric_prediction(created)
+    runtime.window.creation_task.reset()
     runtime.window.navigate_to("Prediction Detail")
 
     revise = runtime.window.findChild(QPushButton, "reviseNumericForecastButton")
@@ -728,52 +676,31 @@ def test_numeric_revision_journal_timeline_and_chart_work_end_to_end(
     runtime.close()
 
 
-def test_dashboard_and_browser_open_type_aware_numeric_predictions(
-    qtbot,
-    tmp_path,
-) -> None:
-    runtime = create_runtime(database_path=tmp_path / "reckonsolve.sqlite3")
+def test_journal_opens_type_aware_numeric_predictions(qtbot, tmp_path):
+    from reckonsolve.domain.browser import ArchiveQuery
+    from reckonsolve.domain.predictions import PredictionType
+
+    runtime = create_runtime(database_path=tmp_path / "journal.sqlite3")
     qtbot.addWidget(runtime.window)
     operations = PredictionOperations(runtime.database)
-    create_binary(operations, "Will the Binary row remain clear?", 60)
+    create_binary(operations, "Binary row", 60)
     numeric = create_numeric(
         operations,
-        "How many Numeric days?",
+        "Numeric row",
         "days",
         1,
         {5: "2.0", 25: "2.0", 50: "4.0", 75: "8.0", 95: "8.0"},
     )
     runtime.window.show()
-
-    runtime.window.navigate_to("New Prediction")
-    runtime.window.navigate_to("Dashboard")
-    dashboard_row = runtime.window.findChild(
-        QPushButton,
-        f"dashboardOpenPrediction{numeric.prediction_id}",
-    )
-    assert dashboard_row is not None
-    assert "Five-quantile forecast" in dashboard_row.text()
-    assert "90% interval: 2.0 to 8.0 days; median: 4.0 days" in dashboard_row.text()
-    qtbot.mouseClick(dashboard_row, Qt.MouseButton.LeftButton)
-    assert runtime.window.current_screen_name == "Prediction Detail"
-    assert runtime.window.findChild(QLabel, "numericPredictionQuestion").text() == (
-        numeric.question
-    )
-
-    runtime.window.navigate_to("Predictions")
-    type_filter = runtime.window.findChild(QComboBox, "predictionTypeFilter")
-    results = runtime.window.findChild(QListWidget, "predictionBrowserResults")
-    assert type_filter is not None
-    assert results is not None
-    type_filter.setCurrentIndex(type_filter.findData("numeric"))
-    assert results.count() == 1
-    assert "Five-quantile" in str(
-        results.item(0).data(Qt.ItemDataRole.AccessibleDescriptionRole)
-    )
-    results.itemActivated.emit(results.item(0))
-    assert runtime.window.current_screen_name == "Prediction Detail"
-    assert runtime.window.findChild(QLabel, "numericPredictionQuestion").text() == (
-        numeric.question
+    journal = runtime.window._journal_screen
+    journal._change(filters=ArchiveQuery(prediction_type=PredictionType.NUMERIC))
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    assert journal.page.total == 1
+    assert journal.cards[0].prediction_id == numeric.prediction_id
+    journal._open(numeric.prediction_id, None)
+    assert (
+        runtime.window.findChild(QLabel, "numericPredictionQuestion").text()
+        == numeric.question
     )
     runtime.close()
 
@@ -795,6 +722,7 @@ def test_numeric_resolution_ui_persists_exact_terminal_information(
     )
     runtime.window.show()
     runtime.window._prediction_detail_host.show_numeric_prediction(created)
+    runtime.window.creation_task.reset()
     runtime.window.navigate_to("Prediction Detail")
 
     resolve = runtime.window.findChild(QPushButton, "resolveNumericPredictionButton")
@@ -844,6 +772,7 @@ def test_numeric_resolution_ui_persists_exact_terminal_information(
     reopened = create_runtime(database_path=path)
     qtbot.addWidget(reopened.window)
     reopened.window.show()
+    reopened.window.creation_task.reset()
     reopened.window.navigate_to("Prediction Detail")
     assert (
         reopened.window.findChild(QLabel, "numericResolutionActualValue").text()
@@ -873,6 +802,7 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
     )
     runtime.window.show()
     runtime.window._prediction_detail_host.show_numeric_prediction(invalid_candidate)
+    runtime.window.creation_task.reset()
     runtime.window.navigate_to("Prediction Detail")
     mark_invalid = runtime.window.findChild(
         QPushButton, "markNumericPredictionInvalidButton"
@@ -956,6 +886,7 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     create_binary(
         PredictionOperations(first_runtime.database), question_input.text(), 50
     )
+    first_runtime.window.creation_task.reset()
     first_runtime.window.navigate_to("Prediction Detail")
 
     edit_button = first_runtime.window.findChild(
@@ -1022,6 +953,7 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
+    second_runtime.window.creation_task.reset()
     second_runtime.window.navigate_to("Prediction Detail")
 
     question = second_runtime.window.findChild(QLabel, "predictionDetailQuestion")
@@ -1137,7 +1069,9 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
-    assert first_runtime.window.current_screen_name == "Prediction Detail"
+    assert first_runtime.window.current_screen_name == "Journal"
+    first_runtime.window.creation_task.reset()
+    first_runtime.window.navigate_to("Prediction Detail")
     current_probability = first_runtime.window.findChild(
         QLabel,
         "predictionDetailProbability",
@@ -1226,6 +1160,7 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
+    second_runtime.window.creation_task.reset()
     second_runtime.window.navigate_to("Prediction Detail")
     reopened_question = second_runtime.window.findChild(
         QLabel,
@@ -1286,6 +1221,9 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     probability.setValue(60)
     _set_exact_deadline(create_button.window())
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
+
+    assert first_runtime.window.current_screen_name == "Journal"
+    first_runtime.window.navigate_to("Prediction Detail")
 
     add_journal = first_runtime.window.findChild(
         QPushButton,
@@ -1420,6 +1358,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     second_runtime = create_runtime(database_path=database_path)
     qtbot.addWidget(second_runtime.window)
     second_runtime.window.show()
+    second_runtime.window.creation_task.reset()
     second_runtime.window.navigate_to("Prediction Detail")
 
     reopened_probability = second_runtime.window.findChild(

@@ -1,48 +1,29 @@
-"""The primary Reckonsolve application window."""
+"""Compose the Journal workspace; canonical work stays in application operations."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from functools import partial
-
-from PySide6.QtCore import QEvent, QModelIndex, QRect, QSignalBlocker, QSize, Qt
-from PySide6.QtGui import QCloseEvent, QIcon, QKeySequence, QPainter, QShortcut
+from PySide6.QtCore import QEvent, QRect, Qt
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QApplication,
-    QComboBox,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
-    QPlainTextEdit,
-    QPushButton,
-    QSizePolicy,
+    QMessageBox,
     QStackedWidget,
-    QStyle,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from reckonsolve.domain.search import SearchDocument
+from reckonsolve.application.errors import ApplicationError, PredictionNotFoundError
+from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
+from reckonsolve.data.migrations import MigrationError
+from reckonsolve.domain.one_shot import OneShotDetail
 from reckonsolve.ui.analytics_screen import AnalyticsScreen
-from reckonsolve.ui.dashboard import AttentionSettingsScreen, DashboardScreen
-from reckonsolve.ui.icons import (
-    LucideIcon,
-    apply_lucide_icon,
-    is_palette_change,
-    lucide_icon,
-    refresh_lucide_icons,
-)
+from reckonsolve.ui.appearance import AppearanceController
+from reckonsolve.ui.creation_task import CreationTask
+from reckonsolve.ui.icons import refresh_lucide_icons
+from reckonsolve.ui.journal.screen import JournalScreen
 from reckonsolve.ui.notifications import NotificationHost
 from reckonsolve.ui.one_shot import OneShotCreationScreen
-from reckonsolve.ui.prediction_browser import PredictionBrowserScreen
 from reckonsolve.ui.presentation_settings import (
     MINIMUM_WINDOW_SIZE,
     MemoryPresentationSettings,
@@ -53,133 +34,28 @@ from reckonsolve.ui.presentation_settings import (
 from reckonsolve.ui.screens import (
     NewPredictionScreen,
     NumericPredictionDetailScreen,
-    NumericPredictionSnapshot,
     PredictionDetailHost,
     PredictionDetailScreen,
-    PredictionOperations,
-    PredictionSnapshot,
 )
+from reckonsolve.ui.settings_screen import SettingsScreen
 from reckonsolve.ui.visual_system import (
-    NAVIGATION_COMPACT_PROPERTY,
-    ActionRole,
-    Spacing,
-    SurfaceRole,
-    TextRole,
-    apply_action_role,
-    apply_navigation_active,
-    apply_navigation_compact,
-    apply_surface_role,
-    apply_text_role,
     install_visual_system,
     is_visual_system_change,
     refresh_visual_system,
 )
-
-_ROUTE_NAMES = (
-    "Dashboard",
-    "New Prediction",
-    "Prediction Detail",
-    "Predictions",
-    "Analytics",
-    "Settings",
-)
-_PRIMARY_DESTINATIONS = (
-    "Dashboard",
-    "Predictions",
-    "Analytics",
-)
-_PRIMARY_ICONS = {
-    "Dashboard": LucideIcon.LAYOUT_DASHBOARD,
-    "Predictions": LucideIcon.LIST_FILTER,
-    "Analytics": LucideIcon.CHART,
-}
-_EXPANDED_SIDEBAR_WIDTH = 240
-_COMPACT_SIDEBAR_WIDTH = 68
-_COMPACT_NAVIGATION_ROW_HEIGHT = 40
-_COMPACT_NAVIGATION_SPACING = 1
-_GLOBAL_SHORTCUT_SPECS = (
-    ("globalShortcutNewPrediction", "Ctrl+N"),
-    ("globalShortcutFindPredictions", "Ctrl+F"),
-    ("globalShortcutDashboard", "Ctrl+1"),
-    ("globalShortcutPredictions", "Ctrl+2"),
-    ("globalShortcutAnalytics", "Ctrl+3"),
-    ("globalShortcutSettings", "Ctrl+,"),
-    ("globalShortcutToggleSidebar", "Ctrl+B"),
-    ("globalShortcutReturnFromDetail", "Alt+Left"),
-)
-
-
-class _PrimaryNavigationItemDelegate(QStyledItemDelegate):
-    """Center icon-only navigation without changing expanded item layout."""
-
-    def paint(
-        self,
-        painter: QPainter,
-        option: QStyleOptionViewItem,
-        index: QModelIndex,
-    ) -> None:
-        widget = option.widget
-        if widget is None or not bool(widget.property(NAVIGATION_COMPACT_PROPERTY)):
-            super().paint(painter, option, index)
-            return
-
-        compact_option = QStyleOptionViewItem(option)
-        self.initStyleOption(compact_option, index)
-        icon = QIcon(compact_option.icon)
-        compact_option.icon = QIcon()
-        compact_option.text = ""
-        compact_option.features &= ~(
-            QStyleOptionViewItem.ViewItemFeature.HasDecoration
-            | QStyleOptionViewItem.ViewItemFeature.HasDisplay
-        )
-        widget.style().drawControl(
-            QStyle.ControlElement.CE_ItemViewItem,
-            compact_option,
-            painter,
-            widget,
-        )
-
-        if icon.isNull():
-            return
-        mode = QIcon.Mode.Normal
-        if not compact_option.state & QStyle.StateFlag.State_Enabled:
-            mode = QIcon.Mode.Disabled
-        elif compact_option.state & QStyle.StateFlag.State_Selected:
-            mode = QIcon.Mode.Selected
-        elif compact_option.state & QStyle.StateFlag.State_MouseOver:
-            mode = QIcon.Mode.Active
-        icon.paint(
-            painter,
-            _centered_icon_rect(compact_option.rect, self._navigation_icon_size()),
-            Qt.AlignmentFlag.AlignCenter,
-            mode,
-            QIcon.State.Off,
-        )
-
-    def _navigation_icon_size(self) -> QSize:
-        navigation = self.parent()
-        if isinstance(navigation, QListWidget):
-            return navigation.iconSize()
-        return QSize(20, 20)
-
-
-def _centered_icon_rect(item_rect: QRect, icon_size: QSize) -> QRect:
-    width = min(max(1, icon_size.width()), item_rect.width())
-    height = min(max(1, icon_size.height()), item_rect.height())
-    icon_rect = QRect(0, 0, width, height)
-    icon_rect.moveCenter(item_rect.center())
-    return icon_rect
+from reckonsolve.ui.workspace_state import Destination, Route, WorkspaceState
+from reckonsolve.ui.workspace_toolbar import WorkspaceToolbar
 
 
 class MainWindow(QMainWindow):
-    """Display the responsive navigation shell for the desktop application."""
+    """Keep a single source for each task, with current-state-checked returns."""
 
     def __init__(
         self,
-        operations: PredictionOperations,
-        parent: QWidget | None = None,
+        operations,
+        parent=None,
         *,
-        window_title: str = "Reckonsolve",
+        window_title="Reckonsolve",
         presentation_settings: PresentationSettings | None = None,
         available_screens: tuple[QRect, ...] | None = None,
     ) -> None:
@@ -187,231 +63,354 @@ class MainWindow(QMainWindow):
         self.setObjectName("mainWindow")
         self.setWindowTitle(window_title)
         self.setMinimumSize(MINIMUM_WINDOW_SIZE)
+        self.operations = operations
+        self.workspace = WorkspaceState()
+        self.archive_blocked = False
         self._refreshing_visual_system = False
         self._presentation_settings = (
             presentation_settings or MemoryPresentationSettings()
         )
-        self._available_screens_override = available_screens
         self._presentation_state = self._presentation_settings.load()
-        self._sidebar_compact = self._presentation_state.sidebar_compact
-        self._last_primary_screen = "Dashboard"
-        self._detail_return_screen: str | None = None
-        self._detail_origin_focus: QWidget | None = None
-        self._current_route_name = "Dashboard"
-
+        self._available_screens_override = available_screens
+        self.appearance = AppearanceController(
+            self._presentation_state.appearance, self
+        )
+        self._toolbar = WorkspaceToolbar(window_title, self)
         self._screen_stack = QStackedWidget(self)
         self._screen_stack.setObjectName("screenStack")
-
+        self._journal_screen = JournalScreen(
+            operations.journal.query_independently, self
+        )
         self._new_prediction_screen = NewPredictionScreen(operations)
         self._one_shot_creation_screen = OneShotCreationScreen(operations)
         self._creation_stack = QStackedWidget(self)
         self._creation_stack.addWidget(self._new_prediction_screen)
         self._creation_stack.addWidget(self._one_shot_creation_screen)
+        self.creation_task = CreationTask(
+            self,
+            (self._new_prediction_screen, self._one_shot_creation_screen),
+            (
+                self._new_prediction_screen._reset_form,
+                self._one_shot_creation_screen.reset,
+            ),
+            (
+                self._new_prediction_screen.prediction_type_input,
+                self._one_shot_creation_screen.form.type_input,
+            ),
+        )
+        self._new_prediction_screen.save_guard = lambda: (
+            self.creation_task.confirm_save(0)
+        )
+        self._one_shot_creation_screen.save_guard = lambda: (
+            self.creation_task.confirm_save(1)
+        )
         self._new_prediction_screen.one_shot_requested.connect(
             lambda: self._creation_stack.setCurrentIndex(1)
         )
         self._one_shot_creation_screen.cancelled.connect(
             lambda: self._creation_stack.setCurrentIndex(0)
         )
-        self._one_shot_creation_screen.prediction_created.connect(
-            self._show_created_prediction
-        )
+        for form in (self._new_prediction_screen, self._one_shot_creation_screen):
+            form.prediction_created.connect(self._show_created_prediction)
         self._prediction_detail_screen = PredictionDetailScreen(operations)
         self._numeric_prediction_detail_screen = NumericPredictionDetailScreen(
             operations
         )
+        for detail in (
+            self._prediction_detail_screen,
+            self._numeric_prediction_detail_screen,
+        ):
+            detail.skip_postmortem_button.completed.connect(
+                self._show_routine_notification
+            )
         self._prediction_detail_host = PredictionDetailHost(
             operations,
             self._prediction_detail_screen,
             self._numeric_prediction_detail_screen,
         )
-        self._dashboard_screen = DashboardScreen(operations)
-        self._prediction_browser_screen = PredictionBrowserScreen(operations)
         self._analytics_screen = AnalyticsScreen(operations)
-        self._settings_screen = AttentionSettingsScreen(operations)
-
-        self._back_from_detail_button = QPushButton("Back to Predictions", self)
-        self._back_from_detail_button.setObjectName("backFromPredictionDetailButton")
-        self._back_from_detail_button.setAccessibleName(
-            "Return from Prediction Detail to Predictions"
-        )
-        self._back_from_detail_button.setToolTip(
-            "Return to the previous screen (Alt+Left)"
-        )
-        apply_action_role(self._back_from_detail_button, ActionRole.QUIET)
-        apply_lucide_icon(self._back_from_detail_button, LucideIcon.ARROW_LEFT)
-
-        detail_container = QWidget(self)
-        detail_container.setObjectName("contextualPredictionDetail")
-        detail_layout = QVBoxLayout(detail_container)
-        detail_layout.setContentsMargins(0, 0, 0, 0)
-        detail_layout.setSpacing(int(Spacing.CONTROL))
-        detail_layout.addWidget(
-            self._back_from_detail_button,
-            alignment=Qt.AlignmentFlag.AlignLeft,
-        )
-        detail_layout.addWidget(self._prediction_detail_host, 1)
-
-        screens = {
-            "Dashboard": self._dashboard_screen,
-            "New Prediction": self._creation_stack,
-            "Prediction Detail": detail_container,
-            "Predictions": self._prediction_browser_screen,
-            "Analytics": self._analytics_screen,
-            "Settings": self._settings_screen,
+        self._settings_screen = SettingsScreen(operations)
+        self._screens = {
+            Route.JOURNAL: self._journal_screen,
+            Route.NEW: self._creation_stack,
+            Route.DETAIL: self._prediction_detail_host,
+            Route.PERFORMANCE: self._analytics_screen,
+            Route.SETTINGS: self._settings_screen,
         }
-        self._screen_indexes: dict[str, int] = {}
-        for route_name in _ROUTE_NAMES:
-            self._screen_indexes[route_name] = self._screen_stack.addWidget(
-                screens[route_name]
-            )
-
-        self._sidebar = QFrame(self)
-        self._sidebar.setObjectName("applicationSidebar")
-        apply_surface_role(self._sidebar, SurfaceRole.BASE)
-        sidebar_layout = QVBoxLayout(self._sidebar)
-        sidebar_layout.setContentsMargins(
-            int(Spacing.CONTROL),
-            int(Spacing.CONTROL),
-            int(Spacing.CONTROL),
-            int(Spacing.CONTROL),
-        )
-        sidebar_layout.setSpacing(int(Spacing.CONTROL))
-
-        identity_row = QWidget(self._sidebar)
-        identity_row.setObjectName("sidebarIdentityRow")
-        identity_layout = QHBoxLayout(identity_row)
-        identity_layout.setContentsMargins(0, 0, 0, 0)
-        identity_layout.setSpacing(int(Spacing.COMPACT))
-        self._sidebar_identity = QLabel(window_title, identity_row)
-        self._sidebar_identity.setObjectName("sidebarIdentity")
-        self._sidebar_identity.setAccessibleName(window_title)
-        self._sidebar_identity.setToolTip(window_title)
-        apply_text_role(self._sidebar_identity, TextRole.SECTION_TITLE)
-        self._sidebar_toggle = QPushButton("", identity_row)
-        self._sidebar_toggle.setObjectName("sidebarModeToggle")
-        apply_action_role(
-            self._sidebar_toggle,
-            ActionRole.QUIET,
-            accessible_name="Collapse sidebar",
-        )
-        identity_layout.addWidget(self._sidebar_identity)
-        identity_layout.addStretch()
-        identity_layout.addWidget(self._sidebar_toggle)
-
-        self._new_prediction_button = QPushButton("New Prediction", self._sidebar)
-        self._new_prediction_button.setObjectName("newPredictionNavigationButton")
-        self._new_prediction_button.setAccessibleName("New Prediction")
-        self._new_prediction_button.setToolTip("Create a new prediction (Ctrl+N)")
-        apply_action_role(self._new_prediction_button, ActionRole.PRIMARY)
-        apply_lucide_icon(self._new_prediction_button, LucideIcon.CIRCLE_PLUS)
-
-        self._navigation = QListWidget(self._sidebar)
-        self._navigation.setObjectName("primaryNavigation")
-        self._navigation.setAccessibleName("Primary navigation")
-        self._navigation.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self._navigation.setIconSize(QSize(20, 20))
-        self._navigation.setItemDelegate(
-            _PrimaryNavigationItemDelegate(self._navigation)
-        )
-        self._navigation.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self._navigation.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self._navigation.setSpacing(int(Spacing.COMPACT))
-        self._expanded_navigation_row_height = max(
-            44,
-            self.fontMetrics().height() + 20,
-        )
-        for screen_name in _PRIMARY_DESTINATIONS:
-            item = QListWidgetItem(screen_name)
-            item.setData(Qt.ItemDataRole.UserRole, screen_name)
-            item.setData(Qt.ItemDataRole.AccessibleTextRole, screen_name)
-            item.setToolTip(_primary_destination_tooltip(screen_name))
-            item.setSizeHint(QSize(0, self._expanded_navigation_row_height))
-            item.setIcon(lucide_icon(_PRIMARY_ICONS[screen_name], self.palette()))
-            self._navigation.addItem(item)
-        self._navigation.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
-
-        self._settings_button = QPushButton("Settings", self._sidebar)
-        self._settings_button.setObjectName("settingsNavigationButton")
-        self._settings_button.setAccessibleName("Settings")
-        self._settings_button.setToolTip("Settings (Ctrl+,)")
-        apply_action_role(self._settings_button, ActionRole.QUIET)
-        apply_lucide_icon(self._settings_button, LucideIcon.SETTINGS)
-
-        sidebar_layout.addWidget(identity_row)
-        sidebar_layout.addWidget(self._new_prediction_button)
-        sidebar_layout.addWidget(self._navigation)
-        sidebar_layout.addStretch()
-        sidebar_layout.addWidget(self._settings_button)
-
+        for screen in self._screens.values():
+            self._screen_stack.addWidget(screen)
         content = QWidget(self)
-        content.setObjectName("mainContent")
-        layout = QHBoxLayout(content)
-        layout.setContentsMargins(
-            int(Spacing.ORDINARY),
-            int(Spacing.ORDINARY),
-            int(Spacing.ORDINARY),
-            int(Spacing.ORDINARY),
-        )
-        layout.setSpacing(int(Spacing.ORDINARY))
-        layout.addWidget(self._sidebar)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(12, 0, 12, 12)
+        layout.setSpacing(12)
+        layout.addWidget(self._toolbar)
         layout.addWidget(self._screen_stack, 1)
         self.setCentralWidget(content)
         self._notification_host = NotificationHost(content)
-
-        install_visual_system(self)
-        self._fit_primary_navigation_height()
-        self._set_sidebar_mode(self._sidebar_compact, persist=False)
-        self._refresh_navigation_icons()
-        refresh_lucide_icons(self)
-        self._restore_window_state()
-
-        self._navigation.currentRowChanged.connect(self._primary_navigation_changed)
-        self._navigation.itemClicked.connect(self._primary_navigation_activated)
-        self._navigation.itemActivated.connect(self._primary_navigation_activated)
-        self._new_prediction_button.clicked.connect(
-            lambda: self.navigate_to("New Prediction")
+        self._toolbar.back_requested.connect(self.return_to_source)
+        self._toolbar.journal_requested.connect(lambda: self.navigate_to("Journal"))
+        self._toolbar.new_requested.connect(lambda: self.navigate_to("New Prediction"))
+        self._toolbar.performance_requested.connect(
+            lambda: self.navigate_to("Performance")
         )
-        self._settings_button.clicked.connect(lambda: self.navigate_to("Settings"))
-        self._sidebar_toggle.clicked.connect(self.toggle_sidebar)
-        self._back_from_detail_button.clicked.connect(self.return_from_detail)
-        self._new_prediction_screen.prediction_created.connect(
-            self._show_created_prediction
-        )
-        self._dashboard_screen.prediction_selected.connect(
-            self._show_selected_prediction
-        )
-        self._prediction_browser_screen.prediction_selected.connect(
-            self._show_selected_prediction
-        )
-        self._prediction_browser_screen.search_result_selected.connect(
-            self._show_search_result
-        )
-        self._settings_screen.threshold_changed.connect(
-            lambda _value: self._dashboard_screen.refresh()
-        )
-        self._dashboard_screen.routine_notification_requested.connect(
-            self._show_routine_notification
-        )
+        self._toolbar.settings_requested.connect(lambda: self.navigate_to("Settings"))
+        self._toolbar.appearance_requested.connect(self.appearance.toggle)
+        self.appearance.changed.connect(self._appearance_changed)
+        self._settings_screen.appearance_changed.connect(self.appearance.select)
         self._settings_screen.routine_notification_requested.connect(
             self._show_routine_notification
         )
-        self.setTabOrder(self._sidebar_toggle, self._new_prediction_button)
-        self.setTabOrder(self._new_prediction_button, self._navigation)
-        self.setTabOrder(self._navigation, self._settings_button)
+        self._journal_screen.prediction_selected.connect(self._open_prediction)
+        self._journal_screen.repair_requested.connect(
+            lambda: self.navigate_to("Settings")
+        )
+        self._journal_screen.archive_refused.connect(self._archive_refused)
+        install_visual_system(self)
+        self._restore_window_state()
         self._install_global_shortcuts()
-        self._activate_route("Dashboard", refresh=True, focus=False)
+        self._sync_toolbar()
+        self._activate(Destination(), refresh=True)
+
+    @property
+    def screen_names(self) -> tuple[str, ...]:
+        return tuple(route.value for route in Route)
+
+    @property
+    def navigation_names(self) -> tuple[str, ...]:
+        return (Route.JOURNAL.value, Route.PERFORMANCE.value)
+
+    @property
+    def current_screen_name(self) -> str:
+        return self.workspace.current.route.value
+
+    def navigate_to(self, name: str) -> None:
+        if self.archive_blocked:
+            return
+        # Old internal route callers are adapted; retired names are never visible.
+        name = {
+            "Dashboard": "Journal",
+            "Predictions": "Journal",
+            "Analytics": "Performance",
+        }.get(name, name)
+        route = Route(name)
+        current = self.workspace.current.route
+        if current is Route.NEW:
+            if route is Route.NEW:
+                self._focus_creation()
+                return
+            if not self.creation_task.confirm_exit():
+                return
+            self.creation_task.reset()
+        if route is Route.DETAIL:
+            prediction = self.operations.get_latest_for_navigation()
+            self._prediction_detail_host.refresh()
+            self._activate(
+                Destination(
+                    route, prediction.prediction_id if prediction is not None else None
+                ),
+                refresh=False,
+            )
+            return
+        if route is Route.NEW and current is Route.SETTINGS:
+            return
+        if route is Route.NEW:
+            self._creation_stack.setCurrentIndex(0)
+        self._activate(Destination(route), refresh=True)
+
+    def _activate(
+        self, destination: Destination, *, refresh: bool, remember_source: bool = True
+    ) -> None:
+        self.workspace.enter(destination, remember_source=remember_source)
+        route = destination.route
+        self._screen_stack.setCurrentWidget(self._screens[route])
+        self._sync_toolbar()
+        if route is Route.NEW:
+            self._focus_creation()
+        elif route is Route.JOURNAL and refresh:
+            self._journal_screen.refresh()
+        elif route is Route.PERFORMANCE and refresh:
+            self._analytics_screen.refresh()
+        elif route is Route.SETTINGS and refresh:
+            self._settings_screen.refresh()
+
+    def _focus_creation(self) -> None:
+        if self._creation_stack.currentIndex() == 0:
+            self._new_prediction_screen.focus_question()
+        else:
+            self._one_shot_creation_screen.question.setFocus(
+                Qt.FocusReason.ShortcutFocusReason
+            )
+
+    def _sync_toolbar(self) -> None:
+        route = self.workspace.current.route
+        origin = self.workspace.back_destination()
+        if route is Route.DETAIL:
+            text = "Back to Journal"
+        elif origin.route is Route.DETAIL:
+            text = "Back to Prediction"
+        else:
+            text = f"Back to {origin.route.value}"
+        self._toolbar.update_route(
+            route,
+            text,
+            separate_home=route is Route.PERFORMANCE and origin.route is Route.DETAIL,
+        )
+        self._toolbar.update_appearance(self.appearance.dark)
+        self._settings_screen.set_appearance(self.appearance.mode)
+
+    def return_to_source(self) -> None:
+        if self.archive_blocked:
+            return
+        route = self.workspace.current.route
+        if route is Route.JOURNAL:
+            return
+        destination = self.workspace.back_destination()
+        # Verify before asking for discard. A failed read is neither deletion
+        # nor consent to discard work that the user must then keep editing.
+        prediction = None
+        return_notice = None
+        if destination.route is Route.DETAIL:
+            try:
+                prediction = self.operations.get_prediction_for_navigation(
+                    destination.prediction_id
+                )
+            except PredictionNotFoundError:
+                destination = Destination()
+                return_notice = (
+                    "That Prediction is no longer available. Returned to Journal."
+                )
+            except (ForecastContractIntegrityError, MigrationError) as error:
+                self._archive_refused(error)
+                return
+            except ApplicationError as error:
+                self._show_routine_notification(f"Could not return yet. {error}")
+                return
+        if route is Route.NEW:
+            if not self.creation_task.confirm_exit():
+                return
+            self.creation_task.reset()
+        if prediction is not None:
+            self._display_prediction(prediction)
+        self._activate(destination, refresh=True, remember_source=False)
+        if return_notice:
+            self._show_routine_notification(return_notice)
+
+    def return_from_detail(self) -> None:
+        if self.workspace.current.route is Route.DETAIL:
+            self.return_to_source()
+
+    def _display_prediction(self, prediction) -> None:
+        if isinstance(prediction, OneShotDetail) or not hasattr(
+            prediction, "decimal_places"
+        ):
+            self._prediction_detail_host.show_prediction(prediction)
+        else:
+            self._prediction_detail_host.show_numeric_prediction(prediction)
+
+    def _open_prediction(self, identifier: int, document=None) -> None:
+        if self.archive_blocked:
+            return
+        try:
+            prediction = self.operations.get_prediction_for_navigation(identifier)
+            changed = False
+            if document is not None:
+                document, changed = self.operations.journal.resolve_passage(
+                    identifier, document
+                )
+        except PredictionNotFoundError:
+            self._journal_screen.refresh()
+            self._show_routine_notification(
+                "That Prediction is no longer available. Journal has been refreshed."
+            )
+            return
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._archive_refused(error)
+            return
+        except ApplicationError as error:
+            self._show_routine_notification(f"Could not open Prediction. {error}")
+            return
+        self._display_prediction(prediction)
+        self._activate(Destination(Route.DETAIL, identifier), refresh=False)
+        if document is not None:
+            self._prediction_detail_host.focus_search_match(
+                document, emphasize=not changed
+            )
+        if changed:
+            self._show_routine_notification(
+                "The matched passage changed after the search. Showing current text without the former match emphasis."
+            )
+
+    def _show_created_prediction(self, prediction) -> None:
+        self.creation_task.reset()
+        self._creation_stack.setCurrentIndex(0)
+        if (
+            isinstance(prediction, OneShotDetail)
+            and prediction.record.effective.answer is not None
+        ):
+            self._display_prediction(prediction)
+            self._activate(
+                Destination(Route.DETAIL, prediction.prediction_id), refresh=False
+            )
+        else:
+            self._activate(Destination(), refresh=True)
+            self._show_routine_notification("Prediction created")
+
+    def _install_global_shortcuts(self) -> None:
+        self._global_shortcuts = {}
+        for name, keys, action in (
+            ("globalShortcutNewPrediction", "Ctrl+N", self._shortcut_new),
+            ("globalShortcutFindPredictions", "Ctrl+F", self._shortcut_find),
+            ("globalShortcutSettings", "Ctrl+,", self._shortcut_settings),
+        ):
+            shortcut = QShortcut(QKeySequence(keys), self)
+            shortcut.setObjectName(name)
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+            shortcut.setAutoRepeat(False)
+            shortcut.activated.connect(
+                lambda selected=action: (
+                    selected() if QApplication.activeModalWidget() is None else None
+                )
+            )
+            self._global_shortcuts[name] = shortcut
+
+    def _shortcut_new(self) -> None:
+        if self.workspace.current.route is not Route.SETTINGS:
+            self.navigate_to("New Prediction")
+
+    def _shortcut_find(self) -> None:
+        if self.workspace.current.route is Route.JOURNAL:
+            self._journal_screen.focus_search()
+
+    def _shortcut_settings(self) -> None:
+        if self.workspace.current.route not in (Route.NEW, Route.SETTINGS):
+            self.navigate_to("Settings")
+
+    def _appearance_changed(self, _mode) -> None:
+        self._sync_toolbar()
+        if not self._save_presentation_state():
+            self._show_routine_notification(
+                "Appearance changed for this session, but the preference could not be remembered."
+            )
+
+    def _archive_refused(self, error: Exception) -> None:
+        if self.archive_blocked:
+            return
+        self.archive_blocked = True
+        self._journal_screen.block_archive(error)
+        self._screen_stack.setEnabled(False)
+        self._toolbar.new.setEnabled(False)
+        self._toolbar.performance.setEnabled(False)
+        self._toolbar.settings.setEnabled(False)
+        QMessageBox.critical(self, "Journal cannot be opened", str(error))
+
+    def _show_routine_notification(self, message: str) -> None:
+        try:
+            self._notification_host.show_message(message)
+        except (RuntimeError, TypeError, ValueError):
+            # A presentation failure cannot undo a committed canonical operation.
+            return
 
     def changeEvent(self, event: QEvent) -> None:
-        """Refresh semantic styling and icons after native theme changes."""
-
         super().changeEvent(event)
         if (
             is_visual_system_change(event)
@@ -420,378 +419,53 @@ class MainWindow(QMainWindow):
         ):
             self._refreshing_visual_system = True
             try:
-                refresh_visual_system(self)
-                self._fit_primary_navigation_height()
+                refresh_visual_system(self, palette=QApplication.palette())
+                refresh_lucide_icons(self)
             finally:
                 self._refreshing_visual_system = False
-        if is_palette_change(event) and hasattr(self, "_navigation"):
-            self._refresh_navigation_icons()
-            refresh_lucide_icons(self)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Persist disposable shell state without touching canonical data."""
-
+        if self.workspace.current.route is Route.NEW:
+            if not self.creation_task.confirm_exit():
+                event.ignore()
+                return
+            self.creation_task.reset()
+        self._journal_screen.close_retrieval()
+        self.appearance.close()
         self._save_presentation_state()
         super().closeEvent(event)
 
-    @property
-    def screen_names(self) -> tuple[str, ...]:
-        """Return every named screen route, including contextual Detail."""
-
-        return _ROUTE_NAMES
-
-    @property
-    def navigation_names(self) -> tuple[str, ...]:
-        """Return the three permanent primary destinations."""
-
-        return _PRIMARY_DESTINATIONS
-
-    @property
-    def current_screen_name(self) -> str:
-        """Return the route currently displayed in the content stack."""
-
-        return self._current_route_name
-
-    @property
-    def sidebar_compact(self) -> bool:
-        return self._sidebar_compact
-
-    def navigate_to(self, screen_name: str) -> None:
-        """Navigate to a named screen while preserving contextual semantics."""
-
-        if screen_name == "New Prediction":
-            self._creation_stack.setCurrentIndex(0)
-        if screen_name not in self.screen_names:
-            message = f"Unknown Reckonsolve screen: {screen_name!r}"
-            raise ValueError(message)
-        if screen_name == "Prediction Detail":
-            if self.current_screen_name != "Prediction Detail":
-                self._capture_detail_origin()
-            self._activate_route(screen_name, refresh=True, focus=False)
-            return
-        self._activate_route(screen_name, refresh=True, focus=True)
-
-    def toggle_sidebar(self) -> None:
-        self._set_sidebar_mode(not self._sidebar_compact, persist=True)
-
-    def _install_global_shortcuts(self) -> None:
-        """Install navigation-only shortcuts behind one conflict guard."""
-
-        actions: tuple[Callable[[], None], ...] = (
-            partial(self.navigate_to, "New Prediction"),
-            self._focus_prediction_search,
-            partial(self.navigate_to, "Dashboard"),
-            partial(self.navigate_to, "Predictions"),
-            partial(self.navigate_to, "Analytics"),
-            partial(self.navigate_to, "Settings"),
-            self.toggle_sidebar,
-            self.return_from_detail,
-        )
-        self._global_shortcuts: dict[str, QShortcut] = {}
-        for (object_name, key), action in zip(
-            _GLOBAL_SHORTCUT_SPECS,
-            actions,
-            strict=True,
-        ):
-            shortcut = QShortcut(QKeySequence(key), self)
-            shortcut.setObjectName(object_name)
-            shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
-            shortcut.setAutoRepeat(False)
-            shortcut.activated.connect(partial(self._invoke_global_shortcut, action))
-            self._global_shortcuts[object_name] = shortcut
-
-    def _invoke_global_shortcut(self, action: Callable[[], None]) -> None:
-        if _global_shortcut_conflicts_with_current_context():
-            return
-        action()
-
-    def _focus_prediction_search(self) -> None:
-        self.navigate_to("Predictions")
-        self._prediction_browser_screen.focus_search()
-
-    def return_from_detail(self) -> None:
-        """Return to Detail's source without rebuilding an archive query."""
-
-        if self.current_screen_name != "Prediction Detail":
-            return
-        destination = self._detail_return_screen or "Predictions"
-        origin_focus = self._detail_origin_focus
-        self._activate_route(destination, refresh=False, focus=False)
-        self._detail_return_screen = None
-        self._detail_origin_focus = None
-        if origin_focus is not None:
-            try:
-                if origin_focus.isVisible():
-                    origin_focus.setFocus(Qt.FocusReason.BacktabFocusReason)
-                    return
-            except RuntimeError:
-                pass
-        if destination in ("Predictions", "Dashboard"):
-            self._navigation.setFocus(Qt.FocusReason.BacktabFocusReason)
-
-    def _primary_navigation_changed(self, row: int) -> None:
-        if row < 0:
-            return
-        screen_name = str(self._navigation.item(row).data(Qt.ItemDataRole.UserRole))
-        if self.current_screen_name != screen_name:
-            self._activate_route(screen_name, refresh=True, focus=True)
-
-    def _primary_navigation_activated(self, item: QListWidgetItem) -> None:
-        screen_name = str(item.data(Qt.ItemDataRole.UserRole))
-        if self.current_screen_name != screen_name:
-            self._activate_route(screen_name, refresh=True, focus=True)
-
-    def _activate_route(
-        self,
-        screen_name: str,
-        *,
-        refresh: bool,
-        focus: bool,
-    ) -> None:
-        if screen_name in _PRIMARY_DESTINATIONS:
-            self._last_primary_screen = screen_name
-        self._current_route_name = screen_name
-        self._screen_stack.setCurrentIndex(self._screen_indexes[screen_name])
-        self._sync_navigation_state()
-        if screen_name == "Dashboard":
-            if refresh:
-                self._dashboard_screen.refresh()
-        elif screen_name == "New Prediction":
-            if focus:
-                self._new_prediction_screen.focus_question()
-        elif screen_name == "Prediction Detail":
-            if refresh:
-                self._prediction_detail_host.refresh()
-        elif screen_name == "Predictions":
-            if refresh:
-                self._prediction_browser_screen.refresh()
-        elif screen_name == "Analytics":
-            if refresh:
-                self._analytics_screen.refresh()
-        elif screen_name == "Settings" and refresh:
-            self._settings_screen.refresh()
-
-    def _capture_detail_origin(self) -> None:
-        current = self.current_screen_name
-        if current in _PRIMARY_DESTINATIONS:
-            self._detail_return_screen = current
-        elif current == "New Prediction":
-            self._detail_return_screen = self._last_primary_screen
-        else:
-            self._detail_return_screen = "Predictions"
-        focused = QApplication.focusWidget()
-        self._detail_origin_focus = focused if isinstance(focused, QWidget) else None
-        self._update_back_button()
-
-    def _show_created_prediction(
-        self,
-        prediction: PredictionSnapshot | NumericPredictionSnapshot,
-    ) -> None:
-        self._capture_detail_origin()
-        if hasattr(prediction, "decimal_places"):
-            self._prediction_detail_host.show_numeric_prediction(prediction)
-        else:
-            self._prediction_detail_host.show_prediction(prediction)
-        self._activate_route("Prediction Detail", refresh=False, focus=False)
-
-    def _show_selected_prediction(
-        self,
-        prediction: PredictionSnapshot | NumericPredictionSnapshot,
-    ) -> None:
-        self._capture_detail_origin()
-        if hasattr(prediction, "decimal_places"):
-            self._prediction_detail_host.show_numeric_prediction(prediction)
-        else:
-            self._prediction_detail_host.show_prediction(prediction)
-        self._activate_route("Prediction Detail", refresh=False, focus=False)
-
-    def _show_search_result(
-        self,
-        prediction: PredictionSnapshot | NumericPredictionSnapshot,
-        search_document: SearchDocument,
-    ) -> None:
-        """Open current Detail, then reveal the canonical source that matched."""
-
-        self._show_selected_prediction(prediction)
-        self._prediction_detail_host.focus_search_match(search_document)
-
-    def _show_routine_notification(self, message: str) -> None:
-        """Keep acknowledgment rendering outside committed application work."""
-
-        try:
-            self._notification_host.show_message(message)
-        except (RuntimeError, TypeError, ValueError):
-            # The operation has already completed and refreshed its canonical view.
-            # A disposable presentation failure must not turn that into false failure.
-            return
-
-    def _sync_navigation_state(self) -> None:
-        route = self.current_screen_name
-        primary_active = route if route in _PRIMARY_DESTINATIONS else None
-        if route == "Prediction Detail" and self._detail_return_screen in (
-            _PRIMARY_DESTINATIONS
-        ):
-            primary_active = self._detail_return_screen
-        with QSignalBlocker(self._navigation):
-            if primary_active is None:
-                self._navigation.setCurrentRow(-1)
-                self._navigation.clearSelection()
-            else:
-                self._navigation.setCurrentRow(
-                    _PRIMARY_DESTINATIONS.index(primary_active)
-                )
-        apply_navigation_active(
-            self._new_prediction_button,
-            route == "New Prediction",
-        )
-        apply_navigation_active(
-            self._settings_button,
-            route == "Settings",
-        )
-
-    def _update_back_button(self) -> None:
-        destination = self._detail_return_screen or "Predictions"
-        self._back_from_detail_button.setText(f"Back to {destination}")
-        self._back_from_detail_button.setAccessibleName(
-            f"Return from Prediction Detail to {destination}"
-        )
-
-    def _set_sidebar_mode(self, compact: bool, *, persist: bool) -> None:
-        self._sidebar_compact = compact
-        self._sidebar.setFixedWidth(
-            _COMPACT_SIDEBAR_WIDTH if compact else _EXPANDED_SIDEBAR_WIDTH
-        )
-        self._sidebar_identity.setVisible(not compact)
-        self._sidebar_identity.setText(self.windowTitle())
-        self._new_prediction_button.setText("" if compact else "New Prediction")
-        self._settings_button.setText("" if compact else "Settings")
-        self._navigation.setSpacing(
-            _COMPACT_NAVIGATION_SPACING if compact else int(Spacing.COMPACT)
-        )
-        apply_navigation_compact(self._navigation, compact)
-        for row, screen_name in enumerate(_PRIMARY_DESTINATIONS):
-            item = self._navigation.item(row)
-            item.setText("" if compact else screen_name)
-            item.setSizeHint(
-                QSize(
-                    0,
-                    _COMPACT_NAVIGATION_ROW_HEIGHT
-                    if compact
-                    else self._expanded_navigation_row_height,
-                )
-            )
-        self._fit_primary_navigation_height()
-
-        if compact:
-            toggle_name = "Expand sidebar"
-            toggle_icon = LucideIcon.ARROW_RIGHT
-        else:
-            toggle_name = "Collapse sidebar"
-            toggle_icon = LucideIcon.ARROW_LEFT
-        self._sidebar_toggle.setAccessibleName(toggle_name)
-        self._sidebar_toggle.setToolTip(f"{toggle_name} (Ctrl+B)")
-        apply_lucide_icon(self._sidebar_toggle, toggle_icon)
-        refresh_lucide_icons(self._sidebar)
-        if persist:
-            self._save_presentation_state()
-
     def _restore_window_state(self) -> None:
-        geometry = safe_window_geometry(
-            self._presentation_state.normal_geometry,
-            self._available_screen_geometries(),
+        self.setGeometry(
+            safe_window_geometry(
+                self._presentation_state.normal_geometry,
+                self._available_screen_geometries(),
+            )
         )
-        self.setGeometry(geometry)
-        state = self.windowState() & ~Qt.WindowState.WindowMinimized
         if self._presentation_state.maximized:
-            state |= Qt.WindowState.WindowMaximized
-        else:
-            state &= ~Qt.WindowState.WindowMaximized
-        self.setWindowState(state)
+            self.setWindowState(Qt.WindowState.WindowMaximized)
 
-    def _save_presentation_state(self) -> None:
+    def _save_presentation_state(self) -> bool:
         maximized = bool(self.windowState() & Qt.WindowState.WindowMaximized)
         minimized = bool(self.windowState() & Qt.WindowState.WindowMinimized)
         normal = self.normalGeometry() if maximized or minimized else self.geometry()
-        if not normal.isValid():
-            normal = self.geometry()
         state = WindowPresentationState(
-            sidebar_compact=self._sidebar_compact,
             normal_geometry=(normal.x(), normal.y(), normal.width(), normal.height()),
             maximized=maximized,
+            appearance=self.appearance.mode,
         )
         if self._presentation_settings.save(state):
             self._presentation_state = state
+            return True
+        return False
 
     def _available_screen_geometries(self) -> tuple[QRect, ...]:
         if self._available_screens_override is not None:
             return self._available_screens_override
         application = QApplication.instance()
-        if not isinstance(application, QApplication):
-            return ()
         primary = application.primaryScreen()
-        ordered = [] if primary is None else [primary.availableGeometry()]
-        for screen in application.screens():
-            geometry = screen.availableGeometry()
-            if geometry not in ordered:
-                ordered.append(geometry)
-        return tuple(ordered)
-
-    def _refresh_navigation_icons(self) -> None:
-        for row, screen_name in enumerate(_PRIMARY_DESTINATIONS):
-            self._navigation.item(row).setIcon(
-                lucide_icon(_PRIMARY_ICONS[screen_name], self.palette())
-            )
-
-    def _fit_primary_navigation_height(self) -> None:
-        """Expose every fixed primary destination without an internal scroll."""
-
-        row_heights = tuple(
-            self._navigation.sizeHintForRow(row)
-            for row in range(self._navigation.count())
+        screens = [primary] if primary is not None else []
+        screens.extend(
+            screen for screen in application.screens() if screen is not primary
         )
-        content_height = sum(max(1, height) for height in row_heights)
-        # QListView lays its configured spacing around each item, so every row
-        # contributes a leading and trailing spacing interval.
-        spacing_height = self._navigation.spacing() * self._navigation.count() * 2
-        frame_height = self._navigation.frameWidth() * 2
-        self._navigation.setFixedHeight(
-            content_height + spacing_height + frame_height + 2
-        )
-        self._navigation.verticalScrollBar().setValue(0)
-
-
-def _global_shortcut_conflicts_with_current_context() -> bool:
-    """Keep global navigation out of modal decisions and active editors."""
-
-    application = QApplication.instance()
-    if not isinstance(application, QApplication):
-        return True
-    if application.activeModalWidget() is not None:
-        return True
-    focused = application.focusWidget()
-    while isinstance(focused, QWidget):
-        if isinstance(focused, QLineEdit) and not focused.isReadOnly():
-            return True
-        if isinstance(focused, QAbstractSpinBox) and not focused.isReadOnly():
-            return True
-        if (
-            isinstance(focused, (QPlainTextEdit, QTextEdit))
-            and not focused.isReadOnly()
-        ):
-            return True
-        if isinstance(focused, QComboBox) and focused.isEditable():
-            return True
-        focused = focused.parentWidget()
-    return False
-
-
-def _primary_destination_tooltip(screen_name: str) -> str:
-    shortcuts = {
-        "Dashboard": "Ctrl+1",
-        "Predictions": "Ctrl+2; Ctrl+F focuses Search",
-        "Analytics": "Ctrl+3",
-    }
-    return f"{screen_name} ({shortcuts[screen_name]})"
-
-
-__all__ = ["MainWindow"]
+        return tuple(screen.availableGeometry() for screen in screens)

@@ -23,11 +23,13 @@ from reckonsolve.analytics.quantiles import (
     resolved_quantile_scorecard,
 )
 from reckonsolve.analytics.trajectory import trajectory_scorecard
+from reckonsolve.application.journal import JournalOperations
 from reckonsolve.application.one_shot import OneShotOperations
 from reckonsolve.application.quantiles import QuantileOperations
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
 from reckonsolve.data.database import Database
+from reckonsolve.data.metadata_snapshots import read_metadata_snapshot
 from reckonsolve.data.numeric_predictions import (
     NumericPredictionRepository,
 )
@@ -48,13 +50,6 @@ from reckonsolve.data.predictions import (
     PredictionRepository,
 )
 from reckonsolve.data.quantiles import QuantilePredictionRepository
-from reckonsolve.data.saved_views import (
-    DuplicateSavedViewNameError as RepositoryDuplicateSavedViewNameError,
-)
-from reckonsolve.data.saved_views import (
-    SavedViewNotFoundError as RepositorySavedViewNotFoundError,
-)
-from reckonsolve.data.saved_views import SavedViewRepository
 from reckonsolve.data.search import SearchRepository
 from reckonsolve.data.search_index import SearchIndexBusyError, SearchIndexError
 from reckonsolve.data.settings import SettingsRepository
@@ -154,12 +149,6 @@ from reckonsolve.domain.quantiles import (
     QuantileRevision,
     QuantileTimelineEvent,
 )
-from reckonsolve.domain.saved_views import (
-    SavedView,
-    SavedViewConfiguration,
-    SavedViewValidationError,
-    normalize_saved_view_name,
-)
 from reckonsolve.domain.search import (
     PredictionSearchResults,
     SearchMatchMode,
@@ -192,7 +181,6 @@ from .errors import (
     ConcurrentTagLibraryUpdateError,
     ConcurrentTerminalCorrectionError,
     CsvExportError,
-    DuplicateSavedViewNameError,
     DuplicateTagNameError,
     ForecastReviewNotAllowedError,
     ForecastRevisionNotAllowedError,
@@ -205,7 +193,6 @@ from .errors import (
     PredictionDeletionConfirmationRequired,
     PredictionDeletionNotAllowedError,
     PredictionNotFoundError,
-    SavedViewNotFoundError,
     SearchUnavailableError,
     TagMergeSelectionError,
     TagNotFoundError,
@@ -214,6 +201,7 @@ from .errors import (
     TerminalCorrectionUnchangedError,
     ValidationError,
 )
+from .read_errors import expected_database_read
 
 
 class PredictionOperations:
@@ -232,7 +220,6 @@ class PredictionOperations:
         self._terminal_history_repository = TerminalHistoryRepository(database)
         self._transfer_repository = DataTransferRepository(database)
         self._search_repository = SearchRepository(database)
-        self._saved_view_repository = SavedViewRepository(database)
         self._tag_repository = TagRepository(database)
         self._database = database
         self._clock = SystemClock() if clock is None else clock
@@ -241,6 +228,7 @@ class PredictionOperations:
             QuantilePredictionRepository(database, self._clock)
         )
         self._local_timezone = local_timezone
+        self.journal = JournalOperations(database, self._clock, local_timezone)
 
     def create_prediction(
         self,
@@ -586,14 +574,16 @@ class PredictionOperations:
         self._validate_positive_token(
             expected_metadata_version, "expected_metadata_version"
         )
-        self._quantiles.invalidate_or_delete(
+        updated = self._quantiles.invalidate_or_delete(
             prediction_id,
             delete=False,
             reason=reason,
             expected_revision_id=expected_revision_id,
             expected_metadata_version=expected_metadata_version,
         )
-        return self.get_numeric_prediction(prediction_id)
+        if updated is None:
+            raise PredictionNotFoundError(prediction_id)
+        return self._with_derived_numeric_status(updated, as_utc(self._clock.now()))
 
     def delete_numeric_prediction(
         self,
@@ -1334,6 +1324,7 @@ class PredictionOperations:
             ),
         )
 
+    @expected_database_read
     def browse_predictions(
         self,
         question_text: str = "",
@@ -1591,75 +1582,6 @@ class PredictionOperations:
             raise SearchUnavailableError(
                 "The local search index could not be rebuilt from Prediction history."
             ) from error
-
-    def list_saved_views(self) -> tuple[SavedView, ...]:
-        """Return every mutable Saved View without querying Prediction membership."""
-
-        return self._saved_view_repository.list_saved_views()
-
-    def create_saved_view(
-        self,
-        name: str,
-        configuration: SavedViewConfiguration,
-    ) -> SavedView:
-        """Persist one named dynamic archive configuration."""
-
-        try:
-            display_name, normalized_name = normalize_saved_view_name(name)
-            return self._saved_view_repository.create_saved_view(
-                display_name,
-                normalized_name,
-                configuration,
-            )
-        except SavedViewValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
-        except RepositoryDuplicateSavedViewNameError as error:
-            raise DuplicateSavedViewNameError(display_name) from error
-
-    def update_saved_view(
-        self,
-        saved_view_id: int,
-        configuration: SavedViewConfiguration,
-    ) -> SavedView:
-        """Explicitly replace a Saved View's dynamic configuration."""
-
-        self._validate_positive_token(saved_view_id, "saved_view_id")
-        try:
-            return self._saved_view_repository.update_saved_view(
-                saved_view_id,
-                configuration,
-            )
-        except SavedViewValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
-        except RepositorySavedViewNotFoundError as error:
-            raise SavedViewNotFoundError(saved_view_id) from error
-
-    def rename_saved_view(self, saved_view_id: int, name: str) -> SavedView:
-        """Explicitly rename one mutable Saved View."""
-
-        self._validate_positive_token(saved_view_id, "saved_view_id")
-        try:
-            display_name, normalized_name = normalize_saved_view_name(name)
-            return self._saved_view_repository.rename_saved_view(
-                saved_view_id,
-                display_name,
-                normalized_name,
-            )
-        except SavedViewValidationError as error:
-            raise ValidationError(str(error), field=error.field) from error
-        except RepositoryDuplicateSavedViewNameError as error:
-            raise DuplicateSavedViewNameError(display_name) from error
-        except RepositorySavedViewNotFoundError as error:
-            raise SavedViewNotFoundError(saved_view_id) from error
-
-    def delete_saved_view(self, saved_view_id: int) -> None:
-        """Delete only a selected mutable Saved View and its tag references."""
-
-        self._validate_positive_token(saved_view_id, "saved_view_id")
-        try:
-            self._saved_view_repository.delete_saved_view(saved_view_id)
-        except RepositorySavedViewNotFoundError as error:
-            raise SavedViewNotFoundError(saved_view_id) from error
 
     def list_tags(self, name_filter: str = "") -> tuple[TagLibraryItem, ...]:
         """Return every retained tag, optionally narrowed by a name substring."""
@@ -1920,6 +1842,7 @@ class PredictionOperations:
             csv_file_count=csv_file_count,
         )
 
+    @expected_database_read
     def get_stale_threshold_days(self) -> int:
         """Return the persisted Needs Attention threshold."""
 
@@ -1954,6 +1877,7 @@ class PredictionOperations:
             raise PredictionNotFoundError(prediction_id)
         return self._with_derived_numeric_status(detail, as_utc(self._clock.now()))
 
+    @expected_database_read
     def get_prediction_for_navigation(
         self,
         prediction_id: int,
@@ -2054,28 +1978,25 @@ class PredictionOperations:
 
         changed_at = as_utc(self._clock.now())
         try:
-            update_applied = self._repository.update_metadata(
+            updated = self._repository.update_metadata(
                 prediction_id,
                 update,
                 expected=current,
                 expected_metadata_version=expected_metadata_version,
                 changed_at=changed_at,
+                read_saved=lambda connection: read_metadata_snapshot(
+                    connection, prediction_id
+                ),
             )
         except PredictionChangedError as error:
             raise ConcurrentPredictionUpdateError(prediction_id) from error
-        if update_applied is None:
+        if updated is None:
             raise PredictionNotFoundError(prediction_id)
-        if isinstance(current, OneShotDetail):
-            return self.one_shots.get(prediction_id)
-        if isinstance(current, NumericPrediction):
-            updated_numeric = self._numeric_repository.get_prediction(prediction_id)
-            if updated_numeric is None:
-                raise PredictionNotFoundError(prediction_id)
-            return self._with_derived_numeric_status(updated_numeric, changed_at)
-        updated_binary = self._repository.get_prediction(prediction_id)
-        if updated_binary is None:
-            raise PredictionNotFoundError(prediction_id)
-        return self._with_derived_status(updated_binary, changed_at)
+        if isinstance(updated, OneShotDetail):
+            return updated
+        if isinstance(updated, NumericPrediction):
+            return self._with_derived_numeric_status(updated, changed_at)
+        return self._with_derived_status(updated, changed_at)
 
     def list_definition_changes(
         self,

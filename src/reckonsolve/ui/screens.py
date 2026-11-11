@@ -91,6 +91,7 @@ from reckonsolve.ui.effective_time_input import EffectiveTimeInput
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.one_shot import OneShotEditDialog, text_label
+from reckonsolve.ui.postmortem_action import PostmortemSkipButton
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.quantile_input import FiveQuantileInput, QuantileCDF
 from reckonsolve.ui.quantile_scorecard import QuantileScorecardPanel
@@ -982,6 +983,10 @@ class NewPredictionScreen(QWidget):
             self.focus_question()
             return
 
+        guard = getattr(self, "save_guard", None)
+        if guard is not None and not guard():
+            return
+
         try:
             details = {
                 "rationale": self.rationale_input.toPlainText(),
@@ -1026,6 +1031,7 @@ class NewPredictionScreen(QWidget):
         self.prediction_type_input.setCurrentIndex(0)
         self.probability_input.setValue(50)
         self.exact_deadline.reset()
+        self.numeric_exact_deadline.reset()
         self.numeric_unit_input.clear()
         self.numeric_precision_input.setValue(0)
         self.quantile_input.clear()
@@ -1296,6 +1302,15 @@ class NumericPredictionDetailScreen(QWidget):
         _make_selectable(self.postmortem)
         self.postmortem_completion = QLabel("", self.resolution_section)
         self.postmortem_completion.setObjectName("numericPostmortemCompletion")
+        self.skip_postmortem_button = PostmortemSkipButton(
+            lambda identifier, **context: self._operations.record_postmortem_skip(
+                identifier, **context
+            ),
+            self.refresh,
+            self._show_error,
+            self.resolution_section,
+        )
+        self.skip_postmortem_button.setObjectName("numericSkipPostmortemButton")
         self.postmortem_completion.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem_completion.setWordWrap(True)
         _make_selectable(self.postmortem_completion)
@@ -1327,6 +1342,7 @@ class NumericPredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.resolution_notes)
         resolution_layout.addWidget(self.postmortem)
         resolution_layout.addWidget(self.postmortem_completion)
+        resolution_layout.addWidget(self.skip_postmortem_button)
         resolution_layout.addWidget(
             self.correct_resolution_button,
             0,
@@ -1645,6 +1661,7 @@ class NumericPredictionDetailScreen(QWidget):
     def show_prediction(self, prediction: NumericPredictionSnapshot | None) -> None:
         """Present one Numeric Prediction or the honest empty state."""
 
+        self.skip_postmortem_button.set_context(None)
         self._prediction = prediction
         self._hide_error()
         if prediction is None:
@@ -1810,6 +1827,7 @@ class NumericPredictionDetailScreen(QWidget):
                     history,
                     prediction.unit,
                 )
+                self.skip_postmortem_button.set_context(history)
             self.resolution_actual.setText(
                 f"Actual value: {effective.actual_value} {prediction.unit}"
             )
@@ -2930,16 +2948,23 @@ class PredictionDetailHost(QWidget):
         else:
             self.show_latest_prediction()
 
-    def focus_search_match(self, document: SearchDocument) -> None:
+    def focus_search_match(
+        self, document: SearchDocument, *, emphasize: bool = True
+    ) -> None:
         """Delegate matched-source navigation to the currently selected Detail."""
 
         if self._stack.currentWidget() is self._one_shot_detail:
             self._one_shot_detail.focus_search_match(document)
-            return
-        if self._current_type is PredictionType.NUMERIC:
+        elif self._current_type is PredictionType.NUMERIC:
             self._numeric_detail.focus_search_match(document)
         elif self._current_type is PredictionType.BINARY:
             self._binary_detail.focus_search_match(document)
+        if not emphasize:
+            for widget in self.findChildren(QWidget):
+                if widget.property("searchMatchEmphasis"):
+                    widget.setProperty("searchMatchEmphasis", False)
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
 
 
 class _StyledDialog(QDialog):
@@ -5330,6 +5355,15 @@ class PredictionDetailScreen(QWidget):
         _make_selectable(self.postmortem)
         self.postmortem_completion = QLabel("", self.resolution_section)
         self.postmortem_completion.setObjectName("predictionPostmortemCompletion")
+        self.skip_postmortem_button = PostmortemSkipButton(
+            lambda identifier, **context: self._operations.record_postmortem_skip(
+                identifier, **context
+            ),
+            self.refresh,
+            self._show_error,
+            self.resolution_section,
+        )
+        self.skip_postmortem_button.setObjectName("skipPostmortemButton")
         self.postmortem_completion.setTextFormat(Qt.TextFormat.PlainText)
         self.postmortem_completion.setWordWrap(True)
         _make_selectable(self.postmortem_completion)
@@ -5360,6 +5394,7 @@ class PredictionDetailScreen(QWidget):
         resolution_layout.addWidget(self.postmortem_heading)
         resolution_layout.addWidget(self.postmortem)
         resolution_layout.addWidget(self.postmortem_completion)
+        resolution_layout.addWidget(self.skip_postmortem_button)
         resolution_layout.addWidget(
             self.correct_resolution_button,
             0,
@@ -5657,6 +5692,7 @@ class PredictionDetailScreen(QWidget):
 
     def show_prediction(self, prediction: PredictionSnapshot | None) -> None:
         """Present a prediction or the new-database empty state."""
+        self.skip_postmortem_button.set_context(None)
         self._prediction = prediction
         self._hide_error()
         if prediction is None:
@@ -6113,6 +6149,7 @@ class PredictionDetailScreen(QWidget):
                     self.resolution_history,
                     history,
                 )
+                self.skip_postmortem_button.set_context(history)
             self.resolution_outcome.setText(
                 f"Outcome: {effective.outcome.value.capitalize()}"
             )

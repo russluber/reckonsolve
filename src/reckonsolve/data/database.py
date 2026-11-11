@@ -3,7 +3,7 @@
 import os
 import sqlite3
 import tempfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -11,6 +11,7 @@ from .forecast_contracts import check_forecast_contract_integrity
 from .migrations import (
     MIGRATIONS,
     Migration,
+    MigrationError,
     apply_migrations,
     current_schema_version,
 )
@@ -23,6 +24,8 @@ from .search_index import (
     refresh_pending_search_documents,
     require_fts5,
 )
+from .upgrade import UpgradeReview, upgrade_with_recovery
+from .writer_contract import register_writer
 
 
 class DatabaseClosedError(RuntimeError):
@@ -42,10 +45,12 @@ class Database:
         connection: sqlite3.Connection,
         *,
         search_enabled: bool,
+        migrations: Sequence[Migration] = MIGRATIONS,
     ) -> None:
         self._path = path
         self._connection: sqlite3.Connection | None = connection
         self._search_enabled = search_enabled
+        self.migrations = tuple(migrations)
 
     @classmethod
     def open(
@@ -53,6 +58,7 @@ class Database:
         path: Path,
         *,
         migrations: Sequence[Migration] = MIGRATIONS,
+        confirm_upgrade: Callable[[UpgradeReview], bool] | None = None,
     ) -> "Database":
         """Open, configure, and migrate the database at an explicit path."""
 
@@ -66,6 +72,7 @@ class Database:
                 timeout=5.0,
             )
             connection.row_factory = sqlite3.Row
+            register_writer(connection)
             connection.execute("PRAGMA foreign_keys = ON")
             if connection.execute("PRAGMA foreign_keys").fetchone()[0] != 1:
                 raise sqlite3.DatabaseError(
@@ -74,7 +81,12 @@ class Database:
             connection.execute("PRAGMA busy_timeout = 5000")
             if any(migration.version >= 14 for migration in migrations):
                 require_fts5(connection)
-            apply_migrations(connection, migrations)
+            if any(migration.version == 21 for migration in migrations):
+                upgrade_with_recovery(
+                    connection, database_path, migrations, confirm_upgrade
+                )
+            else:
+                apply_migrations(connection, migrations)
             if any(migration.version >= 16 for migration in migrations):
                 check_forecast_contract_integrity(connection)
             search_enabled = initialize_search_index(connection)
@@ -87,7 +99,27 @@ class Database:
             database_path,
             connection,
             search_enabled=search_enabled,
+            migrations=migrations,
         )
+
+    @classmethod
+    def open_readonly(
+        cls, path: Path, *, migrations: Sequence[Migration] = MIGRATIONS
+    ) -> "Database":
+        """Connect read-only; admission occurs in each coherent read snapshot."""
+        connection = sqlite3.connect(
+            Path(path).resolve().as_uri() + "?mode=ro",
+            uri=True,
+            autocommit=True,
+            timeout=0.25,
+        )
+        connection.row_factory = sqlite3.Row
+        try:
+            connection.execute("PRAGMA foreign_keys = ON")
+        except BaseException:
+            connection.close()
+            raise
+        return cls(Path(path), connection, search_enabled=True, migrations=migrations)
 
     @property
     def path(self) -> Path:
@@ -136,6 +168,36 @@ class Database:
             if connection.in_transaction:
                 connection.execute("ROLLBACK")
             raise
+
+    @contextmanager
+    def read_snapshot(
+        self, *, one_shots: dict | None = None
+    ) -> Iterator[sqlite3.Connection]:
+        """Read one compatible snapshot without taking a writer reservation."""
+        connection = self._require_connection()
+        if connection.in_transaction:
+            raise NestedTransactionError("Nested transactions are not supported.")
+        was_query_only = connection.execute("PRAGMA query_only").fetchone()[0]
+        connection.execute("PRAGMA query_only = ON")
+        try:
+            connection.execute("BEGIN")
+            from .migrations import _validated_applied_count
+
+            if _validated_applied_count(connection, self.migrations) != len(
+                self.migrations
+            ):
+                raise MigrationError(
+                    "The journal requires the desktop upgrade before retrieval."
+                )
+            check_forecast_contract_integrity(connection, one_shots=one_shots)
+            yield connection
+            connection.execute("COMMIT")
+        except BaseException:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            connection.execute(f"PRAGMA query_only = {int(was_query_only)}")
 
     def close(self) -> None:
         """Close the connection. Calling close more than once is safe."""

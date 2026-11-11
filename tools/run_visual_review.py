@@ -10,8 +10,18 @@ from tempfile import TemporaryDirectory
 from reckonsolve.app import run
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
-from reckonsolve.domain.predictions import BinaryOutcome
-from reckonsolve.domain.quantiles import NumericValueConstraint
+from reckonsolve.domain.forecast_contracts import one_shot_contract
+from reckonsolve.domain.one_shot import NewOneShotPrediction, OneShotValues
+from reckonsolve.domain.predictions import (
+    BinaryOutcome,
+    FixedPrecisionValue,
+    PredictionType,
+)
+from reckonsolve.domain.quantiles import (
+    FiveQuantiles,
+    NumericValueConstraint,
+    QuantileDefinition,
+)
 from reckonsolve.identity import DEVELOPMENT_APPLICATION
 
 
@@ -128,6 +138,30 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
             reason=f"The question became unresolvable.{repeated}",
             expected_revision_id=invalid.current_revision_id,
             expected_metadata_version=invalid.metadata_version,
+        )
+        operations.one_shots.create(
+            NewOneShotPrediction(
+                f"Is this sealed bag heavier than two kilograms?{repeated}",
+                one_shot_contract(PredictionType.BINARY),
+                OneShotValues(probability_percent=75, answer=BinaryOutcome.YES),
+                background="An already-existing answer, recorded after a final guess.",
+                tags=("Visual review", "One-Shot"),
+            )
+        )
+        operations.one_shots.create(
+            NewOneShotPrediction(
+                f"What was the wind speed at the station?{repeated}",
+                one_shot_contract(PredictionType.NUMERIC),
+                OneShotValues(
+                    quantiles=FiveQuantiles.from_values(
+                        {5: "8.2", 25: "12.6", 50: "17.3", 75: "22.8", 95: "32.5"}, 1
+                    ),
+                    answer=FixedPrecisionValue.from_value("19.5", 1),
+                ),
+                QuantileDefinition("km/h", 1, NumericValueConstraint.CONTINUOUS),
+                background="A measured value whose original answer already exists.",
+                tags=("Visual review", "One-Shot"),
+            )
         )
     finally:
         database.close()

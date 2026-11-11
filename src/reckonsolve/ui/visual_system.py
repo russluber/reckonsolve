@@ -64,6 +64,7 @@ class TextRole(StrEnum):
     SECONDARY = "secondary"
     LABEL = "label"
     SECTION_TITLE = "section-title"
+    QUESTION = "question"
     PAGE_TITLE = "page-title"
     METRIC = "metric"
     FORECAST = "forecast"
@@ -100,6 +101,7 @@ class StatusTone(StrEnum):
     SUCCESS = "success"
     INFO = "info"
     WARNING = "warning"
+    CAUTION = "caution"
     ERROR = "error"
     DESTRUCTIVE = "destructive"
 
@@ -122,6 +124,9 @@ class SemanticColors:
     on_accent: str
     accent_soft: str
     on_accent_soft: str
+    success: str
+    success_surface: str
+    on_success: str
     focus: str
     info: str
     info_surface: str
@@ -140,6 +145,7 @@ _TEXT_ROLE_DELTAS = {
     TextRole.SECONDARY: 0.0,
     TextRole.LABEL: 0.0,
     TextRole.SECTION_TITLE: 1.0,
+    TextRole.QUESTION: 3.0,
     TextRole.PAGE_TITLE: 4.0,
     TextRole.METRIC: 7.0,
     TextRole.FORECAST: 7.0,
@@ -150,6 +156,7 @@ _TEXT_ROLE_WEIGHTS = {
     TextRole.SECONDARY: QFont.Weight.Normal,
     TextRole.LABEL: QFont.Weight.DemiBold,
     TextRole.SECTION_TITLE: QFont.Weight.DemiBold,
+    TextRole.QUESTION: QFont.Weight.DemiBold,
     TextRole.PAGE_TITLE: QFont.Weight.Bold,
     TextRole.METRIC: QFont.Weight.Bold,
     TextRole.FORECAST: QFont.Weight.Bold,
@@ -211,11 +218,14 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
             border=border,
             disabled_text="#89928d",
             disabled_surface="#2a302d",
-            accent="#55c995",
-            on_accent="#071a12",
-            accent_soft="#193d30",
-            on_accent_soft="#c7f4df",
-            focus="#74e2ae",
+            accent="#b2d3f3",
+            on_accent="#142535",
+            accent_soft="#253c53",
+            on_accent_soft="#c7e0f6",
+            success="#55c995",
+            success_surface="#193d30",
+            on_success="#c7f4df",
+            focus="#b2d3f3",
             info="#9fc8ff",
             info_surface="#20344e",
             warning="#f0c66d",
@@ -239,11 +249,14 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         border=border,
         disabled_text="#747b78",
         disabled_surface="#e3e7e5",
-        accent="#176b4d",
+        accent="#325f8d",
         on_accent="#ffffff",
-        accent_soft="#e3f2eb",
-        on_accent_soft="#124f3a",
-        focus="#0f7651",
+        accent_soft="#e7eff7",
+        on_accent_soft="#294e73",
+        success="#176b4d",
+        success_surface="#e3f2eb",
+        on_success="#124f3a",
+        focus="#325f8d",
         info="#245c94",
         info_surface="#e9f2ff",
         warning="#765200",
@@ -595,11 +608,21 @@ QLabel[reckonsolveBadgeTone="neutral"] {{
     color: {color.text};
     border: 1px solid {color.border};
 }}
-QLabel[reckonsolveBadgeTone="accent"],
-QLabel[reckonsolveBadgeTone="success"] {{
+QLabel[reckonsolveBadgeTone="accent"] {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border: 1px solid {color.accent};
+}}
+QLabel[reckonsolveBadgeTone="success"] {{
+    background-color: {color.success_surface};
+    color: {color.on_success};
+    border: 1px solid {color.success};
+}}
+QLabel[reckonsolveBadgeTone="caution"],
+QLabel[reckonsolveMessageTone="caution"] {{
+    background-color: {color.caution_surface};
+    color: {color.caution};
+    border: 1px solid {color.caution};
 }}
 QLabel[reckonsolveBadgeTone="warning"] {{
     background-color: {color.warning_surface};
@@ -627,11 +650,15 @@ QLabel[reckonsolveMessageTone="neutral"] {{
     color: {color.text};
     border: 1px solid {color.border};
 }}
-QLabel[reckonsolveMessageTone="accent"],
-QLabel[reckonsolveMessageTone="success"] {{
+QLabel[reckonsolveMessageTone="accent"] {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border: 1px solid {color.accent};
+}}
+QLabel[reckonsolveMessageTone="success"] {{
+    background-color: {color.success_surface};
+    color: {color.on_success};
+    border: 1px solid {color.success};
 }}
 QLabel[reckonsolveMessageTone="warning"] {{
     background-color: {color.warning_surface};
@@ -662,6 +689,30 @@ QGroupBox::title {{
     top: 2px;
     padding: 0 {int(Radius.SMALL)}px;
     color: {color.secondary_text};
+}}
+
+QLabel[reckonsolveQuestionLink="true"] {{
+    padding: 2px;
+    border: 1px solid transparent;
+}}
+QFrame#journalRowSeparator {{
+    background-color: {color.border};
+    border: none;
+}}
+QPushButton[journalQuickView="true"] {{
+    background-color: transparent;
+    border: 2px solid transparent;
+    color: {color.secondary_text};
+}}
+QPushButton[journalQuickView="true"][reckonsolveNavigationActive="true"] {{
+    border-bottom: 2px solid {color.accent};
+    color: {color.text};
+}}
+QPushButton[journalQuickView="true"]:focus {{
+    border: 2px solid {color.focus};
+}}
+QLabel[reckonsolveQuestionLink="true"]:focus {{
+    border-color: {color.focus};
 }}
 
 QListWidget {{
@@ -722,18 +773,18 @@ QWidget[searchMatchEmphasis="true"] {{
 """.strip()
 
 
-def install_visual_system(root: QWidget) -> None:
+def install_visual_system(root: QWidget, *, palette: QPalette | None = None) -> None:
     """Install or refresh the visual system on one top-level widget tree."""
 
     root.setProperty(VISUAL_SYSTEM_PROPERTY, True)
-    root.setStyleSheet(build_stylesheet(root.palette()))
+    root.setStyleSheet(build_stylesheet(root.palette() if palette is None else palette))
     refresh_semantic_fonts(root)
 
 
-def refresh_visual_system(root: QWidget) -> None:
+def refresh_visual_system(root: QWidget, *, palette: QPalette | None = None) -> None:
     """Re-resolve stylesheet colors and semantic fonts after a theme change."""
 
-    install_visual_system(root)
+    install_visual_system(root, palette=palette)
 
 
 def is_visual_system_change(event: QEvent) -> bool:

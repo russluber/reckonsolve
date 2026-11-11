@@ -1,3 +1,5 @@
+from supported_fixtures import connect_fixture
+
 """M54B compatibility refusal is whole-database, explicit, and non-mutating."""
 
 import sqlite3
@@ -12,6 +14,7 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS, Migration, apply_migrations
+from reckonsolve.data.writer_contract import register_writer
 from reckonsolve.domain.predictions import BinaryOutcome
 from reckonsolve.domain.quantiles import NumericValueConstraint
 
@@ -29,14 +32,15 @@ class Clock:
 
 def historical_database(path, version):
     """Construct an old artifact, not a supported application's creation path."""
-    with sqlite3.connect(path, autocommit=True) as connection:
+    with connect_fixture(path, autocommit=True) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         apply_migrations(connection, MIGRATIONS[:version])
 
 
 def insert_retired(path, *, numeric=False, with_identity=True, state="open"):
     """Minimal immutable old-model fixture built only for refusal assertions."""
-    with sqlite3.connect(path) as connection:
+    with connect_fixture(path) as connection:
+        register_writer(connection)
         connection.execute("PRAGMA foreign_keys = ON")
         cursor = connection.execute(
             """INSERT INTO predictions
@@ -115,7 +119,7 @@ def test_retired_lifecycle_and_backup_artifact_do_not_change_refusal(
     historical_database(path, 18)
     insert_retired(path, state=state, numeric=numeric)
     backup = tmp_path / "old-backup.sqlite3"
-    with sqlite3.connect(path) as source, sqlite3.connect(backup) as target:
+    with connect_fixture(path) as source, connect_fixture(backup) as target:
         source.backup(target)
     for artifact in (path, backup):
         before = artifact.read_bytes()
@@ -132,7 +136,7 @@ def test_current_schema_bad_identity_refuses_without_repair(tmp_path, damage):
         "Current model?", 60, forecast_deadline=START + timedelta(days=1)
     )
     database.close()
-    with sqlite3.connect(path) as connection:
+    with connect_fixture(path) as connection:
         connection.execute("PRAGMA ignore_check_constraints = ON")
         if damage == "missing":
             # Simulate a damaged artifact, not an application mutation.
@@ -293,10 +297,10 @@ def test_retired_artifact_is_refused_by_migration_entry_point(tmp_path):
     insert_retired(path)
     before = path.read_bytes()
     with (
-        sqlite3.connect(path, autocommit=True) as connection,
+        connect_fixture(path, autocommit=True) as connection,
         pytest.raises(ForecastContractIntegrityError, match="retired"),
     ):
-        apply_migrations(connection)
+        apply_migrations(connection, MIGRATIONS[:20])
     assert path.read_bytes() == before
 
 

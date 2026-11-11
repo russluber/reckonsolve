@@ -13,7 +13,9 @@ from reckonsolve.domain.one_shot import (
     NewOneShotPrediction,
     OneShotDetail,
     OneShotJournal,
+    OneShotSourceAction,
     OneShotValues,
+    validate_source_action,
 )
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
@@ -393,12 +395,23 @@ class OneShotRepository:
         return self.correct_detail(expected, values, note=note).record
 
     def correct_detail(
-        self, expected: OneShotRecord, values: OneShotValues, *, note: str | None = None
+        self,
+        expected: OneShotRecord,
+        values: OneShotValues,
+        *,
+        note: str | None = None,
+        source_action: OneShotSourceAction = OneShotSourceAction.TRANSCRIPTION,
     ) -> OneShotDetail:
         values.validate_contract(expected.contract, expected.definition)
         note = _optional_text(note, "note")
         with self.database.transaction() as connection:
             current = self._current(connection, expected)
+            validate_source_action(current.effective, values, source_action)
+            if (
+                source_action is OneShotSourceAction.POSTMORTEM
+                and current.status is not PredictionStatus.RESOLVED
+            ):
+                raise ValueError("Postmortem writing requires an answered One-Shot.")
             if values == current.effective:
                 raise PredictionValidationError(
                     "The transcription is unchanged.", field="forecast"
@@ -410,6 +423,18 @@ class OneShotRepository:
             columns = ["prediction_id", "sequence", "corrected_at", "note"] + [
                 p + f for p in ("old_", "new_") for f in SNAPSHOT_FIELDS
             ]
+            extra_values = ()
+            has_action = any(
+                row[1] == "source_action"
+                for row in connection.execute("PRAGMA table_info(one_shot_corrections)")
+            )
+            if has_action:
+                columns.append("source_action")
+                extra_values = (source_action.value,)
+            elif source_action is not OneShotSourceAction.TRANSCRIPTION:
+                raise ValueError(
+                    "This action requires the reviewed Journal schema upgrade."
+                )
             connection.execute(
                 f"INSERT INTO one_shot_corrections ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
                 (
@@ -419,6 +444,7 @@ class OneShotRepository:
                     note,
                     *_snapshot(current.effective),
                     *_snapshot(values),
+                    *extra_values,
                 ),
             )
             connection.execute(

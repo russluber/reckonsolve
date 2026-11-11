@@ -48,7 +48,6 @@ from reckonsolve.domain.quantiles import (
     QuantileRevision,
     QuantileTimelineEvent,
 )
-from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import (
     PredictionSearchHit,
     PredictionSearchResults,
@@ -72,6 +71,38 @@ from reckonsolve.domain.transfer import (
     CsvExportResult,
     DataManagementStatus,
 )
+
+
+class FakeJournalOperations:
+    """Shell-adapter fake; canonical query/scoring rules have real-store tests."""
+
+    def __init__(self, operations):
+        self.operations = operations
+
+    def query_independently(self, request):
+        from reckonsolve.domain.journal import JournalPage, JournalRow
+
+        snapshot = self.operations.browse_predictions()
+        rows = tuple(
+            JournalRow(
+                item,
+                item.created_at,
+                "Current committed forecast",
+                item.probability_percent,
+                item.numeric_quantiles,
+            )
+            for item in snapshot.predictions
+        )
+        return JournalPage(
+            request,
+            rows[: request.limit],
+            len(rows),
+            snapshot.available_tags,
+            parse_search_text(request.text),
+        )
+
+    def resolve_passage(self, identifier, document):
+        return document, False
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +317,7 @@ class DeletePredictionCall:
 
 class FakePredictionOperations:
     def __init__(self, latest: FakePrediction | None = None) -> None:
+        self.journal = FakeJournalOperations(self)
         self.latest = latest
         self.create_calls: list[CreatePredictionCall] = []
         self.create_error: ApplicationError | None = None
@@ -360,9 +392,6 @@ class FakePredictionOperations:
         self.search_document: SearchDocument | None = None
         self.search_any_word_available = False
         self.search_suggestion: str | None = None
-        self.saved_views: list[SavedView] = []
-        self.saved_view_error: ApplicationError | None = None
-        self.saved_view_next_id = 1
         self.tag_library: list[TagLibraryItem] = []
         self.tag_library_error: ApplicationError | None = None
         self.analytics_source = TrajectoryAnalyticsSource(records=())
@@ -938,6 +967,13 @@ class FakePredictionOperations:
             return self.get_prediction(prediction_id)
         return self.get_numeric_prediction(prediction_id)
 
+    def get_latest_for_navigation(self):
+        return max(
+            (item for item in (self.numeric_latest, self.latest) if item is not None),
+            key=lambda item: (item.created_at, item.prediction_id),
+            default=None,
+        )
+
     def update_metadata(
         self,
         prediction_id: int,
@@ -1232,58 +1268,6 @@ class FakePredictionOperations:
             available_tags=source.available_tags,
         )
 
-    def list_saved_views(self) -> tuple[SavedView, ...]:
-        if self.saved_view_error is not None:
-            raise self.saved_view_error
-        return tuple(self.saved_views)
-
-    def create_saved_view(
-        self,
-        name: str,
-        configuration: SavedViewConfiguration,
-    ) -> SavedView:
-        if self.saved_view_error is not None:
-            raise self.saved_view_error
-        view = SavedView(
-            saved_view_id=self.saved_view_next_id,
-            name=name.strip(),
-            normalized_name=name.strip().casefold(),
-            configuration=configuration,
-            tags=(),
-        )
-        self.saved_view_next_id += 1
-        self.saved_views.append(view)
-        return view
-
-    def update_saved_view(
-        self,
-        saved_view_id: int,
-        configuration: SavedViewConfiguration,
-    ) -> SavedView:
-        for index, view in enumerate(self.saved_views):
-            if view.saved_view_id == saved_view_id:
-                updated = replace(view, configuration=configuration)
-                self.saved_views[index] = updated
-                return updated
-        raise RuntimeError("Saved View missing from fake operations.")
-
-    def rename_saved_view(self, saved_view_id: int, name: str) -> SavedView:
-        for index, view in enumerate(self.saved_views):
-            if view.saved_view_id == saved_view_id:
-                renamed = replace(
-                    view,
-                    name=name.strip(),
-                    normalized_name=name.strip().casefold(),
-                )
-                self.saved_views[index] = renamed
-                return renamed
-        raise RuntimeError("Saved View missing from fake operations.")
-
-    def delete_saved_view(self, saved_view_id: int) -> None:
-        self.saved_views = [
-            view for view in self.saved_views if view.saved_view_id != saved_view_id
-        ]
-
     def list_tags(self, name_filter: str = "") -> tuple[TagLibraryItem, ...]:
         if self.tag_library_error is not None:
             raise self.tag_library_error
@@ -1338,15 +1322,6 @@ class FakePredictionOperations:
                     }
                 )
             ),
-            affected_saved_view_ids=tuple(
-                sorted(
-                    {
-                        saved_view_id
-                        for context in source_contexts
-                        for saved_view_id in context.saved_view_ids
-                    }
-                )
-            ),
         )
 
     def merge_tags(self, preview: TagMergePreview) -> None:
@@ -1359,12 +1334,6 @@ class FakePredictionOperations:
                     len(
                         set(preview.target_context.prediction_ids)
                         | set(preview.affected_prediction_ids)
-                    )
-                ),
-                saved_view_count=(
-                    len(
-                        set(preview.target_context.saved_view_ids)
-                        | set(preview.affected_saved_view_ids)
                     )
                 ),
             )
@@ -1389,9 +1358,6 @@ class FakePredictionOperations:
             item=tag,
             prediction_ids=tuple(
                 tag.tag_id * 100 + index for index in range(tag.prediction_count)
-            ),
-            saved_view_ids=tuple(
-                tag.tag_id * 100 + index for index in range(tag.saved_view_count)
             ),
         )
 

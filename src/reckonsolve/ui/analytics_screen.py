@@ -96,7 +96,7 @@ class AnalyticsScreen(QWidget):
         ) = None
 
         header = PageHeader(
-            "Analytics",
+            "Performance",
             title_object_name="analyticsScreenTitle",
             supporting_object_name="analyticsIntroduction",
             parent=self,

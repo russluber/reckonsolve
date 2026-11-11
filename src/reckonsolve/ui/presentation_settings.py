@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
@@ -12,6 +13,12 @@ DEFAULT_WINDOW_SIZE = QSize(960, 640)
 MINIMUM_WINDOW_SIZE = QSize(760, 520)
 
 
+class AppearanceMode(StrEnum):
+    FOLLOW_WINDOWS = "follow_windows"
+    LIGHT = "light"
+    DARK = "dark"
+
+
 @dataclass(frozen=True, slots=True)
 class WindowPresentationState:
     """Noncanonical shell preferences loaded at desktop startup."""
@@ -19,6 +26,7 @@ class WindowPresentationState:
     sidebar_compact: bool = False
     normal_geometry: tuple[int, int, int, int] | None = None
     maximized: bool = False
+    appearance: AppearanceMode = AppearanceMode.FOLLOW_WINDOWS
 
 
 class PresentationSettings(Protocol):
@@ -54,6 +62,7 @@ class QtPresentationSettings:
     _SIDEBAR_KEY = "shell/sidebar_compact"
     _GEOMETRY_KEY = "window/normal_geometry"
     _MAXIMIZED_KEY = "window/maximized"
+    _APPEARANCE_KEY = "appearance/mode"
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -73,6 +82,7 @@ class QtPresentationSettings:
                     settings.value(self._MAXIMIZED_KEY),
                     default=False,
                 ),
+                appearance=_parse_appearance(settings.value(self._APPEARANCE_KEY)),
             )
             if settings.status() != QSettings.Status.NoError:
                 return WindowPresentationState()
@@ -93,6 +103,7 @@ class QtPresentationSettings:
                     ",".join(str(value) for value in geometry),
                 )
             settings.setValue(self._MAXIMIZED_KEY, state.maximized)
+            settings.setValue(self._APPEARANCE_KEY, state.appearance.value)
             settings.sync()
             return settings.status() == QSettings.Status.NoError
         except (OSError, RuntimeError, TypeError, ValueError):
@@ -100,6 +111,13 @@ class QtPresentationSettings:
 
     def _open(self) -> QSettings:
         return QSettings(str(self.path), QSettings.Format.IniFormat)
+
+
+def _parse_appearance(value: object) -> AppearanceMode:
+    try:
+        return AppearanceMode(value)
+    except (TypeError, ValueError):
+        return AppearanceMode.FOLLOW_WINDOWS
 
 
 def safe_window_geometry(

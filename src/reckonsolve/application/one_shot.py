@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Callable
+from dataclasses import replace
 from fractions import Fraction
 
 from reckonsolve.analytics.one_shot import one_shot_score
@@ -12,6 +13,7 @@ from reckonsolve.data.search_index import SearchIndexError
 from reckonsolve.domain.one_shot import (
     NewOneShotPrediction,
     OneShotDetail,
+    OneShotSourceAction,
     OneShotValues,
 )
 
@@ -40,6 +42,19 @@ class OneShotOperations:
         self, expected: OneShotDetail, values: OneShotValues, *, note: str | None = None
     ) -> OneShotDetail:
         return self._save(expected, values, correction=True, note=note)
+
+    def save_postmortem(
+        self, expected: OneShotDetail, body: str | None, *, confirm_clear: bool = False
+    ) -> OneShotDetail:
+        """Append a dedicated reflection snapshot without changing forecast facts."""
+        values = replace(expected.record.effective, postmortem=body)
+        if values.postmortem is None and not confirm_clear:
+            raise ApplicationError("Confirm clearing the Postmortem before saving.")
+        return self._perform(
+            lambda: self.repository.correct_detail(
+                expected.record, values, source_action=OneShotSourceAction.POSTMORTEM
+            )
+        )
 
     def _save(
         self,

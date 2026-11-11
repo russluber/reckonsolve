@@ -44,6 +44,8 @@ class LucideIcon(StrEnum):
     SAVE = "save"
     SEARCH = "search"
     SETTINGS = "settings"
+    SUN = "sun"
+    MOON = "moon"
     TRASH = "trash-2"
 
 

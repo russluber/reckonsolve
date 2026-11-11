@@ -170,9 +170,9 @@ class QuantileOperations:
         reason: str | None,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> None:
+    ) -> NumericPrediction | None:
         try:
-            self.repository.invalidate_or_delete(
+            return self.repository.invalidate_or_delete(
                 prediction_id,
                 delete=delete,
                 reason=reason,

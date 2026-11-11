@@ -466,10 +466,11 @@ _CSV_TABLES += (
             "sequence",
             "corrected_at_utc",
             "note",
+            "source_action",
             *_ONE_SHOT_CORRECTION_VALUES,
         ),
         "SELECT id AS correction_id, prediction_id, sequence, "
-        "corrected_at AS corrected_at_utc, note, "
+        "corrected_at AS corrected_at_utc, note, source_action, "
         + ", ".join(_ONE_SHOT_CORRECTION_VALUES)
         + " FROM one_shot_corrections ORDER BY prediction_id, sequence, id",
     ),
@@ -617,13 +618,13 @@ def _export_readme(exported_at: datetime) -> str:
     return f"""Reckonsolve CSV Export Bundle
 ==============================
 
-Format version: 5
+Format version: 6
 Exported at (UTC): {format_utc(exported_at)}
 
 Purpose and limits
 ------------------
 This is a relational analytical export, not an import or a recovery artifact.
-Use a verified Reckonsolve .sqlite3 backup to recover the application. Format 5
+Use a verified Reckonsolve .sqlite3 backup to recover the application. Format 6
 exports the four supported Adaptive and One-Shot contracts; archives containing retired or
 mismatched contracts are refused before this ZIP is created. It is not compatible
 with the format-3 column layout. Format-4 files retain their columns; three new
@@ -722,7 +723,9 @@ one_shot_effective_facts.csv is a derived convenience snapshot of current facts,
 with the same immutable entry instants. It is not a second observation.
 one_shot_corrections.csv preserves each complete old_/new_ snapshot, contiguous
 per-Prediction sequence, immutable correction_id/corrected_at_utc, and optional note.
-These are transcription corrections, not forecast updates.
+source_action is transcription for historical rows and Correct transcription
+repairs; postmortem identifies a dedicated reflection-only operation. Neither
+changes the original forecast or creates another scored observation.
 
 To replay, start with the original forecast without an answer. Apply forecast
 corrections in sequence. Before the first correction whose old snapshot has an

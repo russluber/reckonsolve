@@ -1,5 +1,7 @@
 # CLI guide
 
+This checkout includes the unreleased first Journal/workspace slice, pending native acceptance. Installed v0.8.0 snapshots retain their released interface until deliberately replaced.
+
 ## Choose the matching identity
 
 `rsc` is the shortcut for `reckonsolve-cli` and shares the stable desktop database. `rscd` is the shortcut for `reckonsolve-cli-dev` and shares the separate development database.
@@ -21,11 +23,11 @@ uv run rscd list --mode adaptive
 uv run rscd list --mode one-shot
 uv run rscd show 1
 uv run rscd search "remembered words" --mode one-shot --include-superseded-history
-uv run rscd saved-views
-uv run rscd saved-view --name "Needs a postmortem"
+uv run rscd settings attention-days
+uv run rscd settings attention-days --set 21
 ```
 
-`--mode deadline` remains an alias for `--mode adaptive`. List and search default to All modes. Each command's help describes its status, type, tag, attention, date, and sorting flags; list and search have different filter surfaces. Search groups matches by prediction and identifies their source. `--include-superseded-history` also searches earlier audited text. Saved Views are maintained in the desktop and executed read-only in the CLI.
+`--mode deadline` remains an alias for `--mode adaptive`. List and search default to All modes. Each command's help describes its status, type, tag, attention, date, and sorting flags; list and search have different filter surfaces. Search groups matches by prediction and identifies their source. `--include-superseded-history` also searches earlier audited text. Saved View commands are retired and are rejected before opening data.
 
 ## Create a prediction
 
@@ -59,6 +61,12 @@ Lifecycle commands show current context and require confirmation. Invalid preser
 
 CLI rationale, Journal, and Review-note prompts are single-line; the desktop supports multiline text. `show` displays exact values, original/effective terminal facts, Journal/Definition/correction history, Postmortem completion, and individual scores. One-Shot scores use the effective corrected guess and answer once.
 
+## Configure attention timing
+
+`settings attention-days` reads the stored Adaptive attention threshold; `--set N` changes it to a whole number from 1 through 9999. New journals default to 14 days. This is CLI-only and changes neither forecast freshness nor Journal Last active. The desktop has no Review after control.
+
+If an older supported journal contains Saved Views, CLI opening refuses the review-dependent upgrade. Open the updated desktop to inspect the verified recovery location and confirm retirement. Forecasting history is retained.
+
 ## Backup and export
 
 ```powershell
@@ -66,11 +74,11 @@ uv run rscd backup .\reckonsolve-dev-backup.sqlite3
 uv run rscd export-csv .\reckonsolve-dev-export.zip
 ```
 
-Omit the destination to be prompted. Both use Settings' verified transfer operations. SQLite backup is complete recovery; format-5 CSV is analytical history with a data dictionary. A failed artifact operation preserves the prior destination.
+Omit the destination to be prompted. Both use Settings' verified transfer operations. SQLite backup is complete recovery; format-6 CSV is analytical history with a data dictionary. A failed artifact operation preserves the prior destination.
 
 ## Desktop-only actions
 
-Use the desktop for metadata edits, Journal corrections, terminal corrections, One-Shot Correct transcription, later Postmortem editing/Skip, Saved View maintenance, global tag maintenance, and search repair. The CLI inspects their history but has no correction or metadata mutation command.
+Use the desktop for metadata edits, Journal corrections, terminal corrections, One-Shot Correct transcription, later Postmortem editing/Skip, global tag maintenance and search repair. The CLI inspects their history but has no correction or metadata mutation command.
 
 ## Shared data and failures
 

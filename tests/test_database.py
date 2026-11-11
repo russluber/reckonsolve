@@ -1,6 +1,7 @@
 import sqlite3
 
 import pytest
+from supported_fixtures import connect_fixture
 
 from reckonsolve.data.database import Database, DatabaseClosedError
 from reckonsolve.data.migrations import (
@@ -104,7 +105,7 @@ def test_failing_migration_rolls_back_entire_upgrade(tmp_path) -> None:
     with pytest.raises(sqlite3.Error):
         Database.open(database_path, migrations=failing_migrations)
 
-    connection = sqlite3.connect(database_path)
+    connection = connect_fixture(database_path)
     try:
         versions = connection.execute(
             "SELECT version FROM schema_migrations ORDER BY version"
@@ -139,7 +140,7 @@ def test_database_from_newer_application_is_rejected(tmp_path) -> None:
 def test_changed_migration_history_is_rejected_without_repair(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     Database.open(database_path).close()
-    connection = sqlite3.connect(database_path)
+    connection = connect_fixture(database_path)
     try:
         connection.execute(
             "UPDATE schema_migrations SET name = 'changed' WHERE version = 1"
@@ -151,7 +152,7 @@ def test_changed_migration_history_is_rejected_without_repair(tmp_path) -> None:
     with pytest.raises(InvalidMigrationHistoryError, match="does not match"):
         Database.open(database_path)
 
-    connection = sqlite3.connect(database_path)
+    connection = connect_fixture(database_path)
     try:
         name = connection.execute(
             "SELECT name FROM schema_migrations WHERE version = 1"
@@ -163,7 +164,7 @@ def test_changed_migration_history_is_rejected_without_repair(tmp_path) -> None:
 
 def test_malformed_migration_table_is_rejected(tmp_path) -> None:
     database_path = tmp_path / "malformed.sqlite3"
-    connection = sqlite3.connect(database_path)
+    connection = connect_fixture(database_path)
     try:
         connection.execute(
             "CREATE TABLE schema_migrations (version INTEGER, name TEXT)"
@@ -182,7 +183,7 @@ def test_malformed_migration_table_is_rejected(tmp_path) -> None:
 def test_schema_version_reader_does_not_require_row_factory(tmp_path) -> None:
     database_path = tmp_path / "reckonsolve.sqlite3"
     Database.open(database_path).close()
-    connection = sqlite3.connect(database_path)
+    connection = connect_fixture(database_path)
     try:
         from reckonsolve.data.migrations import current_schema_version
 
@@ -193,7 +194,7 @@ def test_schema_version_reader_does_not_require_row_factory(tmp_path) -> None:
 
 def test_unrecognized_sqlite_database_is_preserved(tmp_path) -> None:
     database_path = tmp_path / "other.sqlite3"
-    connection = sqlite3.connect(database_path)
+    connection = connect_fixture(database_path)
     try:
         connection.execute("CREATE TABLE unrelated (value TEXT NOT NULL)")
         connection.execute("INSERT INTO unrelated VALUES ('keep me')")
@@ -204,7 +205,7 @@ def test_unrecognized_sqlite_database_is_preserved(tmp_path) -> None:
     with pytest.raises(UnrecognizedDatabaseError, match="no Reckonsolve"):
         Database.open(database_path)
 
-    connection = sqlite3.connect(database_path)
+    connection = connect_fixture(database_path)
     try:
         value = connection.execute("SELECT value FROM unrelated").fetchone()[0]
     finally:

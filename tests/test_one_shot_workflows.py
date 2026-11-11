@@ -333,6 +333,8 @@ def test_main_window_one_shot_route_defaults_and_detail(app, qtbot):
     window.findChild(QPushButton, "newOneShotButton").click()
     assert screen.question.text() == "Tree?"
     screen.submit()
+    assert window.current_screen_name == "Journal"
+    window._open_prediction(1)
     detail = window._prediction_detail_host._one_shot_detail
     assert detail.isVisible()
     assert detail.answer_button.isVisible()

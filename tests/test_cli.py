@@ -5,8 +5,8 @@ from io import StringIO
 from zipfile import ZipFile
 
 import pytest
-from PySide6.QtCore import QCoreApplication, Qt
-from PySide6.QtWidgets import QListWidget
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QLabel
 from supported_fixtures import create_binary, create_numeric
 
 import reckonsolve.cli
@@ -18,10 +18,7 @@ from reckonsolve.data.database import Database
 from reckonsolve.data.migrations import MIGRATIONS
 from reckonsolve.data.settings import SettingsRepository
 from reckonsolve.data.transfer import EXPORT_ARCHIVE_NAMES
-from reckonsolve.domain.browser import ArchiveQuery, ArchiveSort, ArchiveTagMatchMode
-from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
-from reckonsolve.domain.saved_views import SavedViewConfiguration
-from reckonsolve.domain.search import SearchMatchMode
+from reckonsolve.domain.predictions import BinaryOutcome
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 
 
@@ -114,21 +111,6 @@ def test_cli_version_and_help_do_not_open_a_database(tmp_path, capsys) -> None:
     assert "--date-meaning" in search_help_output.out
     assert not database_path.exists()
 
-    with pytest.raises(SystemExit) as saved_views_help_exit:
-        run(["saved-views", "--help"], database_path=database_path)
-    saved_views_help_output = capsys.readouterr()
-
-    assert saved_views_help_exit.value.code == 0
-    assert "Saved View" in saved_views_help_output.out
-    assert not database_path.exists()
-
-    with pytest.raises(SystemExit) as saved_view_help_exit:
-        run(["saved-view", "--help"], database_path=database_path)
-    saved_view_help_output = capsys.readouterr()
-
-    assert saved_view_help_exit.value.code == 0
-    assert "SAVED_VIEW_ID" in saved_view_help_output.out
-    assert "--name NAME" in saved_view_help_output.out
     assert not database_path.exists()
 
     with pytest.raises(SystemExit) as create_help_exit:
@@ -394,123 +376,6 @@ def test_cli_search_uses_shared_explainable_query_and_rich_filters(tmp_path) -> 
     )
     assert "Include superseded history: Yes" in historical.getvalue()
     assert "Match: Question match — superseded history" in historical.getvalue()
-
-
-def test_cli_saved_views_list_and_execute_current_dynamic_queries(tmp_path) -> None:
-    database_path = tmp_path / "reckonsolve.sqlite3"
-    database = Database.open(database_path)
-    operations = PredictionOperations(database, FixedClock(NOW), local_timezone=UTC)
-    binary = create_binary(
-        operations,
-        "Will saved-view evidence arrive?",
-        55,
-        tags=("Work", "Evidence"),
-    )
-    operations.add_journal_entry(
-        binary.prediction_id,
-        "The project lead says the evidence is now available.",
-        expected_revision_id=binary.current_revision_id,
-        expected_metadata_version=binary.metadata_version,
-    )
-    numeric = create_numeric(
-        operations,
-        "How many work items will finish?",
-        "items",
-        0,
-        {5: 1, 25: 1, 50: 2, 75: 3, 95: 3},
-        tags=("Work",),
-    )
-    evidence_view = operations.create_saved_view(
-        "Evidence Search",
-        SavedViewConfiguration(
-            search_text="project lead",
-            match_mode=SearchMatchMode.ALL,
-            include_superseded=False,
-            archive_query=ArchiveQuery(
-                tags=("Work", "Evidence"),
-                tag_match_mode=ArchiveTagMatchMode.ALL,
-                sort=ArchiveSort.RELEVANCE,
-            ),
-        ),
-    )
-    numeric_view = operations.create_saved_view(
-        "Numeric Work",
-        SavedViewConfiguration(
-            search_text="",
-            match_mode=SearchMatchMode.ALL,
-            include_superseded=False,
-            archive_query=ArchiveQuery(
-                prediction_type=PredictionType.NUMERIC,
-                tags=("Work",),
-                sort=ArchiveSort.QUESTION_A_TO_Z,
-            ),
-        ),
-    )
-    before_binary = operations.get_prediction(binary.prediction_id)
-    before_numeric = operations.get_numeric_prediction(numeric.prediction_id)
-    database.close()
-
-    listed = StringIO()
-    assert run(["saved-views"], database_path=database_path, stdout=listed) == 0
-    rendered_list = listed.getvalue()
-    assert "Saved Views (2)" in rendered_list
-    assert f"#{evidence_view.saved_view_id} | Evidence Search" in rendered_list
-    assert "Search: project lead" in rendered_list
-    assert f"#{numeric_view.saved_view_id} | Numeric Work" in rendered_list
-    assert "Forecast type: Numeric" in rendered_list
-
-    by_name = StringIO()
-    assert (
-        run(
-            ["saved-view", "--name", "eViDeNcE sEaRcH"],
-            database_path=database_path,
-            stdout=by_name,
-        )
-        == 0
-    )
-    rendered_name = by_name.getvalue()
-    assert (
-        f"Saved View #{evidence_view.saved_view_id}: Evidence Search" in rendered_name
-    )
-    assert f"#{binary.prediction_id} | BINARY | OPEN | 55% Yes" in rendered_name
-    assert "Match: Journal entry match" in rendered_name
-    assert "work items" not in rendered_name
-
-    by_id = StringIO()
-    assert (
-        run(
-            ["saved-view", "--id", str(numeric_view.saved_view_id)],
-            database_path=database_path,
-            stdout=by_id,
-        )
-        == 0
-    )
-    rendered_id = by_id.getvalue()
-    assert f"Saved View #{numeric_view.saved_view_id}: Numeric Work" in rendered_id
-    assert f"#{numeric.prediction_id} | NUMERIC | OPEN" in rendered_id
-    assert "saved-view evidence" not in rendered_id
-
-    missing_errors = StringIO()
-    assert (
-        run(
-            ["saved-view", "--name", "No such view"],
-            database_path=database_path,
-            stdout=StringIO(),
-            stderr=missing_errors,
-        )
-        == 1
-    )
-    assert "Saved View named 'No such view' was not found." in missing_errors.getvalue()
-
-    reopened = Database.open(database_path)
-    reopened_operations = PredictionOperations(reopened, FixedClock(NOW), UTC)
-    assert reopened_operations.get_prediction(binary.prediction_id) == before_binary
-    assert (
-        reopened_operations.get_numeric_prediction(numeric.prediction_id)
-        == before_numeric
-    )
-    assert len(reopened_operations.list_saved_views()) == 2
-    reopened.close()
 
 
 def test_cli_show_binary_includes_terminal_detail_and_complete_history(
@@ -1021,23 +886,18 @@ def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
     qtbot.addWidget(runtime.window)
     runtime.window.show()
     runtime.window.navigate_to("Predictions")
-    results = runtime.window.findChild(QListWidget, "predictionBrowserResults")
-
-    assert results is not None
-    assert results.count() == 2
+    journal = runtime.window._journal_screen
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    assert len(journal.cards) == 2
     rendered_rows = "\n".join(
-        (
-            str(results.item(index).data(Qt.ItemDataRole.AccessibleTextRole))
-            + "\n"
-            + str(results.item(index).data(Qt.ItemDataRole.AccessibleDescriptionRole))
-        )
-        for index in range(2)
+        label.text() for card in journal.cards for label in card.findChildren(QLabel)
     )
     assert "Will the GUI display this CLI Binary?" in rendered_rows
     assert "70%" in rendered_rows
     assert "How many CLI items will the GUI display?" in rendered_rows
-    assert "90% interval: 2 to 9 items" in rendered_rows
-    assert "median: 5 items" in rendered_rows
+    assert "Unit: items" in rendered_rows
+    for value in ("2", "3", "5", "7", "9"):
+        assert value in rendered_rows
     runtime.close()
 
 
@@ -2048,7 +1908,7 @@ def test_cli_terminal_write_lock_failure_is_clear_and_preserves_state(
         locker.close()
 
     assert result == 1
-    assert "locked" in errors.getvalue().casefold()
+    assert "busy" in errors.getvalue().casefold()
     database = Database.open(database_path)
     current = PredictionOperations(database).get_prediction(created.prediction_id)
     assert current.status.value == "open"
@@ -2138,7 +1998,7 @@ def test_cli_export_prompt_writes_format_four_for_current_contract(
     assert "Destination [reckonsolve-export-" in output.getvalue()
     assert not errors.getvalue()
     with ZipFile(export_path) as archive:
-        assert "Format version: 5" in archive.read("README.txt").decode("utf-8")
+        assert "Format version: 6" in archive.read("README.txt").decode("utf-8")
         assert "binary-trajectory-v1" in archive.read("predictions.csv").decode("utf-8")
     reopened = Database.open(database_path)
     assert (

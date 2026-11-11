@@ -49,16 +49,16 @@ def test_prediction_browser_opens_secondary_tag_manager(
         def __init__(self, supplied_operations, _parent) -> None:
             opened.append(supplied_operations)
 
-        def exec(self) -> int:
+        def show(self) -> int:
             return 0
 
     monkeypatch.setattr(
-        "reckonsolve.ui.prediction_browser.TagManagerDialog",
+        "reckonsolve.ui.settings_screen.TagManagerDialog",
         FakeTagDialog,
     )
     window = MainWindow(operations)
     qtbot.addWidget(window)
-    window.navigate_to("Predictions")
+    window.navigate_to("Settings")
 
     qtbot.mouseClick(
         _required_child(window, QPushButton, "manageTagsButton"),
@@ -74,9 +74,9 @@ def test_tag_manager_filters_and_confirms_rename_merge_and_delete(
 ) -> None:
     operations = FakePredictionOperations()
     operations.tag_library = [
-        TagLibraryItem(1, "Work", "work", 2, 1),
-        TagLibraryItem(2, "Personal", "personal", 1, 0),
-        TagLibraryItem(3, "Old", "old", 1, 2),
+        TagLibraryItem(1, "Work", "work", 2),
+        TagLibraryItem(2, "Personal", "personal", 1),
+        TagLibraryItem(3, "Old", "old", 1),
     ]
     dialog = TagManagerDialog(operations)
     qtbot.addWidget(dialog)
@@ -149,7 +149,7 @@ def test_tag_manager_filters_and_confirms_rename_merge_and_delete(
         Qt.MouseButton.LeftButton,
     )
     assert [tag.display_name for tag in operations.tag_library] == ["Career"]
-    assert "may return a broader set of Predictions" in confirmations[-1]
+    assert "Prediction associations removed" in confirmations[-1]
     assert (
         _required_child(dialog, QLabel, "tagManagerStatus").property(
             MESSAGE_TONE_PROPERTY
@@ -164,7 +164,7 @@ def test_tag_manager_cancellation_leaves_library_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     operations = FakePredictionOperations()
-    original = TagLibraryItem(1, "Work", "work", 2, 1)
+    original = TagLibraryItem(1, "Work", "work", 2)
     operations.tag_library = [original]
     dialog = TagManagerDialog(operations)
     qtbot.addWidget(dialog)

@@ -6,8 +6,8 @@ from datetime import UTC, date
 from io import StringIO
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QPoint, Qt
-from PySide6.QtWidgets import QGroupBox, QLabel, QListWidget, QWidget
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QGroupBox, QLabel, QWidget
 from supported_fixtures import create_binary
 from test_one_shot_persistence import Clock, request
 
@@ -16,16 +16,13 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli import create_runtime, run
 from reckonsolve.data.database import Database
 from reckonsolve.domain.browser import ArchiveDateMeaning, ArchiveMode, ArchiveQuery
-from reckonsolve.domain.saved_views import SavedViewConfiguration
-from reckonsolve.domain.search import SearchMatchMode, SearchSourceKind
+from reckonsolve.domain.search import SearchSourceKind
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 from reckonsolve.ui.main_window import MainWindow
 from reckonsolve.ui.screens import OneShotDetailScreen
 from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
-    BADGE_TONE_PROPERTY,
     ActionRole,
-    StatusTone,
 )
 
 
@@ -238,79 +235,52 @@ def test_search_match_opens_one_shot_timeline(qtbot, journal):
     assert "Typo in field note" in targets[0].text()
 
 
-def test_one_shot_archive_mode_and_search_context_survive_detail_return(qtbot, journal):
+def test_one_shot_journal_scope_and_search_refresh_on_detail_return(qtbot, journal):
     _, _, operations = journal
-    operations.one_shots.create(request())
+    saved = operations.one_shots.create(request())
     create_binary(operations, "Deadline tree question?", 70)
     window = MainWindow(operations)
     qtbot.addWidget(window)
     window.show()
-    window.navigate_to("Predictions")
-    browser = window._prediction_browser_screen
-    browser.mode_filter.setCurrentIndex(
-        browser.mode_filter.findData(ArchiveMode.ONE_SHOT.value)
-    )
-    browser.search_input.setText("Tree height")
-    browser.refresh()
-    assert browser.results_list.count() == 1
-    old_snapshot = browser._loaded_snapshot
-    browser._open_item(browser.results_list.item(0))
+    screen = window._journal_screen
+    screen._change(text="Tree height", filters=ArchiveQuery(mode=ArchiveMode.ONE_SHOT))
+    qtbot.waitUntil(lambda: not screen.loading, timeout=10000)
+    assert screen.page.total == 1
+    applied = screen.state.request
+    screen._open(saved.prediction_id, None)
     assert window.current_screen_name == "Prediction Detail"
     window.return_from_detail()
-    assert window.current_screen_name == "Predictions"
-    assert browser.mode_filter.currentData() == ArchiveMode.ONE_SHOT.value
-    assert browser.search_input.text() == "Tree height"
-    assert browser._loaded_snapshot is old_snapshot
+    qtbot.waitUntil(lambda: not screen.loading, timeout=10000)
+    assert window.current_screen_name == "Journal"
+    assert screen.state.request == applied
+    assert screen.page.total == 1
 
 
-def test_one_shot_result_rows_fit_badges_and_wrapped_numeric_text(qtbot, journal):
+def test_one_shot_journal_rows_keep_all_exact_values_at_minimum_width(qtbot, journal):
     _, _, operations = journal
     binary = operations.one_shots.create(request(answered=False))
     numeric = operations.one_shots.create(request(numeric=True))
     window = MainWindow(operations)
     qtbot.addWidget(window)
-    window.resize(1200, 800)
+    window.resize(920, 800)
     window.show()
-    window.navigate_to("Predictions")
-    results = window.findChild(QListWidget, "predictionBrowserResults")
-    assert results is not None and results.count() == 2
-    qtbot.wait(20)
-
-    for width in (1200, 920):
-        window.resize(width, 800)
-        qtbot.wait(20)
-        for prediction_id in (binary.prediction_id, numeric.prediction_id):
-            item = next(
-                results.item(index)
-                for index in range(results.count())
-                if results.item(index).data(Qt.ItemDataRole.UserRole) == prediction_id
-            )
-            row = results.itemWidget(item)
-            assert row is not None and row.layout() is not None
-            for name in (
-                f"predictionResultType{prediction_id}",
-                f"predictionResultStatus{prediction_id}",
-            ):
-                badge = row.findChild(QLabel, name)
-                assert badge is not None
-                assert badge.mapTo(row, QPoint(0, badge.height())).y() <= row.height()
-                assert badge.contentsRect().height() >= badge.fontMetrics().height()
-            status = row.findChild(QLabel, f"predictionResultStatus{prediction_id}")
-            assert status.property(BADGE_TONE_PROPERTY) == (
-                StatusTone.WARNING.value
-                if prediction_id == binary.prediction_id
-                else StatusTone.SUCCESS.value
-            )
-            extra_height = item.sizeHint().height() - row.layout().heightForWidth(
-                row.width()
-            )
-            assert 0 <= extra_height <= 4
-
-    numeric_forecast = window.findChild(
-        QLabel, f"predictionResultForecast{numeric.prediction_id}"
+    screen = window._journal_screen
+    qtbot.waitUntil(lambda: not screen.loading, timeout=10000)
+    assert {card.prediction_id for card in screen.cards} == {
+        binary.prediction_id,
+        numeric.prediction_id,
+    }
+    assert screen.scroll.horizontalScrollBar().maximum() == 0
+    card = next(
+        card for card in screen.cards if card.prediction_id == numeric.prediction_id
     )
-    assert numeric_forecast is not None
-    assert numeric_forecast.text().count("\n") == 2
+    labels = card.findChildren(QLabel)
+    assert any(
+        label.text() == "Waiting for answer"
+        for label in screen.cards[1].findChildren(QLabel)
+    )
+    for value in numeric.record.effective.quantiles.values:
+        assert any(label.text() == str(value) for label in labels)
 
 
 def test_one_shot_journal_times_are_readable_and_invalid_is_orange(qtbot, journal):
@@ -446,77 +416,24 @@ def test_tag_rename_updates_one_shot_retrieval_and_search(journal):
     database.check_search_index()
 
 
-def test_saved_view_mode_round_trips_through_cli_restart_and_backup(journal, tmp_path):
+def test_one_shot_mode_scope_survives_backup_and_restart(journal, tmp_path):
     path, database, operations = journal
-    deadline = create_binary(operations, "Tomorrow?", 70)
+    create_binary(operations, "Tomorrow?", 70)
     one_shot = operations.one_shots.create(request())
-    configuration = SavedViewConfiguration(
-        search_text="",
-        match_mode=SearchMatchMode.ALL,
-        include_superseded=False,
-        archive_query=ArchiveQuery(mode=ArchiveMode.ONE_SHOT),
-    )
-    saved = operations.create_saved_view("One-Shots", configuration)
-    assert saved.configuration.archive_query.mode is ArchiveMode.ONE_SHOT
-    assert operations.list_saved_views() == (saved,)
-    output = StringIO()
-    assert run(["saved-views"], database_path=path, stdout=output) == 0
-    assert "Mode: One-Shot" in output.getvalue()
-    output = StringIO()
-    assert (
-        run(
-            ["saved-view", "--id", str(saved.saved_view_id)],
-            database_path=path,
-            stdout=output,
-        )
-        == 0
-    )
-    assert "Tree height?" in output.getvalue()
-    assert "Tomorrow?" not in output.getvalue()
-
-    backup = tmp_path / "mode-view-backup.sqlite3"
+    backup = tmp_path / "mode-backup.sqlite3"
     database.backup_to(backup)
-    recovered = Database.open(backup)
-    try:
-        recovered_operations = PredictionOperations(recovered, Clock(), UTC)
-        assert recovered_operations.list_saved_views() == (saved,)
-        assert [
-            item.prediction_id
-            for item in recovered_operations.browse_predictions(
-                mode=saved.configuration.archive_query.mode
-            ).predictions
-        ] == [one_shot.prediction_id]
-    finally:
-        recovered.close()
-
-    updated = operations.update_saved_view(
-        saved.saved_view_id,
-        replace(
-            configuration,
-            archive_query=ArchiveQuery(mode=ArchiveMode.DEADLINE),
-        ),
-    )
-    assert updated.configuration.archive_query.mode is ArchiveMode.DEADLINE
-    output = StringIO()
-    assert (
-        run(
-            ["saved-view", "--name", "One-Shots"],
-            database_path=path,
-            stdout=output,
-        )
-        == 0
-    )
-    assert "Tomorrow?" in output.getvalue()
-    assert "Tree height?" not in output.getvalue()
-    output = StringIO()
-    assert run(["saved-views"], database_path=path, stdout=output) == 0
-    assert "Mode: Adaptive" in output.getvalue()
-    assert [
-        item.prediction_id
-        for item in operations.browse_predictions(
-            mode=updated.configuration.archive_query.mode
-        ).predictions
-    ] == [deadline.prediction_id]
+    for target in (path, backup):
+        recovered = Database.open(target)
+        try:
+            current = PredictionOperations(recovered, Clock(), UTC)
+            assert [
+                item.prediction_id
+                for item in current.browse_predictions(
+                    mode=ArchiveMode.ONE_SHOT
+                ).predictions
+            ] == [one_shot.prediction_id]
+        finally:
+            recovered.close()
 
 
 def test_one_shot_stays_in_its_stable_or_development_database(tmp_path, monkeypatch):

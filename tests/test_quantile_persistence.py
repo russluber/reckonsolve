@@ -493,7 +493,7 @@ def test_schema18_preserves_trajectory_rows_and_rolls_back_failure(
             == schema_before
         )
 
-    upgraded = Database.open(path)
+    upgraded = Database.open(path, migrations=MIGRATIONS[:18])
     try:
         with upgraded.transaction() as c:
             for table, (columns, rows) in before.items():

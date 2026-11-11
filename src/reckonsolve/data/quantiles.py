@@ -411,11 +411,13 @@ class QuantilePredictionRepository:
                         format_utc(self._clock.now()),
                     ),
                 )
-        return next(
-            e
-            for e in self.list_timeline(prediction_id)
-            if e.kind == "journal" and e.record_id == entry_id
-        )
+            # Build the response before commit so a read failure cannot turn a
+            # durable correction into an apparently unsuccessful save.
+            return next(
+                e
+                for e in read_timeline(connection, prediction_id)
+                if e.kind == "journal" and e.record_id == entry_id
+            )
 
     def invalidate_or_delete(
         self,
@@ -425,7 +427,7 @@ class QuantilePredictionRepository:
         reason: str | None,
         expected_revision_id: int,
         expected_metadata_version: int,
-    ) -> None:
+    ) -> NumericPrediction | None:
         reason = _optional_text(reason, "reason")
         with self._database.transaction() as connection:
             current = read_prediction(connection, prediction_id)
@@ -451,6 +453,8 @@ class QuantilePredictionRepository:
                     "INSERT INTO prediction_invalidations (prediction_id, invalidated_at, reason) VALUES (?, ?, ?)",
                     (prediction_id, format_utc(now), reason),
                 )
+                return read_prediction(connection, prediction_id)
+        return None
 
     def resolve_prediction(
         self,
@@ -503,45 +507,48 @@ class QuantilePredictionRepository:
 
     def list_timeline(self, prediction_id: int) -> tuple[QuantileTimelineEvent, ...]:
         with self._database.transaction() as connection:
-            revisions = read_revisions(connection, prediction_id)
-            anchors = {r.revision_id: r for r in revisions}
-            events = [
-                QuantileTimelineEvent(
-                    "forecast", r.revision_id, r, r.created_at, r.rationale
-                )
-                for r in revisions
-            ]
-            for kind, table, field in (
-                ("journal", "journal_entries", "body"),
-                ("review", "forecast_reviews", "note"),
-            ):
-                for row in connection.execute(
-                    f"SELECT * FROM {table} WHERE prediction_id = ? ORDER BY id",
-                    (prediction_id,),
-                ):
-                    corrections = ()
-                    if kind == "journal":
-                        corrections = tuple(
-                            JournalCorrection(
-                                c["id"], c["body"], parse_utc(c["corrected_at"])
-                            )
-                            for c in connection.execute(
-                                "SELECT * FROM journal_entry_corrections WHERE journal_entry_id = ? ORDER BY sequence",
-                                (row["id"],),
-                            )
-                        )
-                    events.append(
-                        QuantileTimelineEvent(
-                            kind,
-                            row["id"],
-                            anchors[row["quantile_revision_id"]],
-                            parse_utc(row["created_at"]),
-                            corrections[-1].body if corrections else row[field],
-                            row[field],
-                            corrections,
-                        )
+            return read_timeline(connection, prediction_id)
+
+
+def read_timeline(
+    connection: sqlite3.Connection, prediction_id: int
+) -> tuple[QuantileTimelineEvent, ...]:
+    """Read complete anchored history in the caller's existing snapshot."""
+    revisions = read_revisions(connection, prediction_id)
+    anchors = {r.revision_id: r for r in revisions}
+    events = [
+        QuantileTimelineEvent("forecast", r.revision_id, r, r.created_at, r.rationale)
+        for r in revisions
+    ]
+    for kind, table, field in (
+        ("journal", "journal_entries", "body"),
+        ("review", "forecast_reviews", "note"),
+    ):
+        for row in connection.execute(
+            f"SELECT * FROM {table} WHERE prediction_id = ? ORDER BY id",
+            (prediction_id,),
+        ):
+            corrections = ()
+            if kind == "journal":
+                corrections = tuple(
+                    JournalCorrection(c["id"], c["body"], parse_utc(c["corrected_at"]))
+                    for c in connection.execute(
+                        "SELECT * FROM journal_entry_corrections WHERE journal_entry_id = ? ORDER BY sequence",
+                        (row["id"],),
                     )
-        kinds = {"forecast": 0, "journal": 1, "review": 2}
-        return order_timeline(
-            events, key=lambda e: (e.revision.sequence, kinds[e.kind], e.record_id)
-        )
+                )
+            events.append(
+                QuantileTimelineEvent(
+                    kind,
+                    row["id"],
+                    anchors[row["quantile_revision_id"]],
+                    parse_utc(row["created_at"]),
+                    corrections[-1].body if corrections else row[field],
+                    row[field],
+                    corrections,
+                )
+            )
+    kinds = {"forecast": 0, "journal": 1, "review": 2}
+    return order_timeline(
+        events, key=lambda e: (e.revision.sequence, kinds[e.kind], e.record_id)
+    )

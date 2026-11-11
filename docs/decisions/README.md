@@ -86,6 +86,8 @@ earlier record.
 - [0020: Resolve local deadlines without silent clock changes](0020-resolve-local-deadlines-explicitly.md) — Accepted 2026-09-22
 - [0021: Preserve One-Shot originals with separate transcription snapshots](0021-one-shot-originals-and-transcription-snapshots.md) — Accepted 2026-09-26
 
+- [0022: Protect Journal upgrades with verified recovery and persistent writer guards](0022-reviewed-journal-upgrades-and-writer-guards.md) — Accepted for the first slice, 2026-11-10; native acceptance pending
+
 ## Current applicability
 
 | Records | What remains current / what changed |
@@ -94,14 +96,15 @@ earlier record.
 | 0004 | Native history rendering remains for Adaptive. Strict event ordering follows 0016; One-Shot has no updating path. |
 | 0005 | Immutable one-way terminal records remain. A captured revision is audit context; Adaptive scoring selection follows 0017–0018, and One-Shot uses effective snapshots under 0021. |
 | 0006 | Fixed Binary calibration bins and one observation per Prediction remain. Retired final-only runtime analytics are superseded by 0017, 0019, and 0021; modes keep separate denominators. |
-| 0007–0008 | Online backup, relational analytical export, local icons, and private builds remain. Current CSV is format 5; old format descriptions are release history. |
+| 0007–0008 | Online backup, relational analytical export, local icons, and private builds remain. The unreleased first slice uses CSV format 6 under 0022; old format descriptions are release history. |
 | 0009 | Exact scaled integers remain; the single chosen-confidence interval model is retired by 0018–0019. |
 | 0010–0012 | Adaptive unchanged-forecast Reviews, shared CLI operations, and append-only terminal corrections remain. Quantile anchors follow 0018; One-Shot excludes Reviews and adds transcription snapshots under 0021. |
 | 0013 | Canonical authority and rebuildable FTS5 remain; current projection is version 3 with One-Shot provenance. |
 | 0014–0016 | Immutable identities and transaction-time exact forecasting checks remain for Adaptive. The supported matrix excludes retired identities under 0019 and includes two One-Shot pairs under 0021. |
 | 0017–0018 | Current Adaptive trajectory/WIS selection, exact mathematics, quantile storage, and shared anchors. Do not restore historical coexistence promises. |
 | 0019–0020 | Current refusal-before-mutation boundary and explicit local Deadline resolution. |
-| 0021 | Current One-Shot originals, documentary reports, append-only correction replay, and pure individual Brier/WIS. |
+| 0021 | One-Shot originals, documentary reports, append-only correction replay and pure individual Brier/WIS; 0022 adds explicit reflection provenance without inferring older intent. |
+| 0022 | Unreleased schema-21 recovery/review, stale-writer guards and CSV-6 provenance in the authorized first slice; personal-data and publication permission remain separate. |
 
 These notes narrow the scope of earlier reasoning without rewriting the records. When
 a future decision replaces one completely, mark it Superseded and link its successor.

@@ -15,7 +15,7 @@ from PySide6.QtCore import QCoreApplication
 
 from reckonsolve.analytics.quantiles import QuantileScorecard
 from reckonsolve.analytics.trajectory import TrajectoryScorecard
-from reckonsolve.application.errors import ApplicationError, SavedViewNotFoundError
+from reckonsolve.application.errors import ApplicationError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli_creation import (
     CliInputCancelled,
@@ -67,7 +67,6 @@ from reckonsolve.domain.quantiles import (
     QuantileTimelineEvent,
     quantile_summary,
 )
-from reckonsolve.domain.saved_views import SavedView, SavedViewConfiguration
 from reckonsolve.domain.search import (
     PredictionSearchHit,
     PredictionSearchResults,
@@ -181,10 +180,14 @@ def run(
             return _run_show(runtime.operations, arguments.prediction_id, output)
         if arguments.command == "search":
             return _run_search(runtime.operations, arguments, output)
-        if arguments.command == "saved-views":
-            return _run_saved_views(runtime.operations, output)
-        if arguments.command == "saved-view":
-            return _run_saved_view(runtime.operations, arguments, output)
+        if arguments.command == "settings":
+            value = (
+                runtime.operations.get_stale_threshold_days()
+                if arguments.days is None
+                else runtime.operations.set_stale_threshold_days(arguments.days)
+            )
+            print(f"Review after: {value} days", file=output)
+            return 0
         if arguments.command == "create":
             return _run_create(
                 runtime.operations,
@@ -369,33 +372,18 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
     )
     _add_search_archive_filters(search_parser)
 
-    commands.add_parser(
-        "saved-views",
-        help="List saved dynamic archive views without running one.",
-        description="List every Saved View and its retained dynamic configuration.",
+    settings_parser = commands.add_parser(
+        "settings", help="Read or change CLI-only settings."
     )
-
-    saved_view_parser = commands.add_parser(
-        "saved-view",
-        help="Run one Saved View against current local data.",
-        description=(
-            "Run one named dynamic Saved View through the same read-only archive "
-            "query as the desktop application."
-        ),
+    setting_commands = settings_parser.add_subparsers(dest="setting", required=True)
+    attention_parser = setting_commands.add_parser(
+        "attention-days", help="Read or change the Adaptive attention threshold."
     )
-    saved_view_identifier = saved_view_parser.add_mutually_exclusive_group(
-        required=True
-    )
-    saved_view_identifier.add_argument(
-        "--id",
-        type=_positive_saved_view_id,
-        metavar="SAVED_VIEW_ID",
-        help="Run the Saved View with this stable identifier.",
-    )
-    saved_view_identifier.add_argument(
-        "--name",
-        metavar="NAME",
-        help="Run the Saved View with this exact case-insensitive name.",
+    attention_parser.add_argument(
+        "--set",
+        dest="days",
+        type=_attention_days,
+        help="Whole days from 1 through 9999; omit to read.",
     )
 
     create_parser = commands.add_parser(
@@ -571,22 +559,6 @@ def _positive_prediction_id(value: str) -> int:
     return prediction_id
 
 
-def _positive_saved_view_id(value: str) -> int:
-    """Parse a stable Saved View identifier without reusing Prediction wording."""
-
-    try:
-        saved_view_id = int(value)
-    except ValueError as error:
-        raise argparse.ArgumentTypeError(
-            "SAVED_VIEW_ID must be a positive whole number."
-        ) from error
-    if saved_view_id < 1:
-        raise argparse.ArgumentTypeError(
-            "SAVED_VIEW_ID must be a positive whole number."
-        )
-    return saved_view_id
-
-
 def _iso_calendar_date(value: str) -> date:
     """Parse one local-calendar archive boundary for argparse."""
 
@@ -760,78 +732,6 @@ def _run_search(
     return 0
 
 
-def _run_saved_views(operations: PredictionOperations, output: TextIO) -> int:
-    """List mutable dynamic Saved Views without evaluating their membership."""
-
-    views = operations.list_saved_views()
-    if not views:
-        print("No Saved Views yet.", file=output)
-        return 0
-    print(_format_saved_views(views), file=output)
-    return 0
-
-
-def _run_saved_view(
-    operations: PredictionOperations,
-    arguments: argparse.Namespace,
-    output: TextIO,
-) -> int:
-    """Execute one dynamic Saved View using the ordinary shared read queries."""
-
-    view = _selected_saved_view(operations.list_saved_views(), arguments)
-    configuration = view.configuration
-    query = configuration.archive_query
-    indicators = AttentionIndicators.from_snapshot(operations.get_dashboard())
-    header = f"Saved View #{view.saved_view_id}: {terminal_text(view.name)}"
-    if configuration.search_text.strip():
-        results = operations.search_predictions(
-            configuration.search_text,
-            match_mode=configuration.match_mode,
-            include_superseded=configuration.include_superseded,
-            status=query.status,
-            prediction_type=query.prediction_type,
-            mode=query.mode,
-            tags=query.tags,
-            tag_match_mode=query.tag_match_mode,
-            attention=query.attention,
-            date_meaning=query.date_meaning,
-            date_start=query.date_start,
-            date_end=query.date_end,
-            sort=query.sort,
-        )
-        if not results.hits:
-            print(
-                f"{header}\n\n{_search_empty_message(operations, results)}", file=output
-            )
-            return 0
-        print(
-            _format_search_results(results, indicators, heading=header),
-            file=output,
-        )
-        return 0
-
-    snapshot = operations.browse_predictions(
-        status=query.status,
-        prediction_type=query.prediction_type,
-        mode=query.mode,
-        tags=query.tags,
-        tag_match_mode=query.tag_match_mode,
-        attention=query.attention,
-        date_meaning=query.date_meaning,
-        date_start=query.date_start,
-        date_end=query.date_end,
-        sort=query.sort,
-    )
-    if not snapshot.predictions:
-        print(
-            f"{header}\n\nNo predictions currently match this Saved View.", file=output
-        )
-        return 0
-    rendered = _format_prediction_list(snapshot.predictions, indicators)
-    print(f"{header}\n\n{rendered}", file=output)
-    return 0
-
-
 def _optional_status(value: str) -> PredictionStatus | None:
     """Convert an argparse status selection to the domain's optional filter."""
 
@@ -856,40 +756,6 @@ def _optional_attention(value: str) -> ArchiveAttention | None:
     return None if value == "all" else _archive_enum(ArchiveAttention, value)
 
 
-def _selected_saved_view(
-    views: tuple[SavedView, ...],
-    arguments: argparse.Namespace,
-) -> SavedView:
-    """Resolve the explicit stable ID or normalized exact display name selection."""
-
-    if arguments.id is not None:
-        view = next(
-            (
-                candidate
-                for candidate in views
-                if candidate.saved_view_id == arguments.id
-            ),
-            None,
-        )
-        if view is None:
-            raise SavedViewNotFoundError(arguments.id)
-        return view
-    name = arguments.name.strip()
-    view = next(
-        (
-            candidate
-            for candidate in views
-            if candidate.normalized_name == name.casefold()
-        ),
-        None,
-    )
-    if view is None:
-        raise ApplicationError(
-            f"Saved View named {terminal_text(name)!r} was not found."
-        )
-    return view
-
-
 def _search_empty_message(
     operations: PredictionOperations,
     results: PredictionSearchResults,
@@ -907,83 +773,6 @@ def _search_empty_message(
     if results.suggestion is not None:
         message += f"\nSuggestion: search for {terminal_text(results.suggestion)!r}."
     return message
-
-
-def _format_saved_views(views: tuple[SavedView, ...]) -> str:
-    """Render inspectable dynamic configurations without evaluating membership."""
-
-    lines = [f"Saved Views ({len(views)})"]
-    for view in views:
-        lines.extend(("", f"#{view.saved_view_id} | {terminal_text(view.name)}"))
-        _append_saved_view_configuration(lines, view.configuration)
-    return "\n".join(lines)
-
-
-def _append_saved_view_configuration(
-    lines: list[str],
-    configuration: SavedViewConfiguration,
-) -> None:
-    """Render every stored archive control in plain terminal text."""
-
-    query = configuration.archive_query
-    _append_field(
-        lines,
-        "  Search",
-        configuration.search_text
-        if configuration.search_text.strip()
-        else "Browse archive",
-    )
-    _append_field(
-        lines,
-        "  Word mode",
-        "All words" if configuration.match_mode is SearchMatchMode.ALL else "Any words",
-    )
-    _append_field(
-        lines,
-        "  Include superseded history",
-        "Yes" if configuration.include_superseded else "No",
-    )
-    _append_field(
-        lines,
-        "  Status",
-        "All" if query.status is None else query.status.value.capitalize(),
-    )
-    _append_field(
-        lines,
-        "  Forecast type",
-        "All"
-        if query.prediction_type is None
-        else query.prediction_type.value.capitalize(),
-    )
-    _append_field(
-        lines,
-        "  Mode",
-        "All"
-        if query.mode is None
-        else ("One-Shot" if query.mode is ArchiveMode.ONE_SHOT else "Adaptive"),
-    )
-    _append_field(
-        lines,
-        "  Tags",
-        (
-            "None"
-            if not query.tags
-            else f"{', '.join(query.tags)} ({query.tag_match_mode.value.capitalize()})"
-        ),
-    )
-    _append_field(
-        lines,
-        "  Attention",
-        "None"
-        if query.attention is None
-        else query.attention.value.replace("_", " ").title(),
-    )
-    _append_field(
-        lines,
-        "  Date range",
-        _archive_date_range_text(query.date_meaning, query.date_start, query.date_end),
-    )
-    _append_field(lines, "  Sort", query.sort.value.replace("_", " ").title())
 
 
 def _archive_date_range_text(
@@ -1967,3 +1756,15 @@ def _format_local_timestamp(value: datetime | None) -> str:
 
 def _format_date(value: date) -> str:
     return value.isoformat()
+
+
+def _attention_days(value: str) -> int:
+    try:
+        days = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "Enter whole days from 1 through 9999."
+        ) from error
+    if not 1 <= days <= 9999:
+        raise argparse.ArgumentTypeError("Enter whole days from 1 through 9999.")
+    return days

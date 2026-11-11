@@ -86,8 +86,8 @@ class TagManagerDialog(QDialog):
         apply_text_role(title, TextRole.PAGE_TITLE)
 
         introduction = QLabel(
-            "Rename, merge, or delete reusable tags across Predictions and Saved "
-            "Views. Forecast and Journal history are not changed.",
+            "Rename, merge, or delete reusable tags across Predictions. "
+            "Forecast and Journal history are not changed.",
             self,
         )
         introduction.setObjectName("tagManagerIntroduction")
@@ -112,9 +112,10 @@ class TagManagerDialog(QDialog):
         self.table.setObjectName("tagManagerTable")
         self.table.setAccessibleName("Tag library")
         self.table.setAccessibleDescription(
-            "Tags with their current Prediction and Saved View association counts."
+            "Tags with their current Prediction association counts."
         )
-        self.table.setHorizontalHeaderLabels(("Tag", "Predictions", "Saved Views"))
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(("Tag", "Predictions"))
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -122,7 +123,6 @@ class TagManagerDialog(QDialog):
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
 
         self.rename_button = QPushButton("Rename…", self)
         self.rename_button.setObjectName("renameTagButton")
@@ -156,7 +156,7 @@ class TagManagerDialog(QDialog):
 
         library_panel = ContentPanel(
             "Tag library",
-            "Counts show current Prediction and Saved View use.",
+            "Counts show current Prediction use.",
             parent=self,
         )
         library_panel.setObjectName("tagManagerLibraryPanel")
@@ -208,11 +208,8 @@ class TagManagerDialog(QDialog):
             name_item.setData(Qt.ItemDataRole.UserRole, tag.tag_id)
             prediction_count = QTableWidgetItem(str(tag.prediction_count))
             prediction_count.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            saved_view_count = QTableWidgetItem(str(tag.saved_view_count))
-            saved_view_count.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row, 0, name_item)
             self.table.setItem(row, 1, prediction_count)
-            self.table.setItem(row, 2, saved_view_count)
             if tag.tag_id in selected_ids:
                 self.table.selectRow(row)
         self._update_action_state()
@@ -241,7 +238,7 @@ class TagManagerDialog(QDialog):
             f"Rename {current.display_name!r} to "
             f"{preview.proposed_display_name!r}?\n\n"
             f"Affected Predictions: {preview.prediction_count}\n"
-            "Saved View references retain this tag's stable identity.",
+            "Prediction references retain this tag's stable identity.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
@@ -290,8 +287,7 @@ class TagManagerDialog(QDialog):
             "Confirm Tag Merge",
             f"Merge {source_names} into {target.display_name!r}?\n\n"
             f"Affected Predictions: {preview.prediction_count}\n"
-            f"Affected Saved Views: {preview.saved_view_count}\n\n"
-            "Source tags will be removed. Prediction and Saved View references "
+            "\nSource tags will be removed. Prediction references "
             "will be retargeted and deduplicated.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
@@ -318,19 +314,12 @@ class TagManagerDialog(QDialog):
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             return
-        saved_view_warning = ""
-        if preview.saved_view_count:
-            saved_view_warning = (
-                "\n\nAffected Saved Views will lose this tag condition and may "
-                "return a broader set of Predictions."
-            )
         answer = QMessageBox.question(
             self,
             "Confirm Tag Deletion",
             f"Delete tag {current.display_name!r}?\n\n"
             f"Prediction associations removed: {preview.prediction_count}\n"
-            f"Saved View references removed: {preview.saved_view_count}"
-            f"{saved_view_warning}\n\n"
+            "\n"
             "Forecast, Journal, terminal, and scoring history will not change.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,

@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from fractions import Fraction
 
 import pytest
+from supported_fixtures import connect_fixture
 
 from reckonsolve.analytics.one_shot import one_shot_score
 from reckonsolve.application.predictions import PredictionOperations
@@ -396,10 +397,12 @@ def test_v18_upgrade_preserves_all_existing_rows_scores_search_and_export(tmp_pa
     database.close()
     upgraded = Database.open(path)
     try:
-        assert upgraded.schema_version == 20
+        assert upgraded.schema_version == 21
         with upgraded.transaction() as c:
             after = canonical_snapshot(c)
             for table, rows in before.items():
+                if table in {"saved_views", "saved_view_tags"}:
+                    continue  # Retired active configuration has separate recovery tests.
                 assert after[table] == rows, table
             assert not c.execute("PRAGMA foreign_key_check").fetchall()
         ops = PredictionOperations(upgraded, clock, UTC)
@@ -436,7 +439,7 @@ def test_bad_one_shot_archive_is_refused_before_repair_or_write(tmp_path, damage
     original = repo.create_prediction(request())
     repo.correct(original, replace(original.effective, probability_percent=70))
     database.close()
-    with sqlite3.connect(path) as c:
+    with connect_fixture(path) as c:
         c.execute("PRAGMA ignore_check_constraints = ON")
         if damage in ("unknown", "mismatched", "deadline"):
             c.execute("DROP TRIGGER prediction_forecast_contracts_are_immutable")
@@ -473,7 +476,7 @@ def test_existing_connection_checks_external_damage_before_repair_and_backup(
 ):
     database, _, repo = storage
     original = repo.create_prediction(request())
-    with sqlite3.connect(database.path) as c:
+    with connect_fixture(database.path) as c:
         c.execute("DROP TRIGGER prediction_forecast_contracts_are_immutable")
         c.execute("PRAGMA ignore_check_constraints = ON")
         c.execute("UPDATE prediction_forecast_contracts SET scoring_contract = 'bad'")
