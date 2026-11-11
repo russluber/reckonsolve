@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
     QLineEdit,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -22,7 +23,14 @@ from reckonsolve.domain.quantiles import (
     quantile_summary,
 )
 
-from .visual_system import Spacing, TextRole, apply_text_role, semantic_colors
+from .visual_system import (
+    Spacing,
+    StatusTone,
+    TextRole,
+    apply_message_role,
+    apply_text_role,
+    semantic_colors,
+)
 
 
 class QuantileCDF(QWidget):
@@ -113,6 +121,7 @@ class FiveQuantileInput(QWidget):
         self.value_constraint = NumericValueConstraint.CONTINUOUS
         self.unit = ""
         self.inputs: dict[int, QLineEdit] = {}
+        self.preview_enabled = True
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(int(Spacing.CONTROL))
@@ -138,6 +147,15 @@ class FiveQuantileInput(QWidget):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         layout.addLayout(grid)
+        self.validation_message = QLabel(self)
+        self.validation_message.setWordWrap(True)
+        apply_message_role(
+            self.validation_message,
+            StatusTone.ERROR,
+            accessible_name="Numeric forecast validation",
+        )
+        layout.addWidget(self.validation_message)
+        self.validation_message.hide()
         self.preview = QuantileCDF(self)
         self.summary = QLabel(self)
         self.summary.setWordWrap(True)
@@ -170,7 +188,45 @@ class FiveQuantileInput(QWidget):
         for field in self.inputs.values():
             field.clear()
 
+    def show_validation(self, error: Exception) -> None:
+        """Place authoritative exact-value feedback beside the unchanged inputs."""
+        if getattr(error, "field", "") not in (
+            "quantiles",
+            "value",
+            "q05",
+            "q25",
+            "q50",
+            "q75",
+            "q95",
+        ):
+            return
+        try:
+            quantiles = FiveQuantiles.from_values(self.values(), self.decimal_places)
+            QuantileDefinition(
+                self.unit, self.decimal_places, self.value_constraint
+            ).validate_quantiles(quantiles)
+        except PredictionValidationError as invalid:
+            self.validation_message.setText(str(invalid))
+            self.validation_message.show()
+            field = (
+                self.inputs.get(int(invalid.field[1:]))
+                if invalid.field.startswith("q") and invalid.field != "quantiles"
+                else self.inputs[5]
+            )
+            field.setFocus(Qt.FocusReason.OtherFocusReason)
+            ancestor = self.parentWidget()
+            while ancestor is not None:
+                if isinstance(ancestor, QScrollArea):
+                    ancestor.ensureWidgetVisible(self, 12, 12)
+                    break
+                ancestor = ancestor.parentWidget()
+
     def update_preview(self) -> None:
+        self.validation_message.hide()
+        if not self.preview_enabled:
+            self.preview.hide()
+            self.summary.hide()
+            return
         try:
             definition = QuantileDefinition(
                 self.unit, self.decimal_places, self.value_constraint

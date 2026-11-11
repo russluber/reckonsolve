@@ -141,7 +141,7 @@ def test_shared_draft_creation_failure_reset_and_restart(
 ):
     clock = Clock()
     monkeypatch.setattr(
-        "reckonsolve.ui.screens.ExactDeadlineInput",
+        "reckonsolve.ui.creation_screen.ExactDeadlineInput",
         partial(
             ExactDeadlineInput, clock=clock, time_zone=QTimeZone(b"America/Los_Angeles")
         ),

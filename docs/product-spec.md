@@ -1858,9 +1858,9 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved future target, not implemented in full. The authorized first Journal/workspace slice is implemented locally with automated checks complete; human native acceptance remains pending. The current v0.8.0 contract remains recognizable above; only a separately authorized software slice may introduce the affected behavior. These requirements describe the target and its acceptance gates, not native validation or permission to change software, schema, commands, exports, personal data or supported artifacts. Resolve the relevant technical contract details before that slice; no implementation milestone is authorized by publication alone.
+**Status:** Approved target, implemented in part. The first Journal/workspace slice's requested walkthrough is accepted with recorded limits. New Prediction/Prediction Detail is implemented with automated checks complete and native acceptance pending; Performance/Settings and final integrated acceptance remain. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
-**Separately authorized work — 2026-11-10:** The user has explicitly authorized the first software slice in [Section 38.10](#3810-authorized-first-implementation-slice). Its software/verification permission is distinct from approval/publication of the target. The redesign is not yet implemented or accepted; protected personal-data and Git publication boundaries remain in force.
+**Separately authorized work — updated 2026-11-11:** The user explicitly authorized the first software slice in [Section 38.10](#3810-authorized-first-implementation-slice) and New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
 For this future desktop, the Journal-centered shell, filtering/rows, source-aware returns, creation completion, Detail writing/confirmation, comprehensive Performance, Settings results and manual appearance rules below deliberately replace the corresponding earlier desktop presentation/workflow requirements. The recovery-backed Saved View retirement and CLI-only threshold route are explicit future compatibility/interface changes. All other protected shared/Adaptive/One-Shot history, exactness, lifecycle, scoring, refusal and recovery requirements remain in force. Earlier interface requirements continue to describe current behavior until their affected slice is implemented and accepted; do not silently apply future rules to the current software.
 
@@ -1987,7 +1987,7 @@ Implement only an explicitly authorized coherent slice after resolving its relev
 
 **Search submission refinement — adopted 2026-11-10:** The measured 2,000-Prediction fixture exceeded the local 750 ms warm live-retrieval budget. For this slice, text is submitted with **Enter or Search**, as explicitly adopted by the user. Editing text removes prior rows/count and presents a submission hint; polling never submits unfinished text. Clearing text, accepting an explicit spelling offer and deliberate retrieval controls may retrieve directly. Preserve full corpus/ranking, complete counts, checked snapshots, current-generation-only results and distinct pending/error/empty states. Automatic text submission remains deferred pending new responsiveness evidence; this refinement governs the conditional live-search direction above.
 
-**Authorized 2026-11-10; local implementation and automated checks complete, native acceptance pending.** Deliver the shared native workspace/appearance controls and Journal home/retrieval described above. Integrate responsibility-based modularization, readable code, comments explaining non-obvious safeguards/tradeoffs and aligned documentation in this slice. Preserve functioning creation, Detail, analytical and Settings destinations through scoped adapters; their full body redesigns follow separately. Do not replace them with stubs or claim the whole redesign is complete.
+**Authorized 2026-11-10; implemented locally with automated checks and the requested native walkthrough accepted.** The [2026-11-11 checkpoint record](archive/releases/2026-11-11-journal-workspace-review.md) identifies source, evidence and remaining integration limits. This slice delivers the shared native workspace/appearance controls and Journal home/retrieval described above. Integrate responsibility-based modularization, readable code, comments explaining non-obvious safeguards/tradeoffs and aligned documentation in this slice. Preserve functioning creation, Detail, analytical and Settings destinations through scoped adapters; their full body redesigns follow separately. Do not replace them with stubs or claim the whole redesign is complete.
 
 Begin with controlled-clock temporary fixtures and independent connections. Reproduce the affected paths before narrowly repairing effective-reflection classification, post-commit response-read failures or expected database-error translation. Prove required upgrade exclusion/recovery mechanisms before activating the dependent startup/Journal behavior. A failed proof blocks that path; it does not relax the requirement or authorize silent retirement. Normal GUI/CLI concurrency remains supported outside the protected transition.
 
@@ -2002,3 +2002,33 @@ Journal widgets collect/render; shared application/data read models own faithful
 Measure request-to-display/count completeness and responsiveness on an initial mixed corpus of 2,000 Predictions, 500 per contract, including long histories and corrected/superseded text. Record a concrete local response budget before enabling live retrieval; preserve ranking/corpus semantics, current-generation-only publication, distinct pending/error/empty states and the accepted bounded-loading fallback. Native acceptance covers Section 38.9, integrated returns/guards and both appearances on explicitly injected disposable data, with a focused human visual review. Run the relevant regressions and full milestone checks; reconcile the implemented specification, architecture and affected guides on acceptance.
 
 This authorization covers the bounded software/verification work and necessary aligned documentation. It grants no access to either real user journal as a fixture and no live-data upgrade/move/purge, installed stable-tool replacement, packaging/release, staging, commit or push. Stop the affected path and surface evidence for a failed safety gate, protected-rule conflict or genuinely new consequential choice; routine module names and visual tuning within the approved behavior need no separate approval.
+
+### 38.11 Authorized second implementation slice
+
+**Authorized 2026-11-11; implemented locally with automated checks complete and native acceptance pending.** The [verification checkpoint](archive/releases/2026-11-11-prediction-detail-verification.md) records source, evidence and limits. Implement
+the focused four-contract creation workspace and complete Prediction Detail
+requirements in Sections 38.5–38.6, preserving the accepted first-slice Journal,
+toolbar, appearance, presets and source returns. Deliver reading layouts and
+writing/confirmation flows as one scoped package, with bounded human checkpoints.
+
+Separate creation composition, shared view/operation contracts, committed header,
+Timeline/context layout, task/editor state and focused dialogs into straightforward
+modules. Remove migrated responsibilities from the monolith; retain compatibility
+exports where existing callers need them. Widgets collect/render; shared application
+operations retain eligibility, exact validation, transaction-time/stale checks and
+atomic saves. Reuse current scoring, charts and input components.
+
+Include exact Numeric header/tie/connector/all-equal presentation, independently
+scrolling panes, contextual writing and temporary Overview, guarded exits,
+lifecycle-appropriate reading, conditional review inside focused dialogs, deliberate
+terminal confirmation, One-Shot answer/transcription flows and the narrow nonblank
+reflection-only confirmation exception already specified above. Failure retains work;
+drafts never become committed history or charts before a successful save.
+
+Keep schema 21, projection 3, CSV 6 and applied migrations unchanged. Preserve CLI,
+backup/refusal, scoring and immutable-history rules. Use disposable data and controlled
+clocks, run focused and full checks, align current documentation with implementation,
+and review actual native output in both appearances. Earlier first-slice evidence
+does not accept later screen edits. Full Performance/Settings redesign, relocation,
+personal-data operations, installed-tool replacement, packaging/release, staging,
+commits and pushes remain outside this package.

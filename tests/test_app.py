@@ -4,7 +4,7 @@ from typing import cast
 from zipfile import ZipFile
 
 import pytest
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -34,6 +34,24 @@ from reckonsolve.data.migrations import MIGRATIONS, MigrationError
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
+
+
+def _confirm_contextual_save(button: QPushButton) -> None:
+    editor = button.parentWidget()
+    while editor is not None and not isinstance(editor, QDialog):
+        editor = editor.parentWidget()
+    if editor is None or not editor.property("contextualEditor"):
+        return
+
+    def confirm():
+        dialog = QApplication.activeModalWidget()
+        assert isinstance(dialog, QMessageBox)
+        decision = (
+            "Mark Invalid" if "invalid" in editor.objectName().lower() else "Resolve"
+        )
+        next(item for item in dialog.buttons() if item.text() == decision).click()
+
+    QTimer.singleShot(0, confirm)
 
 
 def _sqlite_logical_snapshot(
@@ -375,6 +393,7 @@ def test_resolve_through_ui_survives_restart_with_scoring_context(
     outcome_no.setChecked(True)
     notes.setPlainText("Verified from the official result.")
     postmortem.setPlainText("I should have weighted the base rate more.")
+    _confirm_contextual_save(save)
     qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
 
     status = first.window.findChild(QLabel, "predictionDetailStatus")
@@ -431,6 +450,7 @@ def test_mark_invalid_through_ui_survives_restart(qtbot, tmp_path) -> None:
     assert reason is not None
     assert save is not None
     reason.setPlainText("The underlying event was cancelled.")
+    _confirm_contextual_save(save)
     qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
     first.close()
 
@@ -754,6 +774,7 @@ def test_numeric_resolution_ui_persists_exact_terminal_information(
     actual.setText("-2.5")
     notes.setPlainText("The certified final measurement.")
     postmortem.setPlainText("The lower tail was too narrow.")
+    _confirm_contextual_save(save)
     qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: dialog.isHidden())
 
@@ -820,6 +841,7 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
     assert reason is not None
     assert save_invalid is not None
     reason.setPlainText("The measurement became undefined.")
+    _confirm_contextual_save(save_invalid)
     qtbot.mouseClick(save_invalid, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: invalid_dialog.isHidden())
     assert runtime.window.findChild(QLabel, "numericPredictionStatus").text() == (
@@ -941,7 +963,10 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     monkeypatch.setattr(QMessageBox, "warning", confirm_definition_change)
     qtbot.mouseClick(save_button, Qt.MouseButton.LeftButton)
 
-    assert warning_messages
+    assert warning_messages == []
+    assert dialog.review.active
+    assert "Definition snapshot" in dialog.review.text.text()
+    qtbot.mouseClick(save_button, Qt.MouseButton.LeftButton)
     assert not dialog.isVisible()
     with first_runtime.database.transaction() as connection:
         history_count = connection.execute(
@@ -986,7 +1011,7 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert reopened_background.text() == "End-to-end metadata context."
     assert reopened_criteria.text() == ("Yes if the same details reopen from SQLite.")
     assert reopened_tags.text() == "#m3  #persistence"
-    assert " at " in reopened_deadline.text()
+    assert "UTC" in reopened_deadline.text()
     assert "(permanent)" not in reopened_deadline.text()
     assert (
         "2099-01-01"
@@ -1403,7 +1428,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     assert [
         timeline.layout().itemAt(index).widget().objectName()
         for index in range(timeline.layout().count())
-    ] == ["forecastRevision1", "journalEntry1", "forecastRevision2"]
+    ] == ["forecastRevision2", "journalEntry1", "forecastRevision1"]
     second_runtime.close()
 
 

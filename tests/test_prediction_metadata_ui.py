@@ -544,79 +544,40 @@ def test_permanent_deadline_has_no_metadata_edit_controls(qtbot: QtBot) -> None:
     assert operations.update_calls == []
 
 
-def test_semantic_change_warning_decline_does_not_retry_or_mutate(
-    qtbot: QtBot,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_semantic_change_review_returns_to_unchanged_form_without_mutation(qtbot):
     operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
     operations.confirmation_fields = ("question",)
     window = MainWindow(operations)
     qtbot.addWidget(window)
-    warnings: list[tuple[str, str]] = []
-
-    def decline_warning(
-        _parent: QWidget,
-        title: str,
-        message: str,
-        _buttons: QMessageBox.StandardButton,
-        _default: QMessageBox.StandardButton,
-    ) -> QMessageBox.StandardButton:
-        warnings.append((title, message))
-        return QMessageBox.StandardButton.Cancel
-
-    monkeypatch.setattr(QMessageBox, "warning", decline_warning)
     dialog = _open_edit_dialog(qtbot, window)
-    _required_child(dialog, QLineEdit, "editQuestionInput").setText("Changed question")
-
-    qtbot.mouseClick(
-        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
-        Qt.MouseButton.LeftButton,
-    )
-
+    dialog.question_input.setText("Changed question")
+    dialog.submit()
     assert len(operations.update_calls) == 1
     assert not operations.update_calls[0].confirm_meaning_change
+    assert dialog.review.active
+    assert "Original question" in dialog.review.text.text()
+    assert "Changed question" in dialog.review.text.text()
+    assert "create a new prediction" in dialog.review.text.text()
     assert operations.mutation_count == 0
-    assert operations.latest is not None
+    dialog.review.back.click()
+    assert not dialog.review.active
+    assert dialog.question_input.text() == "Changed question"
     assert operations.latest.question == "Original question"
-    assert dialog.isVisible()
-    assert warnings[0][0] == "Confirm definition change"
-    assert "what this prediction means" in warnings[0][1]
-    assert "create a new prediction" in warnings[0][1]
-    assert "forecast revisions become locked" not in warnings[0][1]
 
 
-def test_meaning_change_confirmation_retries_and_refreshes_returned_detail(
-    qtbot: QtBot,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_meaning_change_internal_confirmation_retries_and_refreshes_detail(qtbot):
     operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
     operations.confirmation_fields = ("question", "resolution_criteria")
     window = MainWindow(operations)
     qtbot.addWidget(window)
-    warnings: list[tuple[str, str]] = []
-
-    def accept_warning(
-        _parent: QWidget,
-        title: str,
-        message: str,
-        _buttons: QMessageBox.StandardButton,
-        _default: QMessageBox.StandardButton,
-    ) -> QMessageBox.StandardButton:
-        warnings.append((title, message))
-        return QMessageBox.StandardButton.Save
-
-    monkeypatch.setattr(QMessageBox, "warning", accept_warning)
     dialog = _open_edit_dialog(qtbot, window)
-    _required_child(dialog, QLineEdit, "editQuestionInput").setText("Changed question")
-    _required_child(dialog, QPlainTextEdit, "editResolutionCriteriaInput").setPlainText(
-        "Published result counts."
-    )
-
-    qtbot.mouseClick(
-        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
-        Qt.MouseButton.LeftButton,
-    )
-
+    dialog.question_input.setText("Changed question")
+    dialog.resolution_criteria_input.setPlainText("Published result counts.")
+    dialog.submit()
+    assert operations.mutation_count == 0
+    assert dialog.review.active
+    assert "Definition snapshot" in dialog.review.text.text()
+    dialog.submit()
     assert [call.confirm_meaning_change for call in operations.update_calls] == [
         False,
         True,
@@ -626,56 +587,36 @@ def test_meaning_change_confirmation_retries_and_refreshes_returned_detail(
         1,
     ]
     assert operations.mutation_count == 1
-    assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
-        "Changed question"
+    assert (
+        _required_child(window, QLabel, "predictionDetailQuestion").text()
+        == "Changed question"
     )
-    assert warnings[0][0] == "Confirm definition change"
-    assert "what this prediction means" in warnings[0][1]
-    assert "create a new prediction" in warnings[0][1]
-    assert "forecast revisions become locked" not in warnings[0][1]
-    assert "Definition history" in warnings[0][1]
     assert not dialog.isVisible()
-    assert operations.definition_change_calls == [7, 7, 7, 7]
 
 
-def test_stale_confirmation_retry_stays_inline_without_mutating(
-    qtbot: QtBot,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_stale_internal_confirmation_retains_form_without_mutating(qtbot):
     operations = FakePredictionOperations(FakePrediction(7, "Original question", 55))
     operations.confirmation_fields = ("question",)
     window = MainWindow(operations)
     qtbot.addWidget(window)
     dialog = _open_edit_dialog(qtbot, window)
-    _required_child(dialog, QLineEdit, "editQuestionInput").setText("Changed question")
-
-    def make_stale(*args, **kwargs) -> QMessageBox.StandardButton:
-        assert operations.latest is not None
-        operations.latest = replace(
-            operations.latest,
-            background="Intervening edit",
-            metadata_version=2,
-        )
-        return QMessageBox.StandardButton.Save
-
-    monkeypatch.setattr(QMessageBox, "warning", make_stale)
-    qtbot.mouseClick(
-        _required_child(dialog, QPushButton, "savePredictionDetailsButton"),
-        Qt.MouseButton.LeftButton,
+    dialog.question_input.setText("Changed question")
+    dialog.submit()
+    operations.latest = replace(
+        operations.latest, background="Intervening edit", metadata_version=2
     )
-
+    dialog.submit()
     assert [call.expected_metadata_version for call in operations.update_calls] == [
         1,
         1,
     ]
     assert operations.mutation_count == 0
-    assert operations.latest is not None
     assert operations.latest.question == "Original question"
     assert operations.latest.background == "Intervening edit"
-    error = _required_child(dialog, QLabel, "editDetailsError")
-    assert "changed before" in error.text()
-    assert not error.isHidden()
-    assert dialog.isVisible()
+    assert "changed before" in dialog.form_error.text()
+    assert dialog.form_error.isVisible()
+    dialog.review.back.click()
+    assert dialog.question_input.text() == "Changed question"
 
 
 def test_definition_history_is_collapsed_and_shows_snapshot_in_local_time(

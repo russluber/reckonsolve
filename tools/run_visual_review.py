@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -23,6 +24,14 @@ from reckonsolve.domain.quantiles import (
     QuantileDefinition,
 )
 from reckonsolve.identity import DEVELOPMENT_APPLICATION
+
+
+@dataclass(frozen=True)
+class _ReviewClock:
+    instant: datetime
+
+    def now(self) -> datetime:
+        return self.instant
 
 
 def main() -> int:
@@ -147,6 +156,36 @@ def _seed_review_database(database_path: Path, *, long_text: bool) -> None:
                 background="An already-existing answer, recorded after a final guess.",
                 tags=("Visual review", "One-Shot"),
             )
+        )
+        operations.one_shots.create(
+            NewOneShotPrediction(
+                f"Is the waiting-for-answer sample longer than one metre?{repeated}",
+                one_shot_contract(PredictionType.BINARY),
+                OneShotValues(probability_percent=60),
+                background="Measure the already-existing sample after recording the guess.",
+                tags=("Visual review", "Waiting"),
+            )
+        )
+        # These historical fixtures are already Locked when the real review
+        # window opens. No clock or Deadline is rewritten to manufacture it.
+        historic = PredictionOperations(
+            database, _ReviewClock(datetime.now(UTC) - timedelta(days=2))
+        )
+        expired = datetime.now(UTC) - timedelta(days=1)
+        historic.create_prediction(
+            "Will the Locked Binary actions stay clear?",
+            60,
+            forecast_deadline=expired,
+            tags=("Visual review", "Locked"),
+        )
+        historic.create_numeric_prediction(
+            "How readable is the Locked Numeric interval?",
+            "units",
+            0,
+            {5: 1, 25: 2, 50: 3, 75: 3, 95: 5},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=expired,
+            tags=("Visual review", "Locked"),
         )
         operations.one_shots.create(
             NewOneShotPrediction(

@@ -1,7 +1,7 @@
 # Reckonsolve architecture
 
-Unreleased working tree: first Journal/workspace slice, schema 21, search projection 3, CSV format 6; native acceptance pending. Released v0.8.0 remains the schema-20/format-5 baseline.
-Last reviewed: 2026-11-10.
+Unreleased working tree: Journal/workspace plus New Prediction/Prediction Detail, schema 21, search projection 3, CSV format 6. The first walkthrough is accepted with [recorded limits](archive/releases/2026-11-11-journal-workspace-review.md); the second slice awaits native acceptance. Released v0.8.0 remains the schema-20/format-5 baseline.
+Last reviewed: 2026-11-11.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
 
@@ -43,13 +43,16 @@ Paths below are relative to src/reckonsolve/.
 | Boundary | Main modules | Responsibility |
 | --- | --- | --- |
 | Composition | app.py, cli.py, identity.py, paths.py | Identity, lifetime, entry points, injected clock/paths. |
-| Application | application/predictions.py, application/quantiles.py, application/one_shot.py | Complete actions, reviewed-context checks, read models, expected-error translation. |
+| Application | application/predictions.py, application/quantiles.py, application/one_shot.py, application/reflection.py | Complete actions, reviewed-context checks, read models, expected-error translation and reflection-only delegation preserving terminal facts. |
 | Domain | domain/forecast_contracts.py, domain/predictions.py, domain/quantiles.py, domain/one_shot.py | Closed identities, lifecycle/time rules, exact values, complete statements and documentary times. |
 | Persistence | data/database.py, data/migrations.py, data/predictions.py, data/quantiles.py, data/one_shot.py | Connections, immutable schema history, model-aware transactions and reads. |
 | One-Shot replay | data/one_shot_facts.py, data/one_shot_archive.py | Independently checked original/correction replay and effective archive facts. |
 | Retrieval | application/journal.py, data/journal.py, domain/journal.py, data/search_index.py, data/search.py, data/tags.py | Checked Journal facts, faithful matching/order/counts, derived projection and tag transactions. |
 | Workspace | ui/main_window.py, ui/workspace_state.py, ui/workspace_toolbar.py, ui/creation_task.py, ui/appearance.py | Composition, task sources, eligible controls, retained creation and presentation preference. |
 | Journal widgets | ui/journal/ | Separate applied state, filter drafts, one-worker request coordination, controls and rows/excerpts. |
+| Creation and Detail | ui/creation_screen.py, ui/binary_detail.py, ui/numeric_detail.py, ui/one_shot_detail.py, ui/prediction_detail.py | Mode-specific composition and reading; the small host dispatches the four contracts. ui/screens.py retains imports for existing callers. |
+| Detail components/tasks | ui/prediction_contracts.py, ui/prediction_widgets.py, ui/detail_workspace.py, ui/detail_reading.py, ui/numeric_interval.py | Narrow view/operation contracts, committed presentation, Timeline helpers, exact interval labels, independent panes and one guarded writing task. |
+| Focused forms | ui/prediction_dialogs.py, ui/dialog_review.py, ui/contextual_forms.py, ui/reflection_editor.py, ui/revision_fields.py, ui/editor_feedback.py | Existing operation-backed forms, internal review, contextual embedding, current/draft alignment and retained-input failure feedback. |
 | Upgrade | data/upgrade.py, data/journal_migration.py, data/writer_contract.py | Protected recovery/review, ordered schema 21 and persistent stale-writer exclusion. |
 | Analytics | analytics/trajectory.py, analytics/quantiles.py, analytics/one_shot.py and aggregate modules | Exact selection/scoring and separate observation populations. |
 | Transfers | data/transfer.py | Verified online backup and snapshot-based CSV ZIP. |
@@ -149,7 +152,13 @@ ui/visual_system.py owns palette-relative typography, semantic colors, spacing, 
 
 Journal replaces Dashboard and the old browser. A compact shared toolbar offers prominent New, quiet Performance, appearance and Settings controls only on eligible pages. One task-source coordinator owns New/Performance/Settings origins; returning through Settings never overwrites Performance's independent origin. Detail returns to a refreshed Journal retrieval and a useful nearby anchor. No sidebar, peer tabs or general navigation stack remains.
 
-Creation, Detail, Performance and Settings retain working body adapters for this slice; their complete body redesigns are separate work. Existing creation capabilities remain, with whole-task discard/save guards, retained mode inputs and the approved Journal/answered-Detail success landings. Adaptive Skip remains reachable in Detail beside existing reflection content while its full body is deferred. User/history text stays selectable; complete Numeric row values remain horizontal with readable wrapping.
+Creation retains all four contracts, whole-task discard/save guards, mode inputs and the Journal/answered-Detail success landings. Numeric validation uses authoritative field errors beside retained forecast inputs. Performance and Settings keep functioning bodies for their later slice.
+
+Adaptive Detail keeps committed header/Deadline context above independent Timeline and Overview scroll areas. Reading uses 60/40; contextual writing uses 40/60, with Mark Invalid at 60/40. A 120 ms pane transition follows Qt's animation preference and never gates input. An outer fallback scroll preserves access with tall headers or short windows. Numeric intervals project exact scaled-integer ratios only for painting; grouped ties, selectable exact labels and connector leaders never alter canonical values. The current-revision marker/jump targets the actual saved Timeline row; historical search opens the necessary disclosures and pane.
+
+One-Shot reading is a single completed-exercise page with effective forecast/answer and pure score, originals/history on request, visible Journals and inline later reflection. Contextual Journal/Invalid forms use the same task guard. Existing dialogs are embedded as nonmodal contextual forms where selected; saved signals continue invoking the canonical operations. Temporary Overview consultation retains entered revision values. Raw input fingerprints exclude presentation-only state; no persistent draft is written.
+
+Edit Details and Correct transcription keep review and final consent inside one focused dialog, bound to the reviewed inputs and original concurrency token. Adaptive Resolution/Invalid preparation requires a separate explicit terminal confirmation. Nonblank reflection-only saves delegate unchanged effective terminal facts through shared operations; mixed factual corrections, clearing and Skip keep confirmation. One-Shot reflection uses the dedicated provenance operation. Failure retains inputs; Deadline rejection refreshes committed Locked context and provides a brief right-side notice plus a repeatable cue. User/history text remains selectable; charts remain committed-only.
 
 Creation modes share canvas/card placement and reciprocal top-right One-Shot/Adaptive actions with draft retention. One-Shot shows Background/Rationale/Tags in the main card and optional separate date/segmented time input. ui/time_input.py adapts native QTimeEdit section entry, Tab/Shift+Tab, A/P, and Up/Down. UTC is a neutral Qt carrier for documentary wall time, not normalization of a reported event.
 

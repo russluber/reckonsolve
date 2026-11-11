@@ -52,7 +52,6 @@ from reckonsolve.ui.visual_system import (
     SURFACE_ROLE_PROPERTY,
     TEXT_ROLE_PROPERTY,
     ActionRole,
-    Spacing,
     StatusTone,
     SurfaceRole,
     TextRole,
@@ -80,69 +79,45 @@ def test_m42_binary_detail_separates_identity_common_and_lifecycle_actions(
     status = _required_child(window, QLabel, "predictionDetailStatus")
     summary = _required_child(window, QFrame, "predictionDetailSummaryPanel")
     action_panel = _required_child(window, QFrame, "predictionDetailActionPanel")
-    action_help = _required_child(window, QLabel, "predictionDetailActionHelp")
     action_container = _required_child(
         window,
         QWidget,
         "futurePredictionActions",
     )
-    action_grid = action_container.layout()
-    assert isinstance(action_grid, QGridLayout)
-
+    assert isinstance(
+        action_container.layout(), QGridLayout
+    )  # retained adapter, hidden
+    assert action_container.isHidden()
     assert question.text() == prediction.question
-    assert question.property(TEXT_ROLE_PROPERTY) == TextRole.PAGE_TITLE.value
+    assert question.property(TEXT_ROLE_PROPERTY) == TextRole.QUESTION.value
     assert (
         question.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
     )
     assert forecast_type.text() == "BINARY · TRAJECTORY"
     assert status.property(BADGE_TONE_PROPERTY) == StatusTone.ACCENT.value
-    assert summary.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
-    assert action_panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
-    assert window.findChild(QLabel, "predictionDetailLifecycleHeading") is None
-    assert action_help.property(TEXT_ROLE_PROPERTY) == TextRole.LABEL.value
-    assert action_help.contentsMargins().bottom() == int(Spacing.CONTROL)
+    assert summary.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.CANVAS.value
+    assert action_panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.CANVAS.value
+    screen = window._prediction_detail_screen
+    for name in (
+        "reviseForecastButton",
+        "addJournalEntryButton",
+        "reviewForecastButton",
+        "resolvePredictionButton",
+    ):
+        assert _required_child(window, QPushButton, name).isVisible()
+    for name in (
+        "editPredictionDetailsButton",
+        "markInvalidButton",
+        "deletePredictionButton",
+    ):
+        assert _required_child(window, QPushButton, name).isHidden()
+    assert [
+        action.text() for action, _button in screen.more_actions if action.isVisible()
+    ] == ["Edit Details", "Mark Invalid", "Delete"]
     assert (
-        _required_child(window, QPushButton, "reviseForecastButton").property(
-            ACTION_ROLE_PROPERTY
-        )
-        == ActionRole.PRIMARY.value
+        screen.workspace.timeline.viewport().width()
+        > screen.workspace.overview.viewport().width()
     )
-    assert (
-        _required_child(window, QPushButton, "deletePredictionButton").property(
-            ACTION_ROLE_PROPERTY
-        )
-        == ActionRole.DESTRUCTIVE.value
-    )
-    edit = _required_child(window, QPushButton, "editPredictionDetailsButton")
-    invalid = _required_child(window, QPushButton, "markInvalidButton")
-    delete = _required_child(window, QPushButton, "deletePredictionButton")
-    journal = _required_child(window, QPushButton, "addJournalEntryButton")
-    revise = _required_child(window, QPushButton, "reviseForecastButton")
-    review = _required_child(window, QPushButton, "reviewForecastButton")
-    resolve = _required_child(window, QPushButton, "resolvePredictionButton")
-    assert edit.property(ACTION_ROLE_PROPERTY) == ActionRole.SECONDARY.value
-    assert invalid.property(ACTION_ROLE_PROPERTY) == ActionRole.CAUTION.value
-    assert action_grid.getItemPosition(action_grid.indexOf(journal)) == (0, 1, 1, 1)
-    assert action_grid.getItemPosition(action_grid.indexOf(revise)) == (0, 2, 1, 1)
-    assert action_grid.getItemPosition(action_grid.indexOf(review)) == (0, 3, 1, 1)
-    assert action_grid.getItemPosition(action_grid.indexOf(edit)) == (1, 1, 1, 1)
-    assert action_grid.getItemPosition(action_grid.indexOf(resolve)) == (1, 2, 1, 1)
-    assert action_grid.getItemPosition(action_grid.indexOf(invalid)) == (1, 3, 1, 1)
-    assert action_grid.getItemPosition(action_grid.indexOf(delete)) == (2, 2, 1, 1)
-    action_buttons = (
-        revise,
-        journal,
-        review,
-        edit,
-        resolve,
-        invalid,
-        delete,
-    )
-    assert all(button.width() <= 210 for button in action_buttons)
-    # Equal-stretch columns share leftover pixels when the width is not
-    # divisible by three; a one-pixel remainder is not unequal button sizing.
-    widths = [button.width() for button in action_buttons]
-    assert max(widths) - min(widths) <= 1
 
 
 def test_m42_dialogs_share_heading_context_error_and_action_roles(
@@ -166,10 +141,8 @@ def test_m42_dialogs_share_heading_context_error_and_action_roles(
     assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
     assert save.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
     assert cancel.property(ACTION_ROLE_PROPERTY) == ActionRole.SECONDARY.value
-    assert dialog.focusWidget() is _required_child(
-        dialog,
-        QSpinBox,
-        "revisionProbabilityInput",
+    qtbot.waitUntil(
+        lambda: _required_child(dialog, QSpinBox, "revisionProbabilityInput").hasFocus()
     )
 
 
@@ -339,7 +312,7 @@ def test_prediction_detail_shows_present_metadata_and_hides_missing_sections(
         "#release  #desktop"
     )
     deadline = _required_child(window, QLabel, "predictionDetailForecastDeadline")
-    assert " at " in deadline.text()
+    assert "UTC" in deadline.text()
     assert "(permanent)" not in deadline.text()
     assert "Exact, fixed deadline:" in deadline.toolTip()
     assert deadline.wordWrap()
@@ -376,7 +349,6 @@ def test_prediction_detail_hides_all_empty_optional_metadata(qtbot: QtBot) -> No
         "predictionDetailTags",
         "predictionDetailExpectedResolutionRow",
         "predictionDetailBackgroundSection",
-        "predictionDetailResolutionCriteriaSection",
         "definitionHistoryGroup",
     ):
         assert _required_child(window, QWidget, object_name).isHidden()

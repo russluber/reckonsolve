@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased first Journal/workspace slice, pending native acceptance. Journal and the shared toolbar use the new workflow below; creation, Detail, Performance and Settings retain working body adapters while their full redesigns remain separate.
+This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The first slice's requested walkthrough is accepted; the second awaits native review. Performance and Settings retain functioning bodies for their later redesign.
 
 ## In this guide
 
@@ -90,26 +90,30 @@ Open a Question from **Journal**. Detail shows the forecast, lifecycle, metadata
 An Open Adaptive prediction offers:
 
 - **Revise:** append a changed probability or complete five-quantile forecast as an immutable revision.
-- **Forecast Review:** record that you reconsidered and kept the forecast. It refreshes Needs Attention without inventing a revision.
+- **Still at … / Keep forecast:** record a Forecast Review that retains the forecast without inventing a revision. It advances Last considered.
 - **Journal:** add reasoning or evidence without changing forecast or refreshing Needs Attention.
 
 At the Forecast Deadline, an unanswered Adaptive prediction becomes **Locked**. Revisions and Reviews stop; Journal, Resolve, and Mark Invalid remain available. A waiting One-Shot permits Journal entries and metadata work, but no revision or Review.
 
+Adaptive Detail keeps the committed forecast above independently scrolling Timeline and Overview panes. Revise and Journal writing open on the right. **Overview / Revision · unsaved** lets you consult saved context without losing the draft. **Commit Revision** saves a complete changed forecast; failed saves retain entered values. **Current revision** jumps to the marked saved Timeline event. Choose Newest first or Oldest first to read history; expand longer Journal text and earlier body versions when needed. Long criteria have a wider read-only view.
+
+Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot reading leads with the effective saved forecast, answer and score; originals and recorded history are available on request, and saved Journals have their own visible section.
+
 ## Add an answer
 
-Adaptive **Resolve** asks for the outcome, when it became fixed and ascertainable under your criteria, and optional factual notes and Postmortem. That effective time differs from when you enter the answer. Use recording time only if the answer became knowable now; otherwise enter the defensible earlier time with its correct UTC offset.
+Adaptive **Resolve** prepares the outcome, when it became fixed and ascertainable under your criteria, and optional factual notes and collapsed Postmortem on the right. A separate final confirmation reviews the terminal decision. That effective time differs from when you enter the answer. Use recording time only if the answer became knowable now; otherwise enter the defensible earlier time with its correct UTC offset.
 
 Adaptive scoring uses effective time. Forecasts at or after the scoring cutoff stay in history but do not count. An outcome already fixed at or before the first Adaptive forecast is explicitly unscored.
 
 One-Shot **Add answer** records the checked answer and optionally when you checked it. The answer can predate the guess physically; you must have guessed before looking. Documentary times do not create an Adaptive scoring window.
 
-Resolution is a one-way terminal decision. You can add or correct a Postmortem later. **Needs Postmortem** surfaces resolved entries without reflection. **Skip Postmortem** dismisses the queue item while permitting reflection later.
+Resolution is a one-way terminal decision. **Write Postmortem** adds reflection later: on the right for Adaptive, inline below One-Shot results. A nonblank reflection-only addition/edit saves directly. Clearing it, **Skip**, and mixed factual corrections retain confirmation. **Needs postmortem** surfaces resolved entries without reflection; Skip dismisses the queue item while permitting reflection later.
 
 ## Correct a mistake
 
 Adaptive belief changes use **Revise** before the deadline. Saved revisions are never overwritten. Terminal corrections can repair an outcome or effective time while preserving the original; score-affecting changes require an explanation.
 
-One-Shot **Correct transcription** repairs a copied probability, percentile, answer, or reported time. The original and each correction remain inspectable. Scoring uses the latest effective facts once. This repairs the record of your earlier guess; it does not add a new guess after seeing the answer.
+One-Shot **More → Correct transcription** repairs a copied probability, percentile, answer, or reported time. Edit and review the complete proposed facts inside one dialog before confirming. The original and each correction remain inspectable. Scoring uses the latest effective facts once. This repairs the record of your earlier guess; it does not add a new guess after seeing the answer.
 
 Journal corrections show the latest body at the original Timeline position. Open **Edit history** for earlier versions. Question and Resolution Criteria clarifications retain Definition history; Background and tags are ordinary editable metadata. A material change to the target, source, threshold, or measurement convention requires preserving the original as Invalid and creating a new prediction.
 

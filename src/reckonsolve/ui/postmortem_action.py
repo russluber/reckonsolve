@@ -1,4 +1,4 @@
-"""Retain Adaptive Skip while the full Detail body is rebuilt in a later slice."""
+"""An explicit reflection completion action, separate from written reflection."""
 
 from collections.abc import Callable
 
@@ -23,11 +23,13 @@ class PostmortemSkipButton(QPushButton):
         show_error: Callable[[str], None],
         parent: QWidget,
     ):
-        super().__init__("Skip Postmortem", parent)
+        super().__init__("Skip", parent)
+        self.setAccessibleName("Skip Postmortem")
         self.setObjectName("skipAdaptivePostmortemButton")
         apply_action_role(self, ActionRole.QUIET)
         self._save, self._refresh, self._show_error = save, refresh, show_error
         self._history = None
+        self.before_skip: Callable[[], bool] = lambda: True
         self.hide()
         self.clicked.connect(self._skip)
 
@@ -44,6 +46,8 @@ class PostmortemSkipButton(QPushButton):
     def _skip(self) -> None:
         history = self._history
         if history is None:
+            return
+        if not self.before_skip():
             return
         if (
             QMessageBox.warning(

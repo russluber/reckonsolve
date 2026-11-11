@@ -20,9 +20,9 @@ from PySide6.QtWidgets import (
 def form_values(form: QWidget, excluded: tuple[QWidget, ...]) -> tuple:
     """Inspect raw input text, including invalid values, without validating it.
 
-    This adapter deliberately ignores labels, focus and disclosure state. It is
-    temporary integration for the existing forms until their dedicated slice;
-    it neither creates a canonical draft nor hides incomplete entered inputs.
+    This adapter deliberately ignores labels, focus and disclosure state. The
+    shared guard fingerprint creates no canonical draft and retains incomplete
+    entered inputs. Presentation-only state never makes a task dirty.
     """
     result = []
     for widget in form.findChildren(QWidget):

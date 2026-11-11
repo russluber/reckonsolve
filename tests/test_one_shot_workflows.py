@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from io import StringIO
 
 import pytest
-from PySide6.QtCore import QDate, QTime
+from PySide6.QtCore import QDate, Qt, QTime
 from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton
 from supported_fixtures import create_binary, create_numeric
 from test_one_shot_persistence import Clock, request
@@ -354,18 +354,15 @@ def test_main_window_one_shot_route_defaults_and_detail(app, qtbot):
     qtbot.waitUntil(detail.correct_button.isVisible)
     assert detail.edit_button.isVisible()
     assert not detail.answer_button.isVisible()
-    assert detail.scorecard.isVisible()
+    qtbot.waitUntil(detail.scorecard.isVisible)
     assert detail.add_postmortem_button.isVisible()
     assert detail.skip_postmortem_button.isVisible()
-    assert (
-        len(
-            [
-                button
-                for button in detail.findChildren(QPushButton)
-                if button.text() == "Correct transcription"
-            ]
-        )
-        == 1
+    assert "Correct transcription" in [
+        action.text() for action in detail.more_button.menu().actions()
+    ]
+    assert not any(
+        button.text() == "Correct transcription"
+        for button in detail.findChildren(QPushButton)
     )
     window.navigate_to("Predictions")
     window.navigate_to("Dashboard")
@@ -526,6 +523,7 @@ def test_one_shot_metadata_preserves_old_expected_date_without_attention(app, qt
         replace(request(False, False), expected_resolution=old_date)
     )
     dialog = EditPredictionDetailsDialog(operations, pending)
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
     qtbot.addWidget(dialog)
     dialog.show()
     assert not dialog.expected_resolution_toggle.isVisible()

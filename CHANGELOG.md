@@ -4,15 +4,17 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-First Journal/workspace slice; implementation under native review, not a published release.
+Journal/workspace walkthrough accepted; New Prediction/Prediction Detail implemented for native review. Performance, Settings and integrated acceptance remain. Not a published release.
 
 - Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
-- Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Existing destination bodies remain adapters for later slices.
+- Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Performance and Settings bodies remain adapters for their later slice.
 - Recovery-backed schema 21 retires Saved Views after review where configurations exist, blocks stale writers and records explicit One-Shot reflection provenance. CSV format 6 includes that provenance.
 - CLI-only `settings attention-days [--set N]`; retired Saved View commands fail before data access.
 - Corrected effective-reflection classification and affected save-response reads without rewriting forecasting history.
 - Aligned Journal Question headings with row content and made them more prominent than Binary forecasts; removed duplicate style rebuilds during appearance switching.
 - Shared 10–90 probability presets across both Binary creation modes and reserved focus-border space for presets and the shared New action.
+- Modular creation and Detail owners replace the former screen monolith. Adaptive Detail has committed headers, exact Numeric interval/tie labels, independently scrolling Timeline/Overview and contextual writing with guarded exits.
+- Lifecycle-specific reading, conditional Definition/transcription review inside focused dialogs, separate terminal confirmation, inline One-Shot reflection and direct nonblank reflection-only saves preserve immutable originals and stale-write checks.
 
 ## 0.8.0 - 2026-10-07
 

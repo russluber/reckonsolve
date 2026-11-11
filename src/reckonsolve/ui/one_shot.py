@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -44,9 +43,10 @@ from reckonsolve.domain.quantiles import (
     NumericValueConstraint,
     QuantileDefinition,
 )
-from reckonsolve.one_shot_display import forecast_text
+from reckonsolve.one_shot_display import forecast_text, values_lines
 from reckonsolve.reported_time import parse_reported_offset
 from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
+from reckonsolve.ui.dialog_review import DialogReview
 from reckonsolve.ui.quantile_input import FiveQuantileInput
 from reckonsolve.ui.time_input import SegmentedTimeEdit
 from reckonsolve.ui.visual_system import (
@@ -522,6 +522,7 @@ class OneShotCreationScreen(QWidget):
         except (ApplicationError, ValueError, sqlite3.Error) as error:
             self.error.setText(str(error))
             self.error.show()
+            self.form.quantiles.show_validation(error)
             return
         self.reset()
         self.prediction_created.emit(saved)
@@ -595,27 +596,38 @@ class OneShotEditDialog(QDialog):
         layout.addWidget(self.buttons)
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
+        self.review = DialogReview(self, self.buttons) if correction else None
+        if not correction:
+            consequence = text_label(
+                "Adding the answer marks this One-Shot Resolved. Transcription mistakes can be corrected later; forecasting cannot reopen.",
+                self,
+            )
+            layout.insertWidget(layout.indexOf(self.buttons), consequence)
+            self.buttons.button(QDialogButtonBox.StandardButton.Save).setText(
+                "Add answer"
+            )
 
     def submit(self) -> None:
         try:
             values = self.form.values()
             if self.correction and values == self.detail.record.effective:
                 raise ValueError("The transcription is unchanged.")
-            message = (
-                "Save this transcription correction? The original values remain in history. The saved score will use the corrected forecast and answer."
-                if self.correction
-                else "Save this answer and mark the One-Shot Resolved? You can correct transcription mistakes later; this cannot reopen forecasting."
-            )
-            if (
-                QMessageBox.question(
-                    self,
-                    self.windowTitle(),
-                    message,
-                    QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
-                    QMessageBox.StandardButton.Cancel,
-                )
-                != QMessageBox.StandardButton.Save
+            if self.correction and not (
+                self.review.active and self.review.consent_matches()
             ):
+                unit = (
+                    self.detail.record.definition.unit
+                    if self.detail.record.definition
+                    else ""
+                )
+                self.review.show(
+                    "Review transcription correction\n\nCurrent recorded facts:\n"
+                    + "\n".join(values_lines(self.detail.record.effective, unit))
+                    + "\n\nProposed recorded facts:\n"
+                    + "\n".join(values_lines(values, unit))
+                    + "\n\nThis repairs the record of your earlier forecast. Originals remain; scoring uses the corrected facts once.",
+                    "Confirm transcription correction",
+                )
                 return
             saved = (
                 self.operations.one_shots.correct(

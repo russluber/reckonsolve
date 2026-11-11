@@ -44,7 +44,12 @@ class OneShotOperations:
         return self._save(expected, values, correction=True, note=note)
 
     def save_postmortem(
-        self, expected: OneShotDetail, body: str | None, *, confirm_clear: bool = False
+        self,
+        expected: OneShotDetail,
+        body: str | None,
+        *,
+        confirm_clear: bool = False,
+        note: str | None = None,
     ) -> OneShotDetail:
         """Append a dedicated reflection snapshot without changing forecast facts."""
         values = replace(expected.record.effective, postmortem=body)
@@ -52,7 +57,10 @@ class OneShotOperations:
             raise ApplicationError("Confirm clearing the Postmortem before saving.")
         return self._perform(
             lambda: self.repository.correct_detail(
-                expected.record, values, source_action=OneShotSourceAction.POSTMORTEM
+                expected.record,
+                values,
+                note=note,
+                source_action=OneShotSourceAction.POSTMORTEM,
             )
         )
 

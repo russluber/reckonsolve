@@ -61,11 +61,22 @@ uv run python tools/run_visual_review.py representative
 uv run python tools/run_visual_review.py long-text
 ```
 
-These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. Representative and long-text profiles include all four forecasting contracts. Use these injected profiles for first-slice review; no personal upgrade or installed-tool replacement is needed.
+These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. Representative and long-text profiles include all four forecasting contracts, a waiting One-Shot and already-Locked Adaptive examples. Use these injected profiles for Journal, creation and Detail review; no personal upgrade or installed-tool replacement is needed.
 
 Review affected screens in Follow Windows, Light and Dark, relevant Windows scaling settings and normal/minimum supported widths. There is no sidebar in the first Journal/workspace slice. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
 
 Human visual acceptance is separate from offscreen Qt tests. Dated acceptance belongs in [the archive](../archive/README.md), not this repeatable procedure.
+
+### New Prediction and Detail review
+
+Start with the representative profile, then use long-text for wrapping/history checks. Keep all new records in that disposable window.
+
+1. Open Binary/Numeric Adaptive and answered One-Shot examples. Read full Questions, exact values/units, paired timing, results and originals. Check Locked/Invalid explanations, Timeline order/current-revision jump, and the separate One-Shot Journal section.
+2. Revise an Adaptive forecast. Consult Overview and return to the retained draft; change appearance. Check that the header/chart stay committed-only, then Commit Revision and verify the saved state. Try replacing entered work with Journal, New or Back, choosing Keep editing before testing explicit discard.
+3. Prepare Resolve or More → Mark Invalid, return from final confirmation to the populated form, then confirm on a disposable record. On an answered record, write/edit reflection and inspect history. Check inline One-Shot reflection and More → Correct transcription's internal review/Back route.
+4. Create each mode/type combination, including a waiting One-Shot and a later answer. Try crossed Numeric values: inputs must remain, the nearby explanation must be reachable and ties must remain valid. Check source-aware cancellation and the distinct ordinary/answered save landings.
+
+Repeat affected states at the supported minimum and 100%/150%/200% Windows scaling, using the fallback scroll when tall content exceeds a short window. Inspect keyboard focus, reachable Save/Cancel, modal boundaries and both appearances. Record the evaluated source and any limits; a passing automated capture does not substitute for these judgments.
 
 ## Documentation checks
 

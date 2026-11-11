@@ -340,7 +340,11 @@ def test_one_shot_journal_timeline_shows_current_text_and_reveals_matched_histor
     assert timeline is not None and card is not None and history is not None
     assert body is not None and body.text() == "Final field clue"
     assert not history.isChecked()
-    assert len(timeline.findChildren(QWidget, f"oneShotJournalEntry{entry_id}")) == 1
+    assert (
+        len(screen.journals.findChildren(QWidget, f"oneShotJournalEntry{entry_id}"))
+        == 1
+    )
+    assert not screen.journals.isHidden()
     assert screen.findChild(QWidget, "oneShotJournal") is None
 
     old_hit = operations.search_predictions(

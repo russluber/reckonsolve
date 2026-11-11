@@ -194,6 +194,14 @@ class MainWindow(QMainWindow):
         }.get(name, name)
         route = Route(name)
         current = self.workspace.current.route
+        if (
+            current is Route.DETAIL
+            and route is not Route.DETAIL
+            and not self._prediction_detail_host.confirm_exit(
+                "start New" if route is Route.NEW else "open " + route.value
+            )
+        ):
+            return
         if current is Route.NEW:
             if route is Route.NEW:
                 self._focus_creation()
@@ -263,6 +271,8 @@ class MainWindow(QMainWindow):
             return
         route = self.workspace.current.route
         if route is Route.JOURNAL:
+            return
+        if route is Route.DETAIL and not self._prediction_detail_host.confirm_exit():
             return
         destination = self.workspace.back_destination()
         # Verify before asking for discard. A failed read is neither deletion
@@ -425,6 +435,12 @@ class MainWindow(QMainWindow):
                 self._refreshing_visual_system = False
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if (
+            self.workspace.current.route is Route.DETAIL
+            and not self._prediction_detail_host.confirm_exit("close Reckonsolve")
+        ):
+            event.ignore()
+            return
         if self.workspace.current.route is Route.NEW:
             if not self.creation_task.confirm_exit():
                 event.ignore()

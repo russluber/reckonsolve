@@ -26,7 +26,7 @@ def qapp(qapp):
     return qapp
 
 
-@pytest.hookimpl(tryfirst=True)
+@pytest.hookimpl(wrapper=True, tryfirst=True)
 def pytest_runtest_teardown():
     """Test cleanup discards form inputs; exit-guard tests exercise their dialogs.
 
@@ -35,11 +35,14 @@ def pytest_runtest_teardown():
     """
     from PySide6.QtWidgets import QApplication
 
+    from reckonsolve.ui.detail_workspace import DetailWorkspace
     from reckonsolve.ui.main_window import MainWindow
 
     application = QApplication.instance()
-    if application is None:
-        return
-    for widget in application.topLevelWidgets():
-        if isinstance(widget, MainWindow):
-            widget.creation_task.reset()
+    if application is not None:
+        for widget in application.topLevelWidgets():
+            if isinstance(widget, MainWindow):
+                widget.creation_task.reset()
+                for workspace in widget.findChildren(DetailWorkspace):
+                    workspace.clear_editor()
+    yield

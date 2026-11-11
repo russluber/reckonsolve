@@ -17,8 +17,9 @@ from main_window_helpers import (
     _open_resolution_dialog,
     _required_child,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
     QGroupBox,
     QLabel,
     QMessageBox,
@@ -85,6 +86,7 @@ def test_resolve_yes_saves_reviewed_context_and_renders_terminal_facts(
         "I updated too slowly."
     )
 
+    _confirm_next_terminal("Resolve")
     qtbot.mouseClick(
         _required_child(dialog, QPushButton, "confirmResolvePredictionButton"),
         Qt.MouseButton.LeftButton,
@@ -157,6 +159,7 @@ def test_resolve_expected_error_keeps_dialog_and_inputs_for_retry(qtbot: QtBot) 
     notes = _required_child(dialog, QPlainTextEdit, "resolutionNotesInput")
     notes.setPlainText("Keep this source")
 
+    _confirm_next_terminal("Resolve")
     qtbot.mouseClick(
         _required_child(dialog, QPushButton, "confirmResolvePredictionButton"),
         Qt.MouseButton.LeftButton,
@@ -195,6 +198,7 @@ def test_mark_invalid_saves_optional_reason_and_renders_preserved_state(
     reason = _required_child(dialog, QPlainTextEdit, "invalidationReasonInput")
     reason.setPlainText("The event was cancelled.")
 
+    _confirm_next_terminal("Mark Invalid")
     qtbot.mouseClick(
         _required_child(dialog, QPushButton, "confirmMarkInvalidButton"),
         Qt.MouseButton.LeftButton,
@@ -353,3 +357,12 @@ def test_meaningful_open_prediction_disables_delete_and_guides_invalid(
     assert not delete.isEnabled()
     assert "Mark Invalid" in delete.toolTip()
     assert _required_child(window, QPushButton, "markInvalidButton").isEnabled()
+
+
+def _confirm_next_terminal(label):
+    def confirm():
+        dialog = QApplication.activeModalWidget()
+        assert isinstance(dialog, QMessageBox)
+        next(button for button in dialog.buttons() if button.text() == label).click()
+
+    QTimer.singleShot(0, confirm)
