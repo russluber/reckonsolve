@@ -59,9 +59,12 @@ Private design charters, workshop procedures, exploratory decisions, and validat
 uv run python tools/run_visual_review.py empty
 uv run python tools/run_visual_review.py representative
 uv run python tools/run_visual_review.py long-text
+uv run python tools/run_visual_review.py detail
 ```
 
 These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. Representative and long-text profiles include all four forecasting contracts, a waiting One-Shot and already-Locked Adaptive examples. Use these injected profiles for Journal, creation and Detail review; no personal upgrade or installed-tool replacement is needed.
+
+The `detail` profile adds ten controlled historical examples to the representative set: both Adaptive types with an earlier eligible forecast or no eligible forecast, corrected Invalid reasons across all four contracts, and waiting One-Shots of both types. Search for **Earlier forecast scored**, **No eligible forecast**, **Corrected Invalid reason**, or **Waiting for answer**. The outcomes, exact scores and original/corrected facts come through ordinary application operations. These examples do not yet supply substantial revision chains or corrected Journal/Definition/transcription history; those remain separate completion-review coverage.
 
 Review affected screens in Follow Windows, Light and Dark, relevant Windows scaling settings and normal/minimum supported widths. There is no sidebar in the first Journal/workspace slice. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
 

@@ -105,6 +105,8 @@ Adaptive **Resolve** prepares the outcome, when it became fixed and ascertainabl
 
 Adaptive scoring uses effective time. Forecasts at or after the scoring cutoff stay in history but do not count. An outcome already fixed at or before the first Adaptive forecast is explicitly unscored.
 
+Resolved Adaptive Detail leads with the effective outcome or actual value and its existing Trajectory Brier or WIS. **Forecast used for scoring** opens the eligible forecast context; an earlier scored forecast is distinct from the latest committed revision. An unscored result shows its explanation. Invalid Detail leads with the recorded reason and **Not scored**; **Last forecast · Not scored** retains access to the saved forecast. A corrected reason keeps the original decision date and labels the later correction separately.
+
 One-Shot **Add answer** records the checked answer and optionally when you checked it. The answer can predate the guess physically; you must have guessed before looking. Documentary times do not create an Adaptive scoring window.
 
 Resolution is a one-way terminal decision. **Write Postmortem** adds reflection later: on the right for Adaptive, inline below One-Shot results. A nonblank reflection-only addition/edit saves directly. Clearing it, **Skip**, and mixed factual corrections retain confirmation. **Needs postmortem** surfaces resolved entries without reflection; Skip dismisses the queue item while permitting reflection later.

@@ -108,3 +108,57 @@ reference preservation and both whitespace checks passed. Storage, analytics,
 migrations, dependencies and personal data remain unchanged. The earlier test runs
 above retain their original artifact scope; this run covers the accepted hierarchy/
 Timeline tuning together with the calibration repair.
+
+## Reported calibration recheck acceptance
+
+The user confirmed the calibration blackout fixed, found the reviewed result good,
+and reported staging, committing and pushing both checkpoints. The public tree
+was verified clean at `85eea77` and the private notes tree at `b01ed22` before the
+acceptance documentation update. This closes the focused calibration repair
+recheck and carries the accepted hierarchy/Timeline refinements forward. It does
+not close the remaining Detail feature/fixture audit, broader visual polish or
+the unreported native Windows scaling/focus matrix. No software changed during
+this acceptance update, so the preceding runtime evidence retains its scope.
+
+## First Detail completion checkpoint: terminal reading
+
+A source/reference comparison found that Resolved Adaptive and Invalid reading
+still gave the large current-forecast header priority over terminal facts. The
+working tree based on `85eea77` now leads Resolved Adaptive with its effective
+outcome/actual and existing Trajectory Brier/WIS, or the explicit unscored reason.
+Eligible scoring context starts collapsed; a later excluded revision remains
+preserved and distinct. Invalid reading across all four contracts leads with the
+effective reason and Not scored, separates later reason corrections from the
+original decision date, and keeps the last forecast available on request.
+Open/Locked reading and the accepted Timeline controls retain their behavior.
+
+The shared presentation component receives existing facts/scores. Real-store
+regressions cover terminal reading, cutoff selection, no eligible forecast,
+corrected One-Shot Invalid reasons and unchanged history/scores. The 27 focused
+Detail checks passed. The new `detail` review profile adds ten controlled cases
+to the representative profile, with a regression checking their substantive
+states and exact read-model meaning. Actual Qt light/dark captures were inspected
+at 1100 × 850 and representative terminal cases at 760 × 520 with fallback
+scrolling; this is not human Windows scaling/focus or visual acceptance.
+
+This is a completion checkpoint within the authorized second slice, not full
+Detail completion. Longer revision chains, corrected Journal/Definition/
+transcription history, remaining reading/task composition and the broader
+visual/keyboard/scaling review remain open. Existing runtime evidence above
+retains its artifact scope; later verification is recorded separately below.
+
+The final working tree for this checkpoint passed **1,127 tests in 258.38 seconds**,
+with no failures, errors or skips. Ruff check and format check passed. Data/domain/
+analytics, schema, migration, projection/export and dependency implementations
+remain unchanged. No personal database, staging, commit or push was operated.
+
+## Reported terminal-reading acceptance — 2026-11-12
+
+The user reported checking all supplied Detail review examples and finding them
+good. This accepts the terminal-reading checkpoint in the uncommitted working tree
+based on `85eea77`: earlier scoring-eligible forecasts, explicit unscored results,
+and corrected Invalid reasons with inspectable last forecasts. The earlier
+calibration repair acceptance is retained. This does not close the remaining
+Detail body/reflection/history work or the broader native Windows review matrix.
+The user retains staging, commits and pushes. This acceptance update changes only
+documentation; the preceding runtime checks retain their original scope.

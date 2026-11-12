@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -16,8 +17,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from reckonsolve.domain.predictions import InvalidationHistory
 from reckonsolve.domain.quantiles import FiveQuantiles
-from reckonsolve.ui.detail_workspace import collapse_section
+from reckonsolve.ui.detail_workspace import collapse_section, exact_detail_time
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
     ActionRole,
@@ -26,6 +28,91 @@ from reckonsolve.ui.visual_system import (
     apply_action_role,
     apply_text_role,
 )
+
+
+class TerminalSummary(QWidget):
+    """Lead terminal reading with supplied facts, never recalculate a score."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setObjectName("detailTerminalSummary")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.CONTROL))
+        metrics = QHBoxLayout()
+        self.outcome = self._label("terminalOutcome", TextRole.FORECAST)
+        self.score = self._label("terminalScore", TextRole.FORECAST)
+        metrics.addWidget(self.outcome, 1)
+        metrics.addWidget(self.score, 1)
+        layout.addLayout(metrics)
+        self.timing = self._label("terminalTiming", TextRole.SECONDARY)
+        self.note = self._label("terminalExplanation", TextRole.BODY)
+        layout.addWidget(self.timing)
+        layout.addWidget(self.note)
+        self.facts = self._label("terminalForecastFacts", TextRole.BODY)
+        self.context = collapse_section(self.facts, "Forecast used for scoring")
+        self.context.setObjectName("terminalForecastContext")
+        layout.addWidget(self.context)
+        self.hide()
+
+    def _label(self, name: str, role: TextRole) -> QLabel:
+        label = QLabel(self)
+        label.setObjectName(name)
+        label.setWordWrap(True)
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        apply_text_role(label, role)
+        return label
+
+    def set_facts(
+        self,
+        *,
+        outcome: str,
+        score: str,
+        timing: str,
+        note: str,
+        context: str,
+        context_title: str = "Forecast used for scoring",
+    ) -> None:
+        for label, text in (
+            (self.outcome, outcome),
+            (self.score, score),
+            (self.timing, timing),
+            (self.note, note),
+            (self.facts, context),
+        ):
+            label.setText(text)
+            label.setVisible(bool(text))
+        apply_text_role(
+            self.score, TextRole.LABEL if score == "Not scored" else TextRole.FORECAST
+        )
+        apply_text_role(
+            self.outcome,
+            TextRole.SECTION_TITLE
+            if outcome == "Recorded reason"
+            else TextRole.FORECAST,
+        )
+        self.context.disclosure_button.setText(context_title)
+        self.context.disclosure_button.setAccessibleName(context_title)
+        self.context.disclosure_button.setChecked(False)
+        self.context.disclosure_body.hide()
+        self.context.setVisible(bool(context))
+        self.show()
+
+
+def invalidation_timing(original: str, history: InvalidationHistory | None) -> str:
+    """Keep the decision date separate from a later reason correction."""
+    if history is None or not history.corrections:
+        return original
+    return (
+        original
+        + "\nReason corrected: "
+        + exact_detail_time(history.corrections[-1].corrected_at)
+        + " · Original decision date unchanged"
+    )
 
 
 def timeline_controls(

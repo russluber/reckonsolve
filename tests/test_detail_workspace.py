@@ -1,6 +1,8 @@
 """Native task, header and confirmation regressions on disposable real stores."""
 
+import runpy
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QPoint, QTimer
@@ -11,6 +13,7 @@ from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.application.reflection import save_postmortem
 from reckonsolve.data.database import Database
 from reckonsolve.domain.forecast_contracts import one_shot_contract
+from reckonsolve.domain.journal import JournalRequest
 from reckonsolve.domain.one_shot import (
     NewOneShotPrediction,
     OneShotSourceAction,
@@ -76,6 +79,268 @@ def choose(label):
         next(button for button in dialog.buttons() if button.text() == label).click()
 
     QTimer.singleShot(0, answer)
+
+
+def test_detail_review_profile_exposes_exact_terminal_cases(tmp_path):
+    fixture = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    now = datetime(2026, 11, 11, 12, tzinfo=UTC)
+    database = Database.open(tmp_path / "profile.sqlite3")
+    try:
+        fixture["_seed_detail_cases"](database, now=now)
+        operations = PredictionOperations(database, fixture["_ReviewClock"](now), UTC)
+        page = operations.journal.query(JournalRequest())
+        assert page.total == 10
+        assert (
+            len(
+                [
+                    row
+                    for row in page.rows
+                    if row.prediction.status is PredictionStatus.INVALID
+                ]
+            )
+            == 4
+        )
+        assert (
+            len(
+                [
+                    row
+                    for row in page.rows
+                    if row.prediction.status is PredictionStatus.OPEN
+                ]
+            )
+            == 2
+        )
+        for row in page.rows:
+            if row.prediction.question.startswith("No eligible forecast"):
+                assert operations.get_prediction_scorecard(
+                    row.prediction.prediction_id
+                ).unscored_reason
+                assert row.probability_percent is None and row.quantiles is None
+            elif row.prediction.question.startswith("Earlier forecast scored"):
+                assert row.excluded_later_forecast
+                assert (
+                    row.probability_percent == 65
+                    if row.probability_percent is not None
+                    else str(row.quantiles.q50) == "3"
+                )
+            elif row.prediction.status is PredictionStatus.INVALID:
+                history = operations.get_invalidation_history(
+                    row.prediction.prediction_id
+                )
+                assert len(history.corrections) == 1
+                assert history.original.reason != history.effective.reason
+                assert (
+                    history.original.invalidated_at
+                    < history.corrections[0].corrected_at
+                )
+    finally:
+        database.close()
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("invalid", [False, True])
+def test_terminal_reading_leads_with_results_or_reason(detail, qtbot, numeric, invalid):
+    window, operations, clock, binary = detail
+    prediction = (
+        operations.create_numeric_prediction(
+            "Terminal Numeric reading",
+            "items",
+            0,
+            {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=clock.now() + timedelta(days=10),
+        )
+        if numeric
+        else binary
+    )
+    context = {
+        "expected_revision_id": (
+            prediction.current_revision.revision_id
+            if numeric
+            else prediction.current_revision_id
+        ),
+        "expected_metadata_version": prediction.metadata_version,
+    }
+    clock.advance()
+    if invalid:
+        operation = (
+            operations.invalidate_numeric_prediction
+            if numeric
+            else operations.invalidate_prediction
+        )
+        operation(
+            prediction.prediction_id, reason="The question is ambiguous.", **context
+        )
+    elif numeric:
+        operations.resolve_numeric_prediction(
+            prediction.prediction_id, 1, use_recorded_time=True, **context
+        )
+    else:
+        operations.resolve_prediction(
+            prediction.prediction_id,
+            BinaryOutcome.YES,
+            use_recorded_time=True,
+            **context,
+        )
+    before = (
+        operations.get_prediction_scorecard(prediction.prediction_id)
+        if not invalid
+        else None
+    )
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    summary = screen.findChild(QWidget, "detailTerminalSummary")
+    assert summary is not None and summary.isVisible()
+    assert (
+        summary.mapTo(screen.workspace.widget(), QPoint()).y()
+        < screen.action_strip.mapTo(screen.workspace.widget(), QPoint()).y()
+    )
+    assert (screen.interval_display if numeric else screen.probability).isHidden()
+    assert screen.header_timing.isHidden()
+    assert (
+        "Not scored" in summary.score.text()
+        if invalid
+        else ("WIS" if numeric else "Trajectory Brier") in summary.score.text()
+    )
+    if invalid:
+        assert "ambiguous" in summary.note.text()
+        assert "Last forecast" in summary.context.disclosure_button.text()
+    else:
+        assert ("1 items" if numeric else "Yes") in summary.outcome.text()
+        assert not summary.context.disclosure_button.isChecked()
+        summary.context.disclosure_button.click()
+        assert summary.context.disclosure_body.isVisible()
+    for mode in (AppearanceMode.DARK, AppearanceMode.LIGHT):
+        window.appearance.select(mode)
+        qtbot.wait(20)
+        assert summary.isVisible()
+    if not invalid:
+        assert operations.get_prediction_scorecard(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("unscored", [False, True])
+def test_terminal_header_preserves_earlier_cutoff_and_unscored_context(
+    detail, numeric, unscored
+):
+    window, operations, clock, binary = detail
+    prediction = (
+        operations.create_numeric_prediction(
+            "Earlier scoring context",
+            "items",
+            0,
+            {5: 1, 25: 2, 50: 3, 75: 4, 95: 5},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=clock.now() + timedelta(days=10),
+        )
+        if numeric
+        else binary
+    )
+    created = clock.now()
+    original_revision_id = (
+        prediction.current_revision.revision_id
+        if numeric
+        else prediction.current_revision_id
+    )
+    clock.advance()
+    revise = (
+        operations.revise_quantile_forecast if numeric else operations.revise_forecast
+    )
+    latest = revise(
+        prediction.prediction_id,
+        {5: 10, 25: 20, 50: 30, 75: 40, 95: 50} if numeric else 90,
+        expected_revision_id=original_revision_id,
+        expected_metadata_version=prediction.metadata_version,
+    )
+    clock.advance()
+    resolve = (
+        operations.resolve_numeric_prediction
+        if numeric
+        else operations.resolve_prediction
+    )
+    resolve(
+        prediction.prediction_id,
+        2 if numeric else BinaryOutcome.YES,
+        effective_resolution_at=created
+        if unscored
+        else created + timedelta(minutes=30),
+        expected_revision_id=latest.current_revision.revision_id
+        if numeric
+        else latest.current_revision_id,
+        expected_metadata_version=latest.metadata_version,
+    )
+    before = operations.get_prediction_scorecard(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    summary = screen.terminal_summary
+    if unscored:
+        assert summary.score.text() == "Not scored"
+        assert before.unscored_reason in summary.note.text()
+        assert summary.context.isHidden()
+    else:
+        assert str(original_revision_id) in summary.facts.text()
+        assert ("median: 3" if numeric else "65%") in summary.facts.text()
+        assert "excluded" in summary.note.text().lower()
+        assert not summary.context.disclosure_button.isChecked()
+    assert operations.get_prediction_scorecard(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_invalid_one_shot_reason_leads_and_forecast_stays_available(detail, numeric):
+    window, operations, clock, _ = detail
+    pending = operations.one_shots.create(
+        NewOneShotPrediction(
+            "Invalid One-Shot reading",
+            one_shot_contract(
+                PredictionType.NUMERIC if numeric else PredictionType.BINARY
+            ),
+            OneShotValues(
+                quantiles=FiveQuantiles.from_values(
+                    {5: 1, 25: 2, 50: 3, 75: 4, 95: 5}, 0
+                )
+            )
+            if numeric
+            else OneShotValues(probability_percent=70),
+            QuantileDefinition("items", 0, NumericValueConstraint.CONTINUOUS)
+            if numeric
+            else None,
+        )
+    )
+    clock.advance()
+    invalid = operations.one_shots.invalidate(
+        pending, reason="The original exercise was ambiguous."
+    )
+    clock.advance()
+    history = operations.correct_invalidation_reason(
+        pending.prediction_id,
+        "Clarified reason: the source used two incompatible answers.",
+        expected_correction_id=None,
+    )
+    before = operations.one_shots.get(pending.prediction_id)
+    window._open_prediction(pending.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    summary = screen.terminal_summary
+    assert summary.isVisible() and summary.score.text() == "Not scored"
+    assert summary.note.text() == history.effective.reason
+    assert "Original decision date unchanged" in summary.timing.text()
+    assert not screen.forecast.isVisible()
+    assert screen.answer_button.isHidden()
+    assert "Last forecast" in summary.context.disclosure_button.text()
+    assert (
+        history.original.invalidated_at
+        == invalid.invalidation_history.original.invalidated_at
+    )
+    assert operations.one_shots.get(pending.prediction_id) == before
 
 
 @pytest.mark.parametrize("numeric", [False, True])

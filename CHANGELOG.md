@@ -17,6 +17,7 @@ Journal/workspace and supplied New Prediction/Prediction Detail journeys reviewe
 - Lifecycle-specific reading, conditional Definition/transcription review inside focused dialogs, separate terminal confirmation, inline One-Shot reflection and direct nonblank reflection-only saves preserve immutable originals and stale-write checks.
 - Page titles lead Question headings; Current revision sits with persistent Timeline controls. Hidden actions leave no gaps in wrapping control rows.
 - Fixed calibration graph/table backgrounds retaining the previous appearance while their text switched to light or dark mode.
+- Resolved Adaptive Detail now leads with factual results and scores; Invalid Detail leads with the recorded reason and Not scored. Scored or last-forecast context remains available on request. Added a disposable Detail review profile for cutoff, unscored and corrected-reason cases.
 
 ## 0.8.0 - 2026-10-07
 

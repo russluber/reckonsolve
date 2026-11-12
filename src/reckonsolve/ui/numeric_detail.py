@@ -32,15 +32,18 @@ from reckonsolve.domain.search import SearchDocument, SearchSourceKind
 from reckonsolve.forecast_display import (
     format_local_deadline,
 )
+from reckonsolve.quantile_display import quantile_scorecard_lines
 from reckonsolve.ui.components import (
     EmptyStateLabel,
     PageHeader,
     StatusBadge,
 )
 from reckonsolve.ui.detail_reading import (
+    TerminalSummary,
     criteria_reader,
     current_marker,
     interval_text,
+    invalidation_timing,
     progressive_body,
     quiet_event,
     reading_refresh,
@@ -583,6 +586,8 @@ class NumericPredictionDetailScreen(QWidget):
             "90% interval · 50% interval · Median",
         )
         summary_layout.addWidget(self.header_timing)
+        self.terminal_summary = TerminalSummary(summary_panel)
+        summary_layout.addWidget(self.terminal_summary)
         action_heading.hide()
         action_help.hide()
         old_actions = actions.layout()
@@ -1399,6 +1404,50 @@ class NumericPredictionDetailScreen(QWidget):
         dialog.open()
 
     def _sync_reading_actions(self, prediction) -> None:
+        terminal = prediction.status in (
+            PredictionStatus.RESOLVED,
+            PredictionStatus.INVALID,
+        )
+        for widget in (
+            self.interval_display,
+            self.forecast_heading,
+            self.header_timing,
+        ):
+            widget.setVisible(not terminal)
+        self.terminal_summary.setVisible(terminal)
+        if prediction.status is PredictionStatus.RESOLVED:
+            card = self._quantile_score
+            facts = quantile_scorecard_lines(card) if card is not None else ()
+            notices = [
+                line
+                for line in facts
+                if line.startswith(("Scoring facts", "Revisions excluded"))
+            ]
+            if card is not None and card.unscored_reason:
+                notices.insert(0, card.unscored_reason)
+            self.terminal_summary.set_facts(
+                outcome=self.resolution_actual.text(),
+                score=facts[1] if facts else "Score unavailable",
+                timing=self.resolution_time.text(),
+                note="\n".join(notices)
+                if card is not None
+                else "The score could not be loaded. Try again before interpreting this result.",
+                context=facts[2] if card is not None and card.final is not None else "",
+            )
+        elif prediction.status is PredictionStatus.INVALID:
+            self.terminal_summary.set_facts(
+                outcome="Recorded reason",
+                score="Not scored",
+                timing=invalidation_timing(
+                    self.invalidation_time.text(), self._invalidation_history
+                ),
+                note=self.invalidation_reason.text() or "No reason recorded.",
+                context=interval_text(
+                    prediction.current_revision.quantiles, prediction.unit
+                )
+                + f"\nOriginal Forecast Deadline: {self.forecast_deadline.text()}",
+                context_title="Last forecast · Not scored",
+            )
         self.write_postmortem_button.setVisible(
             prediction.status is PredictionStatus.RESOLVED
         )

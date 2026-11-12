@@ -37,6 +37,7 @@ from reckonsolve.ui.components import (
     ContentPanel,
 )
 from reckonsolve.ui.contextual_forms import BodyEditor
+from reckonsolve.ui.detail_reading import TerminalSummary, invalidation_timing
 from reckonsolve.ui.detail_workspace import DetailWorkspace, collapse_section
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.numeric_interval import NumericInterval
@@ -118,29 +119,53 @@ class OneShotDetailScreen(QWidget):
                     "Transcription corrected · Effective recorded facts", summary
                 )
             )
-        self.forecast = text_label(forecast_text(record.effective, unit), summary)
+        forecast_summary = QWidget(summary)
+        forecast_layout = QVBoxLayout(forecast_summary)
+        forecast_layout.setContentsMargins(0, 0, 0, 0)
+        self.forecast = text_label(
+            forecast_text(record.effective, unit), forecast_summary
+        )
         self.forecast.setObjectName("oneShotForecast")
         apply_text_role(self.forecast, TextRole.FORECAST)
         if record.effective.quantiles is not None:
-            self.interval = NumericInterval(summary)
+            self.interval = NumericInterval(forecast_summary)
             self.interval.set_forecast(record.effective.quantiles, unit)
-            header.addWidget(self.interval)
+            forecast_layout.addWidget(self.interval)
             self.forecast.hide()
-            header.addWidget(
+            forecast_layout.addWidget(
                 text_label(
                     "90% interval · 50% interval · Median"
                     + (f" · {unit}" if unit else ""),
-                    summary,
+                    forecast_summary,
                 )
             )
         else:
-            header.addWidget(self.forecast)
-        header.addWidget(
+            forecast_layout.addWidget(self.forecast)
+        forecast_layout.addWidget(
             text_label(
                 "Saved One-Shot forecast",
-                summary,
+                forecast_summary,
             )
         )
+        header.addWidget(forecast_summary)
+        if detail.invalidation_history is not None:
+            invalid = detail.invalidation_history
+            forecast_summary.hide()
+            self.terminal_summary = TerminalSummary(summary)
+            timing = invalidation_timing(
+                "Marked Invalid: "
+                + _format_local_timestamp(invalid.original.invalidated_at),
+                invalid,
+            )
+            self.terminal_summary.set_facts(
+                outcome="Recorded reason",
+                score="Not scored",
+                timing=timing,
+                note=invalid.effective.reason or "No reason recorded.",
+                context=forecast_text(record.effective, unit),
+                context_title="Last forecast · Not scored",
+            )
+            header.addWidget(self.terminal_summary)
         if detail.tags:
             self.tags = text_label("  ".join(f"#{t}" for t in detail.tags), summary)
             self.tags.setObjectName("oneShotTags")

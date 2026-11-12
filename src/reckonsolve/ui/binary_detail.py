@@ -36,8 +36,10 @@ from reckonsolve.ui.components import (
     StatusBadge,
 )
 from reckonsolve.ui.detail_reading import (
+    TerminalSummary,
     criteria_reader,
     current_marker,
+    invalidation_timing,
     reading_refresh,
     timeline_controls,
 )
@@ -594,6 +596,8 @@ class PredictionDetailScreen(QWidget):
             self.forecast_deadline_row, summary_panel, "Current committed forecast"
         )
         summary_layout.addWidget(self.header_timing)
+        self.terminal_summary = TerminalSummary(summary_panel)
+        summary_layout.addWidget(self.terminal_summary)
         action_heading.hide()
         action_help.hide()
         old_actions = action_row.layout()
@@ -1254,6 +1258,7 @@ class PredictionDetailScreen(QWidget):
         """Render latest effective facts plus inspectable append-only history."""
 
         self._excluded_scoring_revision_ids: frozenset[int] = frozenset()
+        self._trajectory_score: TrajectoryScorecard | None = None
         resolution = prediction.resolution
         self.resolution_section.setHidden(resolution is None)
         if resolution is not None:
@@ -1362,6 +1367,7 @@ class PredictionDetailScreen(QWidget):
         self.scorecard_guidance.setWordWrap(True)
         self.scorecard_brier.setWordWrap(True)
         if isinstance(scorecard, TrajectoryScorecard):
+            self._trajectory_score = scorecard
             self._excluded_scoring_revision_ids = frozenset(
                 scorecard.excluded_revision_ids
             )
@@ -1517,6 +1523,37 @@ class PredictionDetailScreen(QWidget):
         self.detail_error.setHidden(True)
 
     def _sync_reading_actions(self, prediction) -> None:
+        terminal = prediction.status in (
+            PredictionStatus.RESOLVED,
+            PredictionStatus.INVALID,
+        )
+        self.probability.setVisible(not terminal)
+        self.header_timing.setVisible(not terminal)
+        self.terminal_summary.setVisible(terminal)
+        if prediction.status is PredictionStatus.RESOLVED:
+            card = self._trajectory_score
+            self.terminal_summary.set_facts(
+                outcome=self.resolution_outcome.text(),
+                score=self.scorecard_brier.text()
+                if card is not None
+                else "Score unavailable",
+                timing=self.resolution_resolved_at.text(),
+                note=(card.unscored_reason or self.scorecard_correction_notice.text())
+                if card is not None
+                else "The score could not be loaded. Try again before interpreting this result.",
+                context=self.scorecard_forecast.text() if card is not None else "",
+            )
+        elif prediction.status is PredictionStatus.INVALID:
+            self.terminal_summary.set_facts(
+                outcome="Recorded reason",
+                score="Not scored",
+                timing=invalidation_timing(
+                    self.invalidated_at.text(), self._invalidation_history
+                ),
+                note=self.invalidation_reason.text() or "No reason recorded.",
+                context=f"Last forecast: {prediction.probability_percent}%\nOriginal Forecast Deadline: {self.forecast_deadline.text()}",
+                context_title="Last forecast · Not scored",
+            )
         self.write_postmortem_button.setVisible(
             prediction.status is PredictionStatus.RESOLVED
         )

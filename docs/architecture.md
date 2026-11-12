@@ -154,6 +154,8 @@ The chart/table comparison in ui/analytics_components.py coalesces surface synch
 
 Page-title typography leads the Question role while preserving readable Question/forecast emphasis. Shared FlowLayout omits empty/hidden items from geometry and minimum sizing, so lifecycle-ineligible controls leave no stray spacing. Adaptive Timeline heading, Current revision and order controls wrap together above the history scroll area; the independent pane proportions and jump target remain unchanged.
 
+ui/detail_reading.py supplies the shared terminal summary. Resolved Adaptive headers render effective outcome/actual and the existing analytical score, with eligible forecast context on request. Invalid headers across both modes lead with the effective reason and Not scored, preserve the original decision date and distinguish later reason corrections. Open/Locked retain committed forecast headers. The component receives display-ready facts; it performs no score calculation, canonical writes or SQL.
+
 Journal replaces Dashboard and the old browser. A compact shared toolbar offers prominent New, quiet Performance, appearance and Settings controls only on eligible pages. One task-source coordinator owns New/Performance/Settings origins; returning through Settings never overwrites Performance's independent origin. Detail returns to a refreshed Journal retrieval and a useful nearby anchor. No sidebar, peer tabs or general navigation stack remains.
 
 Creation retains all four contracts, whole-task discard/save guards, mode inputs and the Journal/answered-Detail success landings. Numeric validation uses authoritative field errors beside retained forecast inputs. Performance and Settings keep functioning bodies for their later slice.
