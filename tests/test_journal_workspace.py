@@ -257,6 +257,7 @@ def test_actual_palette_and_readable_rows_follow_both_appearances(workspace, qtb
     from PySide6.QtGui import QPalette
     from PySide6.QtWidgets import QLabel
 
+    from reckonsolve.ui.components import PageHeader
     from reckonsolve.ui.journal.rows import QuestionLabel
     from reckonsolve.ui.visual_system import semantic_colors
 
@@ -277,6 +278,9 @@ def test_actual_palette_and_readable_rows_follow_both_appearances(workspace, qtb
             if label.text() == "60% Yes"
         )
         assert question.font().pointSizeF() >= forecast.font().pointSizeF()
+        title = journal.findChild(PageHeader).title_label
+        assert title.text() == "Journal"
+        assert title.font().pointSizeF() > question.font().pointSizeF()
         assert question.indent() == 0
         assert question.contentsRect().left() == forecast.contentsRect().left() == 0
         assert (

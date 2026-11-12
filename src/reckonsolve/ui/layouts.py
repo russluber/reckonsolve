@@ -47,6 +47,8 @@ class FlowLayout(QLayout):
     def minimumSize(self) -> QSize:
         size = QSize()
         for item in self._items:
+            if item.isEmpty():
+                continue
             size = size.expandedTo(item.minimumSize())
         margins = self.contentsMargins()
         return size + QSize(
@@ -71,6 +73,9 @@ class FlowLayout(QLayout):
         line_height = 0
         spacing = self.spacing()
         for item in self._items:
+            # Ineligible actions and removed chips must leave no spacing behind.
+            if item.isEmpty():
+                continue
             hint = item.sizeHint()
             next_x = x + hint.width() + spacing
             if next_x - spacing > rect.right() + 1 and line_height > 0:

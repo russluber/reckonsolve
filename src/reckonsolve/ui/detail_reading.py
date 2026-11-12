@@ -4,24 +4,49 @@ from functools import wraps
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QGroupBox,
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from reckonsolve.domain.quantiles import FiveQuantiles
 from reckonsolve.ui.detail_workspace import collapse_section
+from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
     ActionRole,
+    Spacing,
     TextRole,
     apply_action_role,
     apply_text_role,
 )
+
+
+def timeline_controls(
+    heading: QWidget, jump: QPushButton, order: QComboBox, parent: QWidget
+) -> QWidget:
+    """Keep reading navigation beside Timeline, wrapping in a narrow writing pane."""
+    row = QWidget(parent)
+    row.setObjectName("detailTimelineControls")
+    row.setAccessibleName("Timeline controls")
+    outer = QVBoxLayout(row)
+    outer.setContentsMargins(int(Spacing.ORDINARY), 0, int(Spacing.ORDINARY), 0)
+    controls = QWidget(row)
+    layout = FlowLayout(controls)
+    outer.addWidget(controls)
+    apply_action_role(jump, ActionRole.QUIET)
+    jump.setToolTip("Jump to the saved revision establishing the current forecast.")
+    heading.setMinimumHeight(max(jump.sizeHint().height(), order.sizeHint().height()))
+    for control in (heading, jump, order):
+        control.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        layout.addWidget(control)
+    return row
 
 
 def interval_text(values: FiveQuantiles, unit: str) -> str:

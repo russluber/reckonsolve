@@ -14,8 +14,19 @@ from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
 from reckonsolve.ui.analytics_components import CompactMetricGroup
 from reckonsolve.ui.analytics_screen import AnalyticsScreen
+from reckonsolve.ui.appearance import appearance_palette
 from reckonsolve.ui.components import ContentPanel
-from reckonsolve.ui.visual_system import install_visual_system, semantic_colors
+from reckonsolve.ui.main_window import MainWindow
+from reckonsolve.ui.presentation_settings import (
+    AppearanceMode,
+    MemoryPresentationSettings,
+    WindowPresentationState,
+)
+from reckonsolve.ui.visual_system import (
+    contrast_ratio,
+    install_visual_system,
+    semantic_colors,
+)
 
 START = datetime(2026, 9, 10, 12, tzinfo=UTC)
 
@@ -433,4 +444,77 @@ def test_compact_trajectory_summary_geometry_and_unchanged_values(
         )
     finally:
         qapp.setFont(original_font)
+        qapp.setPalette(original_palette)
+
+
+@pytest.mark.parametrize("initial", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+@pytest.mark.parametrize("width", [900, 1400])
+def test_calibration_paint_tracks_repeated_appearance_changes(
+    active, qtbot, qapp, initial, width
+):
+    clock, operations = active
+    prediction = operations.create_prediction(
+        "Will calibration stay readable after switching appearance?",
+        70,
+        forecast_deadline=START + timedelta(hours=2),
+    )
+    clock.instant += timedelta(hours=2)
+    operations.resolve_prediction(
+        prediction.prediction_id,
+        BinaryOutcome.YES,
+        effective_resolution_at=clock.instant,
+        **_context(prediction),
+    )
+    before = operations.get_forecast_analytics()
+    original_palette = qapp.palette()
+    window = MainWindow(
+        operations,
+        presentation_settings=MemoryPresentationSettings(
+            WindowPresentationState(appearance=initial)
+        ),
+    )
+    qtbot.addWidget(window)
+    try:
+        window.resize(width, 1000)
+        window.show()
+        window.navigate_to("Performance")
+        screen = window._analytics_screen
+        chart = screen.trajectory_calibration_chart
+        table = screen.trajectory_calibration_table
+        opposite = (
+            AppearanceMode.DARK
+            if initial is AppearanceMode.LIGHT
+            else AppearanceMode.LIGHT
+        )
+        for mode in (initial, opposite, initial, opposite):
+            window.appearance.select(mode)
+            qtbot.wait(20)
+            expected = QColor(
+                semantic_colors(appearance_palette(mode is AppearanceMode.DARK)).raised
+            )
+            # Check actual paint as well as palette roles: stale explicit Base
+            # colors previously survived while text changed to the new theme.
+            assert chart.grab().toImage().pixelColor(5, 5) == expected
+            for widget in (chart, table, table.viewport()):
+                palette = widget.palette()
+                assert palette.color(QPalette.ColorRole.Base) == expected
+                assert (
+                    contrast_ratio(palette.color(QPalette.ColorRole.Text), expected)
+                    >= 4.5
+                )
+            cell = table.visualItemRect(table.item(0, 3))
+            assert (
+                table.viewport()
+                .grab()
+                .toImage()
+                .pixelColor(cell.right() - 4, cell.bottom() - 4)
+                == expected
+            )
+            assert chart.bins == before.trajectory_binary.final_calibration_bins
+            assert sum(int(table.item(row, 1).text()) for row in range(10)) == 1
+            assert screen.mean_trajectory_brier.text() == "0.090"
+            assert screen._loaded_snapshot == before
+        assert operations.get_forecast_analytics() == before
+    finally:
+        window.close()
         qapp.setPalette(original_palette)

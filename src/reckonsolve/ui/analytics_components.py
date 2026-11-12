@@ -1,6 +1,6 @@
 """Shared presentation-only metric rows and responsive plot/table pairs."""
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QColor, QPalette, QResizeEvent
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -189,6 +189,9 @@ class _ResponsiveChartTable(QWidget):
         self.setObjectName(object_name)
         self._chart = chart
         self._table = table
+        self._surface_refresh = QTimer(self)
+        self._surface_refresh.setSingleShot(True)
+        self._surface_refresh.timeout.connect(self._synchronize_surfaces)
         for widget in (chart, table):
             policy = widget.sizePolicy()
             policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
@@ -210,7 +213,10 @@ class _ResponsiveChartTable(QWidget):
             QEvent.Type.ApplicationFontChange,
             QEvent.Type.StyleChange,
         ):
-            self._synchronize_surfaces()
+            # Qt propagates palette/style changes through the parent before
+            # repolishing its children. Read the resolved surface after that
+            # pass; reading it here can pin the previous theme's background.
+            self._surface_refresh.start(0)
             self._fit_table_height()
 
     def resizeEvent(self, event: QResizeEvent) -> None:

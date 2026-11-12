@@ -4,7 +4,7 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace walkthrough accepted; New Prediction/Prediction Detail implemented for native review. Performance, Settings and integrated acceptance remain. Not a published release.
+Journal/workspace and supplied New Prediction/Prediction Detail journeys reviewed; Detail feature/fixture completion and visual refinements remain open. Performance, Settings and integrated acceptance follow. Not a published release.
 
 - Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
 - Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Performance and Settings bodies remain adapters for their later slice.
@@ -15,6 +15,8 @@ Journal/workspace walkthrough accepted; New Prediction/Prediction Detail impleme
 - Shared 10–90 probability presets across both Binary creation modes and reserved focus-border space for presets and the shared New action.
 - Modular creation and Detail owners replace the former screen monolith. Adaptive Detail has committed headers, exact Numeric interval/tie labels, independently scrolling Timeline/Overview and contextual writing with guarded exits.
 - Lifecycle-specific reading, conditional Definition/transcription review inside focused dialogs, separate terminal confirmation, inline One-Shot reflection and direct nonblank reflection-only saves preserve immutable originals and stale-write checks.
+- Page titles lead Question headings; Current revision sits with persistent Timeline controls. Hidden actions leave no gaps in wrapping control rows.
+- Fixed calibration graph/table backgrounds retaining the previous appearance while their text switched to light or dark mode.
 
 ## 0.8.0 - 2026-10-07
 

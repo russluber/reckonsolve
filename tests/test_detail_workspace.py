@@ -3,8 +3,8 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
+from PySide6.QtCore import QPoint, QTimer
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton, QWidget
 
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.application.predictions import PredictionOperations
@@ -76,6 +76,101 @@ def choose(label):
         next(button for button in dialog.buttons() if button.text() == label).click()
 
     QTimer.singleShot(0, answer)
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_timeline_jump_stays_with_history_and_terminal_actions_leave_no_gaps(
+    detail, qtbot, numeric
+):
+    window, operations, clock, binary = detail
+    prediction = (
+        operations.create_numeric_prediction(
+            "Readable Numeric controls",
+            "units",
+            0,
+            {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=clock.now() + timedelta(days=10),
+        )
+        if numeric
+        else binary
+    )
+    revision_id = (
+        prediction.current_revision.revision_id
+        if numeric
+        else prediction.current_revision_id
+    )
+    add_journal = (
+        operations.add_numeric_journal_entry
+        if numeric
+        else operations.add_journal_entry
+    )
+    for index in range(12):
+        clock.advance()
+        add_journal(
+            prediction.prediction_id,
+            f"History entry {index}: " + "Preserve this reasoning. " * 12,
+            expected_revision_id=revision_id,
+            expected_metadata_version=prediction.metadata_version,
+        )
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    controls = screen.findChild(QWidget, "detailTimelineControls")
+    jump = screen.current_revision_button
+    assert controls.isAncestorOf(jump)
+    assert not screen.action_strip.isAncestorOf(jump)
+    bar = screen.workspace.timeline.verticalScrollBar()
+    qtbot.waitUntil(lambda: bar.maximum() > 0)
+    position = jump.mapTo(screen.workspace.panes, QPoint())
+    bar.setValue(bar.maximum())
+    qtbot.wait(20)
+    assert jump.isVisible()
+    assert jump.mapTo(screen.workspace.panes, QPoint()) == position
+    screen.timeline_order.setCurrentIndex(1)
+    qtbot.wait(20)
+    bar.setValue(bar.maximum())
+    jump.click()
+    qtbot.waitUntil(lambda: bar.value() == 0)
+    for width in (1100, 760):
+        window.resize(width, 850)
+        qtbot.wait(30)
+        for control in (jump, screen.timeline_order):
+            assert controls.rect().contains(control.geometry())
+        assert not jump.geometry().intersects(screen.timeline_order.geometry())
+    clock.advance()
+    if numeric:
+        resolved = operations.resolve_numeric_prediction(
+            prediction.prediction_id,
+            "1",
+            use_recorded_time=True,
+            expected_revision_id=revision_id,
+            expected_metadata_version=prediction.metadata_version,
+        )
+    else:
+        resolved = operations.resolve_prediction(
+            prediction.prediction_id,
+            BinaryOutcome.YES,
+            use_recorded_time=True,
+            expected_revision_id=revision_id,
+            expected_metadata_version=prediction.metadata_version,
+        )
+    screen.show_prediction(resolved)
+    qtbot.wait(30)
+    assert screen.more_button.isVisible()
+    assert screen.more_button.geometry().left() == 0
+    assert all(
+        button.isHidden()
+        for button in (
+            screen.revise_forecast_button,
+            screen.review_forecast_button,
+            screen.add_journal_entry_button,
+            screen.resolve_button,
+        )
+    )
 
 
 def test_revision_is_contextual_retains_overview_and_commits_once(detail, qtbot):

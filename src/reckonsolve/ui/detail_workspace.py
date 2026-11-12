@@ -49,6 +49,12 @@ class DetailWorkspace(QScrollArea):
         self.columns.setContentsMargins(0, 0, 0, 0)
         self.columns.setSpacing(int(Spacing.SECTION))
         self.timeline, self.timeline_body = self._pane("detailTimelinePane")
+        self.timeline_column = QWidget(self.panes)
+        self.timeline_column.setMinimumWidth(0)
+        self.timeline_column_layout = QVBoxLayout(self.timeline_column)
+        self.timeline_column_layout.setContentsMargins(0, 0, 0, 0)
+        self.timeline_column_layout.setSpacing(int(Spacing.CONTROL))
+        self.timeline_column_layout.addWidget(self.timeline, 1)
         self.overview, self.overview_body = self._pane("detailOverviewPane")
         self.tabs = QTabWidget(self.panes)
         self.tabs.setObjectName("detailContextTabs")
@@ -56,7 +62,7 @@ class DetailWorkspace(QScrollArea):
         self.tabs.addTab(self.overview, "Overview")
         self.tabs.tabBar().hide()
         self.tabs.currentChanged.connect(self._tab_changed)
-        self.columns.addWidget(self.timeline, 3)
+        self.columns.addWidget(self.timeline_column, 3)
         self.columns.addWidget(self.tabs, 2)
         self.editor: QDialog | None = None
         self.editor_scroll: QScrollArea | None = None
@@ -69,6 +75,10 @@ class DetailWorkspace(QScrollArea):
         self._transition.setDuration(120)
         self._transition.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self._transition.valueChanged.connect(self._set_proportion)
+
+    def set_timeline_controls(self, controls: QWidget) -> None:
+        """Keep history navigation reachable independently of its scroll position."""
+        self.timeline_column_layout.insertWidget(0, controls)
 
     def _pane(self, name: str) -> tuple[QScrollArea, QWidget]:
         scroll = QScrollArea(self.panes)

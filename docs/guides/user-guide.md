@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The first slice's requested walkthrough is accepted; the second awaits native review. Performance and Settings retain functioning bodies for their later redesign.
+This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The first walkthrough and supplied second-slice journeys have been reviewed; Detail feature/fixture completion and visual refinement remain open. Performance and Settings retain functioning bodies for their later redesign.
 
 ## In this guide
 
@@ -95,7 +95,7 @@ An Open Adaptive prediction offers:
 
 At the Forecast Deadline, an unanswered Adaptive prediction becomes **Locked**. Revisions and Reviews stop; Journal, Resolve, and Mark Invalid remain available. A waiting One-Shot permits Journal entries and metadata work, but no revision or Review.
 
-Adaptive Detail keeps the committed forecast above independently scrolling Timeline and Overview panes. Revise and Journal writing open on the right. **Overview / Revision · unsaved** lets you consult saved context without losing the draft. **Commit Revision** saves a complete changed forecast; failed saves retain entered values. **Current revision** jumps to the marked saved Timeline event. Choose Newest first or Oldest first to read history; expand longer Journal text and earlier body versions when needed. Long criteria have a wider read-only view.
+Adaptive Detail keeps the committed forecast above independently scrolling Timeline and Overview panes. Revise and Journal writing open on the right. **Overview / Revision · unsaved** lets you consult saved context without losing the draft. **Commit Revision** saves a complete changed forecast; failed saves retain entered values. **Current revision**, beside the Timeline heading, jumps to its marked saved event. It remains reachable with the Newest first / Oldest first control while history scrolls. Expand longer Journal text and earlier body versions when needed. Long criteria have a wider read-only view.
 
 Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot reading leads with the effective saved forecast, answer and score; originals and recorded history are available on request, and saved Journals have their own visible section.
 

@@ -39,6 +39,7 @@ from reckonsolve.ui.detail_reading import (
     criteria_reader,
     current_marker,
     reading_refresh,
+    timeline_controls,
 )
 from reckonsolve.ui.detail_workspace import (
     DetailWorkspace,
@@ -611,6 +612,7 @@ class PredictionDetailScreen(QWidget):
             button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
             strip.addWidget(button)
         self.more_button = QPushButton("More", self.action_strip)
+        apply_action_role(self.more_button, ActionRole.SECONDARY)
         self.more_menu = QMenu(self.more_button)
         self.more_actions = []
         for button in (
@@ -623,12 +625,10 @@ class PredictionDetailScreen(QWidget):
             self.more_actions.append((action, button))
         self.more_button.setMenu(self.more_menu)
         strip.addWidget(self.more_button)
-        self.current_revision_button = QPushButton(
-            "Current revision", self.action_strip
-        )
+        self.current_revision_button = QPushButton("Current revision", timeline_panel)
+        self.current_revision_button.setObjectName("jumpToCurrentRevisionButton")
         self.current_revision_button.setAccessibleName("Jump to Current Revision")
         self.current_revision_button.clicked.connect(self._jump_current_revision)
-        strip.addWidget(self.current_revision_button)
         action_row.hide()
         action_panel_layout.addWidget(self.action_strip)
         self.timeline_order = QComboBox(timeline_panel)
@@ -642,16 +642,17 @@ class PredictionDetailScreen(QWidget):
             )
         )
         heading = timeline_panel_layout.takeAt(0).widget()
-        order_row = QWidget(timeline_panel)
-        order_layout = QHBoxLayout(order_row)
-        order_layout.setContentsMargins(0, 0, 0, 0)
-        order_layout.addWidget(heading)
-        order_layout.addStretch()
-        order_layout.addWidget(self.timeline_order)
-        timeline_panel_layout.insertWidget(0, order_row)
         self.scroll_area = DetailWorkspace(self.detail_content, self)
         self.scroll_area.setObjectName("predictionDetailScrollArea")
         self.workspace = self.scroll_area
+        self.workspace.set_timeline_controls(
+            timeline_controls(
+                heading,
+                self.current_revision_button,
+                self.timeline_order,
+                self.detail_content,
+            )
+        )
         self.skip_postmortem_button.before_skip = lambda: self.workspace.confirm_exit(
             "skip Postmortem"
         )

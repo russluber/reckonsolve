@@ -146,7 +146,7 @@ _TEXT_ROLE_DELTAS = {
     TextRole.LABEL: 0.0,
     TextRole.SECTION_TITLE: 1.0,
     TextRole.QUESTION: 8.0,
-    TextRole.PAGE_TITLE: 4.0,
+    TextRole.PAGE_TITLE: 11.0,
     TextRole.METRIC: 7.0,
     TextRole.FORECAST: 7.0,
 }

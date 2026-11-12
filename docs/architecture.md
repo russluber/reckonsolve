@@ -1,6 +1,6 @@
 # Reckonsolve architecture
 
-Unreleased working tree: Journal/workspace plus New Prediction/Prediction Detail, schema 21, search projection 3, CSV format 6. The first walkthrough is accepted with [recorded limits](archive/releases/2026-11-11-journal-workspace-review.md); the second slice awaits native acceptance. Released v0.8.0 remains the schema-20/format-5 baseline.
+Unreleased working tree: Journal/workspace plus New Prediction/Prediction Detail, schema 21, search projection 3, CSV format 6. The first walkthrough is accepted with [recorded limits](archive/releases/2026-11-11-journal-workspace-review.md); supplied second-slice journeys and hierarchy/Timeline refinements have [qualified user review](archive/releases/2026-11-11-prediction-detail-verification.md#reported-user-review-and-follow-up), with Detail feature/fixture completion and broader visual refinement open. Released v0.8.0 remains the schema-20/format-5 baseline.
 Last reviewed: 2026-11-11.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
@@ -149,6 +149,10 @@ Journals appear once at their original causal Timeline position, displaying curr
 ui/components.py supplies the shared Binary creation ProbabilityPresets row. Adaptive and One-Shot creation use the same direct-entry controls, with separate widget identities and no save action. Compact presets and the shared New button reserve their focused border width so keyboard focus does not clip labels or change geometry.
 
 ui/visual_system.py owns palette-relative typography, semantic colors, spacing, surfaces, badges, focus/disabled states, action roles, and restrained motion. Palette propagation may request several refreshes; unchanged stylesheet text is retained so each appearance change repolishes the workspace once. Semantic fonts still refresh for native font changes. No widget-local theme framework or domain/data dependency is introduced. Local Lucide assets and dropdown chevrons follow the packaged resource path; palette changes refresh colors and icons.
+
+The chart/table comparison in ui/analytics_components.py coalesces surface synchronization until Qt finishes palette propagation and stylesheet repolishing. Its graph and table then use the same resolved panel surface; explicit child backgrounds cannot retain the previous appearance while text changes.
+
+Page-title typography leads the Question role while preserving readable Question/forecast emphasis. Shared FlowLayout omits empty/hidden items from geometry and minimum sizing, so lifecycle-ineligible controls leave no stray spacing. Adaptive Timeline heading, Current revision and order controls wrap together above the history scroll area; the independent pane proportions and jump target remain unchanged.
 
 Journal replaces Dashboard and the old browser. A compact shared toolbar offers prominent New, quiet Performance, appearance and Settings controls only on eligible pages. One task-source coordinator owns New/Performance/Settings origins; returning through Settings never overwrites Performance's independent origin. Detail returns to a refreshed Journal retrieval and a useful nearby anchor. No sidebar, peer tabs or general navigation stack remains.
 
