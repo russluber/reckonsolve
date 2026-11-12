@@ -2,7 +2,7 @@
 
 from itertools import pairwise
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -65,7 +65,30 @@ class QuantileCDF(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         colors = semantic_colors(self.palette())
         text = self.palette().color(self.palette().ColorRole.Text)
-        area = QRectF(45, 22, max(1, self.width() - 65), max(1, self.height() - 67))
+        metrics = painter.fontMetrics()
+        axis_width = max(1, self.width() - 65)
+        unit_flags = Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap
+        unit_height = metrics.boundingRect(
+            QRect(0, 0, self.width(), 4096), unit_flags, self.unit
+        ).height()
+        endpoints = (str(self.quantiles.q05), str(self.quantiles.q95))
+        separate_ticks = (
+            sum(metrics.horizontalAdvance(t) for t in endpoints) + 12 > axis_width
+        )
+        tick_flags = Qt.TextFlag.TextWrapAnywhere
+        tick_heights = [
+            metrics.boundingRect(QRect(0, 0, axis_width, 4096), tick_flags, t).height()
+            for t in endpoints
+        ]
+        ticks_height = sum(tick_heights) if separate_ticks else max(tick_heights)
+        # Narrow context panes retain complete endpoint labels and long units;
+        # reserve their real text height rather than painting over the plot.
+        area = QRectF(
+            45,
+            22,
+            axis_width,
+            max(1, self.height() - 22 - ticks_height - unit_height - 16),
+        )
         values = [v.scaled_value for v in self.quantiles.values]
         lo, hi = values[0], values[-1]
         span = hi - lo or max(1, 10**self.quantiles.q50.decimal_places)
@@ -94,19 +117,27 @@ class QuantileCDF(QWidget):
         for point in points:
             painter.drawEllipse(point, 4, 4)
         painter.setPen(text)
+        for index, endpoint in enumerate(endpoints):
+            painter.drawText(
+                QRectF(
+                    area.left(),
+                    area.bottom()
+                    + 6
+                    + (tick_heights[0] if index and separate_ticks else 0),
+                    area.width(),
+                    tick_heights[index],
+                ),
+                tick_flags
+                | (
+                    Qt.AlignmentFlag.AlignLeft
+                    if index == 0
+                    else Qt.AlignmentFlag.AlignRight
+                ),
+                endpoint,
+            )
         painter.drawText(
-            QRectF(area.left(), area.bottom() + 6, area.width() / 2, 20),
-            Qt.AlignmentFlag.AlignLeft,
-            str(self.quantiles.q05),
-        )
-        painter.drawText(
-            QRectF(area.center().x(), area.bottom() + 6, area.width() / 2, 20),
-            Qt.AlignmentFlag.AlignRight,
-            str(self.quantiles.q95),
-        )
-        painter.drawText(
-            QRectF(0, self.height() - 22, self.width(), 20),
-            Qt.AlignmentFlag.AlignCenter,
+            QRectF(0, self.height() - unit_height - 2, self.width(), unit_height),
+            unit_flags,
             self.unit,
         )
         painter.end()

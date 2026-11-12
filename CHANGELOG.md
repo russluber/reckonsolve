@@ -4,7 +4,7 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace and supplied New Prediction/Prediction Detail journeys reviewed; Detail feature/fixture completion and visual refinements remain open. Performance, Settings and integrated acceptance follow. Not a published release.
+Journal/workspace and New Prediction/Prediction Detail journeys reviewed. The combined Detail review was good overall; long-history responsiveness and pane-motion tuning await focused native recheck. Performance, Settings and integrated acceptance follow. Not a published release.
 
 - Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
 - Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Performance and Settings bodies remain adapters for their later slice.
@@ -18,6 +18,10 @@ Journal/workspace and supplied New Prediction/Prediction Detail journeys reviewe
 - Page titles lead Question headings; Current revision sits with persistent Timeline controls. Hidden actions leave no gaps in wrapping control rows.
 - Fixed calibration graph/table backgrounds retaining the previous appearance while their text switched to light or dark mode.
 - Resolved Adaptive Detail now leads with factual results and scores; Invalid Detail leads with the recorded reason and Not scored. Scored or last-forecast context remains available on request. Added a disposable Detail review profile for cutoff, unscored and corrected-reason cases.
+
+- Finished terminal supporting content, reflection actions and chronological terminal events. Numeric Detail distinguishes the latest committed distribution from an earlier scoring forecast; complete corrected histories and long revision chains are available in disposable review examples. Small-window reading and revision controls wrap with larger text.
+
+- Reused unchanged Adaptive Timeline rows and replaced only changed entries after fresh reads. Order controls rearrange loaded history directly; bidirectional pane movement avoids rewrapping the full Timeline every frame and honors reduced motion.
 
 ## 0.8.0 - 2026-10-07
 

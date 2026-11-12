@@ -27,6 +27,7 @@ from reckonsolve.ui.visual_system import (
     TextRole,
     apply_action_role,
     apply_text_role,
+    refresh_widget_style,
 )
 
 
@@ -42,8 +43,8 @@ class TerminalSummary(QWidget):
         metrics = QHBoxLayout()
         self.outcome = self._label("terminalOutcome", TextRole.FORECAST)
         self.score = self._label("terminalScore", TextRole.FORECAST)
-        metrics.addWidget(self.outcome, 1)
-        metrics.addWidget(self.score, 1)
+        metrics.addWidget(self.outcome, 1, Qt.AlignmentFlag.AlignTop)
+        metrics.addWidget(self.score, 1, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(metrics)
         self.timing = self._label("terminalTiming", TextRole.SECONDARY)
         self.note = self._label("terminalExplanation", TextRole.BODY)
@@ -76,6 +77,7 @@ class TerminalSummary(QWidget):
         note: str,
         context: str,
         context_title: str = "Forecast used for scoring",
+        timing_tooltip: str = "",
     ) -> None:
         for label, text in (
             (self.outcome, outcome),
@@ -96,6 +98,7 @@ class TerminalSummary(QWidget):
             else TextRole.FORECAST,
         )
         self.context.disclosure_button.setText(context_title)
+        self.timing.setToolTip(timing_tooltip or timing)
         self.context.disclosure_button.setAccessibleName(context_title)
         self.context.disclosure_button.setChecked(False)
         self.context.disclosure_body.hide()
@@ -113,6 +116,18 @@ def invalidation_timing(original: str, history: InvalidationHistory | None) -> s
         + exact_detail_time(history.corrections[-1].corrected_at)
         + " · Original decision date unchanged"
     )
+
+
+def invalidation_exact_timing(history: InvalidationHistory | None) -> str:
+    """Keep subminute instants inspectable beside human-readable dates."""
+    if history is None:
+        return ""
+    text = "Marked Invalid: " + history.original.invalidated_at.isoformat()
+    if history.corrections:
+        text += (
+            "\nReason corrected: " + history.corrections[-1].corrected_at.isoformat()
+        )
+    return text
 
 
 def timeline_controls(
@@ -141,6 +156,17 @@ def interval_text(values: FiveQuantiles, unit: str) -> str:
         f"90% interval: {values.q05} – {values.q95} {unit}\n"
         f"Median: {values.q50} {unit}\n"
         f"50% interval: {values.q25} – {values.q75} {unit}"
+    )
+
+
+def interval_transition_text(
+    before: FiveQuantiles, after: FiveQuantiles, unit: str
+) -> str:
+    """Present complete changed forecasts without rounding or dropping endpoints."""
+    return (
+        f"90% interval: {before.q05} – {before.q95} → {after.q05} – {after.q95} {unit}\n"
+        f"Median: {before.q50} → {after.q50} {unit}\n"
+        f"50% interval: {before.q25} – {before.q75} → {after.q25} – {after.q75} {unit}"
     )
 
 
@@ -206,11 +232,14 @@ def criteria_reader(section: QWidget, label: QLabel) -> QPushButton:
     return button
 
 
-def reset_disclosures(root: QWidget) -> None:
+def reset_disclosures(root: QWidget, *, clear_matches: bool = False) -> None:
     for group in root.findChildren(QGroupBox):
         if group.isCheckable():
             group.setChecked(False)
     for widget in root.findChildren(QWidget):
+        if clear_matches and widget.property("searchMatchEmphasis"):
+            widget.setProperty("searchMatchEmphasis", False)
+            refresh_widget_style(widget)
         toggle = getattr(widget, "disclosure_button", None)
         if toggle is not None:
             toggle.setChecked(False)
@@ -247,7 +276,7 @@ def reading_refresh(method):
             for pane in (workspace.timeline, workspace.overview)
         ]
         result = method(screen, prediction)
-        reset_disclosures(screen)
+        reset_disclosures(screen, clear_matches=not keep)
         for name, checked in groups:
             group = screen.findChild(QGroupBox, name)
             if group is not None:
@@ -264,6 +293,17 @@ def reading_refresh(method):
             chart.disclosure_button.setVisible(invalid)
             if not invalid:
                 chart.disclosure_body.show()
+        distribution = getattr(screen, "distribution_disclosure", None)
+        if distribution is not None and prediction is not None:
+            from reckonsolve.domain.predictions import PredictionStatus
+
+            terminal = prediction.status in (
+                PredictionStatus.RESOLVED,
+                PredictionStatus.INVALID,
+            )
+            distribution.disclosure_button.setVisible(terminal)
+            if not terminal:
+                distribution.disclosure_body.show()
         if keep:
             for pane, value in zip(
                 (workspace.timeline, workspace.overview), positions, strict=True

@@ -155,11 +155,11 @@ def test_binary_correction_and_later_postmortem_survive_restart(
         f"Trajectory Brier: {float(scorecard.trajectory_brier):.4f}"
     )
     assert not _child(window, QGroupBox, "predictionScorecard").isHidden()
-    assert not _child(
-        window,
-        QLabel,
-        "predictionScorecardCorrectionNotice",
-    ).isHidden()
+    assert window._prediction_detail_screen.terminal_summary.note.isVisible()
+    assert (
+        "corrected facts"
+        in window._prediction_detail_screen.terminal_summary.note.text()
+    )
 
     reflection_operations = PredictionOperations(database, FixedClock(REFLECTED), UTC)
     reflection_window = MainWindow(reflection_operations)
@@ -198,7 +198,7 @@ def test_binary_correction_and_later_postmortem_survive_restart(
         "resolutionCorrectionHistory",
     )
     assert not history_group.isHidden()
-    assert "2 corrections" in history_group.title()
+    assert "2 corrections" in history_group.accessibleName()
     history_group.setChecked(True)
     assert (
         _child(

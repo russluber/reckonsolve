@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
@@ -29,14 +30,19 @@ from reckonsolve.ui.visual_system import (
 
 
 class ProbabilityPresets(QWidget):
-    """The same direct-entry shortcuts for both Binary creation modes."""
+    """Direct-entry Binary shortcuts, optionally wrapping in a contextual editor."""
 
     def __init__(
-        self, editor: QSpinBox, parent: QWidget, *, name_prefix: str = "probability"
+        self,
+        editor: QSpinBox,
+        parent: QWidget,
+        *,
+        name_prefix: str = "probability",
+        wrap: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setObjectName(f"{name_prefix}Shortcuts")
-        layout = QHBoxLayout(self)
+        layout = FlowLayout(self) if wrap else QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(int(Spacing.COMPACT))
         for value in range(10, 100, 10):
@@ -49,7 +55,8 @@ class ProbabilityPresets(QWidget):
                 lambda _checked=False, probability=value: editor.setValue(probability)
             )
             layout.addWidget(button)
-        layout.addStretch()
+        if isinstance(layout, QHBoxLayout):
+            layout.addStretch()
 
 
 class PageHeader(QWidget):

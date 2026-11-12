@@ -46,6 +46,7 @@ from reckonsolve.domain.quantiles import (
 from reckonsolve.forecast_display import format_local_deadline
 from reckonsolve.ui.detail_reading import progressive_body, quiet_event
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.one_shot import text_label
 from reckonsolve.ui.prediction_contracts import (
     ForecastReviewTimelineSnapshot,
@@ -272,15 +273,18 @@ def _focus_search_widget(scroll_area: QScrollArea, target: QWidget) -> None:
     target.setProperty("searchMatchEmphasis", True)
     refresh_widget_style(target)
     QTimer.singleShot(0, lambda: scroll_area.ensureWidgetVisible(target, 24, 24))
-    timer = QTimer(target)
-    timer.setSingleShot(True)
+    timer = target.findChild(QTimer, "searchMatchEmphasisTimer")
+    if timer is None:
+        timer = QTimer(target)
+        timer.setObjectName("searchMatchEmphasisTimer")
+        timer.setSingleShot(True)
 
-    def clear_emphasis() -> None:
-        target.setProperty("searchMatchEmphasis", False)
-        refresh_widget_style(target)
-        timer.deleteLater()
+        def clear_emphasis() -> None:
+            target.setProperty("searchMatchEmphasis", False)
+            refresh_widget_style(target)
 
-    timer.timeout.connect(clear_emphasis)
+        timer.timeout.connect(clear_emphasis)
+    # A retained row may be revealed again before its previous cue expires.
     timer.start(4_000)
 
 
@@ -414,9 +418,22 @@ def _finish_terminal_history_group(group: QGroupBox, correction_count: int) -> N
         if "Invalidation" in group.objectName() or "invalidation" in group.objectName()
         else "Resolution correction history"
     )
-    group.setTitle(f"{base_title} ({correction_count} {suffix})")
+    group.setTitle(
+        "Reason history"
+        if base_title.startswith("Invalidation")
+        else "Resolution history"
+    )
+    group.setAccessibleName(f"{base_title} ({correction_count} {suffix})")
+    group.setToolTip(group.accessibleName())
     group.setChecked(False)
     content, _layout = _history_content(group)
+    count = QLabel(
+        f"{correction_count} {suffix}. Original facts are shown first.", content
+    )
+    count.setObjectName("terminalCorrectionCount")
+    count.setWordWrap(True)
+    apply_text_role(count, TextRole.SECONDARY)
+    _layout.insertWidget(0, count)
     content.setHidden(True)
     group.setHidden(correction_count == 0)
 
@@ -843,7 +860,7 @@ def _journal_entry_widget(
     layout.addWidget(timestamp)
 
     heading_row = QWidget(frame)
-    heading_layout = QHBoxLayout(heading_row)
+    heading_layout = FlowLayout(heading_row)
     heading_layout.setContentsMargins(0, 0, 0, 0)
     kind = QLabel("JOURNAL", heading_row)
     kind.setObjectName(f"journalEntryKind{entry.entry_id}")
@@ -858,9 +875,9 @@ def _journal_entry_widget(
         )
         edited.setObjectName(f"journalEntryEdited{entry.entry_id}")
         edited.setTextFormat(Qt.TextFormat.PlainText)
+        edited.setWordWrap(True)
         apply_text_role(edited, TextRole.SECONDARY)
         heading_layout.addWidget(edited)
-    heading_layout.addStretch()
     correct_button = QPushButton("Correct Entry", heading_row)
     correct_button.setObjectName(f"correctJournalEntryButton{entry.entry_id}")
     apply_action_role(correct_button, ActionRole.QUIET)
@@ -994,10 +1011,11 @@ def _journal_edit_history_widget(
     prior_version_count = len(entry.corrections)
     suffix = "version" if prior_version_count == 1 else "versions"
     history = QGroupBox(
-        f"Edit history ({prior_version_count} prior {suffix})",
+        "Edit history",
         parent,
     )
     history.setObjectName(f"journalEntryEditHistory{entry.entry_id}")
+    history.setAccessibleName(f"Edit history ({prior_version_count} prior {suffix})")
     apply_surface_role(history, SurfaceRole.BASE)
     history.setCheckable(True)
     history.setChecked(False)
@@ -1006,6 +1024,10 @@ def _journal_edit_history_widget(
     content.setObjectName(f"journalEntryEditHistoryContent{entry.entry_id}")
     content_layout = QVBoxLayout(content)
     content_layout.setContentsMargins(4, 4, 4, 4)
+    count = QLabel(f"{prior_version_count} prior {suffix}", content)
+    count.setWordWrap(True)
+    apply_text_role(count, TextRole.SECONDARY)
+    content_layout.addWidget(count)
 
     original_heading = QLabel(
         f"Original · {_format_local_timestamp(entry.created_at)}",
@@ -1013,6 +1035,7 @@ def _journal_edit_history_widget(
     )
     original_heading.setObjectName(f"journalEntryOriginalHeading{entry.entry_id}")
     original_heading.setTextFormat(Qt.TextFormat.PlainText)
+    original_heading.setWordWrap(True)
     original_body = QLabel(entry.original_body, content)
     original_body.setObjectName(f"journalEntryOriginalBody{entry.entry_id}")
     original_body.setTextFormat(Qt.TextFormat.PlainText)
@@ -1030,6 +1053,7 @@ def _journal_edit_history_widget(
             f"journalCorrectionHeading{correction.correction_id}"
         )
         correction_heading.setTextFormat(Qt.TextFormat.PlainText)
+        correction_heading.setWordWrap(True)
         correction_body = QLabel(correction.body, content)
         correction_body.setObjectName(
             f"journalCorrectionBody{correction.correction_id}"

@@ -19,6 +19,7 @@ def align_numeric_revision(editor: FiveQuantileInput, quantiles: FiveQuantiles) 
             widget.deleteLater()
     for column, title in ((1, "Current committed"), (2, "Draft revision")):
         label = QLabel(title, editor)
+        label.setWordWrap(True)
         apply_text_role(label, TextRole.LABEL)
         grid.addWidget(label, 0, column)
     current = dict(zip((5, 25, 50, 75, 95), quantiles.values, strict=True))

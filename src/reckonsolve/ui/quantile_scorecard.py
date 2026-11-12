@@ -17,7 +17,9 @@ class QuantileScorecardPanel(ContentPanel):
         super().__init__("Numeric WIS scorecard", parent=parent)
         self.setObjectName("numericQuantileScorecard")
 
-    def set_scorecard(self, card: QuantileScorecard) -> None:
+    def set_scorecard(
+        self, card: QuantileScorecard, *, primary_facts: bool = True
+    ) -> None:
         while self.body_layout.count():
             widget = self.body_layout.takeAt(0).widget()
             if widget is not None:
@@ -37,11 +39,43 @@ class QuantileScorecardPanel(ContentPanel):
                 )
                 label.setObjectName(f"numericWISFact{index}")
                 self.body_layout.addWidget(label)
+                label.setVisible(primary_facts)
         if card.final is None:
+            if not primary_facts:
+                self.body_layout.addWidget(
+                    score_label(
+                        "No interval or median diagnostics are produced for an unscored result.",
+                        self,
+                    )
+                )
             return
 
         assert card.initial is not None and card.delta_wis is not None
         assert card.definition is not None and card.scoring_revision is not None
+        if not primary_facts:
+            unit = card.definition.unit
+            self.title_label.setText("Numeric scorecard")
+            for name, text in (
+                (
+                    "individualMedianErrorSummary",
+                    f"Median absolute error: {exact_score_text(card.final.median_absolute_error)} {unit}",
+                ),
+                (
+                    "individualMedianMissSummary",
+                    f"Signed median miss (actual minus median): {exact_score_text(card.final.signed_median_miss)} {unit}",
+                ),
+                (
+                    "individualInterval50Summary",
+                    f"Actual is {card.final.interval_50.outcome_location} the 50% interval.",
+                ),
+                (
+                    "individualInterval90Summary",
+                    f"Actual is {card.final.interval_90.outcome_location} the 90% interval.",
+                ),
+            ):
+                label = score_label(text, self)
+                label.setObjectName(name)
+                self.body_layout.addWidget(label)
         details = QGroupBox("WIS Breakdown", self)
         details.setAccessibleName("WIS breakdown and initial/final comparison")
         details.setObjectName("numericWISDetails")

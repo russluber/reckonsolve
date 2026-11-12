@@ -426,7 +426,12 @@ def test_timeline_jump_stays_with_history_and_terminal_actions_leave_no_gaps(
     screen.show_prediction(resolved)
     qtbot.wait(30)
     assert screen.more_button.isVisible()
-    assert screen.more_button.geometry().left() == 0
+    assert screen.write_postmortem_button.geometry().left() == 0
+    assert screen.skip_postmortem_button.isVisible()
+    assert (
+        screen.more_button.geometry().left()
+        > screen.skip_postmortem_button.geometry().right()
+    )
     assert all(
         button.isHidden()
         for button in (

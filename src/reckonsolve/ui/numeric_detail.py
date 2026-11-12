@@ -27,7 +27,7 @@ from reckonsolve.domain.predictions import (
     NumericResolutionHistory,
     PredictionStatus,
 )
-from reckonsolve.domain.quantiles import QuantileTimelineEvent
+from reckonsolve.domain.quantiles import FiveQuantiles, QuantileTimelineEvent
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
 from reckonsolve.forecast_display import (
     format_local_deadline,
@@ -43,11 +43,18 @@ from reckonsolve.ui.detail_reading import (
     criteria_reader,
     current_marker,
     interval_text,
+    interval_transition_text,
+    invalidation_exact_timing,
     invalidation_timing,
     progressive_body,
     quiet_event,
     reading_refresh,
     timeline_controls,
+)
+from reckonsolve.ui.detail_sections import (
+    AdaptiveReadingSections,
+    TimelineRows,
+    terminal_timeline_rows,
 )
 from reckonsolve.ui.detail_workspace import (
     DetailWorkspace,
@@ -171,7 +178,7 @@ class NumericPredictionDetailScreen(QWidget):
         apply_text_role(self.tags, TextRole.SECONDARY)
 
         self.forecast_type = StatusBadge(
-            "NUMERIC",
+            "Adaptive · Numeric",
             StatusTone.NEUTRAL,
             parent=self.detail_content,
         )
@@ -465,6 +472,9 @@ class NumericPredictionDetailScreen(QWidget):
             accessible_name="Numeric interval history error",
         )
         self.quantile_cdf = QuantileCDF(self.detail_content)
+        chart_policy = self.quantile_cdf.sizePolicy()
+        chart_policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        self.quantile_cdf.setSizePolicy(chart_policy)
         self.quantile_cdf.hide()
         self.quantile_cdf_summary = QLabel(self.detail_content)
         self.quantile_cdf_summary.setWordWrap(True)
@@ -601,6 +611,8 @@ class NumericPredictionDetailScreen(QWidget):
             self.add_journal_entry_button,
             self.review_forecast_button,
             self.resolve_button,
+            self.write_postmortem_button,
+            self.skip_postmortem_button,
         ):
             button.setParent(self.action_strip)
             button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
@@ -611,6 +623,8 @@ class NumericPredictionDetailScreen(QWidget):
         self.more_actions = []
         for button in (
             self.edit_details_button,
+            self.correct_resolution_button,
+            self.correct_invalidation_button,
             self.mark_invalid_button,
             self.delete_button,
         ):
@@ -628,12 +642,9 @@ class NumericPredictionDetailScreen(QWidget):
         self.timeline_order = QComboBox(timeline_panel)
         self.timeline_order.setAccessibleName("Timeline reading order")
         self.timeline_order.addItems(["Newest first", "Oldest first"])
+        self.timeline_rows = TimelineRows(self.timeline_layout)
         self.timeline_order.currentIndexChanged.connect(
-            lambda _index: (
-                self._load_timeline(self.prediction_id)
-                if self.prediction_id is not None
-                else None
-            )
+            lambda index: self.timeline_rows.order(descending=index == 0)
         )
         heading = timeline_panel_layout.takeAt(0).widget()
         self.scroll_area = DetailWorkspace(self.detail_content, self)
@@ -653,10 +664,25 @@ class NumericPredictionDetailScreen(QWidget):
         self.criteria_read_button = criteria_reader(
             self.resolution_criteria_section, self.resolution_criteria
         )
+        self.reading_sections = AdaptiveReadingSections(
+            self.resolution_notes,
+            self.postmortem,
+            self.postmortem_completion,
+            self.detail_content,
+        )
+        self.distribution_disclosure = collapse_section(
+            history_panel, "Latest committed distribution"
+        )
+        apply_action_role(self.write_postmortem_button, ActionRole.SECONDARY)
         overview = [
             self.resolution_criteria_section,
-            history_panel,
-            self.metadata_panel,
+            self.reading_sections.notes,
+            self.reading_sections.reflection,
+            self.quantile_scorecard,
+            self.resolution_history,
+            self.invalidation_history,
+            self.distribution_disclosure,
+            collapse_section(self.metadata_panel, "More information"),
         ]
         self.scored_forecast_disclosure = collapse_section(
             self.resolution_scoring, "Scored forecast context"
@@ -666,11 +692,12 @@ class NumericPredictionDetailScreen(QWidget):
         for panel in (summary_panel, action_panel, timeline_panel, self.metadata_panel):
             apply_surface_role(panel, SurfaceRole.CANVAS)
         overview.insert(0, QLabel("Overview", self))
+        self.overview_heading = overview[0]
         apply_text_role(overview[0], TextRole.SECTION_TITLE)
         self.workspace.compose(
             summary_panel,
             action_panel,
-            [self.resolution_section, self.invalidation_section, timeline_panel],
+            [timeline_panel],
             overview,
         )
         self.locked_explanation = QLabel(
@@ -800,7 +827,7 @@ class NumericPredictionDetailScreen(QWidget):
                 self.invalidation_history.setChecked(True)
                 target = self.invalidation_history
             else:
-                target = self.invalidation_reason
+                target = self.terminal_summary.note
         _focus_search_widget(self.scroll_area, target)
 
     @reading_refresh
@@ -981,8 +1008,8 @@ class NumericPredictionDetailScreen(QWidget):
                 f"Actual value: {effective.actual_value} {prediction.unit}"
             )
             self.resolution_time.setText(
-                f"Effective resolution: {format_local_deadline(effective.effective_resolution_at)}\n"
-                f"Recorded at: {format_local_deadline(resolution.resolved_at)}"
+                f"Effective resolution: {exact_detail_time(effective.effective_resolution_at)}\n"
+                f"Recorded at: {exact_detail_time(resolution.resolved_at)}"
             )
             self.resolution_time.setToolTip(
                 f"Effective: {effective.effective_resolution_at.isoformat()}\nRecorded: {resolution.resolved_at.isoformat()}"
@@ -990,17 +1017,9 @@ class NumericPredictionDetailScreen(QWidget):
             self.resolution_scoring.setText(
                 "Scoring uses the last revision strictly before the earlier of effective resolution and the permanent Deadline."
             )
-            self.resolution_notes.setText(
-                ""
-                if not effective.resolution_notes
-                else f"Resolution notes: {effective.resolution_notes}"
-            )
+            self.resolution_notes.setText(effective.resolution_notes or "")
             self.resolution_notes.setHidden(not effective.resolution_notes)
-            self.postmortem.setText(
-                ""
-                if not effective.postmortem
-                else f"Postmortem: {effective.postmortem}"
-            )
+            self.postmortem.setText(effective.postmortem or "")
             self.postmortem.setHidden(not effective.postmortem)
             self.postmortem_completion.setText(
                 ""
@@ -1058,7 +1077,7 @@ class NumericPredictionDetailScreen(QWidget):
         if isinstance(scorecard, QuantileScorecard):
             self._quantile_score = scorecard
             self.quantile_scorecard.hide()
-            self.quantile_scorecard.set_scorecard(scorecard)
+            self.quantile_scorecard.set_scorecard(scorecard, primary_facts=False)
             self.quantile_scorecard.show()
             return
         self.quantile_scorecard.hide()
@@ -1082,12 +1101,28 @@ class NumericPredictionDetailScreen(QWidget):
             return
         self.quantile_cdf.show()
         self.quantile_cdf_summary.show()
-        self.numeric_history_label.setText("IMPLIED CENTRAL CDF")
+        self.numeric_history_label.setText(
+            "Latest committed distribution"
+            if self._prediction.status
+            in (PredictionStatus.RESOLVED, PredictionStatus.INVALID)
+            else "Current committed distribution"
+        )
         self.quantile_cdf.set_forecast(revisions[-1].quantiles, self._prediction.unit)
         self.quantile_cdf_summary.setText(
             self.quantile_cdf.accessibleDescription()
             + "\nEvery earlier forecast remains in the timeline below its original timestamp."
         )
+        card = self._quantile_score
+        if card is not None and card.final_revision_id != revisions[-1].revision_id:
+            self.quantile_cdf_summary.setText(
+                (
+                    "No forecast qualified for scoring. "
+                    if card.final_revision_id is None
+                    else "This is not the forecast used for scoring. "
+                )
+                + "It is the latest committed distribution.\n"
+                + self.quantile_cdf_summary.text()
+            )
         self.history_error.setHidden(True)
 
     def _load_timeline(self, prediction_id: int) -> None:
@@ -1097,23 +1132,74 @@ class NumericPredictionDetailScreen(QWidget):
             self.timeline_error.setText(f"Numeric timeline is unavailable. {error}")
             self.timeline_error.setHidden(False)
             return
-        self._clear_timeline()
-        self._sync_timing(events)
-        events = sorted(
-            events,
-            key=lambda event: event.created_at,
-            reverse=self.timeline_order.currentIndex() == 0,
+        snapshot = (
+            prediction_id,
+            tuple(events),
+            self._resolution_history,
+            self._invalidation_history,
+            self._prediction.unit,
         )
+        if self.timeline_rows.matches(snapshot):
+            self.timeline_error.hide()
+            return
+        self._sync_timing(events)
+        forecasts = {
+            event.revision.sequence: event.revision.quantiles
+            for event in events
+            if event.kind == "forecast"
+        }
+        rows = []
         for event in events:
-            self.timeline_layout.addWidget(self._quantile_timeline_row(event))
-        if not events:
+            previous = (
+                forecasts.get(event.revision.sequence - 1)
+                if event.kind == "forecast"
+                else None
+            )
+            rows.append(
+                (
+                    event.created_at,
+                    0,
+                    self.timeline_rows.row(
+                        (prediction_id, event.kind, event.record_id),
+                        (
+                            event,
+                            previous,
+                            self._prediction.unit,
+                            event.kind == "forecast"
+                            and event.record_id
+                            == self._prediction.current_revision.revision_id,
+                            event.kind == "forecast"
+                            and self._quantile_score is not None
+                            and event.record_id
+                            in self._quantile_score.excluded_revision_ids,
+                        ),
+                        lambda event=event, previous=previous: (
+                            self._quantile_timeline_row(event, previous)
+                        ),
+                    ),
+                )
+            )
+        rows.extend(
+            terminal_timeline_rows(
+                self._resolution_history,
+                self._invalidation_history,
+                self.timeline_content,
+                unit=self._prediction.unit,
+            )
+        )
+        self.timeline_rows.replace(
+            snapshot, rows, descending=self.timeline_order.currentIndex() == 0
+        )
+        if not rows:
             empty = QLabel("No Numeric ForecastRevisions have been recorded.")
             empty.setObjectName("numericTimelineEmptyState")
             empty.setTextFormat(Qt.TextFormat.PlainText)
             self.timeline_layout.addWidget(empty)
         self.timeline_error.setHidden(True)
 
-    def _quantile_timeline_row(self, event: QuantileTimelineEvent) -> QWidget:
+    def _quantile_timeline_row(
+        self, event: QuantileTimelineEvent, previous: FiveQuantiles | None = None
+    ) -> QWidget:
         frame = QFrame(self.timeline_content)
         frame.setObjectName(f"numericTimeline{event.kind.title()}{event.record_id}")
         apply_surface_role(frame, SurfaceRole.BASE)
@@ -1129,7 +1215,7 @@ class NumericPredictionDetailScreen(QWidget):
             "review": "REVIEW — FORECAST RETAINED",
         }[event.kind]
         text = QLabel(
-            f"{kind}\n{interval_text(event.revision.quantiles, self._prediction.unit)}\n{event.text or ''}",
+            f"{kind}\n{interval_transition_text(previous, event.revision.quantiles, self._prediction.unit) if previous is not None else interval_text(event.revision.quantiles, self._prediction.unit)}\n{event.text or ''}",
             frame,
         )
         text.setWordWrap(True)
@@ -1195,11 +1281,7 @@ class NumericPredictionDetailScreen(QWidget):
             self.metadata_panel.setHidden(False)
 
     def _clear_timeline(self) -> None:
-        while self.timeline_layout.count():
-            item = self.timeline_layout.takeAt(0)
-            if widget := item.widget():
-                widget.setParent(None)
-                widget.deleteLater()
+        self.timeline_rows.clear()
 
     def open_revise_forecast(self) -> None:
         if not self.workspace.prepare_task("Revision"):
@@ -1404,6 +1486,14 @@ class NumericPredictionDetailScreen(QWidget):
         dialog.open()
 
     def _sync_reading_actions(self, prediction) -> None:
+        self.resolution_section.hide()
+        self.invalidation_section.hide()
+        self.reading_sections.sync(prediction.status)
+        self.overview_heading.setText(
+            "Archival context"
+            if prediction.status is PredictionStatus.INVALID
+            else "Overview"
+        )
         terminal = prediction.status in (
             PredictionStatus.RESOLVED,
             PredictionStatus.INVALID,
@@ -1429,6 +1519,7 @@ class NumericPredictionDetailScreen(QWidget):
                 outcome=self.resolution_actual.text(),
                 score=facts[1] if facts else "Score unavailable",
                 timing=self.resolution_time.text(),
+                timing_tooltip=self.resolution_time.toolTip(),
                 note="\n".join(notices)
                 if card is not None
                 else "The score could not be loaded. Try again before interpreting this result.",
@@ -1447,6 +1538,7 @@ class NumericPredictionDetailScreen(QWidget):
                 )
                 + f"\nOriginal Forecast Deadline: {self.forecast_deadline.text()}",
                 context_title="Last forecast · Not scored",
+                timing_tooltip=invalidation_exact_timing(self._invalidation_history),
             )
         self.write_postmortem_button.setVisible(
             prediction.status is PredictionStatus.RESOLVED

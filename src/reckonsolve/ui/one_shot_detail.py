@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -37,7 +38,11 @@ from reckonsolve.ui.components import (
     ContentPanel,
 )
 from reckonsolve.ui.contextual_forms import BodyEditor
-from reckonsolve.ui.detail_reading import TerminalSummary, invalidation_timing
+from reckonsolve.ui.detail_reading import (
+    TerminalSummary,
+    invalidation_exact_timing,
+    invalidation_timing,
+)
 from reckonsolve.ui.detail_workspace import DetailWorkspace, collapse_section
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.numeric_interval import NumericInterval
@@ -75,6 +80,8 @@ class OneShotDetailScreen(QWidget):
         super().__init__(parent)
         self._operations = operations
         self._prediction: OneShotDetail | None = None
+        self.interval: NumericInterval | None = None
+        self.terminal_summary: TerminalSummary | None = None
         self._dialog = None
         self.content = QWidget(self)
         self.content_layout = QVBoxLayout(self.content)
@@ -89,6 +96,8 @@ class OneShotDetailScreen(QWidget):
 
     def show_prediction(self, detail: OneShotDetail | None) -> None:
         self._prediction = detail
+        self.interval = None
+        self.terminal_summary = None
         self.workspace.clear_reading()
         if detail is None:
             self.content_layout.addWidget(text_label("The One-Shot was deleted.", self))
@@ -164,6 +173,7 @@ class OneShotDetailScreen(QWidget):
                 note=invalid.effective.reason or "No reason recorded.",
                 context=forecast_text(record.effective, unit),
                 context_title="Last forecast · Not scored",
+                timing_tooltip=invalidation_exact_timing(invalid),
             )
             header.addWidget(self.terminal_summary)
         if detail.tags:
@@ -187,6 +197,10 @@ class OneShotDetailScreen(QWidget):
             "Correct transcription", lambda: self.open_values(correction=True)
         )
         self.edit_button = menu.addAction("Edit Details", self.open_metadata)
+        self.invalid_reason_action = menu.addAction(
+            "Correct Invalid reason", self.correct_invalid_reason
+        )
+        self.invalid_reason_action.setVisible(detail.status is PredictionStatus.INVALID)
         self.invalid_button = menu.addAction("Mark Invalid", self.invalidate)
         self.invalid_button.setProperty(ACTION_ROLE_PROPERTY, ActionRole.CAUTION.value)
         self.invalid_button.setVisible(detail.status is PredictionStatus.OPEN)
@@ -230,9 +244,9 @@ class OneShotDetailScreen(QWidget):
                         self,
                     )
                 )
-            correct_reason = QPushButton("Correct Invalid reason", self)
-            correct_reason.clicked.connect(self.correct_invalid_reason)
-            self.results.body_layout.addWidget(correct_reason)
+            # The header owns current reason/timing; original and corrected
+            # versions remain in recorded history, with repair under More.
+            self.results.hide()
         else:
             answer_text = next(
                 (
@@ -276,8 +290,15 @@ class OneShotDetailScreen(QWidget):
             pair_row = QHBoxLayout(pair)
             pair_row.setContentsMargins(0, 0, 0, 0)
             self.results.body_layout.removeWidget(self.answer_result)
-            pair_row.addWidget(self.answer_result, 1)
-            pair_row.addWidget(self.scorecard, 1)
+            self.answer_panel = ContentPanel("Checked answer", parent=pair)
+            apply_surface_role(self.answer_panel, SurfaceRole.CANVAS)
+            self.answer_result.setAccessibleName(self.answer_result.text())
+            self.answer_result.setText(
+                self.answer_result.text().removeprefix("Answer: ")
+            )
+            self.answer_panel.body_layout.addWidget(self.answer_result)
+            pair_row.addWidget(self.answer_panel, 1, Qt.AlignmentFlag.AlignTop)
+            pair_row.addWidget(self.scorecard, 1, Qt.AlignmentFlag.AlignTop)
             self.results.body_layout.addWidget(pair)
             if record.effective.resolution_notes:
                 self.results.body_layout.addWidget(
@@ -384,7 +405,7 @@ class OneShotDetailScreen(QWidget):
                 panel.body_layout.addWidget(text_label(str(value), self))
                 overview.append(panel)
         history = _collapsible_history_group(
-            "Original facts and transcription corrections",
+            "Original facts and corrections",
             "oneShotCorrectionHistory",
             self,
         )
@@ -400,7 +421,7 @@ class OneShotDetailScreen(QWidget):
         for correction in record.corrections:
             body.addWidget(
                 text_label(
-                    f"Correction {correction.sequence} · {_format_local_timestamp(correction.corrected_at)}\nBefore\n"
+                    f"{'Postmortem update' if correction.source_action is OneShotSourceAction.POSTMORTEM else 'Transcription correction'} {correction.sequence} · {_format_local_timestamp(correction.corrected_at)}\nBefore\n"
                     + "\n".join(values_lines(correction.before, unit))
                     + "\nAfter\n"
                     + "\n".join(values_lines(correction.after, unit))
@@ -432,7 +453,11 @@ class OneShotDetailScreen(QWidget):
             summary,
             action_panel,
             [
-                self.results,
+                *(
+                    [self.results]
+                    if detail.status is not PredictionStatus.INVALID
+                    else []
+                ),
                 self.reflection,
                 history,
                 *extras,
@@ -490,7 +515,7 @@ class OneShotDetailScreen(QWidget):
                 (
                     correction.corrected_at,
                     2,
-                    f"Transcription correction {correction.sequence}\n"
+                    f"{'Postmortem update' if correction.source_action is OneShotSourceAction.POSTMORTEM else 'Transcription correction'} {correction.sequence}\n"
                     + "\n".join(values_lines(correction.after, unit))
                     + (f"\nNote: {correction.note}" if correction.note else ""),
                     (
@@ -643,6 +668,13 @@ class OneShotDetailScreen(QWidget):
         ):
             return
         kind = document.source_kind
+        if (
+            kind is SearchSourceKind.INVALIDATION_REASON
+            and not document.is_superseded
+            and self._prediction.invalidation_history is not None
+        ):
+            _focus_search_widget(self.scroll, self.terminal_summary.note)
+            return
         target = self._search_targets.get(
             (kind, document.source_record_id, document.source_version_id)
         ) or self._search_targets.get((kind, None, document.source_version_id))

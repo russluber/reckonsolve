@@ -162,3 +162,133 @@ calibration repair acceptance is retained. This does not close the remaining
 Detail body/reflection/history work or the broader native Windows review matrix.
 The user retains staging, commits and pushes. This acceptance update changes only
 documentation; the preceding runtime checks retain their original scope.
+
+## Detail finishing pass — 2026-11-12
+
+The user authorized the larger finishing package for one combined completion
+walkthrough. It is based on clean `ux-redesign` source `baa89c9` and the subsequent
+uncommitted changes. Earlier terminal-reading, hierarchy and calibration acceptance
+retain their original scope; they do not accept this later finish.
+
+Adaptive terminal Overview now owns factual notes, saved reflection and supporting
+score details without repeating header facts. Write/Edit Postmortem and eligible
+Skip share the action strip; factual repairs remain under More. Immutable terminal
+recording, correction and completion instants join true Timeline chronology in
+both reading orders. Invalid current reasons have one visible home and exact
+current-search target across all four contracts. One-Shot keeps its compact
+completed-exercise page, aligned answer/score and inline reflection, with distinct
+transcription and dedicated Postmortem update history labels.
+
+Terminal Numeric Detail offers Latest committed distribution on request, separate
+from an earlier scored forecast. This follows the current-only CDF requirement;
+it introduces no historical CDF. Existing exact score context and WIS interval
+breakdown remain available. Narrow chart endpoints/units, revision headings,
+Binary presets and Journal history wrap without changing canonical values,
+button identities or history anchors. Readable terminal dates retain exact seconds, fractional seconds and offsets in hover text, including current headers and new Timeline events.
+
+The `detail` review profile now has 28 examples, including 25-forecast chains for
+both Adaptive types, corrected Journal/Definition/terminal histories, corrected
+One-Shot exercises and all-equal/nearby Numeric percentiles with long units. All
+records use ordinary application operations, controlled clocks and temporary data.
+Exact superseded-only Journal/Question tokens permit reproducible historical
+retrieval; original forecasts, answers and source-action provenance remain intact.
+
+The 117 focused checks passed, covering the finishing cases together with existing
+Detail/One-Shot/resolution/scorecard flows. Larger-text minimum-window checks use
+9- and 12-point Segoe UI, wait for the actual pane transition and verify reachable
+inputs/Commit plus expanded Journal history without horizontal overflow. An old
+tests' internal TRAJECTORY badge expectations and former terminal-panel assertions were updated to the selected public Adaptive/Binary terminology and visible header/Overview placement. Canonical fact assertions remain; immutable scoring identities are unchanged.
+
+The final capture source produced 84 actual Qt screenshots at each offscreen scale
+factor 1, 1.5 and 2: 252 total, with no horizontal-scroll overflow, interval-label
+fit failures or visible errors in the capture checks. Light/dark output at ordinary
+and minimum logical sizes, long history, revision fields, terminal results and
+long-unit charts was inspected. Captures and temporary helpers remain ignored under
+`build/ux-detail-finish`. These checks supplement rather than establish human
+Windows scaling/focus/accessibility or visual acceptance.
+
+The complete software finish is prepared for the [combined native walkthrough](../../maintainer/development.md#new-prediction-and-detail-review).
+That review remains pending. Performance/ordinary Settings redesign, relocation,
+installed tools, packaging/release and personal-data operations remain separate.
+Schema 21, migrations, projection 3, CSV 6, domain/data/analytics implementations and
+dependencies are unchanged. No stable or persistent development database was used;
+staging, commits and pushes remain with the user.
+
+The final finishing source, including exact timestamp hover checks, passed
+**1,144 tests in 318.53 seconds**, without failures, errors or skips. Ruff check and
+format check passed for 296 Python files. Public/private documentation checks passed
+289/284 local links across 52/5 Markdown files; whitespace and reference-preservation
+checks passed. The added regressions preserve exact historical navigation, terminal
+facts/scores, modal boundaries and reachable reading/writing controls. Earlier counts
+above retain their evaluated artifact scope. Native completion review remains pending.
+
+## Long-history responsiveness follow-up — 2026-11-12
+
+The user completed the combined review and found it good overall, but reported
+2–3 second delays opening Resolve/Keep forecast and changing Timeline order, plus
+abrupt rather than smooth pane changes. This carries the other reviewed journeys
+forward; it does not accept the reported responsiveness problem or claim an
+unreported native Windows scaling/accessibility matrix complete.
+
+Profiling reproduced a large deferred Qt style/layout pass: every task refresh and
+order change destroyed and rebuilt the whole long Timeline. In the isolated
+eight-record finishing fixture, profiled UI heartbeat gaps were roughly 0.83–1.22
+seconds, despite handlers returning in roughly 83–133 ms. The blocked event loop
+left the 120 ms animation with effectively no useful intermediate frames.
+
+The UI now retains unchanged rendered rows after fresh canonical reads, patches
+changed rows on append/correction, and reorders loaded widgets directly. Current
+revision and scoring-exclusion context participates in matching. Writing tasks
+still refresh eligibility/context, and shared operations still enforce transaction
+time and stale-write rules. Original snapshots, causal anchors, scoring, SQL and
+persistence are unchanged. Ordinary entry resets disclosures and old search cues;
+repeated exact reveals restart one cue timer per retained target.
+
+Pane movement uses the existing 180 ms disclosure-motion token in both directions.
+The real Timeline body retains its wrapping while the viewport boundary moves,
+then wraps once at the destination. The right-hand editor remains live; duplicate
+requests do not restart the same transition, and retargeting does not flash an old
+endpoint. Qt's reduced-motion preference selects an immediate change. No animation
+or persistent-draft framework was added.
+
+The 83 focused Detail/history checks passed during iteration. Ten final regression
+cases cover both Adaptive types: row reuse with fresh reads, direct order changes,
+independent-connection append/correction, Review save, exact search/disclosure reset,
+real intermediate pane geometry in both directions, rapid retargeting, reduced
+motion, preserved inputs and unchanged read-only facts. Twenty-four actual Qt
+states cover both palettes, intermediate/final layouts and the minimum window;
+final panes restore normal wrapping with no horizontal overflow. Representative
+captures were inspected. Temporary profiling/capture artifacts remain ignored under
+`build/ux-detail-responsive`.
+
+The [focused recheck](../../maintainer/development.md#new-prediction-and-detail-review)
+remains pending. Source is the uncommitted finishing tree based on `baa89c9`, plus
+this repair. No personal database, installed tool, staging, commit or push was used.
+For the focused local 28-record profile, the repair target is at most 150 ms UI heartbeat interruption for these interactions and at most 33 ms between steady intermediate motion frames, with 180 ms nominal movement. These are local responsiveness checks, not cross-machine percentile guarantees. Final full-suite and timing results are recorded with this checkpoint below.
+
+Final profiled samples use the full 28-record `detail` profile, temporary database
+and preferences, pinned runtime and actual offscreen Qt widgets with installed
+Segoe UI. Each interaction was sampled once per type after the initial Detail
+load; these are warm local samples with profiler overhead, not cold-start or
+percentile benchmarks. Handler return time is separate from event-loop delivery.
+
+| Interaction | Binary handler (ms) | Numeric handler (ms) |
+| --- | ---: | ---: |
+| Timeline order | 1.7 | 2.4 |
+| Resolve | 61.4 | 87.2 |
+| Keep forecast | 58.9 | 81.7 |
+| Consult Overview | 9.9 | 20.6 |
+| Return to writing | 9.0 | 12.3 |
+
+Maximum observed UI heartbeat interruption ranged from **40.5 to 117.0 ms**, including
+initial presentation and final wrapping. Moving cases recorded **9–10 strict
+intermediate proportions** each, with a worst steady motion-frame gap of **28.4 ms**.
+The local 150/33 ms targets passed. This supports the repair; the user's native
+responsiveness and smoothness recheck remains pending.
+
+The final source passed **1,154 tests in 307.22 seconds**, without failures, errors
+or skips. Ruff check/format passed for 297 Python files. Public/private documentation
+checks passed 290/284 local links across 52/5 Markdown files; whitespace and
+reference-preservation checks passed. All J/R identifiers, both withdrawals and
+saved reference assets remain intact. Domain/data/analytics, schema/migrations,
+projection/export and dependencies remain unchanged.

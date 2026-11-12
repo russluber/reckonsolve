@@ -106,11 +106,13 @@ def test_resolve_yes_saves_reviewed_context_and_renders_terminal_facts(
         _required_child(window, QLabel, "predictionDetailStatus").text() == "RESOLVED"
     )
     section = _required_child(window, QGroupBox, "predictionResolutionSection")
-    assert not section.isHidden()
+    assert section.isHidden()
+    outcome = window._prediction_detail_screen.terminal_summary.outcome
+    assert outcome.isVisible() and "Yes" in outcome.text()
     assert (
         "Yes"
         in _required_child(
-            section,
+            window,
             QLabel,
             "predictionResolutionOutcome",
         ).text()
@@ -118,14 +120,14 @@ def test_resolve_yes_saves_reviewed_context_and_renders_terminal_facts(
     assert (
         "35%"
         in _required_child(
-            section,
+            window,
             QLabel,
             "predictionResolutionScoringForecast",
         ).text()
     )
     assert (
         _required_child(
-            section,
+            window,
             QLabel,
             "predictionResolutionNotes",
         ).text()
@@ -133,7 +135,7 @@ def test_resolve_yes_saves_reviewed_context_and_renders_terminal_facts(
     )
     assert (
         _required_child(
-            section,
+            window,
             QLabel,
             "predictionPostmortem",
         ).text()
@@ -214,7 +216,9 @@ def test_mark_invalid_saves_optional_reason_and_renders_preserved_state(
     ]
     assert _required_child(window, QLabel, "predictionDetailStatus").text() == "INVALID"
     section = _required_child(window, QGroupBox, "predictionInvalidationSection")
-    assert not section.isHidden()
+    assert section.isHidden()
+    reason = window._prediction_detail_screen.terminal_summary.note
+    assert reason.isVisible() and reason.text() == "The event was cancelled."
     assert (
         _required_child(
             section,

@@ -10,9 +10,14 @@ from tempfile import TemporaryDirectory
 
 from reckonsolve.app import run
 from reckonsolve.application.predictions import PredictionOperations
+from reckonsolve.application.reflection import save_postmortem
 from reckonsolve.data.database import Database
 from reckonsolve.domain.forecast_contracts import one_shot_contract
-from reckonsolve.domain.one_shot import NewOneShotPrediction, OneShotValues
+from reckonsolve.domain.one_shot import (
+    NewOneShotPrediction,
+    OneShotValues,
+    ReportedTime,
+)
 from reckonsolve.domain.predictions import (
     BinaryOutcome,
     FixedPrecisionValue,
@@ -208,6 +213,7 @@ def _seed_review_database(
         )
         if detail:
             _seed_detail_cases(database, now=datetime.now(UTC))
+            _seed_finish_cases(database, now=datetime.now(UTC))
     finally:
         database.close()
 
@@ -329,6 +335,286 @@ def _seed_detail_cases(database: Database, *, now: datetime) -> None:
             "Two different answer keys were published. The original exercise cannot be scored reliably.",
             expected_correction_id=None,
         )
+
+
+def _seed_finish_cases(database: Database, *, now: datetime) -> None:
+    """Long/corrected histories are complete synthetic operations, never SQL edits."""
+    for numeric in (False, True):
+        _seed_adaptive_history(database, now=now, numeric=numeric, resolved=False)
+        _seed_adaptive_history(database, now=now, numeric=numeric, resolved=True)
+        _seed_corrected_exercise(database, now=now, numeric=numeric)
+    clock = _ReviewClock(now - timedelta(days=2))
+    operations = PredictionOperations(database, clock, UTC)
+    for question, precision, values in (
+        (
+            "All equal · Numeric: can every percentile be zero?",
+            0,
+            {5: 0, 25: 0, 50: 0, 75: 0, 95: 0},
+        ),
+        (
+            "Nearby percentiles · Numeric: can close values remain exact?",
+            4,
+            {5: "-1000000", 25: "0.0001", 50: "0.0002", 75: "0.0003", 95: "1000000"},
+        ),
+    ):
+        operations.create_numeric_prediction(
+            question,
+            "million international passenger kilometres",
+            precision,
+            values,
+            value_constraint=NumericValueConstraint.CONTINUOUS,
+            forecast_deadline=now + timedelta(days=30),
+            tags=("Detail review", "Numeric layout"),
+        )
+
+
+def _review_context(prediction, numeric: bool) -> dict[str, int]:
+    return {
+        "expected_revision_id": prediction.current_revision.revision_id
+        if numeric
+        else prediction.current_revision_id,
+        "expected_metadata_version": prediction.metadata_version,
+    }
+
+
+def _clarify_review_question(
+    operations: PredictionOperations, prediction, question: str
+):
+    return operations.update_metadata(
+        prediction.prediction_id,
+        question=question,
+        background=prediction.background,
+        resolution_criteria=prediction.resolution_criteria,
+        forecast_deadline=prediction.forecast_deadline,
+        expected_resolution=prediction.expected_resolution,
+        tags=prediction.tags,
+        expected_metadata_version=prediction.metadata_version,
+        confirm_meaning_change=True,
+    )
+
+
+def _seed_adaptive_history(
+    database: Database, *, now: datetime, numeric: bool, resolved: bool
+) -> None:
+    clock = _ReviewClock(now - timedelta(days=6))
+    operations = PredictionOperations(database, clock, UTC)
+    kind = "Numeric" if numeric else "Binary"
+    prefix = "Reflection history" if resolved else "Long history"
+    question = f"{prefix} · Adaptive {kind}: will the copperbridge source remain the basis of the published result?"
+    common = {
+        "forecast_deadline": now + timedelta(days=30),
+        "rationale": "The original forecast is preserved even after many changes.",
+        "resolution_criteria": "Use the published final observation.\n\n"
+        + "Compare the published source, defined period and relevant population before recording the answer. "
+        * 14,
+        "background": "Optional background stays available without crowding ordinary reading. "
+        * 20,
+        "tags": ("Detail review", prefix),
+    }
+    prediction = (
+        operations.create_numeric_prediction(
+            question,
+            "items",
+            0,
+            {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            **common,
+        )
+        if numeric
+        else operations.create_prediction(question, 60, **common)
+    )
+    add_journal = (
+        operations.add_numeric_journal_entry
+        if numeric
+        else operations.add_journal_entry
+    )
+    clock.instant += timedelta(hours=1)
+    first_journal = add_journal(
+        prediction.prediction_id,
+        "Birchbeacon was the initially recorded source. "
+        + "This substantial Journal body should expand without losing its original position. "
+        * 12,
+        **_review_context(prediction, numeric),
+    )
+    for index in range(3 if resolved else 24):
+        clock.instant += timedelta(hours=1)
+        revise = (
+            operations.revise_quantile_forecast
+            if numeric
+            else operations.revise_forecast
+        )
+        prediction = revise(
+            prediction.prediction_id,
+            {5: index - 1, 25: index, 50: index + 1, 75: index + 2, 95: index + 3}
+            if numeric
+            else 61 + index,
+            rationale=f"Revision {index + 2}: new evidence changed the judgment.\n\n"
+            + "The complete rationale remains readable and selectable in true chronology. "
+            * (10 if index == 12 else 2),
+            **_review_context(prediction, numeric),
+        )
+        clock.instant += timedelta(minutes=10)
+        add_journal(
+            prediction.prediction_id,
+            f"Evidence entry {index + 1}: this note does not revise or refresh the forecast. "
+            + "Preserve the current body and original anchor. " * 4,
+            **_review_context(prediction, numeric),
+        )
+        if index % 4 == 0:
+            clock.instant += timedelta(minutes=10)
+            review = (
+                operations.add_numeric_forecast_review
+                if numeric
+                else operations.add_forecast_review
+            )
+            review(
+                prediction.prediction_id,
+                note="I deliberately reconsidered and kept this complete forecast unchanged.",
+                **_review_context(prediction, numeric),
+            )
+    clock.instant += timedelta(hours=1)
+    correct_journal = (
+        operations.correct_numeric_journal_entry
+        if numeric
+        else operations.correct_journal_entry
+    )
+    correct_journal(
+        prediction.prediction_id,
+        first_journal.record_id if numeric else first_journal.entry_id,
+        "Cedarlight is the corrected source. Earlier wording remains available only in edit history.",
+        expected_correction_id=None,
+    )
+    clock.instant += timedelta(hours=1)
+    prediction = _clarify_review_question(
+        operations,
+        prediction,
+        f"{prefix} · Adaptive {kind}: will the final published observation satisfy the clarified question and preserve the complete forecast history?",
+    )
+    if resolved:
+        clock.instant += timedelta(hours=1)
+        resolve = (
+            operations.resolve_numeric_prediction
+            if numeric
+            else operations.resolve_prediction
+        )
+        resolve(
+            prediction.prediction_id,
+            2 if numeric else BinaryOutcome.YES,
+            use_recorded_time=True,
+            resolution_notes="Initial factual notes use the first published answer.",
+            **_review_context(prediction, numeric),
+        )
+        clock.instant += timedelta(hours=1)
+        correct = (
+            operations.correct_numeric_resolution
+            if numeric
+            else operations.correct_binary_resolution
+        )
+        history = correct(
+            prediction.prediction_id,
+            3 if numeric else BinaryOutcome.NO,
+            resolution_notes="Corrected factual notes use the verified publication.",
+            postmortem=None,
+            correction_reason="The original answer was transcribed from the preliminary source.",
+            expected_correction_id=None,
+        )
+        clock.instant += timedelta(hours=1)
+        save_postmortem(
+            operations,
+            history,
+            "Later reflection: I checked the final source and separated evidence from transcription repair.",
+        )
+
+
+def _seed_corrected_exercise(
+    database: Database, *, now: datetime, numeric: bool
+) -> None:
+    clock = _ReviewClock(now - timedelta(days=5))
+    operations = PredictionOperations(database, clock, UTC)
+    kind = "Numeric" if numeric else "Binary"
+    values = (
+        OneShotValues(
+            quantiles=FiveQuantiles.from_values(
+                {5: -2, 25: -1, 50: 0, 75: 2, 95: 4}, 0
+            ),
+            answer=FixedPrecisionValue.from_value(2, 0),
+        )
+        if numeric
+        else OneShotValues(probability_percent=70, answer=BinaryOutcome.YES)
+    )
+    report = ReportedTime(
+        (now - timedelta(days=6)).replace(tzinfo=None, second=0, microsecond=0),
+        approximate=True,
+        offset_minutes=0,
+    )
+    answer = values.answer
+    values = replace(values, answer=None, forecast_reported=report)
+    prediction = operations.one_shots.create(
+        NewOneShotPrediction(
+            f"Corrected exercise · One-Shot {kind}: did the copperbridge answer key match the original transcription?",
+            one_shot_contract(
+                PredictionType.NUMERIC if numeric else PredictionType.BINARY
+            ),
+            values,
+            QuantileDefinition("items", 0, NumericValueConstraint.WHOLE_NUMBER)
+            if numeric
+            else None,
+            rationale="The original guess was finalized before checking the external answer.",
+            tags=("Detail review", "Corrected exercise"),
+        )
+    )
+    # Journal capture precedes the first answer; correction retains its anchor.
+    clock.instant += timedelta(hours=1)
+    prediction = operations.one_shots.add_journal(
+        prediction,
+        "Birchbeacon was the first transcribed evidence. "
+        + "Substantial context remains readable without changing the saved forecast. "
+        * 10,
+    )
+    clock.instant += timedelta(hours=1)
+    prediction = operations.one_shots.correct_journal(
+        prediction,
+        prediction.journals[0].entry_id,
+        "Cedarlight is the corrected evidence. Earlier wording stays available on request.",
+        expected_correction_id=None,
+    )
+    clock.instant += timedelta(hours=1)
+    prediction = operations.one_shots.add_answer(
+        prediction,
+        replace(
+            prediction.record.effective,
+            answer=answer,
+            reveal_reported=replace(
+                report, wall_time=report.wall_time + timedelta(minutes=30)
+            ),
+        ),
+    )
+    clock.instant += timedelta(hours=1)
+    prediction = _clarify_review_question(
+        operations,
+        prediction,
+        f"Corrected exercise · One-Shot {kind}: does the verified answer key match the clarified completed exercise?",
+    )
+    clock.instant += timedelta(hours=1)
+    repaired = operations.one_shots.correct(
+        prediction,
+        replace(
+            prediction.record.effective,
+            quantiles=FiveQuantiles.from_values({5: -2, 25: -1, 50: 1, 75: 2, 95: 4}, 0)
+            if numeric
+            else None,
+            probability_percent=None if numeric else 75,
+            answer=FixedPrecisionValue.from_value(3, 0)
+            if numeric
+            else BinaryOutcome.NO,
+        ),
+        note="Repaired the transcription against the verified answer key; originals and reported minutes remain intact.",
+    )
+    clock.instant += timedelta(hours=1)
+    operations.one_shots.save_postmortem(
+        repaired,
+        "My later reflection is new work, distinct from the transcription repair.",
+    )
 
 
 if __name__ == "__main__":

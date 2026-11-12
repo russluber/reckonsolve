@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The first walkthrough and supplied second-slice journeys have been reviewed; Detail feature/fixture completion and visual refinement remain open. Performance and Settings retain functioning bodies for their later redesign.
+This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The combined Detail review was good overall, with long-history responsiveness and pane-motion tuning awaiting a focused native recheck. Performance and Settings retain functioning bodies for their later redesign.
 
 ## In this guide
 
@@ -106,6 +106,8 @@ Adaptive **Resolve** prepares the outcome, when it became fixed and ascertainabl
 Adaptive scoring uses effective time. Forecasts at or after the scoring cutoff stay in history but do not count. An outcome already fixed at or before the first Adaptive forecast is explicitly unscored.
 
 Resolved Adaptive Detail leads with the effective outcome or actual value and its existing Trajectory Brier or WIS. **Forecast used for scoring** opens the eligible forecast context; an earlier scored forecast is distinct from the latest committed revision. An unscored result shows its explanation. Invalid Detail leads with the recorded reason and **Not scored**; **Last forecast · Not scored** retains access to the saved forecast. A corrected reason keeps the original decision date and labels the later correction separately.
+
+Overview holds factual Resolution notes, saved Postmortem and supporting score details. **Write/Edit Postmortem** and eligible **Skip** sit beside **More**; **Correct Resolution** and **Correct Reason** are inside More. Terminal Timeline events use their actual recording times, with complete before/after versions in history. Numeric **Latest committed distribution** starts collapsed on terminal records; it depicts the latest saved forecast, which can differ from the forecast used for scoring.
 
 One-Shot **Add answer** records the checked answer and optionally when you checked it. The answer can predate the guess physically; you must have guessed before looking. Documentary times do not create an Adaptive scoring window.
 

@@ -77,6 +77,9 @@ class FlowLayout(QLayout):
             if item.isEmpty():
                 continue
             hint = item.sizeHint()
+            if item.hasHeightForWidth() and hint.width() > rect.width():
+                width = max(item.minimumSize().width(), rect.width())
+                hint = QSize(width, max(hint.height(), item.heightForWidth(width)))
             next_x = x + hint.width() + spacing
             if next_x - spacing > rect.right() + 1 and line_height > 0:
                 x = rect.x()

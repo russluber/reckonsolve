@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from reckonsolve.ui.creation_task import form_values
 from reckonsolve.ui.visual_system import (
+    MotionDuration,
     Spacing,
     TextRole,
     animations_enabled,
@@ -72,9 +73,11 @@ class DetailWorkspace(QScrollArea):
         self.single_column = False
         self._proportion = 600
         self._transition = QVariantAnimation(self)
-        self._transition.setDuration(120)
+        self._transition.setDuration(int(MotionDuration.DISCLOSURE))
         self._transition.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self._transition.valueChanged.connect(self._set_proportion)
+        self._transition.finished.connect(self._finish_transition)
+        self._timeline_scroll_policy = None
 
     def set_timeline_controls(self, controls: QWidget) -> None:
         """Keep history navigation reachable independently of its scroll position."""
@@ -283,13 +286,35 @@ class DetailWorkspace(QScrollArea):
         self._change_proportion(400 if writing else 600)
 
     def _change_proportion(self, value: int) -> None:
+        if (
+            self._transition.state() == QVariantAnimation.State.Running
+            and self._transition.endValue() == value
+        ):
+            return
         self._transition.stop()
+        self._finish_transition()
         if self.isVisible() and animations_enabled(self) and self._proportion != value:
+            # Wrap the long Timeline once at completion, rather than laying out
+            # every historical paragraph at each frame. Its real widgets keep
+            # their geometry/selection while the viewport boundary moves.
+            self._timeline_scroll_policy = self.timeline.horizontalScrollBarPolicy()
+            self.timeline.setHorizontalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
+            self.timeline.setWidgetResizable(False)
+            self._transition.blockSignals(True)
             self._transition.setStartValue(self._proportion)
             self._transition.setEndValue(value)
+            self._transition.blockSignals(False)
             self._transition.start()
         else:
             self._set_proportion(value)
+
+    def _finish_transition(self) -> None:
+        if self._timeline_scroll_policy is not None:
+            self.timeline.setWidgetResizable(True)
+            self.timeline.setHorizontalScrollBarPolicy(self._timeline_scroll_policy)
+            self._timeline_scroll_policy = None
 
     def _set_proportion(self, value: int) -> None:
         self._proportion = int(value)

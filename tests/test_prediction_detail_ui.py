@@ -93,7 +93,7 @@ def test_m42_binary_detail_separates_identity_common_and_lifecycle_actions(
     assert (
         question.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse
     )
-    assert forecast_type.text() == "BINARY · TRAJECTORY"
+    assert forecast_type.text() == "Adaptive · Binary"
     assert status.property(BADGE_TONE_PROPERTY) == StatusTone.ACCENT.value
     assert summary.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.CANVAS.value
     assert action_panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.CANVAS.value

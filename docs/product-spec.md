@@ -1858,7 +1858,7 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, implemented in part. The first Journal/workspace walkthrough is accepted with recorded limits. Supplied New Prediction/Prediction Detail journeys have been reviewed, with Detail feature/fixture completeness and visual refinement still open. Performance/Settings and final integrated acceptance remain. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, implemented in part. The first Journal/workspace walkthrough is accepted with recorded limits. The combined New Prediction/Prediction Detail review was good overall; long-history responsiveness and smooth pane motion have a follow-up awaiting focused native recheck. Performance/Settings and final integrated acceptance remain. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
 **Separately authorized work — updated 2026-11-11:** The user explicitly authorized the first software slice in [Section 38.10](#3810-authorized-first-implementation-slice) and New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
@@ -2005,7 +2005,7 @@ This authorization covers the bounded software/verification work and necessary a
 
 ### 38.11 Authorized second implementation slice
 
-**Authorized 2026-11-11; supplied journeys reviewed, feature/fixture completion and visual refinement open.** The [verification checkpoint](archive/releases/2026-11-11-prediction-detail-verification.md) records automated evidence, the qualified user review and later tuning separately. Implement
+**Authorized 2026-11-11; combined review reported good overall on 2026-11-12, with long-history responsiveness tuning awaiting focused native recheck.** The [verification checkpoint](archive/releases/2026-11-11-prediction-detail-verification.md) records automated evidence, the qualified user review and later tuning separately. Implement
 the focused four-contract creation workspace and complete Prediction Detail
 requirements in Sections 38.5–38.6, preserving the accepted first-slice Journal,
 toolbar, appearance, presets and source returns. Deliver reading layouts and

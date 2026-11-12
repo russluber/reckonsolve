@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPlainTextEdit,
-    QPushButton,
     QRadioButton,
     QScrollArea,
     QSpinBox,
@@ -41,6 +40,7 @@ from reckonsolve.forecast_display import (
     format_local_deadline,
     format_readable_local_deadline,
 )
+from reckonsolve.ui.components import ProbabilityPresets
 from reckonsolve.ui.detail_workspace import collapse_section
 from reckonsolve.ui.dialog_review import DialogReview, confirm_contextual_terminal
 from reckonsolve.ui.editor_feedback import show_editor_error
@@ -386,22 +386,9 @@ class ReviseForecastDialog(_StyledDialog):
         self.probability_input.setValue(prediction.probability_percent)
         probability_label.setBuddy(self.probability_input)
 
-        shortcuts = QWidget(self)
-        shortcuts.setObjectName("revisionProbabilityShortcuts")
-        shortcuts_layout = QHBoxLayout(shortcuts)
-        shortcuts_layout.setContentsMargins(0, 0, 0, 0)
-        shortcuts_layout.setSpacing(6)
-        for probability in range(10, 100, 10):
-            shortcut = QPushButton(str(probability), shortcuts)
-            shortcut.setObjectName(f"revisionProbabilityShortcut{probability}")
-            shortcut.setAccessibleName(f"Set new probability to {probability}%")
-            shortcut.clicked.connect(
-                lambda _checked=False, value=probability: (
-                    self.probability_input.setValue(value)
-                )
-            )
-            shortcuts_layout.addWidget(shortcut)
-        shortcuts_layout.addStretch()
+        shortcuts = ProbabilityPresets(
+            self.probability_input, self, name_prefix="revisionProbability", wrap=True
+        )
 
         self.endpoint_note = QLabel(
             "0% and 100% express absolute certainty.",
@@ -541,6 +528,7 @@ class ReviseQuantileForecastDialog(_StyledDialog):
         content = QWidget(scroll)
         layout = QVBoxLayout(content)
         title = QLabel("Revise Numeric Forecast", content)
+        title.setWordWrap(True)
         apply_text_role(title, TextRole.PAGE_TITLE)
         layout.addWidget(title)
         context = QLabel(

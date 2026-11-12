@@ -39,9 +39,15 @@ from reckonsolve.ui.detail_reading import (
     TerminalSummary,
     criteria_reader,
     current_marker,
+    invalidation_exact_timing,
     invalidation_timing,
     reading_refresh,
     timeline_controls,
+)
+from reckonsolve.ui.detail_sections import (
+    AdaptiveReadingSections,
+    TimelineRows,
+    terminal_timeline_rows,
 )
 from reckonsolve.ui.detail_workspace import (
     DetailWorkspace,
@@ -497,6 +503,9 @@ class PredictionDetailScreen(QWidget):
         chart_label = QLabel("PROBABILITY HISTORY", self.detail_content)
         chart_label.setObjectName("probabilityHistoryHeading")
         self.probability_history_chart = ProbabilityHistoryChart(self.detail_content)
+        chart_policy = self.probability_history_chart.sizePolicy()
+        chart_policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        self.probability_history_chart.setSizePolicy(chart_policy)
         self.probability_history_chart.setObjectName("probabilityHistoryChart")
         self.probability_history_chart.setHidden(True)
         self.chart_placeholder = QLabel(
@@ -611,6 +620,8 @@ class PredictionDetailScreen(QWidget):
             self.add_journal_entry_button,
             self.review_forecast_button,
             self.resolve_button,
+            self.write_postmortem_button,
+            self.skip_postmortem_button,
         ):
             button.setParent(self.action_strip)
             button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
@@ -621,6 +632,8 @@ class PredictionDetailScreen(QWidget):
         self.more_actions = []
         for button in (
             self.edit_details_button,
+            self.correct_resolution_button,
+            self.correct_invalidation_button,
             self.mark_invalid_button,
             self.delete_button,
         ):
@@ -638,12 +651,9 @@ class PredictionDetailScreen(QWidget):
         self.timeline_order = QComboBox(timeline_panel)
         self.timeline_order.setAccessibleName("Timeline reading order")
         self.timeline_order.addItems(["Newest first", "Oldest first"])
+        self.timeline_rows = TimelineRows(self.forecast_timeline_layout)
         self.timeline_order.currentIndexChanged.connect(
-            lambda _index: (
-                self._load_timeline(self.prediction_id)
-                if self.prediction_id is not None
-                else None
-            )
+            lambda index: self.timeline_rows.order(descending=index == 0)
         )
         heading = timeline_panel_layout.takeAt(0).widget()
         self.scroll_area = DetailWorkspace(self.detail_content, self)
@@ -666,9 +676,33 @@ class PredictionDetailScreen(QWidget):
         self.chart_disclosure = collapse_section(chart_panel, "Probability history")
         overview = [
             self.resolution_criteria_section,
+            self.scorecard_section,
             self.chart_disclosure,
-            self.metadata_panel,
+            collapse_section(self.metadata_panel, "More information"),
         ]
+        self.reading_sections = AdaptiveReadingSections(
+            self.resolution_notes,
+            self.postmortem,
+            self.postmortem_completion,
+            self.detail_content,
+        )
+        overview[1:1] = [
+            self.reading_sections.notes,
+            self.reading_sections.reflection,
+            self.resolution_history,
+            self.invalidation_history,
+        ]
+        self.scorecard_section.setTitle("Binary score details")
+        apply_surface_role(self.scorecard_section, SurfaceRole.CANVAS)
+        self.trajectory_diagnostics.setTitle("Timing and updating diagnostics")
+        apply_action_role(self.write_postmortem_button, ActionRole.SECONDARY)
+        for label in (
+            self.scorecard_forecast,
+            self.scorecard_outcome,
+            self.scorecard_brier,
+            self.scorecard_correction_notice,
+        ):
+            label.hide()
         self.scored_forecast_disclosure = collapse_section(
             self.resolution_scoring_forecast, "Scored forecast context"
         )
@@ -677,11 +711,12 @@ class PredictionDetailScreen(QWidget):
         for panel in (summary_panel, action_panel, timeline_panel, self.metadata_panel):
             apply_surface_role(panel, SurfaceRole.CANVAS)
         overview.insert(0, QLabel("Overview", self))
+        self.overview_heading = overview[0]
         apply_text_role(overview[0], TextRole.SECTION_TITLE)
         self.workspace.compose(
             summary_panel,
             action_panel,
-            [self.resolution_section, self.invalidation_section, timeline_panel],
+            [timeline_panel],
             overview,
         )
         self.locked_explanation = QLabel(
@@ -797,7 +832,7 @@ class PredictionDetailScreen(QWidget):
                 self.invalidation_history.setChecked(True)
                 target = self.invalidation_history
             else:
-                target = self.invalidation_reason
+                target = self.terminal_summary.note
         _focus_search_widget(self.scroll_area, target)
 
     @reading_refresh
@@ -807,6 +842,7 @@ class PredictionDetailScreen(QWidget):
         self._prediction = prediction
         self._hide_error()
         if prediction is None:
+            self.timeline_rows.clear()
             self.question.clear()
             self.status.clear()
             self.probability.clear()
@@ -1232,7 +1268,7 @@ class PredictionDetailScreen(QWidget):
     def _show_optional_metadata(self, prediction: PredictionSnapshot) -> None:
         contract = getattr(prediction, "forecast_contract", None)
         assert contract is not None and contract.forecast_deadline is not None
-        self.forecast_type.setText("BINARY · TRAJECTORY")
+        self.forecast_type.setText("Adaptive · Binary")
         self.contract_context.setText(
             "Trajectory Binary: each standing probability belongs to the initial-to-Deadline "
             "commitment. Scoring uses when the outcome became knowable. "
@@ -1287,9 +1323,19 @@ class PredictionDetailScreen(QWidget):
                 f"Outcome: {effective.outcome.value.capitalize()}"
             )
             self.resolution_resolved_at.setText(
-                f"Resolved: {_format_local_timestamp(resolution.resolved_at)}"
+                f"Recorded at: {exact_detail_time(resolution.resolved_at)}"
                 if effective.effective_resolution_at is None
-                else f"Outcome became knowable: {format_local_deadline(effective.effective_resolution_at)}\nRecorded at: {format_local_deadline(resolution.resolved_at)}"
+                else f"Outcome became knowable: {exact_detail_time(effective.effective_resolution_at)}\nRecorded at: {exact_detail_time(resolution.resolved_at)}"
+            )
+            self.resolution_resolved_at.setToolTip(
+                "Recorded at: "
+                + resolution.resolved_at.isoformat()
+                + (
+                    "\nOutcome became knowable: "
+                    + effective.effective_resolution_at.isoformat()
+                    if effective.effective_resolution_at is not None
+                    else ""
+                )
             )
             self.resolution_scoring_forecast.setText(
                 f"Scoring forecast: {resolution.scoring_probability_percent}% "
@@ -1441,40 +1487,70 @@ class PredictionDetailScreen(QWidget):
             self._show_error(str(error))
             return False
 
-        _clear_widget_layout(self.forecast_timeline_layout)
-        self._sync_timing(events)
-        events = sorted(
-            events,
-            key=lambda event: event.created_at,
-            reverse=self.timeline_order.currentIndex() == 0,
+        snapshot = (
+            prediction_id,
+            tuple(events),
+            self._resolution_history,
+            self._invalidation_history,
+            frozenset(self._excluded_scoring_revision_ids),
         )
+        if self.timeline_rows.matches(snapshot):
+            self.forecast_timeline.setHidden(not self.timeline_rows.rows)
+            self.timeline_placeholder.setText("No timeline entries are available.")
+            self.timeline_placeholder.setHidden(bool(self.timeline_rows.rows))
+            return True
+        self._sync_timing(events)
+        rows = []
         for event in events:
-            if hasattr(event, "review_id"):
-                self.forecast_timeline_layout.addWidget(
-                    _forecast_review_widget(event, self.forecast_timeline)
-                )
-            elif hasattr(event, "entry_id"):
-                self.forecast_timeline_layout.addWidget(
-                    _journal_entry_widget(
-                        event,
-                        self.forecast_timeline,
-                        self.open_correct_journal_entry,
-                    )
-                )
-            else:
-                row = _forecast_timeline_widget(
+            kind, identifier = (
+                ("review", event.review_id)
+                if hasattr(event, "review_id")
+                else ("journal", event.entry_id)
+                if hasattr(event, "entry_id")
+                else ("forecast", event.revision_id)
+            )
+            row = self.timeline_rows.row(
+                (prediction_id, kind, identifier),
+                (
                     event,
-                    self.forecast_timeline,
-                    scoring_excluded=event.revision_id
-                    in self._excluded_scoring_revision_ids,
-                )
-                if event.revision_id == self._prediction.current_revision_id:
-                    current_marker(row)
-                self.forecast_timeline_layout.addWidget(row)
-        self.forecast_timeline.setHidden(not events)
+                    kind == "forecast"
+                    and identifier == self._prediction.current_revision_id,
+                    kind == "forecast"
+                    and identifier in self._excluded_scoring_revision_ids,
+                ),
+                lambda event=event: self._timeline_row(event),
+            )
+            rows.append((event.created_at, 0, row))
+        rows.extend(
+            terminal_timeline_rows(
+                self._resolution_history,
+                self._invalidation_history,
+                self.forecast_timeline,
+            )
+        )
+        self.timeline_rows.replace(
+            snapshot, rows, descending=self.timeline_order.currentIndex() == 0
+        )
+        self.forecast_timeline.setHidden(not rows)
         self.timeline_placeholder.setText("No timeline entries are available.")
-        self.timeline_placeholder.setHidden(bool(events))
+        self.timeline_placeholder.setHidden(bool(rows))
         return True
+
+    def _timeline_row(self, event) -> QWidget:
+        if hasattr(event, "review_id"):
+            return _forecast_review_widget(event, self.forecast_timeline)
+        if hasattr(event, "entry_id"):
+            return _journal_entry_widget(
+                event, self.forecast_timeline, self.open_correct_journal_entry
+            )
+        row = _forecast_timeline_widget(
+            event,
+            self.forecast_timeline,
+            scoring_excluded=event.revision_id in self._excluded_scoring_revision_ids,
+        )
+        if event.revision_id == self._prediction.current_revision_id:
+            current_marker(row)
+        return row
 
     def _load_probability_history(self, prediction_id: int) -> None:
         """Reload chart revisions without turning a read failure into emptiness."""
@@ -1523,6 +1599,28 @@ class PredictionDetailScreen(QWidget):
         self.detail_error.setHidden(True)
 
     def _sync_reading_actions(self, prediction) -> None:
+        # These legacy groups retain backing label identities; Overview and the
+        # real chronological Timeline now own all visible terminal content.
+        self.resolution_section.hide()
+        self.invalidation_section.hide()
+        self.reading_sections.sync(prediction.status)
+        for label in (
+            self.scorecard_forecast,
+            self.scorecard_outcome,
+            self.scorecard_brier,
+            self.scorecard_correction_notice,
+        ):
+            label.hide()
+        if (
+            self._trajectory_score is not None
+            and self._trajectory_score.unscored_reason
+        ):
+            self.scorecard_section.hide()
+        self.overview_heading.setText(
+            "Archival context"
+            if prediction.status is PredictionStatus.INVALID
+            else "Overview"
+        )
         terminal = prediction.status in (
             PredictionStatus.RESOLVED,
             PredictionStatus.INVALID,
@@ -1538,6 +1636,7 @@ class PredictionDetailScreen(QWidget):
                 if card is not None
                 else "Score unavailable",
                 timing=self.resolution_resolved_at.text(),
+                timing_tooltip=self.resolution_resolved_at.toolTip(),
                 note=(card.unscored_reason or self.scorecard_correction_notice.text())
                 if card is not None
                 else "The score could not be loaded. Try again before interpreting this result.",
@@ -1553,6 +1652,7 @@ class PredictionDetailScreen(QWidget):
                 note=self.invalidation_reason.text() or "No reason recorded.",
                 context=f"Last forecast: {prediction.probability_percent}%\nOriginal Forecast Deadline: {self.forecast_deadline.text()}",
                 context_title="Last forecast · Not scored",
+                timing_tooltip=invalidation_exact_timing(self._invalidation_history),
             )
         self.write_postmortem_button.setVisible(
             prediction.status is PredictionStatus.RESOLVED
