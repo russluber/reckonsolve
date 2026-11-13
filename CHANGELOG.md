@@ -4,7 +4,11 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is also accepted with recorded limits. The requested Journal-relocation walkthrough is accepted with recorded limits; final integrated acceptance remains. Not a published release.
+Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings and Journal-relocation walkthroughs are also accepted with recorded limits. Combined journeys were checked successfully; focused recheck of the subsequent workspace refinements remains. Not a published release.
+
+- Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
+- One-Shot Detail uses shared-style result/reflection/Journal and context/originals panes, with equal terminal reading widths. Adaptive Resolved/Invalid reading also uses 50/50 panes; contextual tabs omit duplicate Overview headings. Main pane headings and principal action labels have consistent hierarchy and capitalization.
+- Settings offers three remembered desktop date orders and read-only Windows time-zone information. Ordinary timestamps omit repeated offsets; exact entry/terminal confirmation retains offset and daylight-saving cues. Canonical facts, CLI and analytical formats are unchanged.
 
 - Returning to refreshed Journal results and background result replacement retain usable keyboard focus. Current nearby results/search/retry provide safe fallbacks without changing query membership, following reordered rows or stealing focus from another action.
 - Numeric interval labels reflow after font/style changes, retaining exact values and percentile labels when text is enlarged.
@@ -20,7 +24,7 @@ Journal/workspace and the requested New Prediction/Prediction Detail walkthrough
 - Shared 10–90 probability presets across both Binary creation modes and reserved focus-border space for presets and the shared New action.
 - Modular creation and Detail owners replace the former screen monolith. Adaptive Detail has committed headers, exact Numeric interval/tie labels, independently scrolling Timeline/Overview and contextual writing with guarded exits.
 - Lifecycle-specific reading, conditional Definition/transcription review inside focused dialogs, separate terminal confirmation, inline One-Shot reflection and direct nonblank reflection-only saves preserve immutable originals and stale-write checks.
-- Page titles lead Question headings; Current revision sits with persistent Timeline controls. Hidden actions leave no gaps in wrapping control rows.
+- Page titles lead Question headings; Current Revision sits with persistent Timeline controls. Hidden actions leave no gaps in wrapping control rows.
 - Fixed calibration graph/table backgrounds retaining the previous appearance while their text switched to light or dark mode.
 - Resolved Adaptive Detail now leads with factual results and scores; Invalid Detail leads with the recorded reason and Not scored. Scored or last-forecast context remains available on request. Added a disposable Detail review profile for cutoff, unscored and corrected-reason cases.
 

@@ -103,7 +103,7 @@ def test_timeline_displays_minutes_but_preserves_exact_timestamp(qtbot, tmp_path
     timestamp = screen.findChild(
         QLabel, f"forecastRevisionTimestamp{prediction.current_revision_id}"
     )
-    assert timestamp.text() == instant.astimezone().strftime("%b %d, %Y at %H:%M")
+    assert timestamp.text() == instant.astimezone().strftime("%Y-%m-%d, %I:%M %p")
     assert timestamp.toolTip() == instant.astimezone().isoformat(sep=" ")
     assert operations.list_timeline(prediction.prediction_id)[0].created_at == instant
     database.close()
@@ -142,7 +142,13 @@ def test_cancel_edit_or_revision_does_not_write_history(qtbot, operations):
     screen.show()
     assert "Adaptive" in screen.forecast_type.text()
     assert "Binary" in screen.forecast_type.text()
-    assert "UTC" in screen.forecast_deadline.text()
+    assert "UTC" not in screen.forecast_deadline.text()
+    assert (
+        datetime.fromisoformat(
+            screen.forecast_deadline.toolTip().removeprefix("Exact, fixed deadline: ")
+        ).utcoffset()
+        is not None
+    )
     assert "permanent" not in screen.forecast_deadline.text()
     assert "Exact, fixed deadline:" in screen.forecast_deadline.toolTip()
     assert screen.resolve_button.isEnabled()

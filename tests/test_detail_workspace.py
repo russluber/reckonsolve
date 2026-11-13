@@ -852,3 +852,78 @@ def test_interval_reflows_exact_labels_after_text_metrics_change(qtbot, change):
         interval.minimumHeight()
         >= max(label.geometry().bottom() for label in interval.labels) + 40
     )
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize(
+    "status",
+    [PredictionStatus.OPEN, PredictionStatus.RESOLVED, PredictionStatus.INVALID],
+)
+def test_one_shot_shared_panes_keep_their_own_workflow_and_terminal_balance(
+    detail, qtbot, numeric, status
+):
+    from reckonsolve.domain.predictions import FixedPrecisionValue
+
+    window, operations, clock, _ = detail
+    values = (
+        OneShotValues(
+            quantiles=FiveQuantiles.from_values(
+                {5: -2, 25: -1, 50: 0, 75: 1, 95: 2}, 0
+            ),
+            answer=FixedPrecisionValue.from_value(1, 0)
+            if status is PredictionStatus.RESOLVED
+            else None,
+        )
+        if numeric
+        else OneShotValues(
+            probability_percent=70,
+            answer=BinaryOutcome.YES if status is PredictionStatus.RESOLVED else None,
+        )
+    )
+    current = operations.one_shots.create(
+        NewOneShotPrediction(
+            "One-Shot has a record, not adaptive revisions",
+            one_shot_contract(
+                PredictionType.NUMERIC if numeric else PredictionType.BINARY
+            ),
+            values,
+            QuantileDefinition("units", 0, NumericValueConstraint.WHOLE_NUMBER)
+            if numeric
+            else None,
+        )
+    )
+    if status is PredictionStatus.INVALID:
+        clock.advance()
+        current = operations.one_shots.invalidate(
+            current, reason="The exercise source was unusable."
+        )
+    window._open_prediction(current.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    workspace = screen.workspace
+    qtbot.waitUntil(
+        lambda: (
+            workspace._proportion == (600 if status is PredictionStatus.OPEN else 500)
+        )
+    )
+    assert workspace.timeline_body.isAncestorOf(screen.journals)
+    assert workspace.overview_body.isAncestorOf(screen.overview_heading)
+    assert screen.overview_heading.text() == (
+        "ARCHIVAL CONTEXT" if status is PredictionStatus.INVALID else "OVERVIEW"
+    )
+    assert not workspace.single_column
+    assert not any(
+        button.text() in ("Revise Forecast", "Keep Forecast", "Current Revision")
+        for button in screen.findChildren(QPushButton)
+    )
+    if status is PredictionStatus.OPEN:
+        screen.open_journal()
+        editor = workspace.editor
+        editor.body_input.setPlainText("Entered One-Shot reasoning")
+        qtbot.waitUntil(lambda: workspace._proportion == 400)
+        workspace.tabs.setCurrentIndex(0)
+        assert screen.overview_heading.isHidden()
+        workspace.tabs.setCurrentIndex(1)
+        assert editor.body_input.toPlainText() == "Entered One-Shot reasoning"
+        workspace.clear_editor()
+        assert not screen.overview_heading.isHidden()
+    assert operations.one_shots.get(current.prediction_id) == current

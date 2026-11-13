@@ -20,6 +20,7 @@ from reckonsolve.domain.one_shot import OneShotDetail
 from reckonsolve.ui.analytics_screen import AnalyticsScreen
 from reckonsolve.ui.appearance import AppearanceController
 from reckonsolve.ui.creation_task import CreationTask
+from reckonsolve.ui.date_display import DateFormat, update_date_inputs
 from reckonsolve.ui.icons import refresh_lucide_icons
 from reckonsolve.ui.journal.screen import JournalScreen
 from reckonsolve.ui.notifications import NotificationHost
@@ -71,6 +72,7 @@ class MainWindow(QMainWindow):
             presentation_settings or MemoryPresentationSettings()
         )
         self._presentation_state = self._presentation_settings.load()
+        self.display_date_format = self._presentation_state.date_format
         self._available_screens_override = available_screens
         self.appearance = AppearanceController(
             self._presentation_state.appearance, self
@@ -157,6 +159,7 @@ class MainWindow(QMainWindow):
         self._toolbar.appearance_requested.connect(self.appearance.toggle)
         self.appearance.changed.connect(self._appearance_changed)
         self._settings_screen.appearance_changed.connect(self.appearance.select)
+        self._settings_screen.date_format_changed.connect(self._date_format_changed)
         self._settings_screen.routine_notification_requested.connect(
             self._show_routine_notification
         )
@@ -172,6 +175,7 @@ class MainWindow(QMainWindow):
         self._restore_window_state()
         self._install_global_shortcuts()
         self._sync_toolbar()
+        update_date_inputs(self)
         self._activate(Destination(), refresh=True)
 
     @property
@@ -244,6 +248,7 @@ class MainWindow(QMainWindow):
         self.workspace.enter(destination, remember_source=remember_source)
         route = destination.route
         self._screen_stack.setCurrentWidget(self._screens[route])
+        update_date_inputs(self._screens[route])
         self._sync_toolbar()
         if route is Route.NEW:
             self._focus_creation()
@@ -278,6 +283,7 @@ class MainWindow(QMainWindow):
         )
         self._toolbar.update_appearance(self.appearance.dark)
         self._settings_screen.set_appearance(self.appearance.mode)
+        self._settings_screen.set_date_format(self.display_date_format)
 
     def return_to_source(self) -> None:
         if self.archive_blocked:
@@ -415,6 +421,17 @@ class MainWindow(QMainWindow):
                 "Appearance changed for this session, but the preference could not be remembered."
             )
 
+    def _date_format_changed(self, value: DateFormat) -> None:
+        self.display_date_format = value
+        self._settings_screen.set_date_format(value)
+        update_date_inputs(self)
+        self._journal_screen._sync_controls()
+        self._settings_screen.refresh()
+        if not self._save_presentation_state():
+            self._show_routine_notification(
+                "Date format changed for this session, but the preference could not be remembered."
+            )
+
     def _archive_refused(self, error: Exception) -> None:
         if self.archive_blocked:
             return
@@ -483,6 +500,7 @@ class MainWindow(QMainWindow):
             normal_geometry=(normal.x(), normal.y(), normal.width(), normal.height()),
             maximized=maximized,
             appearance=self.appearance.mode,
+            date_format=self.display_date_format,
         )
         if self._presentation_settings.save(state):
             self._presentation_state = state

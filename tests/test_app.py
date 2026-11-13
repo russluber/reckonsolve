@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 from zipfile import ZipFile
@@ -1011,7 +1012,13 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert reopened_background.text() == "End-to-end metadata context."
     assert reopened_criteria.text() == ("Yes if the same details reopen from SQLite.")
     assert reopened_tags.text() == "#m3  #persistence"
-    assert "UTC" in reopened_deadline.text()
+    assert "UTC" not in reopened_deadline.text()
+    assert (
+        datetime.fromisoformat(
+            reopened_deadline.toolTip().removeprefix("Exact, fixed deadline: ")
+        ).utcoffset()
+        is not None
+    )
     assert "(permanent)" not in reopened_deadline.text()
     assert (
         "2099-01-01"

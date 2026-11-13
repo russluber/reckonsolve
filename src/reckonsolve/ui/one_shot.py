@@ -46,6 +46,7 @@ from reckonsolve.domain.quantiles import (
 from reckonsolve.one_shot_display import forecast_text, values_lines
 from reckonsolve.reported_time import parse_reported_offset
 from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
+from reckonsolve.ui.date_display import format_reported_time, input_date_format
 from reckonsolve.ui.dialog_review import DialogReview
 from reckonsolve.ui.quantile_input import FiveQuantileInput
 from reckonsolve.ui.time_input import SegmentedTimeEdit
@@ -111,7 +112,7 @@ class ReportedTimeInput(QWidget):
         # The date is a wall-calendar value; no local DST conversion belongs here.
         self.date.setTimeZone(QTimeZone.utc())
         self.date.setDateRange(QDate(1, 1, 1), QDate(9999, 12, 31))
-        self.date.setDisplayFormat("MMM d, yyyy")
+        self.date.setDisplayFormat(input_date_format(self))
         self.date.setCalendarPopup(True)
         self.date.setKeyboardTracking(False)
         field(date_fields, "Date", self.date)
@@ -541,7 +542,7 @@ class OneShotEditDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.operations, self.detail, self.correction = operations, detail, correction
-        self.setWindowTitle("Correct transcription" if correction else "Add answer")
+        self.setWindowTitle("Correct Transcription" if correction else "Add answer")
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setModal(True)
         self.resize(660, 650)
@@ -622,9 +623,25 @@ class OneShotEditDialog(QDialog):
                 )
                 self.review.show(
                     "Review transcription correction\n\nCurrent recorded facts:\n"
-                    + "\n".join(values_lines(self.detail.record.effective, unit))
+                    + "\n".join(
+                        values_lines(
+                            self.detail.record.effective,
+                            unit,
+                            reported_formatter=lambda reported: format_reported_time(
+                                reported, self
+                            ),
+                        )
+                    )
                     + "\n\nProposed recorded facts:\n"
-                    + "\n".join(values_lines(values, unit))
+                    + "\n".join(
+                        values_lines(
+                            values,
+                            unit,
+                            reported_formatter=lambda reported: format_reported_time(
+                                reported, self
+                            ),
+                        )
+                    )
                     + "\n\nThis repairs the record of your earlier forecast. Originals remain; scoring uses the corrected facts once.",
                     "Confirm transcription correction",
                 )

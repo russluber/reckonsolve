@@ -496,3 +496,58 @@ def test_invalid_current_reason_has_one_visible_home_and_exact_search_target(
         for action in actions
     )
     assert operations.get_invalidation_history(identifier) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("invalid", [False, True])
+def test_terminal_panes_are_equal_and_task_tabs_own_the_context_heading(
+    workspace, qtbot, numeric, invalid
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    if invalid:
+        operation = (
+            operations.invalidate_numeric_prediction
+            if numeric
+            else operations.invalidate_prediction
+        )
+        current = operation(
+            prediction.prediction_id,
+            reason="A clear Invalid reason",
+            **context(prediction, numeric),
+        )
+    else:
+        operation = (
+            operations.resolve_numeric_prediction
+            if numeric
+            else operations.resolve_prediction
+        )
+        current = operation(
+            prediction.prediction_id,
+            1 if numeric else BinaryOutcome.YES,
+            use_recorded_time=True,
+            **context(prediction, numeric),
+        )
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    pane = screen.workspace
+    qtbot.waitUntil(lambda: pane._proportion == 500)
+    assert pane.columns.stretch(0) == pane.columns.stretch(1)
+    assert screen.overview_heading.text() == (
+        "ARCHIVAL CONTEXT" if invalid else "OVERVIEW"
+    )
+    if not invalid:
+        screen.open_postmortem()
+        qtbot.waitUntil(lambda: pane._proportion == 400)
+        assert screen.overview_heading.isHidden()
+        pane.tabs.setCurrentIndex(0)
+        qtbot.waitUntil(lambda: pane._proportion == 500)
+        assert screen.overview_heading.isHidden()
+        pane.clear_editor()
+        assert not screen.overview_heading.isHidden()
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == current

@@ -12,6 +12,8 @@ from PySide6.QtCore import QEvent, QRectF, QSize, Qt
 from PySide6.QtGui import QPainter, QPainterPath, QPaintEvent, QPalette, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from reckonsolve.ui.date_display import format_datetime
+
 
 class ForecastRevisionLike(Protocol):
     """Structural revision data consumed by the presentation-only chart."""
@@ -153,8 +155,7 @@ class ProbabilityHistoryChart(QWidget):
         self._samples = samples
         self.setAccessibleDescription(
             _accessible_summary(
-                samples,
-                timeline_available=self._timeline_available,
+                samples, timeline_available=self._timeline_available, widget=self
             )
         )
         self.update()
@@ -169,7 +170,9 @@ class ProbabilityHistoryChart(QWidget):
 
         self._timeline_available = available
         self.setAccessibleDescription(
-            _accessible_summary(self._samples, timeline_available=available)
+            _accessible_summary(
+                self._samples, timeline_available=available, widget=self
+            )
         )
 
     def sizeHint(self) -> QSize:
@@ -367,8 +370,8 @@ class ProbabilityHistoryChart(QWidget):
             label,
         )
 
-    @staticmethod
     def _paint_time_labels(
+        self,
         painter: QPainter,
         palette: QPalette,
         plot_rect: QRectF,
@@ -380,7 +383,7 @@ class ProbabilityHistoryChart(QWidget):
         metrics = painter.fontMetrics()
         label_y = plot_rect.bottom() + 7.0
         label_height = metrics.height()
-        earliest_text = _format_local_timestamp(geometry.earliest_instant)
+        earliest_text = _format_local_timestamp(geometry.earliest_instant, widget=self)
         if geometry.earliest_instant == geometry.latest_instant:
             text = metrics.elidedText(
                 earliest_text,
@@ -395,7 +398,7 @@ class ProbabilityHistoryChart(QWidget):
             return
 
         half_width = max(1.0, plot_rect.width() / 2 - 4.0)
-        latest_text = _format_local_timestamp(geometry.latest_instant)
+        latest_text = _format_local_timestamp(geometry.latest_instant, widget=self)
         painter.drawText(
             QRectF(plot_rect.left(), label_y, half_width, label_height),
             Qt.AlignmentFlag.AlignLeft,
@@ -457,14 +460,15 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-def _format_local_timestamp(value: datetime) -> str:
-    return value.astimezone().strftime("%b %d, %Y %H:%M")
+def _format_local_timestamp(value: datetime, *, widget: QWidget | None = None) -> str:
+    return format_datetime(value, widget)
 
 
 def _accessible_summary(
     samples: tuple[ProbabilityHistorySample, ...],
     *,
     timeline_available: bool = True,
+    widget: QWidget | None = None,
 ) -> str:
     if timeline_available:
         timeline_note = "Exact revision details are listed in the Timeline."
@@ -478,7 +482,7 @@ def _accessible_summary(
     if len(samples) == 1:
         return (
             f"1 forecast revision. Current forecast {current.probability_percent}% "
-            f"recorded {_format_local_timestamp(current.created_at)} local time. "
+            f"recorded {_format_local_timestamp(current.created_at, widget=widget)} local time. "
             f"{timeline_note}"
         )
 
@@ -486,8 +490,8 @@ def _accessible_summary(
     return (
         f"{len(samples)} forecast revisions in sequence order. Started at "
         f"{first.probability_percent}% on "
-        f"{_format_local_timestamp(first.created_at)} local time; current forecast "
+        f"{_format_local_timestamp(first.created_at, widget=widget)} local time; current forecast "
         f"{current.probability_percent}% on "
-        f"{_format_local_timestamp(current.created_at)} local time. Probability "
+        f"{_format_local_timestamp(current.created_at, widget=widget)} local time. Probability "
         f"range {min(probabilities)}% to {max(probabilities)}%. {timeline_note}"
     )

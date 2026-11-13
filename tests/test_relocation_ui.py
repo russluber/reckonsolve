@@ -87,6 +87,9 @@ def test_move_reopens_same_identity_in_fresh_journal_with_fixed_preferences(
     runtime, folder = managed
     window = runtime.window
     window.appearance.select(AppearanceMode.DARK)
+    from reckonsolve.ui.date_display import DateFormat
+
+    window._date_format_changed(DateFormat.MONTH_FIRST)
     window._analytics_screen.state.adaptive_unit = "retained only before restart"
     source = runtime.database.path
     expected = snapshot(source)
@@ -104,6 +107,7 @@ def test_move_reopens_same_identity_in_fresh_journal_with_fixed_preferences(
         assert snapshot(reopened.database.path) == expected
         assert reopened.window.workspace.current.route is Route.JOURNAL
         assert reopened.window.appearance.dark
+        assert reopened.window.display_date_format is DateFormat.MONTH_FIRST
         assert reopened.window._analytics_screen.state.adaptive_unit is None
         assert reopened.location.presentation_path.parent == runtime.location.store.root
         cli = create_cli_runtime(

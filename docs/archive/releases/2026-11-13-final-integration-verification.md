@@ -98,3 +98,12 @@ installed snapshots, packaging and publication are later, separately authorized 
 No personal journal, applied migration, scoring algorithm, search projection,
 CSV format, production dependency or private visual reference changed. The agent
 performed no staging, commit, tag, push or publication.
+
+## Reported combined journey review — 2026-11-13
+
+At saved public `fe6a3df`, the user reported that the combined journeys were checked
+and worked well, then identified eight presentation/responsiveness refinements.
+That is positive functional feedback, with final visual/responsiveness acceptance
+still open. The [post-review refinement record](2026-11-13-workspace-refinement-verification.md)
+owns the resulting work, fresh verification and focused recheck. Earlier source
+counts/captures above remain evidence for their evaluated source, not later edits.

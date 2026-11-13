@@ -127,6 +127,16 @@ Use one combined pass to review the remaining seams:
 
 The [final integration evidence](../archive/releases/2026-11-13-final-integration-verification.md) maps existing slice evidence, new regressions and remaining limits. This review does not replace installed tools, open personal data or publish a release.
 
+### Post-review refinement recheck
+
+The user checked the combined journeys and requested the [workspace refinements](../product-spec.md#3815-authorized-post-review-workspace-refinements). Reuse the same `integrated` command above for this focused recheck; the accepted four-slice walkthroughs need not be repeated.
+
+1. Open a Prediction and return to Journal several times. Check prompt returns and retained browsing/focus. Leave Journal visible for over a minute, then scroll: an unchanged same-view background check should not flash Updating results or rebuild the listing. A deliberate new search/filter still masks the old retrieval until its results arrive.
+2. Inspect Binary and Numeric One-Shot Waiting, Resolved and Invalid examples in both appearances. Check the results/reflection/Journal and context/originals composition, familiar disclosures and distinct One-Shot actions. Terminal reading should be balanced 50/50; Open reading gives more room to history.
+3. In Settings choose each date order, inspect the Windows zone information, and revisit dated Journal/Detail content. Ordinary readouts omit offsets; exact entry/terminal confirmation retains them. Automated injected-runtime tests cover preference restart/relocation; the managed `integrated` profile deliberately starts fresh when relaunched. On Adaptive Detail, check Title Case actions, OVERVIEW/TIMELINE or ARCHIVAL CONTEXT, ordinary subsection headings and equal terminal panes. Start a contextual task, switch to Overview and back: there should be one Overview label, retained inputs and smooth pane movement. Inspect both palettes and the supported minimum size; record your actual Windows scale.
+
+The [dated refinement evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md) separates local timing/source checks from this pending human judgment. All data and preferences must remain disposable; do not use installed personal profiles to test restart or date changes.
+
 ## Documentation checks
 
 After editing or moving documentation, run:

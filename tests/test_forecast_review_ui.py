@@ -116,7 +116,7 @@ def test_numeric_review_uses_quantile_context_and_locked_disables_action(
     action = window.findChild(QPushButton, "reviewNumericForecastButton")
     chart = window._prediction_detail_host._numeric_detail.quantile_cdf
     assert action is not None
-    assert action.text() == "Keep forecast"
+    assert action.text() == "Keep Forecast"
     assert not action.isEnabled()
     assert chart is not None
     assert chart.quantiles == prediction.current_revision.quantiles

@@ -26,6 +26,7 @@ from reckonsolve.domain.search import (
     search_source_label,
 )
 from reckonsolve.ui.components import StatusBadge
+from reckonsolve.ui.date_display import date_context, format_date, format_datetime
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
@@ -55,12 +56,10 @@ def emphasized(text: str, parsed: ParsedSearchText, *, full: bool = False) -> st
     return "".join(pieces)
 
 
-def local_date(value: datetime, *, clock: bool = False) -> str:
-    return (
-        value.astimezone()
-        .strftime("%d %b %Y, %I:%M %p" if clock else "%d %b %Y")
-        .lstrip("0")
-    )
+def local_date(
+    value: datetime, *, clock: bool = False, widget: QWidget | None = None
+) -> str:
+    return format_datetime(value, widget) if clock else format_date(value, widget)
 
 
 class QuestionLabel(QLabel):
@@ -103,6 +102,9 @@ class JournalCard(QFrame):
         parent: QWidget,
     ) -> None:
         super().__init__(parent)
+        self.source_row = row
+        self.rendered_date_context = date_context(parent)
+        self.parsed = parsed
         prediction = row.prediction
         self.prediction_id = prediction.prediction_id
         self.setObjectName(f"journalPrediction{self.prediction_id}")
@@ -128,7 +130,7 @@ class JournalCard(QFrame):
             self._label(
                 "Current wording"
                 + (
-                    f" · {local_date(row.current_question_at)}"
+                    f" · {local_date(row.current_question_at, widget=self)}"
                     if row.current_question_at
                     else ""
                 )
@@ -201,10 +203,10 @@ class JournalCard(QFrame):
             or row.last_active.astimezone().date()
             != row.contextual_at.astimezone().date()
         ):
-            dates.append(f"Last active: {local_date(row.last_active)}")
+            dates.append(f"Last active: {local_date(row.last_active, widget=self)}")
         if row.contextual_at:
             dates.append(
-                f"{row.contextual_label}: {local_date(row.contextual_at, clock=row.contextual_label == 'Forecast Deadline')}"
+                f"{row.contextual_label}: {local_date(row.contextual_at, clock=row.contextual_label == 'Forecast Deadline', widget=self)}"
             )
         self._label("    ".join(dates))
         passages = [
@@ -263,7 +265,7 @@ class JournalCard(QFrame):
         destination = container.layout() if container else self.layout_body
         heading = search_source_label(document)
         if document.occurred_at:
-            heading += f" · {local_date(document.occurred_at)}"
+            heading += f" · {local_date(document.occurred_at, widget=self)}"
         label = QLabel(heading, self)
         label.setWordWrap(True)
         label.setTextFormat(Qt.TextFormat.PlainText)

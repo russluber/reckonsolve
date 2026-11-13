@@ -280,7 +280,7 @@ def test_unified_timeline_renders_forecasts_and_journals_as_plain_text(
     assert timestamp.text() == (
         datetime(2026, 8, 13, 19, 30, tzinfo=UTC)
         .astimezone()
-        .strftime("%b %d, %Y at %H:%M")
+        .strftime("%Y-%m-%d, %I:%M %p")
         .strip()
     )
 

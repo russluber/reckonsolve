@@ -44,6 +44,12 @@ from reckonsolve.domain.quantiles import (
     quantile_summary,
 )
 from reckonsolve.forecast_display import format_local_deadline
+from reckonsolve.ui.date_display import (
+    format_date,
+    format_datetime,
+    input_date_format,
+    update_date_inputs,
+)
 from reckonsolve.ui.detail_reading import progressive_body, quiet_event
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.layouts import FlowLayout
@@ -72,6 +78,7 @@ class _StyledDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:
         _apply_dialog_presentation(self)
+        update_date_inputs(self)
         super().showEvent(event)
 
 
@@ -123,7 +130,7 @@ def _create_optional_date_controls(
     date_input.setObjectName(input_name)
     date_input.setAccessibleName(label)
     date_input.setCalendarPopup(True)
-    date_input.setDisplayFormat("yyyy-MM-dd")
+    date_input.setDisplayFormat(input_date_format(date_input))
     date_input.setDateRange(
         _to_qdate(MIN_METADATA_DATE),
         _to_qdate(MAX_METADATA_DATE),
@@ -451,7 +458,7 @@ def _terminal_history_frame(
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
     heading = QLabel(
-        f"{heading_text} · {_format_local_timestamp(timestamp)}",
+        f"{heading_text} · {_format_local_timestamp(timestamp, widget=parent)}",
         frame,
     )
     heading.setTextFormat(Qt.TextFormat.PlainText)
@@ -569,7 +576,7 @@ def _terminal_correction_frame(
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
     heading = QLabel(
-        f"Correction {sequence} · {_format_local_timestamp(corrected_at)}",
+        f"Correction {sequence} · {_format_local_timestamp(corrected_at, widget=parent)}",
         frame,
     )
     heading.setTextFormat(Qt.TextFormat.PlainText)
@@ -751,7 +758,7 @@ def _definition_change_widget(
     frame.setFrameShape(QFrame.Shape.StyledPanel)
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
-    timestamp = QLabel(_format_local_timestamp(change.changed_at), frame)
+    timestamp = QLabel(_format_local_timestamp(change.changed_at, widget=parent), frame)
     timestamp.setObjectName(f"definitionChangeTimestamp{change.change_id}")
     timestamp.setTextFormat(Qt.TextFormat.PlainText)
     apply_text_role(timestamp, TextRole.SECONDARY)
@@ -770,8 +777,8 @@ def _definition_change_widget(
     for field_name in change.changed_fields:
         old_value, new_value = values[field_name]
         field_change = QLabel(
-            f"{_field_label(field_name)}: {_history_value(old_value)} → "
-            f"{_history_value(new_value)}",
+            f"{_field_label(field_name)}: {_history_value(old_value, widget=parent)} → "
+            f"{_history_value(new_value, widget=parent)}",
             frame,
         )
         field_change.setObjectName(
@@ -796,7 +803,9 @@ def _forecast_timeline_widget(
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
 
-    timestamp = QLabel(_format_local_timestamp(revision.created_at), frame)
+    timestamp = QLabel(
+        _format_local_timestamp(revision.created_at, widget=parent), frame
+    )
     timestamp.setToolTip(revision.created_at.astimezone().isoformat(sep=" "))
     timestamp.setWordWrap(True)
     _make_selectable(timestamp)
@@ -850,7 +859,7 @@ def _journal_entry_widget(
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
 
-    timestamp = QLabel(_format_local_timestamp(entry.created_at), frame)
+    timestamp = QLabel(_format_local_timestamp(entry.created_at, widget=parent), frame)
     timestamp.setToolTip(entry.created_at.astimezone().isoformat(sep=" "))
     timestamp.setWordWrap(True)
     _make_selectable(timestamp)
@@ -870,7 +879,7 @@ def _journal_entry_widget(
     if entry.current_correction_id is not None:
         latest_correction = entry.corrections[-1]
         edited = QLabel(
-            f"Edited {_format_local_timestamp(latest_correction.corrected_at)}",
+            f"Edited {_format_local_timestamp(latest_correction.corrected_at, widget=parent)}",
             heading_row,
         )
         edited.setObjectName(f"journalEntryEdited{entry.entry_id}")
@@ -923,7 +932,7 @@ def _forecast_review_widget(
     frame.setFrameShape(QFrame.Shape.StyledPanel)
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
-    timestamp = QLabel(_format_local_timestamp(review.created_at), frame)
+    timestamp = QLabel(_format_local_timestamp(review.created_at, widget=parent), frame)
     timestamp.setToolTip(review.created_at.astimezone().isoformat(sep=" "))
     timestamp.setWordWrap(True)
     _make_selectable(timestamp)
@@ -962,7 +971,9 @@ def _one_shot_journal_timeline_widget(
     apply_surface_role(frame, SurfaceRole.BASE)
     layout = QVBoxLayout(frame)
 
-    timestamp = text_label(_format_local_timestamp(entry.created_at), frame)
+    timestamp = text_label(
+        _format_local_timestamp(entry.created_at, widget=parent), frame
+    )
     timestamp.setToolTip(entry.created_at.astimezone().isoformat(sep=" "))
     apply_text_role(timestamp, TextRole.SECONDARY)
     layout.addWidget(timestamp)
@@ -975,7 +986,7 @@ def _one_shot_journal_timeline_widget(
     heading_layout.addWidget(kind)
     if entry.corrections:
         edited = text_label(
-            f"Edited {_format_local_timestamp(entry.corrections[-1].corrected_at)}",
+            f"Edited {_format_local_timestamp(entry.corrections[-1].corrected_at, widget=parent)}",
             heading_row,
         )
         edited.setWordWrap(False)
@@ -1030,7 +1041,7 @@ def _journal_edit_history_widget(
     content_layout.addWidget(count)
 
     original_heading = QLabel(
-        f"Original · {_format_local_timestamp(entry.created_at)}",
+        f"Original · {_format_local_timestamp(entry.created_at, widget=parent)}",
         content,
     )
     original_heading.setObjectName(f"journalEntryOriginalHeading{entry.entry_id}")
@@ -1046,7 +1057,7 @@ def _journal_edit_history_widget(
 
     for index, correction in enumerate(entry.corrections[:-1], start=1):
         correction_heading = QLabel(
-            f"Correction {index} · {_format_local_timestamp(correction.corrected_at)}",
+            f"Correction {index} · {_format_local_timestamp(correction.corrected_at, widget=parent)}",
             content,
         )
         correction_heading.setObjectName(
@@ -1103,13 +1114,12 @@ def _clear_widget_layout(layout: QVBoxLayout) -> None:
             widget.deleteLater()
 
 
-def _format_local_timestamp(value: datetime) -> str:
-    local_value = value.astimezone()
-    return local_value.strftime("%b %d, %Y at %H:%M")
+def _format_local_timestamp(value: datetime, *, widget: QWidget | None = None) -> str:
+    return format_datetime(value, widget)
 
 
-def _format_date(value: date | None) -> str:
-    return "" if value is None else value.strftime("%b %d, %Y")
+def _format_date(value: date | None, *, widget: QWidget | None = None) -> str:
+    return format_date(value, widget)
 
 
 def _numeric_forecast_text(
@@ -1121,11 +1131,11 @@ def _numeric_forecast_text(
     return quantile_summary(revision.quantiles, unit)
 
 
-def _history_value(value: str | date | None) -> str:
+def _history_value(value: str | date | None, *, widget: QWidget | None = None) -> str:
     if value is None or value == "":
         return "Not set"
     if isinstance(value, date):
-        return _format_date(value)
+        return _format_date(value, widget=widget)
     return f"“{value}”"
 
 

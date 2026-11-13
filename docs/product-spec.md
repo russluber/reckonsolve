@@ -14,7 +14,7 @@ Completed milestone plans and earlier contracts are preserved in the [historical
 - [Adaptive forecasting](#35-adaptive-forecasting-contract): exact Deadlines, trajectory Binary, five-quantile Numeric, and compatibility.
 - [One-Shot forecasting](#36-one-shot-prediction-contract): existing answers, external notes, documentary time, transcription corrections, and separate scoring.
 
-**Current source applicability:** [Section 38](#38-journal-centered-redesign-approved-future-requirements) governs the implemented Journal-centered desktop, Saved View retirement, schema-21 provenance, CSV 6 and identity-scoped relocation under its explicit software authorizations. The four requested slice walkthroughs are accepted with recorded limits; final integrated acceptance is pending. Its established heading/anchor retains the origin as approved future requirements. Sections 33–36 retain the published v0.8.0 baseline and all protected shared/model/scoring rules; only the explicitly replaced interface, retirement and versioned storage/export provisions yield to Section 38. This distinction does not authorize additional software or publication.
+**Current source applicability:** [Section 38](#38-journal-centered-redesign-approved-future-requirements) governs the implemented Journal-centered desktop, Saved View retirement, schema-21 provenance, CSV 6 and identity-scoped relocation under its explicit software authorizations. The four requested slice walkthroughs are accepted with recorded limits and combined journeys received positive functional feedback; the [post-review refinement recheck](#3815-authorized-post-review-workspace-refinements) remains open. Its established heading/anchor retains the origin as approved future requirements. Sections 33–36 retain the published v0.8.0 baseline and all protected shared/model/scoring rules; only the explicitly replaced interface, retirement and versioned storage/export provisions yield to Section 38. This distinction does not authorize additional software or publication.
 
 ## Proposed changes and authorization
 
@@ -1860,7 +1860,7 @@ The guiding rule is:
 
 **Status:** Approved target, four bounded software slices implemented; final integrated acceptance remains. Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is accepted with recorded limits under Section 38.12. The requested Journal-relocation walkthrough is accepted with recorded limits under Section 38.13. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
-**Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), and final integration in [Section 38.14](#3814-authorized-final-integration-pass). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
+**Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), final integration in [Section 38.14](#3814-authorized-final-integration-pass), and the feedback refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
 For this source desktop, the Journal-centered shell, filtering/rows, source-aware returns, creation completion, Detail writing/confirmation, comprehensive Performance, Settings results and manual appearance rules below deliberately replace the corresponding earlier desktop presentation/workflow requirements. The recovery-backed Saved View retirement and CLI-only threshold route are implemented compatibility/interface changes under Section 38.10. All other protected shared/Adaptive/One-Shot history, exactness, lifecycle, scoring, refusal and recovery requirements remain in force. Earlier interface requirements describe the published v0.8.0 baseline where the accepted implemented slices replace them. Preserve their unaffected protected rules; final integrated acceptance and publication remain separate.
 
@@ -1900,7 +1900,7 @@ Only applied nondefault constraints appear as removable page chips. Tags have on
 
 Automatic sorting is Recently active for blank search and Relevance for active search. An applicable manual order persists across text/view changes until changed/reset. Clearing text discards manual Relevance; later search does not revive it. One grouped menu contains Automatic, Recently active, Created newest/oldest, Question A–Z/Z–A, Last considered newest/oldest, Expected Resolution soonest/latest, terminal decision newest/oldest, and Relevance when applicable. Preserve documented null/applicability semantics and deterministic ties; the event/tie requirements below complete that ordering contract.
 
-Use live search only with measured responsiveness. Coalesce requests and permit only the latest current retrieval to apply. Pending retrieval replaces prior rows/count with Updating results; no old row is actionable under new controls. Publish current rows and applicable full matching-Prediction count together. Show that count for text/advanced retrieval, not ordinary browsing, quick-view-only selection or manual sort alone. Count Predictions, not fragments or loaded rows. Successful zero results, first loading and definitive failure must be distinct. On failure retain controls and no false zero/stale listing; offer Try again for identified temporary reads, Repair search only for an identified rebuildable projection fault, and preserve archive-level refusals. An accepted narrow local spelling offer may change text after an eligible zero-result search; retain scope and omit the initial feature if meeting responsiveness requires substantial machinery. No silent correction, direct Any-word empty-state offer or redundant Search All action is selected.
+Use live search only with measured responsiveness; the adopted explicit submission refinement below governs current text entry. Coalesce requests and permit only the latest current retrieval to apply. A different pending retrieval replaces prior rows/count with Updating results; no old row is actionable under new controls. Under Section 38.15, a same-request background/return check retains readable rows and unchanged widgets until freshly checked publication. Publish current rows and applicable full matching-Prediction count together. Show that count for text/advanced retrieval, not ordinary browsing, quick-view-only selection or manual sort alone. Count Predictions, not fragments or loaded rows. Successful zero results, first loading and definitive failure must be distinct. On failure retain controls and no false zero/stale listing; offer Try again for identified temporary reads, Repair search only for an identified rebuildable projection fault, and preserve archive-level refusals. An accepted narrow local spelling offer may change text after an eligible zero-result search; retain scope and omit the initial feature if meeting responsiveness requires substantial machinery. No silent correction, direct Any-word empty-state offer or redundant Search All action is selected.
 
 Prefer practical continuous browsing with reliable anchors and bounded loading. Load more is an accepted fallback if seamless loading is costly. Do not make advanced virtualization a prerequisite. The separate lifecycle-status refinement and elapsed Last considered controls stay deferred; their old semantics are preserved history, not this build's queue. Existing CLI retrieval remains except explicitly reconciled changes.
 
@@ -1932,7 +1932,7 @@ Numeric validation preserves every input, brings the conflicting fields into vie
 
 Keep the full Question and roomy persistent committed forecast/Deadline context while reading history. Adaptive Numeric uses a proportional horizontal interval with all five exact values, grouped ties, an all-equal collapsed mark and connector labels when distinct values crowd. Timing below the interval aligns legend/Forecast Deadline labels and last revised/last considered/deadline values; Binary follows the same timing rhythm. Do not mix draft or scored-earlier forecasts into a header labeled current committed. Numeric Timeline uses full 90% interval / median / 50% interval text; visualize the current committed distribution only, with the established central-CDF limits and text alternatives.
 
-Overview uses about 60/40 Timeline/context, changing automatically to about 40/60 for revision and ordinary contextual writing. Mark Invalid preparation is the selected 60/40 exception. Keep independent pane scrolling and ongoing-task positions; no initial manual divider. Evaluate light bidirectional motion without delaying work and honor reduced motion. Keep true chronology, newest/oldest reading, full Revisions/rationale, expandable Journal previews/readable Reviews, a marker at the actual current revision and its jump action with the persistent Timeline reading controls. Fresh ordinary Detail visits reapply selected disclosure defaults, without per-Prediction expansion memory; exact historical reveal and ongoing-task state override that ordinary-entry presentation as required.
+Open/Locked Overview uses about 60/40 Timeline/context; Resolved/Invalid reading uses 50/50 under Section 38.15. Change automatically to about 40/60 for revision and ordinary contextual writing. Mark Invalid preparation is the selected 60/40 exception. Keep independent pane scrolling and ongoing-task positions; no initial manual divider. Main headings are TIMELINE and OVERVIEW or ARCHIVAL CONTEXT, with Title Case subsections; contextual tabs suppress the duplicate inner Overview heading. Evaluate light bidirectional motion without delaying work and honor reduced motion. Keep true chronology, newest/oldest reading, full Revisions/rationale, expandable Journal previews/readable Reviews, a marker at the actual Current Committed Revision and its Current Revision jump action with the persistent Timeline reading controls. Fresh ordinary Detail visits reapply selected disclosure defaults, without per-Prediction expansion memory; exact historical reveal and ongoing-task state override that ordinary-entry presentation as required.
 
 Revision keeps existing Binary elicitation and all five aligned Numeric Current committed / Draft revision values, outside-in 90% interval → median → 50% interval guidance with free editing, and rationale below. The header/graph/history remain committed-only. Temporary Overview / Revision · unsaved tabs retain the populated draft. Successful save updates the complete saved state and returns Overview; invalid/no-op/stale/locked failure retains inspection and creates no partial history. Deadline rejection uses the selected brief right-side notification near Commit plus a compact repeatable failure cue, not a permanent error section. Locked hides Revise/Review and explicitly explains the closed window while retaining eligible Journal/terminal actions.
 
@@ -1981,7 +1981,7 @@ The following criteria govern the combined desktop. The slice records identify t
 - Verify both palettes, switching during entered New/revision/Journal/reflection work, correct next-action labels, same-page state retention, preference persistence/failure and modal focus. A fresh session resets retrieval/report state while retaining safe geometry and the chosen appearance preference.
 - Run relevant domain/data/UI regressions for the authorized slice, the required full milestone checks at closure, and human visual review on development/disposable data. Do not use stable personal data as a presentation fixture or carry old passing evidence forward as later runtime acceptance.
 
-Implement only an explicitly authorized coherent slice after resolving its relevant contract and compatibility prerequisites. Validate on disposable development data with focused regressions and human visual review, then reconcile the current specification, guides and architecture on acceptance. Publication of requirements alone does not authorize software, a prototype, personal-data movement, bulk removal, packaging or release. Explicitly authorized work remains bounded by Sections 38.10–38.14.
+Implement only an explicitly authorized coherent slice after resolving its relevant contract and compatibility prerequisites. Validate on disposable development data with focused regressions and human visual review, then reconcile the current specification, guides and architecture on acceptance. Publication of requirements alone does not authorize software, a prototype, personal-data movement, bulk removal, packaging or release. Explicitly authorized work remains bounded by Sections 38.10–38.15.
 
 ### 38.10 Authorized first implementation slice
 
@@ -2134,7 +2134,7 @@ If a required gate fails, keep relocation unavailable rather than weakening it.
 
 ### 38.14 Authorized final integration pass
 
-**Authorized and implemented locally — 2026-11-13; source verification passed, final integrated human review pending.** The [final integration record](archive/releases/2026-11-13-final-integration-verification.md) identifies the evaluated changes, regression/capture evidence and remaining limits. Following
+**Authorized and implemented locally — 2026-11-13; source verification passed.** The user subsequently checked the combined journeys successfully and requested the refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements); that focused recheck remains open. The [final integration record](archive/releases/2026-11-13-final-integration-verification.md) identifies the evaluated changes, regression/capture evidence and remaining limits. Following
 acceptance of the four requested slice walkthroughs and the saved acceptance edits,
 the user explicitly instructed implementation of the final integrated review and
 readiness work. Audit the combined approved package against Sections 38.1–38.13,
@@ -2158,3 +2158,53 @@ and give one bounded combined walkthrough for remaining integration/review gaps.
 Final integrated human acceptance remains separate. No personal-data operations,
 installed-tool replacement, packaging, version/tag change, commit, push or publication
 is authorized by this pass.
+
+
+### 38.15 Authorized post-review workspace refinements
+
+**Authorized and implemented locally — 2026-11-13; source verification passed,
+focused human recheck pending.** The [refinement record](archive/releases/2026-11-13-workspace-refinement-verification.md)
+identifies source/capture/timing evidence and limits. The user checked the combined
+journeys at `fe6a3df` and reported eight presentation/responsiveness refinements.
+Preserve that functional feedback and prior slice acceptance, while keeping this
+refinement/recheck open. Implement the following package without changing history,
+scoring, migration, analytical export or protected time-entry rules.
+
+- Same-retrieval refresh keeps current readable rows while a fresh checked read runs;
+  reuse unchanged row widgets and replace only changed display facts. Current-request
+  membership/counts remain coherent. New query/filter/view/sort controls still mask
+  previous-request rows until publication. Idle polling must not repeatedly blank an
+  unchanged Journal, restart overlapping work or disturb reading/focus. Recognized
+  failure and archive refusal remain visible/protected, never stale success. Measure
+  first paint and returns on the 41-Prediction profile; preserve large-corpus safeguards.
+- Give Binary/Numeric One-Shot Detail the shared surfaces, hierarchy, spacing and
+  contextual reading/writing vocabulary with content suited to one immutable forecast.
+  Keep checked answer/pure Brier or WIS, inline later Postmortem, a visible Journal
+  section, and disclosed originals/corrections/recorded facts. Add no Adaptive revision,
+  Review, Deadline or trajectory controls. Preserve exact historical navigation and
+  the established Add Answer/transcription/Invalid/metadata guards and eligibility.
+- In Settings offer DD-MM-YYYY, MM-DD-YYYY and YYYY-MM-DD, initially YYYY-MM-DD,
+  as an identity-scoped GUI presentation preference beside appearance. Apply throughout
+  desktop dates/readouts/pickers without changing canonical values, analytical export
+  or CLI contracts. Preserve the setting across restart/relocation and use a safe
+  default for missing/corrupt preference data. Windows remains the time-zone source;
+  Settings shows its zone/name/current offset with no zone override. Ordinary reading
+  omits repeated UTC offsets; exact time entry and consequential confirmation retain
+  offset/DST cues needed to distinguish instants. The user explicitly adopted this
+  clarification, preserving Windows-time policy while replacing fixed GUI date order.
+- Use deliberate Title Case for principal labels/actions, including Current Committed
+  Revision, Current Revision, Keep Forecast and Needs Postmortem. Main pane headings
+  are OVERVIEW / TIMELINE, or ARCHIVAL CONTEXT; subordinate sections such as Resolution
+  Criteria use ordinary section styling and Title Case rather than all capitals.
+- Resolved and Invalid reading uses equal 50/50 panes. Open/Locked Adaptive retains
+  60/40 reading and eligible contextual writing retains the existing 40/60/Mark Invalid
+  exceptions. One-Shot adopts the corresponding terminal balance for its own content.
+  Preserve smooth transitions and the minimum-window/scroll fallback contract.
+- When contextual tabs identify Overview and the current unsaved task, suppress the
+  duplicate inner Overview heading; restore the standalone main heading in ordinary
+  reading. Tabs/width changes preserve entered work and source/history position.
+
+Use disposable current-contract data, meaningful regressions, native captures and
+focused/full verification. Give a bounded recheck of the eight feedback points.
+Personal data, installed tools, packaging, version/tag changes, staging, commits,
+pushes and publication remain outside this refinement package.

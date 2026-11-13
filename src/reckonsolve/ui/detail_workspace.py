@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from reckonsolve.ui.creation_task import form_values
+from reckonsolve.ui.date_display import format_datetime
 from reckonsolve.ui.visual_system import (
     MotionDuration,
     Spacing,
@@ -71,6 +72,8 @@ class DetailWorkspace(QScrollArea):
         self._baseline: tuple = ()
         self.inline = False
         self.single_column = False
+        self.reading_proportion = 600
+        self.overview_heading: QLabel | None = None
         self._proportion = 600
         self._transition = QVariantAnimation(self)
         self._transition.setDuration(int(MotionDuration.DISCLOSURE))
@@ -82,6 +85,20 @@ class DetailWorkspace(QScrollArea):
     def set_timeline_controls(self, controls: QWidget) -> None:
         """Keep history navigation reachable independently of its scroll position."""
         self.timeline_column_layout.insertWidget(0, controls)
+
+    def set_reading_context(self, heading: QLabel, *, terminal: bool) -> None:
+        self.overview_heading = heading
+        self.reading_proportion = 500 if terminal else 600
+        self.tabs.setTabText(
+            0,
+            "Archival Context" if heading.text() == "ARCHIVAL CONTEXT" else "Overview",
+        )
+        self._tab_changed(self.tabs.currentIndex())
+
+    def _sync_context_heading(self) -> None:
+        if self.overview_heading is not None:
+            # The tab already names the reading context beside an unsaved task.
+            self.overview_heading.setVisible(self.editor is None or self.inline)
 
     def _pane(self, name: str) -> tuple[QScrollArea, QWidget]:
         scroll = QScrollArea(self.panes)
@@ -245,6 +262,7 @@ class DetailWorkspace(QScrollArea):
 
     def clear_reading(self) -> None:
         """Refresh reading widgets without deleting a retained contextual task."""
+        self.overview_heading = None
         if self.inline and self.editor is not None:
             self.editor.setParent(self)
         for body in (self.timeline_body, self.overview_body):
@@ -276,14 +294,16 @@ class DetailWorkspace(QScrollArea):
         editor.setParent(None)
         editor.deleteLater()
         self.inline = False
-        self._change_proportion(600)
+        self._change_proportion(self.reading_proportion)
+        self._sync_context_heading()
         if self.single_column:
             self.tabs.hide()
         self.task_closed.emit(kind)
 
     def _tab_changed(self, index: int) -> None:
         writing = index > 0 and self.kind != "Mark Invalid"
-        self._change_proportion(400 if writing else 600)
+        self._change_proportion(400 if writing else self.reading_proportion)
+        self._sync_context_heading()
 
     def _change_proportion(self, value: int) -> None:
         if (
@@ -371,14 +391,6 @@ def collapse_section(widget: QWidget, title: str, *, expanded: bool = False) -> 
     return container
 
 
-def exact_detail_time(value: datetime) -> str:
-    """A readable local minute and explicit offset; the caller retains raw time."""
-    local = value.astimezone()
-    offset = local.strftime("%z")
-    return (
-        local.strftime("%d %b %Y, %I:%M %p").lstrip("0")
-        + " UTC"
-        + offset[:3]
-        + ":"
-        + offset[3:]
-    )
+def exact_detail_time(value: datetime, *, widget: QWidget | None = None) -> str:
+    """Readable local time; exact provenance remains available on demand."""
+    return format_datetime(value, widget)

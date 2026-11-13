@@ -357,11 +357,11 @@ def test_main_window_one_shot_route_defaults_and_detail(app, qtbot):
     qtbot.waitUntil(detail.scorecard.isVisible)
     assert detail.add_postmortem_button.isVisible()
     assert detail.skip_postmortem_button.isVisible()
-    assert "Correct transcription" in [
+    assert "Correct Transcription" in [
         action.text() for action in detail.more_button.menu().actions()
     ]
     assert not any(
-        button.text() == "Correct transcription"
+        button.text() == "Correct Transcription"
         for button in detail.findChildren(QPushButton)
     )
     window.navigate_to("Predictions")

@@ -1,5 +1,7 @@
 """One Settings tool and its visit-local, selectable result."""
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
@@ -38,9 +40,11 @@ class SettingsTool(ContentPanel):
             | Qt.TextInteractionFlag.TextSelectableByKeyboard
         )
         self.body_layout.addWidget(self.result)
+        self.date_renderer: Callable[[], str] | None = None
 
     def show_result(self, message: str, tone: StatusTone = StatusTone.SUCCESS) -> None:
         self.result.show_message(message, tone)
 
     def clear_result(self) -> None:
+        self.date_renderer = None
         self.result.clear_message()

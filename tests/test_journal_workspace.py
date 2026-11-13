@@ -406,9 +406,7 @@ def test_keyboard_return_restores_current_question_after_report_settings_detour(
     )
 
 
-def test_background_refresh_keeps_keyboard_access_to_replaced_question(
-    workspace, qtbot
-):
+def test_background_refresh_keeps_the_unchanged_focused_question(workspace, qtbot):
     from reckonsolve.ui.journal.rows import QuestionLabel
 
     window, operations = workspace
@@ -425,7 +423,7 @@ def test_background_refresh_keeps_keyboard_access_to_replaced_question(
     current = journal.findChild(
         QuestionLabel, f"journalQuestion{prediction.prediction_id}"
     )
-    assert current is not question
+    assert current is question
     qtbot.waitUntil(lambda: window.focusWidget() is current)
 
 
@@ -554,3 +552,102 @@ def test_failed_return_leaves_keyboard_retry_instead_of_a_stale_result(
     qtbot.waitUntil(lambda: window.focusWidget() is journal.retry)
     assert journal.page is None and not journal.cards
     assert journal.retry.isVisible()
+
+
+def test_same_retrieval_refresh_retains_rows_and_does_not_flash_pending(
+    workspace, qtbot
+):
+    from threading import Event
+
+    window, operations = workspace
+    create_binary(operations, "Stable current Journal", 55)
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    before = tuple(journal.cards)
+    query = journal.retrieval.query
+    started, release = Event(), Event()
+
+    def held(request):
+        started.set()
+        assert release.wait(5)
+        return query(request)
+
+    journal.retrieval.query = held
+    try:
+        journal.refresh()
+        qtbot.waitUntil(started.is_set)
+        assert tuple(journal.cards) == before
+        assert not journal.message.isVisible()
+        generation = journal.retrieval.generation
+        journal._poll_current()
+        assert journal.retrieval.generation == generation
+        release.set()
+        qtbot.waitUntil(lambda: not journal.loading)
+        assert tuple(journal.cards) == before
+    finally:
+        release.set()
+
+
+def test_refresh_replaces_only_changed_facts_and_failure_clears_retained_results(
+    workspace, qtbot
+):
+    from reckonsolve.application.errors import DatabaseBusyError
+
+    window, operations = workspace
+    first = create_binary(operations, "Changed Journal row", 55)
+    second = create_binary(operations, "Unchanged Journal row", 60)
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    old = {card.prediction_id: card for card in journal.cards}
+    operations.revise_forecast(
+        first.prediction_id,
+        65,
+        expected_revision_id=first.current_revision_id,
+        expected_metadata_version=first.metadata_version,
+    )
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    current = {card.prediction_id: card for card in journal.cards}
+    assert current[first.prediction_id] is not old[first.prediction_id]
+    assert current[second.prediction_id] is old[second.prediction_id]
+    assert current[first.prediction_id].source_row.probability_percent == 65
+
+    def unavailable(_request):
+        raise DatabaseBusyError("Temporary current-read failure")
+
+    journal.retrieval.query = unavailable
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    assert journal.page is None and not journal.cards
+    assert journal.retry.isVisible()
+
+
+def test_quiet_refresh_keeps_focus_on_an_existing_match_disclosure(workspace, qtbot):
+    from PySide6.QtWidgets import QPushButton
+
+    window, operations = workspace
+    prediction = create_binary(
+        operations, "Needle evidence", 55, rationale="Needle rationale"
+    )
+    operations.add_journal_entry(
+        prediction.prediction_id,
+        "Needle journal reasoning",
+        expected_revision_id=prediction.current_revision_id,
+        expected_metadata_version=prediction.metadata_version,
+    )
+    journal = window._journal_screen
+    journal.search_input.setText("needle")
+    journal.submit_search()
+    qtbot.waitUntil(lambda: not journal.loading)
+    button = next(
+        button
+        for button in journal.cards[0].findChildren(QPushButton)
+        if "more matches" in button.text()
+    )
+    button.setFocus()
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    qtbot.wait(20)
+    assert window.focusWidget() is button

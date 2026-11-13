@@ -53,8 +53,7 @@ def test_settings_displays_database_and_persisted_backup_status(qtbot: QtBot) ->
     expected_local = (
         datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
         .astimezone()
-        .strftime("%b %d, %Y, %I:%M %p")
-        .replace(" 0", " ")
+        .strftime("%Y-%m-%d, %I:%M %p")
     )
     assert _required_child(window, QLabel, "lastSuccessfulBackup").text() == (
         f"Last successful backup: {expected_local}"

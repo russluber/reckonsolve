@@ -13,6 +13,7 @@ from reckonsolve.domain.predictions import (
     PredictionStatus,
 )
 from reckonsolve.ui.components import ContentPanel
+from reckonsolve.ui.date_display import date_context
 from reckonsolve.ui.detail_workspace import exact_detail_time
 from reckonsolve.ui.visual_system import (
     Spacing,
@@ -34,8 +35,15 @@ class TimelineRows:
             tuple[int, str, int], tuple[tuple[object, ...], QWidget]
         ] = {}
         self._descending: bool | None = None
+        self._date_context = None
 
     def matches(self, snapshot: tuple[object, ...]) -> bool:
+        context = date_context(self.layout.parentWidget())
+        if context != self._date_context:
+            self._date_context = context
+            self.snapshot = None
+            self._rendered.clear()
+            return False
         return self.snapshot == snapshot
 
     def clear(self) -> None:
@@ -162,7 +170,7 @@ def terminal_timeline_rows(
         )
         for text, role in (
             (title, TextRole.LABEL),
-            (exact_detail_time(instant), TextRole.SECONDARY),
+            (exact_detail_time(instant, widget=parent), TextRole.SECONDARY),
             (body, TextRole.BODY),
         ):
             if not text:

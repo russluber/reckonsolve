@@ -106,14 +106,16 @@ class TerminalSummary(QWidget):
         self.show()
 
 
-def invalidation_timing(original: str, history: InvalidationHistory | None) -> str:
+def invalidation_timing(
+    original: str, history: InvalidationHistory | None, *, widget: QWidget | None = None
+) -> str:
     """Keep the decision date separate from a later reason correction."""
     if history is None or not history.corrections:
         return original
     return (
         original
         + "\nReason corrected: "
-        + exact_detail_time(history.corrections[-1].corrected_at)
+        + exact_detail_time(history.corrections[-1].corrected_at, widget=widget)
         + " · Original decision date unchanged"
     )
 
@@ -185,7 +187,9 @@ def progressive_body(label: QLabel) -> QWidget:
 
 
 def current_marker(row: QWidget) -> None:
-    label = QLabel("Current committed revision", row)
+    label = QLabel("Current Committed Revision", row)
+    label.setWordWrap(True)
+    label.setMinimumWidth(0)
     label.setObjectName("currentCommittedRevisionMarker")
     apply_text_role(label, TextRole.LABEL)
     row.layout().insertWidget(0, label)

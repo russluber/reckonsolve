@@ -9,6 +9,8 @@ from typing import Protocol
 
 from PySide6.QtCore import QRect, QSettings, QSize
 
+from reckonsolve.ui.date_display import DateFormat
+
 DEFAULT_WINDOW_SIZE = QSize(960, 640)
 MINIMUM_WINDOW_SIZE = QSize(760, 520)
 
@@ -27,6 +29,7 @@ class WindowPresentationState:
     normal_geometry: tuple[int, int, int, int] | None = None
     maximized: bool = False
     appearance: AppearanceMode = AppearanceMode.FOLLOW_WINDOWS
+    date_format: DateFormat = DateFormat.YEAR_FIRST
 
 
 class PresentationSettings(Protocol):
@@ -63,6 +66,7 @@ class QtPresentationSettings:
     _GEOMETRY_KEY = "window/normal_geometry"
     _MAXIMIZED_KEY = "window/maximized"
     _APPEARANCE_KEY = "appearance/mode"
+    _DATE_FORMAT_KEY = "display/date_format"
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -83,6 +87,7 @@ class QtPresentationSettings:
                     default=False,
                 ),
                 appearance=_parse_appearance(settings.value(self._APPEARANCE_KEY)),
+                date_format=_parse_date_format(settings.value(self._DATE_FORMAT_KEY)),
             )
             if settings.status() != QSettings.Status.NoError:
                 return WindowPresentationState()
@@ -104,6 +109,7 @@ class QtPresentationSettings:
                 )
             settings.setValue(self._MAXIMIZED_KEY, state.maximized)
             settings.setValue(self._APPEARANCE_KEY, state.appearance.value)
+            settings.setValue(self._DATE_FORMAT_KEY, state.date_format.value)
             settings.sync()
             return settings.status() == QSettings.Status.NoError
         except (OSError, RuntimeError, TypeError, ValueError):
@@ -118,6 +124,13 @@ def _parse_appearance(value: object) -> AppearanceMode:
         return AppearanceMode(value)
     except (TypeError, ValueError):
         return AppearanceMode.FOLLOW_WINDOWS
+
+
+def _parse_date_format(value: object) -> DateFormat:
+    try:
+        return DateFormat(value)
+    except (TypeError, ValueError):
+        return DateFormat.YEAR_FIRST
 
 
 def safe_window_geometry(

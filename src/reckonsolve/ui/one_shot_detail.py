@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -36,8 +36,10 @@ from reckonsolve.one_shot_display import (
 )
 from reckonsolve.ui.components import (
     ContentPanel,
+    StatusBadge,
 )
 from reckonsolve.ui.contextual_forms import BodyEditor
+from reckonsolve.ui.date_display import format_date, format_reported_time
 from reckonsolve.ui.detail_reading import (
     TerminalSummary,
     invalidation_exact_timing,
@@ -52,11 +54,9 @@ from reckonsolve.ui.prediction_dialogs import (
     EditPredictionDetailsDialog,
 )
 from reckonsolve.ui.prediction_widgets import (
-    _collapsible_history_group,
     _definition_change_widget,
     _focus_search_widget,
     _format_local_timestamp,
-    _history_content,
     _one_shot_journal_timeline_widget,
 )
 from reckonsolve.ui.reflection_editor import ReflectionEditor
@@ -86,9 +86,7 @@ class OneShotDetailScreen(QWidget):
         self.content = QWidget(self)
         self.content_layout = QVBoxLayout(self.content)
         self.workspace = DetailWorkspace(self.content, self)
-        self.workspace.single_column = True
         self.workspace.task_closed.connect(self._restore_reflection_actions)
-        self.workspace.tabs.hide()
         self.scroll = self.workspace
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -107,16 +105,33 @@ class OneShotDetailScreen(QWidget):
         summary = QWidget(self)
         header = QVBoxLayout(summary)
         header.setContentsMargins(0, 0, 0, 0)
+        badges = QWidget(summary)
+        badge_row = QHBoxLayout(badges)
+        badge_row.setContentsMargins(0, 0, 0, 0)
+        badge_row.addWidget(
+            StatusBadge(
+                f"One-Shot · {record.contract.prediction_type.value.title()}",
+                StatusTone.NEUTRAL,
+                parent=badges,
+            )
+        )
+        badge_row.addWidget(
+            StatusBadge(
+                status_text(detail),
+                StatusTone.SUCCESS
+                if detail.status is PredictionStatus.RESOLVED
+                else StatusTone.CAUTION
+                if detail.status is PredictionStatus.INVALID
+                else StatusTone.WARNING,
+                parent=badges,
+            )
+        )
+        badge_row.addStretch()
+        header.addWidget(badges)
         self.question = text_label(detail.question, summary)
         self.question.setObjectName("oneShotQuestion")
         apply_text_role(self.question, TextRole.QUESTION)
         header.addWidget(self.question)
-        header.addWidget(
-            text_label(
-                f"{record.contract.prediction_type.value.capitalize()} · One-Shot · {status_text(detail)}",
-                summary,
-            )
-        )
         transcription = [
             item
             for item in record.corrections
@@ -152,7 +167,7 @@ class OneShotDetailScreen(QWidget):
             forecast_layout.addWidget(self.forecast)
         forecast_layout.addWidget(
             text_label(
-                "Saved One-Shot forecast",
+                "Saved One-Shot Forecast",
                 forecast_summary,
             )
         )
@@ -163,8 +178,9 @@ class OneShotDetailScreen(QWidget):
             self.terminal_summary = TerminalSummary(summary)
             timing = invalidation_timing(
                 "Marked Invalid: "
-                + _format_local_timestamp(invalid.original.invalidated_at),
+                + _format_local_timestamp(invalid.original.invalidated_at, widget=self),
                 invalid,
+                widget=self,
             )
             self.terminal_summary.set_facts(
                 outcome="Recorded reason",
@@ -186,7 +202,7 @@ class OneShotDetailScreen(QWidget):
         self.answer_button.setVisible(detail.status is PredictionStatus.OPEN)
         apply_action_role(self.answer_button, ActionRole.PRIMARY)
         self.answer_button.clicked.connect(lambda: self.open_values(correction=False))
-        self.journal_button = QPushButton("Journal", action_panel)
+        self.journal_button = QPushButton("Add Journal Entry", action_panel)
         self.journal_button.setVisible(detail.status is PredictionStatus.OPEN)
         self.journal_button.clicked.connect(self.open_journal)
         actions.addWidget(self.answer_button)
@@ -194,7 +210,7 @@ class OneShotDetailScreen(QWidget):
         self.more_button = QPushButton("More", action_panel)
         menu = QMenu(self.more_button)
         self.correct_button = menu.addAction(
-            "Correct transcription", lambda: self.open_values(correction=True)
+            "Correct Transcription", lambda: self.open_values(correction=True)
         )
         self.edit_button = menu.addAction("Edit Details", self.open_metadata)
         self.invalid_reason_action = menu.addAction(
@@ -231,7 +247,7 @@ class OneShotDetailScreen(QWidget):
             invalid = detail.invalidation_history
             self.results.body_layout.addWidget(
                 text_label(
-                    f"Invalidated: {_format_local_timestamp(invalid.original.invalidated_at)}\nReason: {invalid.effective.reason or 'Not supplied'}",
+                    f"Invalidated: {_format_local_timestamp(invalid.original.invalidated_at, widget=self)}\nReason: {invalid.effective.reason or 'Not supplied'}",
                     self,
                 )
             )
@@ -239,7 +255,9 @@ class OneShotDetailScreen(QWidget):
                 self.results.body_layout.addWidget(
                     text_label(
                         "Reason corrected: "
-                        + _format_local_timestamp(invalid.corrections[-1].corrected_at)
+                        + _format_local_timestamp(
+                            invalid.corrections[-1].corrected_at, widget=self
+                        )
                         + " · Original decision date unchanged",
                         self,
                     )
@@ -251,7 +269,13 @@ class OneShotDetailScreen(QWidget):
             answer_text = next(
                 (
                     line
-                    for line in values_lines(record.effective, unit)
+                    for line in values_lines(
+                        record.effective,
+                        unit,
+                        reported_formatter=lambda reported: format_reported_time(
+                            reported, self
+                        ),
+                    )
                     if line.startswith("Answer:")
                 ),
                 "Add the answer after you have checked it.",
@@ -273,7 +297,7 @@ class OneShotDetailScreen(QWidget):
             if len(lines) > 1:
                 self.scorecard.body_layout.addWidget(
                     collapse_section(
-                        text_label("\n".join(lines[1:]), self), "Score breakdown"
+                        text_label("\n".join(lines[1:]), self), "Score Breakdown"
                     )
                 )
             if record.corrections:
@@ -290,7 +314,7 @@ class OneShotDetailScreen(QWidget):
             pair_row = QHBoxLayout(pair)
             pair_row.setContentsMargins(0, 0, 0, 0)
             self.results.body_layout.removeWidget(self.answer_result)
-            self.answer_panel = ContentPanel("Checked answer", parent=pair)
+            self.answer_panel = ContentPanel("Checked Answer", parent=pair)
             apply_surface_role(self.answer_panel, SurfaceRole.CANVAS)
             self.answer_result.setAccessibleName(self.answer_result.text())
             self.answer_result.setText(
@@ -340,25 +364,31 @@ class OneShotDetailScreen(QWidget):
                 text_label(
                     "Postmortem skipped: "
                     + _format_local_timestamp(
-                        detail.postmortem_completion.completed_at
+                        detail.postmortem_completion.completed_at, widget=self
                     ),
                     self,
                 )
             )
-        self.journals = ContentPanel("Journal entries", parent=self)
+        self.journals = ContentPanel("Journal Entries", parent=self)
         self.journals.setObjectName("oneShotJournalEntries")
         if not detail.journals:
             self.journals.body_layout.addWidget(text_label("No Journal entries.", self))
         self._show_timeline(detail)
         timeline = self.recorded_timeline
 
-        facts = ContentPanel("Recorded facts", parent=self)
+        facts = ContentPanel("Recorded Facts", parent=self)
         facts.setObjectName("oneShotRecordedFacts")
         facts.body_layout.addWidget(
             text_label(
                 "\n".join(
                     line
-                    for line in values_lines(record.effective, unit)[1:]
+                    for line in values_lines(
+                        record.effective,
+                        unit,
+                        reported_formatter=lambda reported: format_reported_time(
+                            reported, self
+                        ),
+                    )[1:]
                     if "(user-reported)" in line
                 ),
                 self,
@@ -367,7 +397,7 @@ class OneShotDetailScreen(QWidget):
         facts.body_layout.addWidget(
             text_label(
                 "Entered in Reckonsolve: "
-                + _format_local_timestamp(record.recorded_at),
+                + _format_local_timestamp(record.recorded_at, widget=self),
                 self,
             )
         )
@@ -375,7 +405,7 @@ class OneShotDetailScreen(QWidget):
             facts.body_layout.addWidget(
                 text_label(
                     "Answer entered in Reckonsolve: "
-                    + _format_local_timestamp(record.answer_recorded_at),
+                    + _format_local_timestamp(record.answer_recorded_at, widget=self),
                     self,
                 )
             )
@@ -402,43 +432,71 @@ class OneShotDetailScreen(QWidget):
                         "Resolution Criteria": "oneShotResolutionCriteria",
                     }.get(title, "oneShotOptionalMetadata")
                 )
-                panel.body_layout.addWidget(text_label(str(value), self))
+                panel.body_layout.addWidget(
+                    text_label(
+                        format_date(value, self)
+                        if isinstance(value, date)
+                        else str(value),
+                        self,
+                    )
+                )
                 overview.append(panel)
-        history = _collapsible_history_group(
-            "Original facts and corrections",
-            "oneShotCorrectionHistory",
-            self,
-        )
-        _, body = _history_content(history)
-        history.show()
+        history = ContentPanel("", parent=self)
+        history.title_label.hide()
+        history.setObjectName("oneShotCorrectionHistory")
+        body = history.body_layout
         body.addWidget(
             text_label(
                 "Original saved facts\n"
-                + "\n".join(values_lines(record.original, unit)),
+                + "\n".join(
+                    values_lines(
+                        record.original,
+                        unit,
+                        reported_formatter=lambda reported: format_reported_time(
+                            reported, self
+                        ),
+                    )
+                ),
                 self,
             )
         )
         for correction in record.corrections:
             body.addWidget(
                 text_label(
-                    f"{'Postmortem update' if correction.source_action is OneShotSourceAction.POSTMORTEM else 'Transcription correction'} {correction.sequence} · {_format_local_timestamp(correction.corrected_at)}\nBefore\n"
-                    + "\n".join(values_lines(correction.before, unit))
+                    f"{'Postmortem update' if correction.source_action is OneShotSourceAction.POSTMORTEM else 'Transcription correction'} {correction.sequence} · {_format_local_timestamp(correction.corrected_at, widget=self)}\nBefore\n"
+                    + "\n".join(
+                        values_lines(
+                            correction.before,
+                            unit,
+                            reported_formatter=lambda reported: format_reported_time(
+                                reported, self
+                            ),
+                        )
+                    )
                     + "\nAfter\n"
-                    + "\n".join(values_lines(correction.after, unit))
+                    + "\n".join(
+                        values_lines(
+                            correction.after,
+                            unit,
+                            reported_formatter=lambda reported: format_reported_time(
+                                reported, self
+                            ),
+                        )
+                    )
                     + (f"\nNote: {correction.note}" if correction.note else ""),
                     self,
                 )
             )
-        overview.append(history)
+        history_disclosure = collapse_section(history, "Original Facts and Corrections")
+        overview.append(history_disclosure)
         if detail.definition_changes:
-            definitions = _collapsible_history_group(
-                "Definition history", "oneShotDefinitionHistory", self
-            )
-            _, body = _history_content(definitions)
-            definitions.show()
+            definitions = ContentPanel("", parent=self)
+            definitions.title_label.hide()
+            definitions.setObjectName("oneShotDefinitionHistory")
+            body = definitions.body_layout
             for change in detail.definition_changes:
                 body.addWidget(_definition_change_widget(change, self))
-            overview.append(definitions)
+            overview.append(collapse_section(definitions, "Definition History"))
         for panel in [
             self.results,
             self.scorecard,
@@ -448,24 +506,54 @@ class OneShotDetailScreen(QWidget):
             *overview[1:],
         ]:
             apply_surface_role(panel, SurfaceRole.CANVAS)
-        extras = [widget for widget in overview if widget not in (facts, history)]
+        if detail.status is PredictionStatus.RESOLVED:
+            self.results.title_label.hide()
+            for panel in (self.results, self.answer_panel, self.scorecard):
+                apply_surface_role(panel, SurfaceRole.BASE)
+        extras = [
+            widget for widget in overview if widget not in (facts, history_disclosure)
+        ]
+        self.overview_heading = text_label(
+            "ARCHIVAL CONTEXT"
+            if detail.status is PredictionStatus.INVALID
+            else "OVERVIEW",
+            self,
+        )
+        apply_text_role(self.overview_heading, TextRole.SECTION_TITLE)
+        reading_heading = text_label(
+            "ARCHIVAL RECORD"
+            if detail.status is PredictionStatus.INVALID
+            else "RESULTS & JOURNAL"
+            if detail.status is PredictionStatus.RESOLVED
+            else "JOURNAL & RECORD",
+            self,
+        )
+        apply_text_role(reading_heading, TextRole.SECTION_TITLE)
         self.workspace.compose(
             summary,
             action_panel,
             [
+                reading_heading,
                 *(
                     [self.results]
                     if detail.status is not PredictionStatus.INVALID
                     else []
                 ),
                 self.reflection,
-                history,
-                *extras,
                 self.journals,
-                collapse_section(facts, "Reported times and recorded facts"),
-                collapse_section(timeline, "Recorded history"),
+                collapse_section(timeline, "Recorded History"),
             ],
-            [],
+            [
+                self.overview_heading,
+                *extras,
+                collapse_section(facts, "Reported Times and Recorded Facts"),
+                history_disclosure,
+            ],
+        )
+        self.workspace.set_reading_context(
+            self.overview_heading,
+            terminal=detail.status
+            in (PredictionStatus.RESOLVED, PredictionStatus.INVALID),
         )
         if self.workspace.inline and self.workspace.editor is not None:
             self.reflection.body_layout.addWidget(self.workspace.editor)
@@ -503,7 +591,15 @@ class OneShotDetailScreen(QWidget):
                     record.answer_recorded_at,
                     1,
                     "Answer entered in Reckonsolve: "
-                    + "\n".join(values_lines(record.original, unit)[2:]),
+                    + "\n".join(
+                        values_lines(
+                            record.original,
+                            unit,
+                            reported_formatter=lambda reported: format_reported_time(
+                                reported, self
+                            ),
+                        )[2:]
+                    ),
                     (
                         (SearchSourceKind.RESOLUTION_NOTES, None, None),
                         (SearchSourceKind.POSTMORTEM, None, None),
@@ -516,7 +612,15 @@ class OneShotDetailScreen(QWidget):
                     correction.corrected_at,
                     2,
                     f"{'Postmortem update' if correction.source_action is OneShotSourceAction.POSTMORTEM else 'Transcription correction'} {correction.sequence}\n"
-                    + "\n".join(values_lines(correction.after, unit))
+                    + "\n".join(
+                        values_lines(
+                            correction.after,
+                            unit,
+                            reported_formatter=lambda reported: format_reported_time(
+                                reported, self
+                            ),
+                        )
+                    )
                     + (f"\nNote: {correction.note}" if correction.note else ""),
                     (
                         (
@@ -650,7 +754,9 @@ class OneShotDetailScreen(QWidget):
             card.setFrameShape(QFrame.Shape.StyledPanel)
             apply_surface_role(card, SurfaceRole.BASE)
             card_layout = QVBoxLayout(card)
-            timestamp = text_label(_format_local_timestamp(occurred_at), card)
+            timestamp = text_label(
+                _format_local_timestamp(occurred_at, widget=self), card
+            )
             apply_text_role(timestamp, TextRole.SECONDARY)
             card_layout.addWidget(timestamp)
             label = text_label(body, card)
@@ -797,7 +903,7 @@ class OneShotDetailScreen(QWidget):
 
     def open_values(self, *, correction: bool) -> None:
         if not self.workspace.prepare_task(
-            "Correct transcription" if correction else "Add Answer"
+            "Correct Transcription" if correction else "Add Answer"
         ):
             return
         self._dialog = OneShotEditDialog(

@@ -79,7 +79,7 @@ Background, Rationale, and Tags are visible in the main Forecast card. Backgroun
 
 **Record date and time** is optional. It supplies a calendar date picker and segmented time field: type hours, Tab, minutes, Tab, then A or P. Shift+Tab moves backward; Up/Down adjusts the selected section. Dates start at today when enabled. Reported times may be approximate, missing, or equal to the same minute. They document the external record and do not affect scoring. Reckonsolve separately retains when you entered the record into the app.
 
-Select **Include the answer now** to enter the Yes/No answer or measured value in the same form. Save records forecast and answer atomically. Scores appear only after Save. Without an answer, Detail shows **Waiting for answer** and offers **Add answer** later.
+Select **Include the answer now** to enter the Yes/No answer or measured value in the same form. Save records forecast and answer atomically. Scores appear only after Save. Without an answer, Detail shows **Waiting for answer** and offers **Add Answer** later.
 
 One-Shot has no Forecast Deadline, Expected Resolution, ordinary forecast updates, or Forecast Reviews. It is not a deadline bypass for ongoing future-event forecasts.
 
@@ -92,14 +92,14 @@ Open a Question from **Journal**. Detail shows the forecast, lifecycle, metadata
 An Open Adaptive prediction offers:
 
 - **Revise:** append a changed probability or complete five-quantile forecast as an immutable revision.
-- **Still at … / Keep forecast:** record a Forecast Review that retains the forecast without inventing a revision. It advances Last considered.
+- **Still at … / Keep Forecast:** record a Forecast Review that retains the forecast without inventing a revision. It advances Last considered.
 - **Journal:** add reasoning or evidence without changing forecast or refreshing Needs Attention.
 
 At the Forecast Deadline, an unanswered Adaptive prediction becomes **Locked**. Revisions and Reviews stop; Journal, Resolve, and Mark Invalid remain available. A waiting One-Shot permits Journal entries and metadata work, but no revision or Review.
 
-Adaptive Detail keeps the committed forecast above independently scrolling Timeline and Overview panes. Revise and Journal writing open on the right. **Overview / Revision · unsaved** lets you consult saved context without losing the draft. **Commit Revision** saves a complete changed forecast; failed saves retain entered values. **Current revision**, beside the Timeline heading, jumps to its marked saved event. It remains reachable with the Newest first / Oldest first control while history scrolls. Expand longer Journal text and earlier body versions when needed. Long criteria have a wider read-only view.
+Adaptive Detail keeps the committed forecast above independently scrolling TIMELINE and OVERVIEW panes. Open/Locked reading gives more room to Timeline; Resolved/Invalid reading gives both panes equal width. Revise and Journal writing open on the right with more writing space. **Overview / Revision · unsaved** lets you consult saved context without losing the draft; the tab identifies Overview without a repeated heading beneath it. **Commit Revision** saves a complete changed forecast; failed saves retain entered values. **Current Revision**, beside the Timeline heading, jumps to its marked saved event. It remains reachable with the Newest first / Oldest first control while history scrolls. Expand longer Journal text and earlier body versions when needed. Long criteria have a wider read-only view.
 
-Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot reading leads with the effective saved forecast, answer and score; originals and recorded history are available on request, and saved Journals have their own visible section.
+Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot shares the two-pane style: results, inline later reflection and visible Journal Entries are on the left; context and disclosed original facts/corrections are on the right. Waiting for answer leads with the saved forecast; answered reading leads with the checked answer and pure score. Resolved and Invalid reading uses equal-width panes. One-Shot has no Adaptive updating controls.
 
 ## Add an answer
 
@@ -111,15 +111,15 @@ Resolved Adaptive Detail leads with the effective outcome or actual value and it
 
 Overview holds factual Resolution notes, saved Postmortem and supporting score details. **Write/Edit Postmortem** and eligible **Skip** sit beside **More**; **Correct Resolution** and **Correct Reason** are inside More. Terminal Timeline events use their actual recording times, with complete before/after versions in history. Numeric **Latest committed distribution** starts collapsed on terminal records; it depicts the latest saved forecast, which can differ from the forecast used for scoring.
 
-One-Shot **Add answer** records the checked answer and optionally when you checked it. The answer can predate the guess physically; you must have guessed before looking. Documentary times do not create an Adaptive scoring window.
+One-Shot **Add Answer** records the checked answer and optionally when you checked it. The answer can predate the guess physically; you must have guessed before looking. Documentary times do not create an Adaptive scoring window.
 
-Resolution is a one-way terminal decision. **Write Postmortem** adds reflection later: on the right for Adaptive, inline below One-Shot results. A nonblank reflection-only addition/edit saves directly. Clearing it, **Skip**, and mixed factual corrections retain confirmation. **Needs postmortem** surfaces resolved entries without reflection; Skip dismisses the queue item while permitting reflection later.
+Resolution is a one-way terminal decision. **Write Postmortem** adds reflection later: on the right for Adaptive, inline below One-Shot results. A nonblank reflection-only addition/edit saves directly. Clearing it, **Skip**, and mixed factual corrections retain confirmation. **Needs Postmortem** surfaces resolved entries without reflection; Skip dismisses the queue item while permitting reflection later.
 
 ## Correct a mistake
 
 Adaptive belief changes use **Revise** before the deadline. Saved revisions are never overwritten. Terminal corrections can repair an outcome or effective time while preserving the original; score-affecting changes require an explanation.
 
-One-Shot **More → Correct transcription** repairs a copied probability, percentile, answer, or reported time. Edit and review the complete proposed facts inside one dialog before confirming. The original and each correction remain inspectable. Scoring uses the latest effective facts once. This repairs the record of your earlier guess; it does not add a new guess after seeing the answer.
+One-Shot **More → Correct Transcription** repairs a copied probability, percentile, answer, or reported time. Edit and review the complete proposed facts inside one dialog before confirming. The original and each correction remain inspectable. Scoring uses the latest effective facts once. This repairs the record of your earlier guess; it does not add a new guess after seeing the answer.
 
 Journal corrections show the latest body at the original Timeline position. Open **Edit history** for earlier versions. Question and Resolution Criteria clarifications retain Definition history; Background and tags are ordinary editable metadata. A material change to the target, source, threshold, or measurement convention requires preserving the original as Invalid and creating a new prediction.
 
@@ -127,7 +127,7 @@ Journal corrections show the latest body at the original Timeline position. Open
 
 ## Find and organize your journal
 
-Journal is home. **All**, **Unresolved** and **Needs postmortem** are quiet views without counters. Unresolved includes Open/Locked Adaptive and One-Shot Waiting for answer. Needs postmortem includes Resolved records with blank effective reflection and no explicit Skip.
+Journal is home. **All**, **Unresolved** and **Needs Postmortem** are quiet views without counters. Unresolved includes Open/Locked Adaptive and One-Shot Waiting for answer. Needs Postmortem includes Resolved records with blank effective reflection and no explicit Skip.
 
 Enter ordinary words in **Search predictions**, then press **Enter** or **Search**. Editing text removes the prior listing/count until you submit, so old rows cannot be mistaken for the new query. Clearing text retrieves the blank-search view. All words is the default; quoted phrases match within one source. Search narrows the selected view and filters. Results explain non-Question matches; extra passages are behind a disclosure. **Include superseded history** permits clearly labeled earlier versions and opens their exact source in Detail. A formerly current Journal passage that changes is opened at its original entry with current text and a changed-text explanation, without false match emphasis.
 
@@ -135,11 +135,13 @@ Enter ordinary words in **Search predictions**, then press **Enter** or **Search
 
 Automatic sort is **Recently active** for blank text and **Relevance** for search. An applicable manual sort persists until changed/reset; clearing text discards manual Relevance. Last active reflects substantive committed work, not reading, automatic locking, ordinary repairs or Skip. Numeric rows retain five exact horizontal values with their unit once. Resolved Adaptive rows identify the scoring-eligible forecast and excluded later revisions; Invalid and unscored cases remain explicit. Load more continues the same retrieval.
 
-The full matching-Prediction count accompanies text/advanced results; ordinary browsing, a quick view alone or a manual sort alone has no count. Loading, successful zero results and failure have different messages. Try again is offered for an identified temporary read failure; Repair search opens Settings only for an identified rebuildable projection problem.
+The full matching-Prediction count accompanies text/advanced results; ordinary browsing, a quick view alone or a manual sort alone has no count. A return or background check of the same retrieval keeps readable rows while checking current data, retaining unchanged rows and focus. A new retrieval still hides the previous listing until its own results arrive. Failure clears retained results and has a different message from successful zero results. Try again is offered for an identified temporary read failure; Repair search opens Settings only for an identified rebuildable projection problem.
 
 **Manage Tags** is in Settings and confirms rename, merge and removal. Saved Views are retired. Upgrading an older supported journal preserves a verified complete recovery copy and requires confirmation where configurations exist; forecasting history remains intact. CLI opening directs review-dependent upgrades to the desktop.
 
 Use the quiet sun/moon control to select the opposite appearance without leaving the page or clearing work. Settings offers **Follow Windows / Light / Dark** for the same remembered preference. Only Ctrl+N, Journal-only Ctrl+F and eligible Ctrl+, remain as app navigation shortcuts; native modal dialogs keep control of their own keys.
+
+**Settings → Dates and Time** selects **DD-MM-YYYY**, **MM-DD-YYYY** or **YYYY-MM-DD** (initially YYYY-MM-DD) for desktop date readouts and pickers. This preference survives restart and moving the journal. Reckonsolve follows Windows’ time zone; Settings shows its name and current offset. Ordinary timestamps omit the repeated offset, while exact time entry and consequential confirmations retain offset/daylight-saving cues. Documentary One-Shot times retain any supplied offset. The setting changes presentation only: saved instants, date-only facts, typed prose, filenames, CLI output and CSV formats stay as recorded.
 
 ## Learn from the results
 
@@ -957,7 +959,7 @@ For implementation boundaries, see [Architecture](../architecture.md).
 
 ## Back up and export
 
-Settings groups appearance, selectable database-location facts and local tools in one page. Each tool keeps its latest result beside it during that visit. Running another tool does not erase an earlier result; errors and destination paths remain selectable. Leaving Settings clears these visit-local messages. The separate Last successful backup fact survives visits and app restarts. Choose folder and Move and restart are described under [Where data lives](#where-data-lives).
+Settings groups appearance, Dates and Time, selectable database-location facts and local tools in one page. Each tool keeps its latest result beside it during that visit. Running another tool does not erase an earlier result; errors and destination paths remain selectable. Changing date order reformats a dated receipt without running its tool again. Leaving Settings clears these visit-local messages. The separate Last successful backup fact survives visits and app restarts. Choose folder and Move and restart are described under [Where data lives](#where-data-lives).
 
 Use **Settings → Back Up Now** or the matching CLI for a verified SQLite backup. It preserves the complete current journal, corrections, tags, provenance and database settings. The separately verified pre-upgrade copy retains retired Saved View configurations. Keep recovery backups outside generated development/build directories.
 
@@ -972,7 +974,7 @@ For recovery, close the app and matching CLI, preserve the current database, and
 | Stable | `reckonsolve` / `rsc` | `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3` |
 | Development | `reckonsolve-dev` / `rscd` | `%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3` |
 
-Each identity keeps its own fixed settings/bootstrap folder. `presentation.ini` stores window/appearance preferences outside canonical history and is excluded from backups/exports. Location/identity/move metadata is separate from that preference file, so clearing appearance preferences does not lose the journal location. GUI and CLI share the matching active journal directly; refresh/reopen after a CLI change. They do not sync across identities.
+Each identity keeps its own fixed settings/bootstrap folder. `presentation.ini` stores window, appearance and date-format preferences outside canonical history and is excluded from backups/exports. Location/identity/move metadata is separate from that preference file, so clearing presentation preferences does not lose the journal location. GUI and CLI share the matching active journal directly; refresh/reopen after a CLI change. They do not sync across identities.
 
 ### Move your journal
 

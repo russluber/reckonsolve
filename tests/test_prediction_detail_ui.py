@@ -312,7 +312,13 @@ def test_prediction_detail_shows_present_metadata_and_hides_missing_sections(
         "#release  #desktop"
     )
     deadline = _required_child(window, QLabel, "predictionDetailForecastDeadline")
-    assert "UTC" in deadline.text()
+    assert "UTC" not in deadline.text()
+    assert (
+        datetime.fromisoformat(
+            deadline.toolTip().removeprefix("Exact, fixed deadline: ")
+        ).utcoffset()
+        is not None
+    )
     assert "(permanent)" not in deadline.text()
     assert "Exact, fixed deadline:" in deadline.toolTip()
     assert deadline.wordWrap()

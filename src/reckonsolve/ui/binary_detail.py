@@ -35,6 +35,7 @@ from reckonsolve.ui.components import (
     PageHeader,
     StatusBadge,
 )
+from reckonsolve.ui.date_display import format_date
 from reckonsolve.ui.detail_reading import (
     TerminalSummary,
     criteria_reader,
@@ -281,21 +282,21 @@ class PredictionDetailScreen(QWidget):
             self.detail_content,
         )
         self.background_section, self.background = _detail_text_section(
-            "BACKGROUND",
+            "Background",
             "predictionDetailBackgroundSection",
             "predictionDetailBackground",
             self.detail_content,
         )
         self.resolution_criteria_section, self.resolution_criteria = (
             _detail_text_section(
-                "RESOLUTION CRITERIA",
+                "Resolution Criteria",
                 "predictionDetailResolutionCriteriaSection",
                 "predictionDetailResolutionCriteria",
                 self.detail_content,
             )
         )
 
-        self.resolution_section = QGroupBox("RESOLUTION", self.detail_content)
+        self.resolution_section = QGroupBox("Resolution", self.detail_content)
         self.resolution_section.setObjectName("predictionResolutionSection")
         apply_surface_role(self.resolution_section, SurfaceRole.RAISED)
         resolution_layout = QVBoxLayout(self.resolution_section)
@@ -310,7 +311,7 @@ class PredictionDetailScreen(QWidget):
             "predictionResolutionScoringForecast"
         )
         self.resolution_scoring_forecast.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_section = QGroupBox("SCORECARD", self.resolution_section)
+        self.scorecard_section = QGroupBox("Scorecard", self.resolution_section)
         self.scorecard_section.setObjectName("predictionScorecard")
         apply_surface_role(self.scorecard_section, SurfaceRole.BASE)
         scorecard_layout = QVBoxLayout(self.scorecard_section)
@@ -347,7 +348,7 @@ class PredictionDetailScreen(QWidget):
         self.trajectory_diagnostics.setHidden(True)
         scorecard_layout.addWidget(self.trajectory_diagnostics)
         self.resolution_notes_heading = QLabel(
-            "RESOLUTION NOTES",
+            "Resolution Notes",
             self.resolution_section,
         )
         self.resolution_notes_heading.setObjectName("predictionResolutionNotesHeading")
@@ -356,7 +357,7 @@ class PredictionDetailScreen(QWidget):
         self.resolution_notes.setTextFormat(Qt.TextFormat.PlainText)
         self.resolution_notes.setWordWrap(True)
         _make_selectable(self.resolution_notes)
-        self.postmortem_heading = QLabel("POSTMORTEM", self.resolution_section)
+        self.postmortem_heading = QLabel("Postmortem", self.resolution_section)
         self.postmortem_heading.setObjectName("predictionPostmortemHeading")
         self.postmortem = QLabel("", self.resolution_section)
         self.postmortem.setObjectName("predictionPostmortem")
@@ -426,7 +427,7 @@ class PredictionDetailScreen(QWidget):
         self.scorecard_section.setHidden(True)
         self.postmortem_completion.setHidden(True)
 
-        self.invalidation_section = QGroupBox("INVALID", self.detail_content)
+        self.invalidation_section = QGroupBox("Invalid", self.detail_content)
         self.invalidation_section.setObjectName("predictionInvalidationSection")
         apply_surface_role(self.invalidation_section, SurfaceRole.RAISED)
         invalidation_layout = QVBoxLayout(self.invalidation_section)
@@ -434,7 +435,7 @@ class PredictionDetailScreen(QWidget):
         self.invalidated_at.setObjectName("predictionInvalidatedAt")
         self.invalidated_at.setTextFormat(Qt.TextFormat.PlainText)
         self.invalidation_reason_heading = QLabel(
-            "REASON",
+            "Reason",
             self.invalidation_section,
         )
         self.invalidation_reason_heading.setObjectName(
@@ -472,7 +473,7 @@ class PredictionDetailScreen(QWidget):
         invalidation_layout.addWidget(self.invalidation_history)
         self.invalidation_section.setHidden(True)
 
-        self.definition_history = QGroupBox("Definition history", self.detail_content)
+        self.definition_history = QGroupBox("Definition History", self.detail_content)
         self.definition_history.setObjectName("definitionHistoryGroup")
         apply_surface_role(self.definition_history, SurfaceRole.BASE)
         self.definition_history.setCheckable(True)
@@ -500,7 +501,7 @@ class PredictionDetailScreen(QWidget):
         self.timeline_placeholder.setObjectName("timelinePlaceholder")
         self.timeline_placeholder.setWordWrap(True)
 
-        chart_label = QLabel("PROBABILITY HISTORY", self.detail_content)
+        chart_label = QLabel("Probability History", self.detail_content)
         chart_label.setObjectName("probabilityHistoryHeading")
         self.probability_history_chart = ProbabilityHistoryChart(self.detail_content)
         chart_policy = self.probability_history_chart.sizePolicy()
@@ -642,7 +643,7 @@ class PredictionDetailScreen(QWidget):
             self.more_actions.append((action, button))
         self.more_button.setMenu(self.more_menu)
         strip.addWidget(self.more_button)
-        self.current_revision_button = QPushButton("Current revision", timeline_panel)
+        self.current_revision_button = QPushButton("Current Revision", timeline_panel)
         self.current_revision_button.setObjectName("jumpToCurrentRevisionButton")
         self.current_revision_button.setAccessibleName("Jump to Current Revision")
         self.current_revision_button.clicked.connect(self._jump_current_revision)
@@ -1275,14 +1276,16 @@ class PredictionDetailScreen(QWidget):
             "This is probability history, not a score plot."
         )
         self.forecast_deadline.setText(
-            exact_detail_time(contract.forecast_deadline.instant)
+            exact_detail_time(contract.forecast_deadline.instant, widget=self)
         )
         self.forecast_deadline.setToolTip(
             "Exact, fixed deadline: "
             + format_local_deadline(contract.forecast_deadline.instant)
         )
         self.forecast_deadline_row.show()
-        self.expected_resolution.setText(_format_date(prediction.expected_resolution))
+        self.expected_resolution.setText(
+            _format_date(prediction.expected_resolution, widget=self)
+        )
         self.expected_resolution_row.setHidden(prediction.expected_resolution is None)
         self.background.setText(prediction.background or "")
         self.background_section.setHidden(not prediction.background)
@@ -1323,9 +1326,9 @@ class PredictionDetailScreen(QWidget):
                 f"Outcome: {effective.outcome.value.capitalize()}"
             )
             self.resolution_resolved_at.setText(
-                f"Recorded at: {exact_detail_time(resolution.resolved_at)}"
+                f"Recorded at: {exact_detail_time(resolution.resolved_at, widget=self)}"
                 if effective.effective_resolution_at is None
-                else f"Outcome became knowable: {exact_detail_time(effective.effective_resolution_at)}\nRecorded at: {exact_detail_time(resolution.resolved_at)}"
+                else f"Outcome became knowable: {exact_detail_time(effective.effective_resolution_at, widget=self)}\nRecorded at: {exact_detail_time(resolution.resolved_at, widget=self)}"
             )
             self.resolution_resolved_at.setToolTip(
                 "Recorded at: "
@@ -1356,7 +1359,7 @@ class PredictionDetailScreen(QWidget):
                 ""
                 if completion is None
                 else "Postmortem completion: Skipped "
-                f"{_format_local_timestamp(completion.completed_at)}. You may still "
+                f"{_format_local_timestamp(completion.completed_at, widget=self)}. You may still "
                 "add a Postmortem later; this completion remains in history."
             )
             self.postmortem_completion.setHidden(completion is None)
@@ -1390,7 +1393,7 @@ class PredictionDetailScreen(QWidget):
                 )
             self.invalidated_at.setText(
                 f"Marked Invalid: "
-                f"{_format_local_timestamp(invalidation.invalidated_at)}"
+                f"{_format_local_timestamp(invalidation.invalidated_at, widget=self)}"
             )
             self.invalidation_reason.setText(effective_invalidation.reason or "")
             has_reason = effective_invalidation.reason is not None
@@ -1617,9 +1620,14 @@ class PredictionDetailScreen(QWidget):
         ):
             self.scorecard_section.hide()
         self.overview_heading.setText(
-            "Archival context"
+            "ARCHIVAL CONTEXT"
             if prediction.status is PredictionStatus.INVALID
-            else "Overview"
+            else "OVERVIEW"
+        )
+        self.workspace.set_reading_context(
+            self.overview_heading,
+            terminal=prediction.status
+            in (PredictionStatus.RESOLVED, PredictionStatus.INVALID),
         )
         terminal = prediction.status in (
             PredictionStatus.RESOLVED,
@@ -1647,7 +1655,7 @@ class PredictionDetailScreen(QWidget):
                 outcome="Recorded reason",
                 score="Not scored",
                 timing=invalidation_timing(
-                    self.invalidated_at.text(), self._invalidation_history
+                    self.invalidated_at.text(), self._invalidation_history, widget=self
                 ),
                 note=self.invalidation_reason.text() or "No reason recorded.",
                 context=f"Last forecast: {prediction.probability_percent}%\nOriginal Forecast Deadline: {self.forecast_deadline.text()}",
@@ -1692,9 +1700,9 @@ class PredictionDetailScreen(QWidget):
         last = max((event.created_at for event in considered), default=revised)
         self.header_timing.activity.setText(
             "Last revised: "
-            + revised.astimezone().strftime("%d %b %Y")
+            + format_date(revised, self)
             + " · Last considered: "
-            + last.astimezone().strftime("%d %b %Y")
+            + format_date(last, self)
         )
 
     def _jump_current_revision(self) -> None:

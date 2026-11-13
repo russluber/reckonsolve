@@ -31,6 +31,7 @@ from reckonsolve.domain.predictions import (
     PredictionType,
 )
 from reckonsolve.domain.search import SearchMatchMode
+from reckonsolve.ui.date_display import input_date_format
 from reckonsolve.ui.tag_filter_picker import TagFilterPicker
 from reckonsolve.ui.visual_system import (
     ActionRole,
@@ -46,8 +47,13 @@ class _DateInput(QDateEdit):
         # QDateEdit may accept an omitted year by retaining the previous value.
         # The optional boundary is a whole explicit date, never that inference.
         raw = self.lineEdit().text()
+        pattern = (
+            r"\d{4}-\d{2}-\d{2}"
+            if self.displayFormat().startswith("yyyy")
+            else r"\d{2}-\d{2}-\d{4}"
+        )
         return (
-            bool(re.search(r"\d{4}\s*$", raw))
+            bool(re.fullmatch(pattern, raw))
             and self.hasAcceptableInput()
             and self.locale().toDate(raw, self.displayFormat()).isValid()
         )
@@ -134,7 +140,7 @@ class JournalFiltersDialog(QDialog):
             editor = _DateInput(row)
             editor.setAccessibleName(f"{label} date, inclusive")
             editor.setCalendarPopup(True)
-            editor.setDisplayFormat("dd MMM yyyy")
+            editor.setDisplayFormat(input_date_format(self))
             editor.setDateRange(QDate(MIN_METADATA_DATE), QDate(MAX_METADATA_DATE))
             editor.setDate(QDate(value) if value else QDate.currentDate())
             editor.setEnabled(value is not None)

@@ -652,7 +652,7 @@ def test_definition_history_is_collapsed_and_shows_snapshot_in_local_time(
     assert content.isHidden()
     history.setChecked(True)
     assert not content.isHidden()
-    expected_timestamp = changed_at.astimezone().strftime("%b %d, %Y at %H:%M").strip()
+    expected_timestamp = changed_at.astimezone().strftime("%Y-%m-%d, %I:%M %p").strip()
     assert (
         _required_child(
             history,

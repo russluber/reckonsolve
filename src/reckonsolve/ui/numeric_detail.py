@@ -38,6 +38,7 @@ from reckonsolve.ui.components import (
     PageHeader,
     StatusBadge,
 )
+from reckonsolve.ui.date_display import format_date
 from reckonsolve.ui.detail_reading import (
     TerminalSummary,
     criteria_reader,
@@ -234,21 +235,21 @@ class NumericPredictionDetailScreen(QWidget):
             self.detail_content,
         )
         self.background_section, self.background = _detail_text_section(
-            "BACKGROUND",
+            "Background",
             "numericBackgroundSection",
             "numericBackgroundValue",
             self.detail_content,
         )
         self.resolution_criteria_section, self.resolution_criteria = (
             _detail_text_section(
-                "RESOLUTION CRITERIA",
+                "Resolution Criteria",
                 "numericResolutionCriteriaSection",
                 "numericResolutionCriteriaValue",
                 self.detail_content,
             )
         )
         self.rationale_section, self.rationale = _detail_text_section(
-            "INITIAL RATIONALE",
+            "Initial Rationale",
             "numericInitialRationaleSection",
             "numericInitialRationaleValue",
             self.detail_content,
@@ -314,7 +315,7 @@ class NumericPredictionDetailScreen(QWidget):
         actions_layout.addWidget(self.mark_invalid_button, 1, 3)
         actions_layout.addWidget(self.delete_button, 2, 2)
 
-        self.resolution_section = QGroupBox("RESOLVED", self.detail_content)
+        self.resolution_section = QGroupBox("Resolved", self.detail_content)
         self.resolution_section.setObjectName("numericResolutionSection")
         apply_surface_role(self.resolution_section, SurfaceRole.RAISED)
         resolution_layout = QVBoxLayout(self.resolution_section)
@@ -402,7 +403,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.quantile_scorecard.setHidden(True)
         self.postmortem_completion.setHidden(True)
 
-        self.invalidation_section = QGroupBox("INVALID", self.detail_content)
+        self.invalidation_section = QGroupBox("Invalid", self.detail_content)
         self.invalidation_section.setObjectName("numericInvalidationSection")
         apply_surface_role(self.invalidation_section, SurfaceRole.RAISED)
         invalidation_layout = QVBoxLayout(self.invalidation_section)
@@ -440,7 +441,7 @@ class NumericPredictionDetailScreen(QWidget):
         invalidation_layout.addWidget(self.invalidation_history)
         self.invalidation_section.setHidden(True)
 
-        self.definition_history = QGroupBox("Definition history", self.detail_content)
+        self.definition_history = QGroupBox("Definition History", self.detail_content)
         self.definition_history.setObjectName("numericDefinitionHistoryGroup")
         apply_surface_role(self.definition_history, SurfaceRole.BASE)
         self.definition_history.setCheckable(True)
@@ -456,7 +457,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.definition_history_content.setHidden(True)
         self.definition_history.setHidden(True)
 
-        history_label = QLabel("INTERVAL HISTORY", self.detail_content)
+        history_label = QLabel("Interval History", self.detail_content)
         history_label.setObjectName("numericHistoryLabel")
         history_font = QFont(history_label.font())
         history_font.setBold(True)
@@ -633,7 +634,7 @@ class NumericPredictionDetailScreen(QWidget):
             self.more_actions.append((action, button))
         self.more_button.setMenu(self.more_menu)
         strip.addWidget(self.more_button)
-        self.current_revision_button = QPushButton("Current revision", timeline_panel)
+        self.current_revision_button = QPushButton("Current Revision", timeline_panel)
         self.current_revision_button.setObjectName("jumpToCurrentRevisionButton")
         self.current_revision_button.setAccessibleName("Jump to Current Revision")
         self.current_revision_button.clicked.connect(self._jump_current_revision)
@@ -878,7 +879,7 @@ class NumericPredictionDetailScreen(QWidget):
             f"Median: {q.q50} {prediction.unit}\n50% interval: {q.q25} to {q.q75} {prediction.unit}\nFive-quantile model · {prediction.value_constraint.value}"
         )
         self.revise_forecast_button.setText("Revise Forecast")
-        self.review_forecast_button.setText("Keep forecast")
+        self.review_forecast_button.setText("Keep Forecast")
         self.review_forecast_button.setAccessibleName(
             "Record a Review retaining all five current percentiles"
         )
@@ -949,19 +950,23 @@ class NumericPredictionDetailScreen(QWidget):
         self.show_prediction(prediction)
 
     def _show_optional_metadata(self, prediction: NumericPredictionSnapshot) -> None:
-        self.forecast_deadline.setText(_format_date(prediction.forecast_deadline))
+        self.forecast_deadline.setText(
+            _format_date(prediction.forecast_deadline, widget=self)
+        )
         self.forecast_deadline_row.setHidden(prediction.forecast_deadline is None)
         contract = getattr(prediction, "forecast_contract", None)
         if contract is not None:
             self.forecast_deadline.setText(
-                exact_detail_time(contract.forecast_deadline.instant)
+                exact_detail_time(contract.forecast_deadline.instant, widget=self)
             )
             self.forecast_deadline.setToolTip(
                 "Exact, fixed deadline: "
                 + format_local_deadline(contract.forecast_deadline.instant)
             )
             self.forecast_deadline_row.show()
-        self.expected_resolution.setText(_format_date(prediction.expected_resolution))
+        self.expected_resolution.setText(
+            _format_date(prediction.expected_resolution, widget=self)
+        )
         self.expected_resolution_row.setHidden(prediction.expected_resolution is None)
         self.background.setText(prediction.background or "")
         self.background_section.setHidden(not prediction.background)
@@ -1008,8 +1013,8 @@ class NumericPredictionDetailScreen(QWidget):
                 f"Actual value: {effective.actual_value} {prediction.unit}"
             )
             self.resolution_time.setText(
-                f"Effective resolution: {exact_detail_time(effective.effective_resolution_at)}\n"
-                f"Recorded at: {exact_detail_time(resolution.resolved_at)}"
+                f"Effective resolution: {exact_detail_time(effective.effective_resolution_at, widget=self)}\n"
+                f"Recorded at: {exact_detail_time(resolution.resolved_at, widget=self)}"
             )
             self.resolution_time.setToolTip(
                 f"Effective: {effective.effective_resolution_at.isoformat()}\nRecorded: {resolution.resolved_at.isoformat()}"
@@ -1025,7 +1030,7 @@ class NumericPredictionDetailScreen(QWidget):
                 ""
                 if completion is None
                 else "Postmortem completion: Skipped "
-                f"{_format_local_timestamp(completion.completed_at)}. You may still "
+                f"{_format_local_timestamp(completion.completed_at, widget=self)}. You may still "
                 "add a Postmortem later; this completion remains in history."
             )
             self.postmortem_completion.setHidden(completion is None)
@@ -1057,7 +1062,7 @@ class NumericPredictionDetailScreen(QWidget):
                     invalidation_history,
                 )
             self.invalidation_time.setText(
-                f"Marked Invalid {_format_local_timestamp(invalidation.invalidated_at)}"
+                f"Marked Invalid {_format_local_timestamp(invalidation.invalidated_at, widget=self)}"
             )
             self.invalidation_reason.setText(
                 ""
@@ -1204,7 +1209,9 @@ class NumericPredictionDetailScreen(QWidget):
         frame.setObjectName(f"numericTimeline{event.kind.title()}{event.record_id}")
         apply_surface_role(frame, SurfaceRole.BASE)
         layout = QVBoxLayout(frame)
-        timestamp = QLabel(_format_local_timestamp(event.created_at), frame)
+        timestamp = QLabel(
+            _format_local_timestamp(event.created_at, widget=self), frame
+        )
         timestamp.setTextFormat(Qt.TextFormat.PlainText)
         timestamp.setToolTip(event.created_at.isoformat())
         _make_selectable(timestamp)
@@ -1247,7 +1254,9 @@ class NumericPredictionDetailScreen(QWidget):
             if event.corrections:
                 edited = QLabel(
                     "Edited "
-                    + _format_local_timestamp(event.corrections[-1].corrected_at),
+                    + _format_local_timestamp(
+                        event.corrections[-1].corrected_at, widget=self
+                    ),
                     frame,
                 )
                 edited.setTextFormat(Qt.TextFormat.PlainText)
@@ -1490,9 +1499,14 @@ class NumericPredictionDetailScreen(QWidget):
         self.invalidation_section.hide()
         self.reading_sections.sync(prediction.status)
         self.overview_heading.setText(
-            "Archival context"
+            "ARCHIVAL CONTEXT"
             if prediction.status is PredictionStatus.INVALID
-            else "Overview"
+            else "OVERVIEW"
+        )
+        self.workspace.set_reading_context(
+            self.overview_heading,
+            terminal=prediction.status
+            in (PredictionStatus.RESOLVED, PredictionStatus.INVALID),
         )
         terminal = prediction.status in (
             PredictionStatus.RESOLVED,
@@ -1530,7 +1544,9 @@ class NumericPredictionDetailScreen(QWidget):
                 outcome="Recorded reason",
                 score="Not scored",
                 timing=invalidation_timing(
-                    self.invalidation_time.text(), self._invalidation_history
+                    self.invalidation_time.text(),
+                    self._invalidation_history,
+                    widget=self,
                 ),
                 note=self.invalidation_reason.text() or "No reason recorded.",
                 context=interval_text(
@@ -1574,9 +1590,9 @@ class NumericPredictionDetailScreen(QWidget):
         last = max((event.created_at for event in considered), default=revised)
         self.header_timing.activity.setText(
             "Last revised: "
-            + revised.astimezone().strftime("%d %b %Y")
+            + format_date(revised, self)
             + " · Last considered: "
-            + last.astimezone().strftime("%d %b %Y")
+            + format_date(last, self)
         )
 
     def _jump_current_revision(self) -> None:

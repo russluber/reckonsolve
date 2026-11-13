@@ -308,7 +308,7 @@ def test_one_shot_journal_times_are_readable_and_invalid_is_orange(qtbot, journa
     timeline = screen.findChild(QWidget, "oneShotTimeline")
     assert timeline is not None
     rendered = "\n".join(label.text() for label in timeline.findChildren(QLabel))
-    assert " at " in rendered
+    assert re.search(r"\d{4}-\d{2}-\d{2}, \d{2}:\d{2} [AP]M", rendered)
     assert not re.search(r"\d{2}:\d{2}:\d{2}|\.\d{6}|[+-]\d{2}:\d{2}", rendered)
 
 

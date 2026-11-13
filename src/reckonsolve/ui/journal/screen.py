@@ -36,6 +36,7 @@ from reckonsolve.domain.journal import (
 )
 from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.ui.components import PageHeader
+from reckonsolve.ui.date_display import date_context, format_date
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
     ActionRole,
@@ -88,6 +89,7 @@ class JournalScreen(QWidget):
         self.loaded_once = False
         self.text_pending = False
         self.refused = False
+        self._quiet_refresh = False
         self._focus_result_id: int | None = None
         self._focus_on_ready = False
         self._focus_guard: QWidget | None = None
@@ -120,7 +122,7 @@ class JournalScreen(QWidget):
         for title, value in (
             ("All", JournalView.ALL),
             ("Unresolved", JournalView.UNRESOLVED),
-            ("Needs postmortem", JournalView.NEEDS_POSTMORTEM),
+            ("Needs Postmortem", JournalView.NEEDS_POSTMORTEM),
         ):
             button = QPushButton(title, self.content)
             button.setObjectName(f"journalView{value.value}")
@@ -190,7 +192,7 @@ class JournalScreen(QWidget):
         self.retrieval.failed.connect(self._failed)
         self.poll = QTimer(self)
         self.poll.setInterval(60_000)
-        self.poll.timeout.connect(self.refresh)
+        self.poll.timeout.connect(self._poll_current)
         self.search_input.textChanged.connect(self._search_changed)
         self.search_input.returnPressed.connect(self.submit_search)
         self.search_button.clicked.connect(self.submit_search)
@@ -211,6 +213,10 @@ class JournalScreen(QWidget):
     def hideEvent(self, event) -> None:
         self.poll.stop()
         super().hideEvent(event)
+
+    def _poll_current(self) -> None:
+        if not self.loading and not self.retrieval.busy and self.isVisible():
+            self.refresh()
 
     def _change(self, **changes) -> None:
         self.text_pending = False
@@ -287,6 +293,14 @@ class JournalScreen(QWidget):
         ):
             # A later keyboard/pointer action owns focus while retrieval runs.
             return
+        if (
+            current is not None
+            and current is not self.scroll
+            and self.isAncestorOf(current)
+        ):
+            # Quiet refresh retained this control, including an excerpt's own
+            # disclosure/selection. It needs no replacement focus target.
+            return
         visible = []
         viewport = self.scroll.viewport()
         for card in self.cards:
@@ -323,6 +337,13 @@ class JournalScreen(QWidget):
                 self._focus_guard = current
                 break
         self.loading = True
+        self._quiet_refresh = (
+            self.page is not None
+            and self.page.request == self.state.request
+            and not self.text_pending
+        )
+        if self._quiet_refresh:
+            return
         self.count.hide()
         self.more.hide()
         for button in (self.retry, self.repair, self.suggestion):
@@ -363,12 +384,8 @@ class JournalScreen(QWidget):
         self.loaded_once = True
         self.page = page
         self.available_tags = page.available_tags
-        self._clear_rows()
-        for row in page.rows:
-            card = JournalCard(row, page.parsed, self._open, self.content)
-            self.results.addWidget(card)
-            card.show()
-            self.cards.append(card)
+        self._update_rows(page)
+        self._quiet_refresh = False
         self.message.setVisible(not page.rows)
         if not page.rows:
             self.message.setText(
@@ -387,8 +404,57 @@ class JournalScreen(QWidget):
             self.suggestion.show()
         QTimer.singleShot(0, self._restore_anchor)
 
+    def _update_rows(self, page: JournalPage) -> None:
+        """Keep unchanged reading widgets; batch actual row/layout changes."""
+        previous = {card.prediction_id: card for card in self.cards}
+        current = []
+        context = date_context(self)
+        self.content.setUpdatesEnabled(False)
+        self.body.setEnabled(False)
+        self.results.setEnabled(False)
+        try:
+            for row in page.rows:
+                card = previous.get(row.prediction.prediction_id)
+                if (
+                    card is None
+                    or card.source_row != row
+                    or card.parsed != page.parsed
+                    or card.rendered_date_context != context
+                ):
+                    card = JournalCard(row, page.parsed, self._open, self.content)
+                current.append(card)
+            if current != self.cards:
+                while self.results.count():
+                    self.results.takeAt(0)
+                for card in self.cards:
+                    if card not in current:
+                        card.setEnabled(False)
+                        card.hide()
+                        card.setParent(None)
+                        card.deleteLater()
+                self.cards = current
+                for card in current:
+                    self.results.addWidget(card)
+                    card.show()
+        except Exception:
+            for card in current:
+                if card not in self.cards:
+                    card.hide()
+                    card.setParent(None)
+                    card.deleteLater()
+            raise
+        finally:
+            self.results.setEnabled(True)
+            self.body.setEnabled(True)
+            self.content.setUpdatesEnabled(True)
+            self.body.activate()
+
     def _failed(self, error: Exception) -> None:
         self.loading = False
+        self._quiet_refresh = False
+        self._clear_rows()
+        self.count.hide()
+        self.more.hide()
         self.page = None
         self.message.setText(f"Journal unavailable. {error}")
         apply_message_role(
@@ -420,7 +486,11 @@ class JournalScreen(QWidget):
             button.hide()
 
     def _open(self, identifier: int, document) -> None:
-        if self.loading or self.page is None or self.page.request != self.state.request:
+        if (
+            (self.loading and not self._quiet_refresh)
+            or self.page is None
+            or self.page.request != self.state.request
+        ):
             return
         self.capture_anchor(exclude_id=identifier)
         self._focus_result_id = identifier
@@ -520,13 +590,11 @@ class JournalScreen(QWidget):
                 chip(tag, remove_tag)
         if filters.date_start or filters.date_end:
             start = (
-                filters.date_start.strftime("%d %b %Y")
+                format_date(filters.date_start, self)
                 if filters.date_start
                 else "Any start"
             )
-            end = (
-                filters.date_end.strftime("%d %b %Y") if filters.date_end else "Any end"
-            )
+            end = format_date(filters.date_end, self) if filters.date_end else "Any end"
             chip(
                 f"{filters.date_meaning.value.replace('_', ' ').title()}: {start} – {end}",
                 lambda: self._change(

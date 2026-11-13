@@ -41,6 +41,7 @@ from reckonsolve.forecast_display import (
     format_readable_local_deadline,
 )
 from reckonsolve.ui.components import ProbabilityPresets
+from reckonsolve.ui.date_display import format_exact_datetime
 from reckonsolve.ui.detail_workspace import collapse_section
 from reckonsolve.ui.dialog_review import DialogReview, confirm_contextual_terminal
 from reckonsolve.ui.editor_feedback import show_editor_error
@@ -798,7 +799,7 @@ class ResolveNumericPredictionDialog(_StyledDialog):
                     "At the actual save time"
                     if self.effective_time is None
                     or self.effective_time.use_now.isChecked()
-                    else str(self.effective_time.value())
+                    else format_exact_datetime(self.effective_time.value(), self)
                 ),
             ):
                 return
@@ -2087,7 +2088,7 @@ class ResolvePredictionDialog(_EffectiveTimeDialog):
                 + (
                     "At the actual save time"
                     if not timing or timing.get("use_recorded_time")
-                    else str(timing["effective_resolution_at"])
+                    else format_exact_datetime(timing["effective_resolution_at"], self)
                 ),
             ):
                 return
