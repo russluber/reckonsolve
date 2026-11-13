@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The combined Detail review was good overall, with long-history responsiveness and pane-motion tuning awaiting a focused native recheck. Performance and Settings retain functioning bodies for their later redesign.
+This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The requested walkthroughs and long-history responsiveness tuning are accepted with recorded limits. Performance and Settings retain functioning bodies for their later redesign.
 
 ## In this guide
 

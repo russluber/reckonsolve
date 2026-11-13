@@ -4,7 +4,7 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace and New Prediction/Prediction Detail journeys reviewed. The combined Detail review was good overall; long-history responsiveness and pane-motion tuning await focused native recheck. Performance, Settings and integrated acceptance follow. Not a published release.
+Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. Performance, Settings and integrated acceptance follow. Not a published release.
 
 - Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
 - Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Performance and Settings bodies remain adapters for their later slice.

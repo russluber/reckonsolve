@@ -292,3 +292,23 @@ checks passed 290/284 local links across 52/5 Markdown files; whitespace and
 reference-preservation checks passed. All J/R identifiers, both withdrawals and
 saved reference assets remain intact. Domain/data/analytics, schema/migrations,
 projection/export and dependencies remain unchanged.
+
+## Reported Detail completion acceptance — 2026-11-12
+
+After the earlier combined review and focused long-history repair, the user reported
+that responsiveness was vastly faster and the result was great. They reported both
+repositories staged, committed and pushed. The public `ux-redesign` tree was verified
+clean at `166686c`; private notes were clean at `4fe2b42`, with cached tracking refs
+matching both commits. This closes the reported responsiveness defect and the
+requested second-slice completion checkpoint, carrying the other combined-review
+feedback forward. No remaining defect was reported in that recheck.
+
+The feedback is scoped to the reviewed artifact and supplied journeys. It does not
+assert an individually enumerated native animation/scaling/accessibility matrix or
+final integrated redesign acceptance. The preceding 1,154-test and timing evidence
+retains its source scope; this acceptance update changes documentation only and
+requires no new runtime run. Performance/ordinary Settings is the next proposed
+slice; relocation and release remain separately gated. The agent performed no
+staging, commit or push.
+
+Public/private documentation links, reference preservation and both whitespace checks passed for this text-only acceptance update. No software or runtime data changed.

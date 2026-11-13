@@ -1,6 +1,6 @@
 # Reckonsolve
 
-The checkout includes the unreleased Journal/workspace slice, with its [requested walkthrough accepted](docs/archive/releases/2026-11-11-journal-workspace-review.md), and the New Prediction/Prediction Detail package. Combined Detail review was good overall; its [long-history responsiveness follow-up](docs/archive/releases/2026-11-11-prediction-detail-verification.md#long-history-responsiveness-follow-up--2026-11-12) awaits a focused native recheck. Performance, Settings and final integrated acceptance remain. The installed/published v0.8.0 release is unchanged.
+The checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail slices, with their requested walkthroughs and subsequent tuning [accepted with recorded limits](docs/archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12). Performance, Settings and final integrated acceptance remain. The installed/published v0.8.0 release is unchanged.
 
 A personal forecasting journal for Windows. Record uncertain judgments, preserve your reasoning, resolve answers, and study calibration. Reckonsolve works offline and stores your data locally.
 

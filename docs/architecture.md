@@ -1,6 +1,6 @@
 # Reckonsolve architecture
 
-Unreleased working tree: Journal/workspace plus New Prediction/Prediction Detail, schema 21, search projection 3, CSV format 6. The first walkthrough is accepted with [recorded limits](archive/releases/2026-11-11-journal-workspace-review.md); combined Detail review was good overall, with a [long-history responsiveness follow-up](archive/releases/2026-11-11-prediction-detail-verification.md#long-history-responsiveness-follow-up--2026-11-12) awaiting focused native recheck. Released v0.8.0 remains the schema-20/format-5 baseline.
+Unreleased working tree: Journal/workspace plus New Prediction/Prediction Detail, schema 21, search projection 3, CSV format 6. The requested walkthroughs and long-history tuning are [accepted with recorded limits](archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12). Performance and Settings retain their existing adapter bodies. Released v0.8.0 remains the schema-20/format-5 baseline.
 Last reviewed: 2026-11-11.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
