@@ -111,6 +111,22 @@ This managed disposable profile contains 13 predictions: three answered per cont
 
 Automated native tests separately cover shared/exclusive access, older GUI/CLI handles/entry points, committed WAL, refused archives, exact complete images and killed-process recovery at every phase. They never move a personal journal or force-close another process. Source smoke/restart/backup tests remain part of the full suite; no frozen bundle or installed tool is replaced by these source checks. Read [ADR 0023](../decisions/0023-native-journal-relocation-and-recovery.md) before changing ordering/ownership, and retain the evaluated source/device limits in the [dated record](../archive/releases/2026-11-12-journal-relocation-verification.md).
 
+### Final integrated review
+
+```powershell
+uv run python tools/run_visual_review.py integrated
+```
+
+This managed disposable profile combines the accepted Detail/history and four-cohort Performance fixtures: 41 Predictions initially. It includes temporary move destinations, with all data/preferences/recovery confined to the printed temporary tree. Close the final window to discard the profile. Do not run a normal stable/development CLI to inspect it; paired CLI behavior is checked through injected automated runtimes.
+
+Use one combined pass to review the remaining seams:
+
+1. Scroll Journal, focus a Question with the keyboard and press Enter. Visit Performance, choose a report scope/supporting disclosure, then visit Settings. Use Back to Performance (retained report state), Back to Prediction (the original Prediction), then Back to Journal. Keyboard focus should land on a current Question near the prior browsing position. Ctrl+F still focuses search. When a current query becomes empty, the return target is search rather than an old result.
+2. On an Open Prediction, enter an unfinished revision or Journal entry. Change appearance, choose + New and Keep editing, then deliberately discard and enter creation. Verify the retained editor before discard and the focused creation page after it; cancel creation back to its source. No cancelled writing should appear as history. Earlier accepted full creation/terminal/relocation walkthroughs need not be repeated.
+3. Check both palettes, a larger window and the supported 760 × 520 logical baseline with keyboard Tab/Shift+Tab and visible focus. Inspect long Numeric values and reach the page/dialog primary actions by scrolling. Record the Windows scale actually reviewed; offscreen 1×/1.5×/2× captures and larger-font probes supplement, rather than claim, a complete human Windows scaling/accessibility review.
+
+The [final integration evidence](../archive/releases/2026-11-13-final-integration-verification.md) maps existing slice evidence, new regressions and remaining limits. This review does not replace installed tools, open personal data or publish a release.
+
 ## Documentation checks
 
 After editing or moving documentation, run:

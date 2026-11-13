@@ -814,3 +814,41 @@ def test_adaptive_reflection_command_preserves_exact_terminal_facts_and_score(
     assert cleared.original == history.original
     assert cleared.effective.postmortem is None
     assert operations.get_prediction_scorecard(prediction.prediction_id) == score
+
+
+@pytest.mark.parametrize("change", ["font", "style", "label_font"])
+def test_interval_reflows_exact_labels_after_text_metrics_change(qtbot, change):
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QVBoxLayout
+
+    parent = QWidget()
+    layout = QVBoxLayout(parent)
+    interval = NumericInterval(parent)
+    layout.addWidget(interval)
+    qtbot.addWidget(parent)
+    parent.resize(700, 260)
+    interval.set_forecast(
+        FiveQuantiles.from_values({5: 1, 25: 2, 50: 3, 75: 5, 95: 8}, 1), "days"
+    )
+    parent.show()
+    qtbot.wait(20)
+    if change == "font":
+        font = QFont(parent.font())
+        font.setPointSize(20)
+        parent.setFont(font)
+    elif change == "style":
+        parent.setStyleSheet("QLabel { font-size: 26px; }")
+    else:
+        for label in interval.labels:
+            font = QFont(label.font())
+            font.setPointSize(20)
+            label.setFont(font)
+    qtbot.wait(30)
+    for label in interval.labels:
+        assert label.height() >= label.heightForWidth(label.width())
+        assert interval.rect().contains(label.geometry())
+        assert label.text().splitlines()[1]
+    assert (
+        interval.minimumHeight()
+        >= max(label.geometry().bottom() for label in interval.labels) + 40
+    )

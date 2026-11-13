@@ -182,3 +182,53 @@ def test_run_automatically_reconstructs_window_after_move(
         for file in tmp_path.rglob("*"):
             if file.is_file() and file.stat().st_file_attributes & 1:
                 file.chmod(stat.S_IREAD | stat.S_IWRITE)
+
+
+def test_integrated_review_profile_keeps_the_whole_workspace_in_disposable_bootstrap(
+    qtbot, monkeypatch
+):
+    import runpy
+    import sys
+    from pathlib import Path
+
+    from reckonsolve.app import create_runtime
+    from reckonsolve.domain.journal import JournalRequest
+    from reckonsolve.identity import DEVELOPMENT_APPLICATION
+
+    tool = runpy.run_path(str(Path(__file__).parents[1] / "tools/run_visual_review.py"))
+    seen = []
+
+    def inspect_run(*, argv, identity, bootstrap_directory):
+        assert identity == DEVELOPMENT_APPLICATION
+        assert bootstrap_directory.name == identity.application_name
+        assert (bootstrap_directory.parent / "New journal folder").is_dir()
+        runtime = create_runtime(
+            argv=argv, identity=identity, bootstrap_directory=bootstrap_directory
+        )
+        try:
+            assert runtime.location.store.root == bootstrap_directory
+            assert runtime.window._settings_screen.location_controls is not None
+            page = runtime.window.operations.journal.query(JournalRequest())
+            assert page.total == 41
+            assert (
+                len(
+                    {
+                        (
+                            row.prediction.prediction_type,
+                            row.prediction.forecast_contract.is_one_shot,
+                        )
+                        for row in page.rows
+                    }
+                )
+                == 4
+            )
+            assert any("Long history" in row.prediction.question for row in page.rows)
+            seen.append(bootstrap_directory.parent)
+        finally:
+            runtime.close()
+        return 0
+
+    tool["main"].__globals__["run"] = inspect_run
+    monkeypatch.setattr(sys, "argv", ["run_visual_review.py", "integrated"])
+    assert tool["main"]() == 0
+    assert len(seen) == 1 and not seen[0].exists()

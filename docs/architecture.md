@@ -1,7 +1,7 @@
 # Reckonsolve architecture
 
 Unreleased working tree: Journal/workspace, New Prediction/Prediction Detail and the comprehensive Performance/ordinary Settings implementation, schema 21, search projection 3, CSV format 6. Journal/Detail walkthroughs are [accepted with recorded limits](archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12); the third slice is [accepted with recorded limits](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12). Journal relocation is [accepted with recorded limits](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12). Released v0.8.0 remains the schema-20/format-5 baseline.
-Last reviewed: 2026-11-12.
+Last reviewed: 2026-11-13.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
 
@@ -151,6 +151,10 @@ Journal reads admit the whole archive before filtering, reuse the existing corpu
 Journals appear once at their original causal Timeline position, displaying current corrected text with collapsed edit history. Superseded matches open that history. Answered One-Shots share the Resolved-only Postmortem queue, Skip, and later reflection. All terminal originals and corrections stay inspectable.
 
 ## 9. Desktop presentation boundary
+
+Journal presentation keeps a transient result-focus bookmark outside retrieval/canonical state. MainWindow asks for focus restoration on source-aware Journal returns; the Journal owner also detects replacement of a focused result during refresh. After layout/anchor restoration it focuses the originating visible Question or a current nearby target, with search/retry fallback. A different action during the asynchronous read owns focus; hidden pages cannot reclaim it. No newly reordered record is followed outside the restored browsing vicinity. The [final integration record](archive/releases/2026-11-13-final-integration-verification.md) ties the repair to its evaluated source and pending combined native review.
+
+`ui/numeric_interval.py` owns exact grouped labels, proportional marks and connector geometry. It coalesces font/style notifications from itself and its labels, then measures final metrics and updates the required height. Dynamic typography changes therefore reflow labels even when interval width is unchanged; values and mark positions retain their original exact meaning.
 
 ui/components.py supplies the shared Binary ProbabilityPresets. Adaptive and One-Shot creation use the same direct-entry row, with separate widget identities and no save action; contextual revision opts into wrapping. Compact presets and the shared New button reserve their focused border width so keyboard focus does not clip labels or change geometry.
 

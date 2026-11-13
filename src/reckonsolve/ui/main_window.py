@@ -248,7 +248,7 @@ class MainWindow(QMainWindow):
         if route is Route.NEW:
             self._focus_creation()
         elif route is Route.JOURNAL and refresh:
-            self._journal_screen.refresh()
+            self._journal_screen.refresh(focus_results=not remember_source)
         elif route is Route.PERFORMANCE and refresh:
             self._analytics_screen.refresh()
         elif route is Route.SETTINGS and refresh:

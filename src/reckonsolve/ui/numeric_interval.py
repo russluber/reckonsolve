@@ -2,7 +2,7 @@
 
 from fractions import Fraction
 
-from PySide6.QtCore import QPointF, QSize, Qt
+from PySide6.QtCore import QEvent, QPointF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
@@ -15,6 +15,7 @@ class NumericInterval(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._metrics_pending = False
         self.setObjectName("committedNumericInterval")
         self.setAccessibleName("Current committed five-percentile forecast")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -47,6 +48,7 @@ class NumericInterval(QWidget):
             label.setIndent(0)
             apply_text_role(label, TextRole.LABEL)
             self.labels.append(label)
+            label.installEventFilter(self)
             label.show()
         self.setAccessibleDescription(quantile_summary(quantiles, unit))
         self._arrange()
@@ -62,6 +64,33 @@ class NumericInterval(QWidget):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._arrange()
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() in (
+            QEvent.Type.FontChange,
+            QEvent.Type.ApplicationFontChange,
+            QEvent.Type.StyleChange,
+        ):
+            self._queue_metrics_refresh()
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._queue_metrics_refresh()
+        return super().eventFilter(watched, event)
+
+    def _queue_metrics_refresh(self) -> None:
+        if not self._metrics_pending:
+            # Styles can change child label metrics without resizing us.
+            # Measure their final metrics together after propagation finishes.
+            self._metrics_pending = True
+            QTimer.singleShot(0, self._refresh_metrics)
+
+    def _refresh_metrics(self) -> None:
+        self._metrics_pending = False
+        self._arrange()
+        self.updateGeometry()
+        self.update()
 
     def _arrange(self) -> None:
         if self.quantiles is None:

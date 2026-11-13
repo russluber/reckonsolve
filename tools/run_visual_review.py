@@ -52,16 +52,21 @@ def main() -> int:
             "detail",
             "performance",
             "relocation",
+            "integrated",
         ),
         help="Fixture shape to display; all data is deleted after the window closes.",
     )
     arguments = parser.parse_args()
 
     with TemporaryDirectory(prefix="reckonsolve-visual-review-") as temporary:
-        if arguments.profile == "relocation":
+        if arguments.profile in {"relocation", "integrated"}:
             bootstrap = Path(temporary) / DEVELOPMENT_APPLICATION.application_name
             bootstrap.mkdir()
             _seed_performance_database(bootstrap / "reckonsolve.sqlite3", per_cohort=3)
+            if arguments.profile == "integrated":
+                _seed_review_database(
+                    bootstrap / "reckonsolve.sqlite3", long_text=False, detail=True
+                )
             for name in ("New journal folder", "Another journal folder"):
                 (Path(temporary) / name).mkdir()
             print(f"Disposable move destinations: {Path(temporary)}")

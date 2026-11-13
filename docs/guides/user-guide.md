@@ -1,6 +1,8 @@
 # User guide
 
-This checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail redesign. The requested walkthroughs and long-history responsiveness tuning are accepted with recorded limits. Performance and Settings retain functioning bodies for their later redesign.
+This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. All four requested slice walkthroughs are accepted with recorded limits; the final integration pass awaits its bounded combined review. Installed v0.8.0 snapshots retain their released interface until deliberately replaced.
+
+Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
 ## In this guide
 

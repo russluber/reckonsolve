@@ -33,7 +33,7 @@ The specification governs behavior. Guides explain it; the scoring references ex
 
 Exploratory planning, UX workshops, draft decisions, and roadmaps live in the optional, Git-ignored `notes/` folder, maintained separately from the public project. Its contents are not included in a public clone or required for builds, tests, or documentation checks. When available locally, its `README.md` provides the private reading path.
 
-The [product specification](product-spec.md#proposed-changes-and-authorization) governs current behavior and deliberately published future requirements. Private preferences or design approval do not authorize implementation. User guides, architecture, and scoring references describe current behavior. The [Journal-centered redesign](product-spec.md#38-journal-centered-redesign-approved-future-requirements) is implemented in part under explicit slice authorizations; its remaining target, compatibility and acceptance gates do not grant further software permission.
+The [product specification](product-spec.md#proposed-changes-and-authorization) governs current behavior and deliberately published future requirements. Private preferences or design approval do not authorize implementation. User guides, architecture, and scoring references describe current behavior. The [Journal-centered redesign](product-spec.md#38-journal-centered-redesign-approved-future-requirements) has four implemented slices with accepted walkthroughs and a separately authorized final integration pass. Source requirements and the published v0.8.0 baseline are distinguished in the specification; remaining acceptance gates grant no additional software or publication permission.
 
 ## Development history
 

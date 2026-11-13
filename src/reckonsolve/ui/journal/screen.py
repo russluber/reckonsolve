@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QComboBox,
     QFrame,
@@ -47,7 +48,7 @@ from reckonsolve.ui.visual_system import (
 
 from .filters import JournalFiltersDialog
 from .retrieval import JournalRetrieval
-from .rows import JournalCard
+from .rows import JournalCard, QuestionLabel
 from .state import JournalState
 
 SORTS = (
@@ -87,6 +88,9 @@ class JournalScreen(QWidget):
         self.loaded_once = False
         self.text_pending = False
         self.refused = False
+        self._focus_result_id: int | None = None
+        self._focus_on_ready = False
+        self._focus_guard: QWidget | None = None
         self.scroll = QScrollArea(self)
         self.scroll.setObjectName("journalScrollArea")
         self.scroll.setWidgetResizable(True)
@@ -242,7 +246,12 @@ class JournalScreen(QWidget):
             )
         )
 
-    def refresh(self, *, restore: bool = True) -> None:
+    def refresh(self, *, restore: bool = True, focus_results: bool = False) -> None:
+        if focus_results:
+            self._focus_on_ready = True
+            self._focus_guard = QApplication.focusWidget()
+            if self.text_pending:
+                self.focus_search()
         if self.text_pending or self.refused:
             return
         if restore and self.page is not None:
@@ -266,8 +275,53 @@ class JournalScreen(QWidget):
                 offset = positions[identifier] + within
                 break
         self.scroll.verticalScrollBar().setValue(max(0, offset))
+        self._restore_result_focus()
+
+    def _restore_result_focus(self) -> None:
+        if not self._focus_on_ready or self.loading:
+            return
+        self._focus_on_ready = False
+        current = QApplication.focusWidget()
+        if not self.isVisible() or (
+            current is not None and current is not self._focus_guard
+        ):
+            # A later keyboard/pointer action owns focus while retrieval runs.
+            return
+        visible = []
+        viewport = self.scroll.viewport()
+        for card in self.cards:
+            question = card.findChild(QuestionLabel)
+            position = question.mapTo(viewport, question.rect().topLeft())
+            if viewport.rect().intersects(question.rect().translated(position)):
+                visible.append((card.prediction_id, question))
+        if visible:
+            # Never follow an updated record to a new position outside the
+            # restored browsing vicinity merely to give it keyboard focus.
+            target = next(
+                (
+                    question
+                    for identifier, question in visible
+                    if identifier == self._focus_result_id
+                ),
+                visible[0][1],
+            )
+        elif self.cards:
+            target = self.scroll
+        else:
+            target = next(
+                (button for button in (self.retry, self.repair) if button.isVisible()),
+                self.search_input,
+            )
+        target.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _pending(self) -> None:
+        current = QApplication.focusWidget()
+        for card in self.cards:
+            if current is not None and card.isAncestorOf(current):
+                self._focus_result_id = card.prediction_id
+                self._focus_on_ready = True
+                self._focus_guard = current
+                break
         self.loading = True
         self.count.hide()
         self.more.hide()
@@ -345,6 +399,7 @@ class JournalScreen(QWidget):
         self.repair.setVisible(isinstance(error, SearchUnavailableError))
         if isinstance(error, (ForecastContractIntegrityError, MigrationError)):
             self.archive_refused.emit(error)
+        QTimer.singleShot(0, self._restore_result_focus)
 
     def block_archive(self, error: Exception) -> None:
         """An archive refusal is persistent; neither polling nor old rows recover it."""
@@ -368,6 +423,7 @@ class JournalScreen(QWidget):
         if self.loading or self.page is None or self.page.request != self.state.request:
             return
         self.capture_anchor(exclude_id=identifier)
+        self._focus_result_id = identifier
         self.prediction_selected.emit(identifier, document)
 
     def focus_search(self) -> None:

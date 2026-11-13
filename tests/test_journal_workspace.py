@@ -367,3 +367,190 @@ def test_archive_refusal_blocks_old_listing_navigation_and_polling(
     window._shortcut_new()
     assert window.current_screen_name == "Journal"
     assert not window._toolbar.new.isEnabled() and len(notices) == 1
+
+
+def test_keyboard_return_restores_current_question_after_report_settings_detour(
+    workspace, qtbot
+):
+    from PySide6.QtCore import Qt
+
+    from reckonsolve.ui.journal.rows import QuestionLabel
+
+    window, operations = workspace
+    prediction = create_binary(operations, "Keyboard round trip", 65)
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    question = journal.findChild(
+        QuestionLabel, f"journalQuestion{prediction.prediction_id}"
+    )
+    question.setFocus()
+    qtbot.keyClick(question, Qt.Key.Key_Return)
+    for button in (window._toolbar.performance, window._toolbar.settings):
+        button.setFocus()
+        qtbot.keyClick(button, Qt.Key.Key_Space)
+    for route in (Route.PERFORMANCE, Route.DETAIL, Route.JOURNAL):
+        button = window._toolbar.back
+        button.setFocus()
+        qtbot.keyClick(button, Qt.Key.Key_Space)
+        assert window.workspace.current.route is route
+    qtbot.waitUntil(lambda: not journal.loading)
+    current = journal.findChild(
+        QuestionLabel, f"journalQuestion{prediction.prediction_id}"
+    )
+    qtbot.waitUntil(lambda: window.focusWidget() is current)
+    qtbot.keyClick(current, Qt.Key.Key_Return)
+    assert window.workspace.current.prediction_id == prediction.prediction_id
+    assert (
+        operations.get_prediction_for_navigation(prediction.prediction_id) == prediction
+    )
+
+
+def test_background_refresh_keeps_keyboard_access_to_replaced_question(
+    workspace, qtbot
+):
+    from reckonsolve.ui.journal.rows import QuestionLabel
+
+    window, operations = workspace
+    prediction = create_binary(operations, "Focused replacement", 55)
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    question = journal.findChild(
+        QuestionLabel, f"journalQuestion{prediction.prediction_id}"
+    )
+    question.setFocus()
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    current = journal.findChild(
+        QuestionLabel, f"journalQuestion{prediction.prediction_id}"
+    )
+    assert current is not question
+    qtbot.waitUntil(lambda: window.focusWidget() is current)
+
+
+def test_return_to_now_empty_retrieval_focuses_search_without_membership_exception(
+    workspace, qtbot
+):
+    window, operations = workspace
+    prediction = create_binary(operations, "Needle original wording", 55)
+    journal = window._journal_screen
+    journal.search_input.setText("needle")
+    journal.submit_search()
+    qtbot.waitUntil(lambda: not journal.loading)
+    window._open_prediction(prediction.prediction_id)
+    operations.update_metadata(
+        prediction.prediction_id,
+        question="Corrected wording",
+        background=None,
+        resolution_criteria=None,
+        forecast_deadline=None,
+        expected_resolution=None,
+        tags=(),
+        expected_metadata_version=prediction.metadata_version,
+        confirm_meaning_change=True,
+    )
+    window.return_to_source()
+    qtbot.waitUntil(lambda: not journal.loading)
+    assert journal.page.total == 0 and not journal.cards
+    assert journal.state.request.text == "needle"
+    qtbot.waitUntil(lambda: window.focusWidget() is journal.search_input)
+
+
+def test_return_retrieval_never_steals_focus_from_a_new_search_action(workspace, qtbot):
+    from threading import Event
+
+    window, operations = workspace
+    prediction = create_binary(operations, "Delayed keyboard return", 55)
+    window._open_prediction(prediction.prediction_id)
+    journal = window._journal_screen
+    query = journal.retrieval.query
+    started, release = Event(), Event()
+
+    def held(request):
+        started.set()
+        assert release.wait(5)
+        return query(request)
+
+    journal.retrieval.query = held
+    try:
+        window.return_to_source()
+        qtbot.waitUntil(started.is_set)
+        window._shortcut_find()
+        release.set()
+        qtbot.waitUntil(lambda: not journal.loading)
+        qtbot.wait(20)
+        assert window.focusWidget() is journal.search_input
+    finally:
+        release.set()
+
+
+def test_return_focus_stays_near_the_prior_vicinity_after_revision_reorders_a_row(
+    workspace, qtbot
+):
+    from PySide6.QtCore import Qt
+
+    from reckonsolve.ui.journal.rows import QuestionLabel
+
+    window, operations = workspace
+    predictions = [
+        create_binary(operations, f"Browsing position {index}", 55)
+        for index in range(24)
+    ]
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading)
+    prediction = predictions[0]
+    question = journal.findChild(
+        QuestionLabel, f"journalQuestion{prediction.prediction_id}"
+    )
+    qtbot.waitUntil(lambda: journal.scroll.verticalScrollBar().maximum() > 0)
+    qtbot.wait(20)  # Let the queued layout/anchor restoration finish first.
+    journal.scroll.ensureWidgetVisible(question)
+    question.setFocus()
+    qtbot.wait(20)
+    assert journal.scroll.verticalScrollBar().value() > 0
+    qtbot.keyClick(question, Qt.Key.Key_Return)
+    operations.revise_forecast(
+        prediction.prediction_id,
+        65,
+        expected_revision_id=prediction.current_revision_id,
+        expected_metadata_version=prediction.metadata_version,
+    )
+    window.return_to_source()
+    qtbot.waitUntil(lambda: not journal.loading)
+    qtbot.waitUntil(lambda: isinstance(window.focusWidget(), QuestionLabel))
+    assert journal.cards[0].prediction_id == prediction.prediction_id
+    assert journal.scroll.verticalScrollBar().value() > 0
+    focused = window.focusWidget()
+    assert focused.objectName() != f"journalQuestion{prediction.prediction_id}"
+    assert (
+        journal.scroll.viewport()
+        .rect()
+        .intersects(
+            focused.rect().translated(
+                focused.mapTo(journal.scroll.viewport(), focused.rect().topLeft())
+            )
+        )
+    )
+
+
+def test_failed_return_leaves_keyboard_retry_instead_of_a_stale_result(
+    workspace, qtbot
+):
+    from reckonsolve.application.errors import DatabaseBusyError
+
+    window, operations = workspace
+    prediction = create_binary(operations, "Retry the unavailable return", 55)
+    window._open_prediction(prediction.prediction_id)
+    journal = window._journal_screen
+
+    def unavailable(_request):
+        raise DatabaseBusyError("The temporary reader is busy.")
+
+    journal.retrieval.query = unavailable
+    window.return_to_source()
+    qtbot.waitUntil(lambda: not journal.loading)
+    qtbot.waitUntil(lambda: window.focusWidget() is journal.retry)
+    assert journal.page is None and not journal.cards
+    assert journal.retry.isVisible()

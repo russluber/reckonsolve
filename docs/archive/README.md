@@ -18,6 +18,8 @@ These excerpts retain original section numbers and historical wording. Legacy-co
 
 ## Release evidence
 
+- [Final integration verification](releases/2026-11-13-final-integration-verification.md) — combined contract/evidence reconciliation, Journal keyboard-focus repair and pending integrated review; unreleased.
+
 - [Journal relocation verification](releases/2026-11-12-journal-relocation-verification.md) — fourth-slice native storage/process-interruption evidence and reported walkthrough acceptance; unreleased.
 
 - [Journal/workspace checkpoint review](releases/2026-11-11-journal-workspace-review.md) — accepted first-slice walkthrough, source/test evidence and remaining integration limits; unreleased.
