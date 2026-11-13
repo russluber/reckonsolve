@@ -165,6 +165,9 @@ class MainWindow(QMainWindow):
             lambda: self.navigate_to("Settings")
         )
         self._journal_screen.archive_refused.connect(self._archive_refused)
+        self._analytics_screen.archive_refused.connect(self._archive_refused)
+        self._settings_screen.archive_refused.connect(self._archive_refused)
+        self._settings_screen.tags_changed.connect(self._analytics_screen.tag_changed)
         install_visual_system(self)
         self._restore_window_state()
         self._install_global_shortcuts()
@@ -228,6 +231,16 @@ class MainWindow(QMainWindow):
     def _activate(
         self, destination: Destination, *, refresh: bool, remember_source: bool = True
     ) -> None:
+        if (
+            self.workspace.current.route is Route.PERFORMANCE
+            and destination.route is not Route.PERFORMANCE
+        ):
+            self._analytics_screen.leave()
+        if (
+            self.workspace.current.route is Route.SETTINGS
+            and destination.route is not Route.SETTINGS
+        ):
+            self._settings_screen.leave()
         self.workspace.enter(destination, remember_source=remember_source)
         route = destination.route
         self._screen_stack.setCurrentWidget(self._screens[route])
@@ -447,6 +460,7 @@ class MainWindow(QMainWindow):
                 return
             self.creation_task.reset()
         self._journal_screen.close_retrieval()
+        self._analytics_screen.close_retrieval()
         self.appearance.close()
         self._save_presentation_state()
         super().closeEvent(event)

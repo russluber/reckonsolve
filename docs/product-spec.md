@@ -1858,9 +1858,9 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, implemented in part. The first Journal/workspace walkthrough is accepted with recorded limits. The requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. Performance/Settings and final integrated acceptance remain. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, implemented in part. Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. Performance/ordinary Settings are implemented for native review under Section 38.12. Relocation and final integrated acceptance remain. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
-**Separately authorized work — updated 2026-11-11:** The user explicitly authorized the first software slice in [Section 38.10](#3810-authorized-first-implementation-slice) and New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
+**Separately authorized work — updated 2026-11-12:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), and Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
 For this future desktop, the Journal-centered shell, filtering/rows, source-aware returns, creation completion, Detail writing/confirmation, comprehensive Performance, Settings results and manual appearance rules below deliberately replace the corresponding earlier desktop presentation/workflow requirements. The recovery-backed Saved View retirement and CLI-only threshold route are explicit future compatibility/interface changes. All other protected shared/Adaptive/One-Shot history, exactness, lifecycle, scoring, refusal and recovery requirements remain in force. Earlier interface requirements continue to describe current behavior until their affected slice is implemented and accepted; do not silently apply future rules to the current software.
 
@@ -2032,3 +2032,44 @@ and review actual native output in both appearances. Earlier first-slice evidenc
 does not accept later screen edits. Full Performance/Settings redesign, relocation,
 personal-data operations, installed-tool replacement, packaging/release, staging,
 commits and pushes remain outside this package.
+
+### 38.12 Authorized third implementation slice
+
+**Authorized 2026-11-12; implemented locally for native review.** The [third-slice checkpoint](archive/releases/2026-11-12-performance-settings-verification.md) separates source verification from pending human acceptance and publication. The user
+explicitly approved implementing the third slice: Performance and ordinary Settings
+under Section 38.7, preserving the accepted Journal/New/Detail and shared workspace.
+
+Deliver the four-section paired/stacked comprehensive report, report-wide tag and
+local Numeric units, initially collapsed supporting detail, Reset View and selected
+session/restart rules. Refresh truthful committed results without inheriting source
+filters. Preserve separate cohorts, exact scoring/calibration, uncertainty, text
+alternatives and explicit section/report empty/failure states. Verified tag deletion
+and successfully confirmed merge retain their selected scope behavior; failed reads
+never prove disappearance or silently broaden a unit selection. Keep archive refusal
+global. Retain source-aware returns through Settings.
+
+Organize existing Settings backup, analytical export, tag maintenance, search repair,
+data-location facts, appearance and shortcut guidance. Put each tool's latest result
+beside it for that Settings visit, preserving selectable failures/paths and canonical
+last-successful-backup metadata. Keep confirmations, shared operations, CLI-only
+attention configuration and retired Saved Views boundaries.
+
+Separate presentation state, query coordination, section rendering and tool results;
+remove migrated orchestration responsibilities and keep SQL/scoring out of widgets.
+Reuse existing exact analytics, charts, native inputs and identity-scoped preferences.
+Add only the read/application coordination needed for this report; keep domain and
+analytics independent of Qt. No production dependency or schema change is selected.
+Measure responsiveness on disposable representative/dense data and use current-only
+request publication if background reads are needed. Each worker owns a read-only
+connection and cannot upgrade, repair or mutate the archive.
+
+Use controlled disposable fixtures for all four cohorts, sparse/empty/failure,
+corrected history, tags/units, session/reset, navigation, palette, focus and responsive
+layouts. Run focused/full checks, align guides/architecture, and provide one bounded
+native review; implemented, manually accepted and published remain distinct.
+
+Relocation/Choose folder/Move and restart and active-location changes remain outside
+this slice pending their recovery/legacy-writer/interruption proof. Do not expose a
+chooser implying an implemented move. Personal data, installed-tool replacement,
+packaging/release, staging, commits and pushes remain excluded. The user owns Git
+publication; other protected history, scoring, compatibility and recovery rules stay.

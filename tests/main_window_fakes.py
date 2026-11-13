@@ -315,6 +315,31 @@ class DeletePredictionCall:
     confirm_permanent_deletion: bool
 
 
+class _FakePerformance:
+    def __init__(self, operations):
+        self.operations = operations
+
+    def query_independently(self, request):
+        from reckonsolve.application.performance import summarize_performance
+        from reckonsolve.domain.analytics import OneShotAnalyticsSource
+
+        operations = self.operations
+        if operations.analytics_error is not None:
+            raise operations.analytics_error
+        tags = operations.list_tags()
+        label = next(
+            (tag.display_name for tag in tags if tag.tag_id == request.tag_id), None
+        )
+        operations.analytics_calls.append(label)
+        return summarize_performance(
+            request,
+            operations.analytics_source,
+            operations.numeric_analytics_source,
+            OneShotAnalyticsSource(()),
+            tags,
+        )
+
+
 class FakePredictionOperations:
     def __init__(self, latest: FakePrediction | None = None) -> None:
         self.journal = FakeJournalOperations(self)
@@ -394,6 +419,7 @@ class FakePredictionOperations:
         self.search_suggestion: str | None = None
         self.tag_library: list[TagLibraryItem] = []
         self.tag_library_error: ApplicationError | None = None
+        self.performance = _FakePerformance(self)
         self.analytics_source = TrajectoryAnalyticsSource(records=())
         self.numeric_analytics_source = QuantileAnalyticsSource(records=())
         self.analytics_error: ApplicationError | None = None

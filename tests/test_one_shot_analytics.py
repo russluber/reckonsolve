@@ -5,11 +5,11 @@ from datetime import UTC, timedelta
 from fractions import Fraction
 
 import pytest
-from PySide6.QtWidgets import QLabel
+from performance_helpers import loaded, one_shot_binary, one_shot_numeric
 from test_one_shot_persistence import NOW, Clock, request
 
 from reckonsolve.analytics.one_shot_aggregate import summarize_one_shot_analytics
-from reckonsolve.application.errors import ApplicationError, ValidationError
+from reckonsolve.application.errors import ValidationError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.analytics import OneShotAnalyticsSource, OneShotScoringRecord
@@ -319,7 +319,7 @@ def test_one_shot_filter_validation(archive, filters):
         archive[2].get_one_shot_analytics(**filters)
 
 
-def test_one_shot_ui_mode_filters_corrections_and_text_alternatives(qtbot, archive):
+def test_one_shot_ui_corrections_local_units_and_text_alternatives(qtbot, archive):
     _, _, operations = archive
     first = operations.one_shots.create(request())
     operations.one_shots.create(numeric_request())
@@ -330,78 +330,52 @@ def test_one_shot_ui_mode_filters_corrections_and_text_alternatives(qtbot, archi
     qtbot.addWidget(screen)
     screen.resize(1000, 800)
     screen.show()
-    screen.refresh()
-    assert screen.mode_filter.currentData() == "deadline"
-    assert screen.one_shot_content.isHidden()
-    screen.mode_filter.setCurrentIndex(screen.mode_filter.findData("one_shot"))
-    view = screen.one_shot_content
+    report = loaded(screen, qtbot)
+    binary, numeric = one_shot_binary(screen), one_shot_numeric(screen)
+    assert binary.score.text() == "0.040" and binary.count.text() == "1"
+    assert "2 answered" in numeric.summary.text()
     assert (
-        not view.isHidden()
-        and screen.trajectory_summary.isHidden()
-        and screen.quantile_content.isHidden()
-    )
-    assert view.mean_brier.text() == "0.040"
-    assert view.binary_count.text() == "1"
-    assert "2 answered" in view.numeric_summary.text()
-    assert (
-        view.continuous.chart.group.sample_size
-        == view.whole_number.chart.group.sample_size
+        numeric.continuous.chart.group.sample_size
+        == numeric.whole_number.chart.group.sample_size
         == 1
     )
-    assert "selectively" in view.caution.text()
-    assert view.table.item(8, 4).text() != "Not available"
-    assert view.table.item(0, 4).text() == "Not available"
-    assert "80-89%" in view.chart.accessibleDescription()
-    assert "95% Wilson" in view.continuous.table.accessibleDescription()
+    assert "Selective entry" in binary.guidance.text()
+    assert binary.table.item(8, 4).text() != "Not available"
+    assert binary.table.item(0, 4).text() == "Not available"
+    assert "80-89%" in binary.chart.accessibleDescription()
+    assert "95% Wilson" in numeric.continuous.table.accessibleDescription()
     operations.one_shots.correct(
         first, replace(first.record.effective, answer=BinaryOutcome.NO)
     )
-    screen.refresh()
-    assert view.mean_brier.text() == "0.640" and view.binary_count.text() == "1"
-    screen.type_filter.setCurrentIndex(screen.type_filter.findData("numeric"))
-    assert view.binary_panel.isHidden() and screen.unit_filter.isEnabled()
-    screen.unit_filter.setCurrentIndex(screen.unit_filter.findData("items"))
-    assert screen._loaded_snapshot.numeric.resolved_count == 1
-    assert view.continuous.chart.group.sample_size == 0
-    screen.tag_filter.setCurrentIndex(screen.tag_filter.findData("outdoors"))
-    assert "No answered" in view.numeric_summary.text()
-    # Use a valid subset again to exercise responsive chart and table layout.
+    loaded(screen, qtbot)
+    assert binary.score.text() == "0.640" and binary.count.text() == "1"
+    numeric.unit_filter.setCurrentIndex(numeric.unit_filter.findData("items"))
+    report = loaded(screen, qtbot, refresh=False)
+    assert report.sections[3].data.resolved_count == 1
+    assert numeric.continuous.chart.group.sample_size == 0
+    outdoors = next(t.tag_id for t in report.tags if t.display_name == "outdoors")
+    screen.tag_filter.setCurrentIndex(screen.tag_filter.findData(outdoors))
+    loaded(screen, qtbot, refresh=False)
+    assert "0 answered" in numeric.summary.text()
     screen.tag_filter.setCurrentIndex(0)
+    loaded(screen, qtbot, refresh=False)
     for width in (1200, 650):
         screen.resize(width, 800)
         qtbot.wait(20)
-        assert view.whole_number.table.width() <= view.whole_number.width()
-    screen.mode_filter.setCurrentIndex(screen.mode_filter.findData("deadline"))
-    assert view.isHidden()
-    assert screen.empty_label.isVisible()
+        assert numeric.whole_number.table.width() <= numeric.whole_number.width()
+    assert all(not s.isHidden() for s in screen.sections.values())
 
 
-def test_empty_one_shot_view_and_failed_mode_switch_keep_honest_context(
-    qtbot, archive, monkeypatch
+def test_empty_one_shot_groups_have_no_invented_score_or_updating_concepts(
+    qtbot, archive
 ):
     _, _, operations = archive
     screen = AnalyticsScreen(operations)
     qtbot.addWidget(screen)
-    screen.refresh()
-
-    def fail(**kwargs):
-        raise ApplicationError("Read failure")
-
-    original = operations.get_one_shot_analytics
-    monkeypatch.setattr(operations, "get_one_shot_analytics", fail)
-    screen.mode_filter.setCurrentIndex(1)
-    assert screen.mode_filter.currentData() == "deadline"
-    assert screen.one_shot_content.isHidden()
-    assert "Read failure" in screen.error_label.text()
-    monkeypatch.setattr(operations, "get_one_shot_analytics", original)
-    screen.mode_filter.setCurrentIndex(1)
-    view = screen.one_shot_content
-    assert view.binary_count.text() == "0"
-    assert view.mean_brier.text() == "Not available"
-    assert "No answered" in view.binary_guidance.text()
-    assert view.comparison.isHidden()
-    assert view.continuous.chart.group.sample_size == 0
-    assert (
-        "unscored"
-        not in " ".join(label.text() for label in view.findChildren(QLabel)).lower()
-    )
+    loaded(screen, qtbot)
+    binary, numeric = one_shot_binary(screen), one_shot_numeric(screen)
+    assert binary.count.text() == "0" and binary.score.text() == "Not available"
+    assert "No answered" in binary.guidance.text() and binary.comparison.isHidden()
+    assert numeric.continuous.chart.group.sample_size == 0
+    assert numeric.update_section.isHidden() and binary.diagnostics_section.isHidden()
+    assert "unscored" not in numeric.summary.text().lower()

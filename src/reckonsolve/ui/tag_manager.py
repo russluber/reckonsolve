@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
@@ -23,6 +24,8 @@ from PySide6.QtWidgets import (
 )
 
 from reckonsolve.application.errors import ApplicationError
+from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
+from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.tags import (
     TagDeletePreview,
     TagLibraryItem,
@@ -63,8 +66,23 @@ class TagManagementOperations(Protocol):
     def delete_tag(self, preview: TagDeletePreview) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class TagChange:
+    """UI notification of an already successful, explicitly confirmed change."""
+
+    kind: str
+    source_ids: tuple[int, ...]
+    target_id: int | None
+    message: str
+    target_name: str = ""
+
+
 class TagManagerDialog(QDialog):
     """List, filter, rename, merge, and delete retained reusable tags."""
+
+    change_committed = Signal(object)
+    result_reported = Signal(str, bool)
+    archive_refused = Signal(object)
 
     def __init__(
         self,
@@ -79,6 +97,8 @@ class TagManagerDialog(QDialog):
         self._operations = operations
         self._tags_by_id: dict[int, TagLibraryItem] = {}
         self.changed = False
+        self.latest_result: tuple[str, bool] | None = None
+        self.archive_error: Exception | None = None
 
         title = QLabel("Manage Tags", self)
         title.setObjectName("tagManagerTitle")
@@ -198,6 +218,9 @@ class TagManagerDialog(QDialog):
         selected_ids = set(self._selected_tag_ids())
         try:
             tags = self._operations.list_tags(self.filter_input.text())
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._refuse_archive(error)
+            return
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             return
@@ -229,6 +252,9 @@ class TagManagerDialog(QDialog):
             return
         try:
             preview = self._operations.preview_tag_rename(current.tag_id, proposed)
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._refuse_archive(error)
+            return
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             return
@@ -246,11 +272,23 @@ class TagManagerDialog(QDialog):
             return
         try:
             self._operations.rename_tag(preview)
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._refuse_archive(error)
+            return
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             self.refresh()
             return
         self.changed = True
+        self.change_committed.emit(
+            TagChange(
+                "rename",
+                (current.tag_id,),
+                current.tag_id,
+                f"Renamed {current.display_name!r} to {preview.proposed_display_name!r}.",
+                preview.proposed_display_name,
+            )
+        )
         self._show_status(
             f"Renamed {current.display_name!r} to {preview.proposed_display_name!r}."
         )
@@ -278,6 +316,9 @@ class TagManagerDialog(QDialog):
                 tuple(tag.tag_id for tag in sources),
                 target.tag_id,
             )
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._refuse_archive(error)
+            return
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             return
@@ -296,11 +337,23 @@ class TagManagerDialog(QDialog):
             return
         try:
             self._operations.merge_tags(preview)
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._refuse_archive(error)
+            return
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             self.refresh()
             return
         self.changed = True
+        self.change_committed.emit(
+            TagChange(
+                "merge",
+                tuple(tag.tag_id for tag in sources),
+                target.tag_id,
+                f"Merged {source_names} into {target.display_name!r}.",
+                target.display_name,
+            )
+        )
         self._show_status(f"Merged {source_names} into {target.display_name!r}.")
         self.refresh()
 
@@ -311,6 +364,9 @@ class TagManagerDialog(QDialog):
         current = selected[0]
         try:
             preview = self._operations.preview_tag_delete(current.tag_id)
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._refuse_archive(error)
+            return
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             return
@@ -328,11 +384,22 @@ class TagManagerDialog(QDialog):
             return
         try:
             self._operations.delete_tag(preview)
+        except (ForecastContractIntegrityError, MigrationError) as error:
+            self._refuse_archive(error)
+            return
         except ApplicationError as error:
             self._show_status(str(error), is_error=True)
             self.refresh()
             return
         self.changed = True
+        self.change_committed.emit(
+            TagChange(
+                "delete",
+                (current.tag_id,),
+                None,
+                f"Deleted tag {current.display_name!r}.",
+            )
+        )
         self._show_status(f"Deleted tag {current.display_name!r}.")
         self.refresh()
 
@@ -357,7 +424,15 @@ class TagManagerDialog(QDialog):
         self.merge_button.setEnabled(count >= 2)
         self.delete_button.setEnabled(count == 1)
 
+    def _refuse_archive(self, error: Exception) -> None:
+        self.archive_error = error
+        self.setEnabled(False)
+        self.reject()
+        self.archive_refused.emit(error)
+
     def _show_status(self, message: str, *, is_error: bool = False) -> None:
+        self.latest_result = (message, is_error)
+        self.result_reported.emit(message, is_error)
         self.status_label.show_message(
             message,
             StatusTone.ERROR if is_error else StatusTone.SUCCESS,

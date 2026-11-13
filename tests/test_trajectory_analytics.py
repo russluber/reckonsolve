@@ -5,17 +5,15 @@ from datetime import UTC, datetime, timedelta
 from fractions import Fraction
 
 import pytest
+from performance_helpers import adaptive_binary, adaptive_numeric, loaded
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor, QFont, QPalette
-from PySide6.QtWidgets import QLabel, QWidget
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
-from reckonsolve.ui.analytics_components import CompactMetricGroup
 from reckonsolve.ui.analytics_screen import AnalyticsScreen
 from reckonsolve.ui.appearance import appearance_palette
-from reckonsolve.ui.components import ContentPanel
 from reckonsolve.ui.main_window import MainWindow
 from reckonsolve.ui.presentation_settings import (
     AppearanceMode,
@@ -176,55 +174,45 @@ def test_early_timing_updates_and_unscored_resolution_are_explained(active) -> N
 
 def test_trajectory_analytics_screen_keeps_score_and_calibration_distinct(
     active, qtbot
-) -> None:
+):
     clock, operations = active
-    prediction = operations.create_prediction(
-        "Will the trajectory render?",
-        70,
-        forecast_deadline=START + timedelta(hours=2),
+    p = operations.create_prediction(
+        "Will the trajectory render?", 70, forecast_deadline=START + timedelta(hours=2)
     )
     clock.instant += timedelta(hours=2)
     operations.resolve_prediction(
-        prediction.prediction_id,
+        p.prediction_id,
         BinaryOutcome.YES,
         effective_resolution_at=clock.instant,
-        **_context(prediction),
+        **_context(p),
     )
     screen = AnalyticsScreen(operations)
     qtbot.addWidget(screen)
     screen.show()
-    screen.refresh()
-
-    assert screen.findChild(QLabel, "trajectoryAnalyticsScoredCount").text() == "1"
-    assert screen.findChild(QLabel, "analyticsMeanTrajectoryBrier").text() == ("0.090")
-    guidance = screen.findChild(QLabel, "trajectoryAnalyticsGuidance")
-    assert guidance.text() == "Updates: 0 helped · 1 tied · 0 hurt"
-    assert "does not prove" in guidance.toolTip()
-    calibration = screen.findChild(QWidget, "trajectoryCalibrationSection")
-    legacy = screen.findChild(ContentPanel, "analyticsBrierSummary")
-    assert not calibration.isHidden()
-    assert legacy is None
-    assert (
-        "no interpolation"
-        in screen.trajectory_calibration_chart.accessibleDescription()
-    )
+    loaded(screen, qtbot)
+    section = adaptive_binary(screen)
+    assert section.count.text() == "1" and section.score.text() == "0.090"
+    assert "0 helped · 1 tied · 0 hurt" in section.diagnostics.text()
+    assert "hindsight, not causal evidence" in section.diagnostics.text()
+    assert "no interpolation" in section.chart.accessibleDescription()
+    assert "95% Wilson" in section.chart.accessibleDescription()
+    assert section.diagnostics_section.disclosure_button.isChecked() is False
+    assert not section.comparison.isHidden()
 
 
 def test_analytics_guide_trajectory_worked_example(active, qtbot):
     clock, operations = active
-    prediction = operations.create_prediction(
+    p = operations.create_prediction(
         "Guide example", 20, forecast_deadline=START + timedelta(hours=10)
     )
     clock.instant += timedelta(hours=2)
-    prediction = operations.revise_forecast(
-        prediction.prediction_id, 80, **_context(prediction)
-    )
+    p = operations.revise_forecast(p.prediction_id, 80, **_context(p))
     clock.instant += timedelta(hours=2)
     operations.resolve_prediction(
-        prediction.prediction_id,
+        p.prediction_id,
         BinaryOutcome.YES,
         effective_resolution_at=clock.instant,
-        **_context(prediction),
+        **_context(p),
     )
     result = operations.get_forecast_analytics().trajectory_binary
     assert result.mean_trajectory_brier == Fraction(286, 1000)
@@ -235,15 +223,11 @@ def test_analytics_guide_trajectory_worked_example(active, qtbot):
     assert result.mean_active_forecast_fraction == Fraction(40, 100)
     screen = AnalyticsScreen(operations)
     qtbot.addWidget(screen)
-    screen.refresh()
-    assert screen.trajectory_active_fraction.text() == "40%"
-    assert screen.trajectory_neutral_fraction.text() == "60%"
-    assert (
-        "4 hours into a 10-hour window" in screen.trajectory_active_fraction.toolTip()
-    )
-    assert "Average Neutral Weight: 60%" == (
-        screen.trajectory_neutral_fraction.accessibleName()
-    )
+    loaded(screen, qtbot)
+    text = adaptive_binary(screen).diagnostics.text()
+    assert "forecast weight: 40.0% · neutral weight: 60.0%" in text
+    assert "Mean hold-initial trajectory: 0.406" in text
+    assert "Mean Updating Gain: +0.120" in text
 
 
 def test_trajectory_window_shares_without_eligible_scores_are_unavailable(
@@ -252,48 +236,31 @@ def test_trajectory_window_shares_without_eligible_scores_are_unavailable(
     _, operations = active
     screen = AnalyticsScreen(operations)
     qtbot.addWidget(screen)
-    screen.refresh()
-    assert screen.trajectory_active_fraction.text() == "Not available"
-    assert screen.trajectory_neutral_fraction.text() == "Not available"
+    loaded(screen, qtbot)
+    section = adaptive_binary(screen)
+    assert section.score.text() == "Not available" and section.count.text() == "0"
+    assert "forecast weight:" not in section.diagnostics.text()
+    assert "Not available" in section.diagnostics.text()
+    assert section.comparison.isHidden()
 
 
 def test_analytics_card_titles_and_on_demand_help(active, qtbot):
     _, operations = active
     screen = AnalyticsScreen(operations)
     qtbot.addWidget(screen)
-    screen.refresh()
-    panels = screen.findChildren(ContentPanel)
-    assert {panel.title_label.text() for panel in panels} == {
-        "Analytics View",
-        "One-Shot Analytics",
-        "Binary One-Shot",
-        "Numeric One-Shot",
-        "Trajectory Binary Forecast",
-        "Trajectory Binary Final-Probability Calibration",
-        "Five-Quantile Numeric Forecast",
-        "Five-Quantile Updates — Initial versus Final",
-        "Continuous-Style Calibration",
-        "Whole-Number Calibration",
-        "50% Interval",
-        "90% Interval",
-        "Median Balance",
-    }
-    for panel in panels:
-        assert panel.supporting_label.isHidden()
-        assert panel.title_label.toolTip()
-        assert panel.accessibleDescription() == panel.title_label.toolTip()
-    assert screen.findChild(QLabel, "analyticsIntroduction").isHidden()
-    assert (
-        screen.quantile_content.summary.text() == "0 eligible · 0 resolved · 0 unscored"
-    )
-    assert (
-        screen.quantile_content.update_guidance.text()
-        == "0 revised pairs · 0 unrevised"
-    )
-    captions = {
-        label.text() for label in screen.trajectory_summary.findChildren(QLabel)
-    }
-    assert {"Average Forecast Weight", "Average Neutral Weight"} <= captions
+    loaded(screen, qtbot)
+    assert [s.title_label.text() for s in screen.sections.values()] == [
+        "Adaptive Binary",
+        "Adaptive Numeric",
+        "One-Shot Binary",
+        "One-Shot Numeric",
+    ]
+    numeric = adaptive_numeric(screen)
+    assert numeric.summary.text() == "0 eligible · 0 resolved · 0 unscored"
+    assert not numeric.supporting.disclosure_button.isChecked()
+    assert not numeric.update_section.disclosure_button.isChecked()
+    assert "raw WIS/Delta is never pooled" in numeric.caveat.text()
+    assert "No eligible results" in screen.message.text()
 
 
 def test_analytics_guide_numeric_and_uncertainty_examples():
@@ -361,86 +328,52 @@ def test_compact_trajectory_summary_geometry_and_unchanged_values(
     active, qtbot, qapp, tmp_path, width, font_size, dark
 ):
     clock, operations = active
-    prediction = operations.create_prediction(
-        "Will the compact summary remain legible?",
+    p = operations.create_prediction(
+        "Will the summary remain legible?",
         70,
         forecast_deadline=START + timedelta(hours=2),
     )
     clock.instant += timedelta(hours=2)
     operations.resolve_prediction(
-        prediction.prediction_id,
+        p.prediction_id,
         BinaryOutcome.YES,
         effective_resolution_at=clock.instant,
-        **_context(prediction),
+        **_context(p),
     )
     before = operations.get_forecast_analytics()
-    original_font = qapp.font()
-    original_palette = qapp.palette()
+    original_font, original_palette = qapp.font(), qapp.palette()
     try:
-        if dark:
-            palette = QPalette(original_palette)
-            for role, color in (
-                (QPalette.ColorRole.Window, "#202020"),
-                (QPalette.ColorRole.Base, "#202020"),
-                (QPalette.ColorRole.AlternateBase, "#303030"),
-                (QPalette.ColorRole.WindowText, "#ffffff"),
-                (QPalette.ColorRole.Text, "#ffffff"),
-                (QPalette.ColorRole.ButtonText, "#ffffff"),
-                (QPalette.ColorRole.Mid, "#707070"),
-            ):
-                palette.setColor(role, QColor(color))
-            qapp.setPalette(palette)
+        qapp.setPalette(appearance_palette(dark))
         qapp.setFont(QFont("Segoe UI", font_size))
         screen = AnalyticsScreen(operations)
         qtbot.addWidget(screen)
         install_visual_system(screen)
         screen.resize(width, 1000)
         screen.show()
-        screen.refresh()
-        qtbot.wait(50)
-        panel = screen.trajectory_summary
-        groups = panel.findChildren(CompactMetricGroup)
-        assert len(groups) == 3
-        assert screen.mean_trajectory_brier.text() == "0.090"
-        assert screen.trajectory_scored_count.text() == "1"
+        loaded(screen, qtbot)
+        section = adaptive_binary(screen)
+        assert section.score.text() == "0.090" and section.count.text() == "1"
         assert (
-            screen.trajectory_scored_count.font() == screen.mean_trajectory_brier.font()
+            "forecast weight: 100.0% · neutral weight: 0.0%"
+            in section.diagnostics.text()
         )
-        colors = semantic_colors(screen.palette())
-        assert screen.trajectory_scored_count.palette().color(
-            QPalette.ColorRole.WindowText
-        ) == QColor(colors.text)
-        assert screen.mean_trajectory_brier.palette().color(
-            QPalette.ColorRole.WindowText
-        ) == QColor(colors.accent)
-        assert screen.trajectory_deadline_count.text() == "1"
-        assert screen.trajectory_active_fraction.text() == "100%"
-        assert screen.trajectory_neutral_fraction.text() == "0%"
         assert screen.scroll_area.horizontalScrollBar().maximum() == 0
-        for group in groups:
-            for label in group.findChildren(QLabel):
-                origin = label.mapTo(panel, QPoint(0, 0))
-                assert panel.rect().contains(origin)
-                assert panel.rect().contains(origin + label.rect().bottomRight())
-        if width == 1800:
-            assert panel.height() < 340
-            assert (
-                max(g.mapTo(panel, QPoint()).y() for g in groups)
-                - min(g.mapTo(panel, QPoint()).y() for g in groups)
-                < 3
-            )
+        for label in (section.score, section.count, section.title_label):
+            origin = label.mapTo(section, QPoint())
+            assert section.rect().contains(origin)
+            assert section.rect().contains(origin + label.rect().bottomRight())
+        other = adaptive_numeric(screen)
+        if section.parentWidget().width() >= 960:
+            assert abs(section.y() - other.y()) < 3
         else:
-            assert (
-                groups[0].mapTo(panel, QPoint()).y()
-                < groups[1].mapTo(panel, QPoint()).y()
-            )
+            assert section.y() < other.y()
         assert (
-            screen.mean_trajectory_brier.textInteractionFlags()
+            section.score.textInteractionFlags()
             & Qt.TextInteractionFlag.TextSelectableByMouse
         )
         assert operations.get_forecast_analytics() == before
         assert screen.grab().save(
-            str(tmp_path / f"trajectory-summary-{width}-{font_size}.png")
+            str(tmp_path / f"performance-{width}-{font_size}.png")
         )
     finally:
         qapp.setFont(original_font)
@@ -453,17 +386,17 @@ def test_calibration_paint_tracks_repeated_appearance_changes(
     active, qtbot, qapp, initial, width
 ):
     clock, operations = active
-    prediction = operations.create_prediction(
-        "Will calibration stay readable after switching appearance?",
+    p = operations.create_prediction(
+        "Will calibration stay readable?",
         70,
         forecast_deadline=START + timedelta(hours=2),
     )
     clock.instant += timedelta(hours=2)
     operations.resolve_prediction(
-        prediction.prediction_id,
+        p.prediction_id,
         BinaryOutcome.YES,
         effective_resolution_at=clock.instant,
-        **_context(prediction),
+        **_context(p),
     )
     before = operations.get_forecast_analytics()
     original_palette = qapp.palette()
@@ -479,8 +412,10 @@ def test_calibration_paint_tracks_repeated_appearance_changes(
         window.show()
         window.navigate_to("Performance")
         screen = window._analytics_screen
-        chart = screen.trajectory_calibration_chart
-        table = screen.trajectory_calibration_table
+        report = loaded(screen, qtbot, refresh=False)
+        section = adaptive_binary(screen)
+        chart, table = section.chart, section.table
+        section.comparison.table_toggle.setChecked(True)
         opposite = (
             AppearanceMode.DARK
             if initial is AppearanceMode.LIGHT
@@ -488,12 +423,10 @@ def test_calibration_paint_tracks_repeated_appearance_changes(
         )
         for mode in (initial, opposite, initial, opposite):
             window.appearance.select(mode)
-            qtbot.wait(20)
+            qtbot.wait(30)
             expected = QColor(
                 semantic_colors(appearance_palette(mode is AppearanceMode.DARK)).raised
             )
-            # Check actual paint as well as palette roles: stale explicit Base
-            # colors previously survived while text changed to the new theme.
             assert chart.grab().toImage().pixelColor(5, 5) == expected
             for widget in (chart, table, table.viewport()):
                 palette = widget.palette()
@@ -511,9 +444,9 @@ def test_calibration_paint_tracks_repeated_appearance_changes(
                 == expected
             )
             assert chart.bins == before.trajectory_binary.final_calibration_bins
-            assert sum(int(table.item(row, 1).text()) for row in range(10)) == 1
-            assert screen.mean_trajectory_brier.text() == "0.090"
-            assert screen._loaded_snapshot == before
+            assert sum(int(table.item(r, 1).text()) for r in range(10)) == 1
+            assert section.score.text() == "0.090"
+            assert screen.report is report
         assert operations.get_forecast_analytics() == before
     finally:
         window.close()

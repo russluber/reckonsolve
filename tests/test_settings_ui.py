@@ -61,7 +61,7 @@ def test_settings_displays_database_and_persisted_backup_status(qtbot: QtBot) ->
     )
     for panel_name in ("dataManagementPanel",):
         panel = _required_child(window, ContentPanel, panel_name)
-        assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
+        assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.CANVAS.value
     assert window.findChild(QWidget, "attentionSettingsPanel") is None
     assert (
         _required_child(
@@ -123,14 +123,16 @@ def test_settings_creates_backup_and_csv_bundle_from_selected_destinations(
 
     expected_backup = tmp_path / "chosen-backup.sqlite3"
     assert operations.backup_calls == [expected_backup]
-    assert _required_child(window, QLabel, "dataManagementStatus").text() == (
-        f"Backup created: {expected_backup}"
+    assert (
+        _required_child(window, QLabel, "backUpNowResult")
+        .text()
+        .startswith(f"Backup created: {expected_backup}\nComplete SQLite backup")
     )
     assert (
         _required_child(
             window,
             QLabel,
-            "dataManagementStatus",
+            "backUpNowResult",
         ).property(MESSAGE_TONE_PROPERTY)
         == StatusTone.SUCCESS.value
     )
@@ -150,8 +152,10 @@ def test_settings_creates_backup_and_csv_bundle_from_selected_destinations(
 
     expected_export = tmp_path / "chosen-export.zip"
     assert operations.export_calls == [expected_export]
-    assert _required_child(window, QLabel, "dataManagementStatus").text() == (
-        f"Exported 16 CSV files: {expected_export}"
+    assert (
+        _required_child(window, QLabel, "exportCsvBundleResult")
+        .text()
+        .startswith(f"Exported 16 CSV files: {expected_export}\nAnalytical export")
     )
     assert suggested_paths[0].endswith("reckonsolve-backup-20260820-123000.sqlite3")
     assert suggested_paths[1].endswith("reckonsolve-export-20260820-123000.zip")
@@ -193,7 +197,7 @@ def test_settings_repairs_search_index_and_reports_expected_failure(
     qtbot.addWidget(window)
     window.navigate_to("Settings")
     button = _required_child(window, QPushButton, "repairSearchIndexButton")
-    status = _required_child(window, QLabel, "dataManagementStatus")
+    status = _required_child(window, QLabel, "repairSearchIndexResult")
 
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
@@ -238,11 +242,21 @@ def test_settings_shows_expected_backup_export_and_status_errors(
         _required_child(window, QPushButton, "backUpNowButton"),
         Qt.MouseButton.LeftButton,
     )
-    assert status.text() == "Backup destination is locked."
+    status = _required_child(window, QLabel, "backUpNowResult")
+    assert (
+        status.text()
+        == f"Backup destination is locked.\nSelected destination: {tmp_path / 'backup.sqlite3'}"
+    )
     assert status.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
     qtbot.mouseClick(
         _required_child(window, QPushButton, "exportCsvBundleButton"),
         Qt.MouseButton.LeftButton,
     )
-    assert status.text() == "Export destination is locked."
+    backup_message = status.text()
+    status = _required_child(window, QLabel, "exportCsvBundleResult")
+    assert (
+        status.text()
+        == f"Export destination is locked.\nSelected destination: {tmp_path / 'export.zip'}"
+    )
+    assert _required_child(window, QLabel, "backUpNowResult").text() == backup_message
     assert status.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from fractions import Fraction
 
 import pytest
-from PySide6.QtWidgets import QWidget
+from performance_helpers import adaptive_numeric, loaded
 
 from reckonsolve.analytics.quantile_aggregate import (
     Proportion,
@@ -393,11 +393,8 @@ def dark_desktop(qapp):
     qapp.setFont(font)
 
 
-def test_unscored_only_desktop_is_explicit_and_refresh_failures_retain_snapshot(
-    active,
-    qtbot,
-    dark_desktop,
-    monkeypatch,
+def test_unscored_only_desktop_and_failed_refresh_are_distinct(
+    active, qtbot, dark_desktop, monkeypatch
 ):
     from reckonsolve.application.errors import ApplicationError
     from reckonsolve.ui.analytics_screen import AnalyticsScreen
@@ -408,22 +405,20 @@ def test_unscored_only_desktop_is_explicit_and_refresh_failures_retain_snapshot(
     screen = AnalyticsScreen(ops)
     qtbot.addWidget(screen)
     screen.show()
-    screen.refresh()
-    assert screen.quantile_content.isVisible()
-    assert not screen.empty_label.isVisible()
-    assert "1 unscored" in screen.quantile_content.summary.text()
-    assert not screen.quantile_content.continuous.pair.isVisible()
-    assert screen.findChild(QWidget, "numericAnalyticsSection") is None
-    previous = screen._loaded_snapshot
+    loaded(screen, qtbot)
+    view = adaptive_numeric(screen)
+    assert "1 unscored" in view.summary.text()
+    assert "No eligible results" in view.continuous_summary.heading.text()
+    assert not view.supporting.disclosure_button.isChecked()
 
-    def fail(**kwargs):
+    def fail(request):
         raise ApplicationError("Read unavailable")
 
-    monkeypatch.setattr(ops, "get_forecast_analytics", fail)
+    monkeypatch.setattr(ops.performance, "query_independently", fail)
     screen.refresh()
-    assert screen.error_label.isVisible()
-    assert screen._loaded_snapshot is previous
-    assert screen.quantile_content.isVisible()
+    qtbot.waitUntil(lambda: not screen.loading)
+    assert screen.report is None and "Read unavailable" in screen.message.text()
+    assert all(s.results.isHidden() for s in screen.sections.values())
 
 
 @pytest.mark.parametrize("width", [1600, 650])
@@ -431,7 +426,6 @@ def test_desktop_groups_responsive_tables_filters_and_rendering(
     active, qtbot, dark_desktop, tmp_path, width, monkeypatch
 ):
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QBoxLayout
 
     from reckonsolve.ui import quantile_analytics
     from reckonsolve.ui.analytics_screen import AnalyticsScreen
@@ -441,12 +435,10 @@ def test_desktop_groups_responsive_tables_filters_and_rendering(
     paint_axes = quantile_analytics._paint_percent_axes
 
     def record_axes(*args, **kwargs):
-        # Never retain QPainter: its lifetime must end with the paint event.
         axis_ticks.append(kwargs["x_ticks"])
         paint_axes(*args, **kwargs)
 
     monkeypatch.setattr(quantile_analytics, "_paint_percent_axes", record_axes)
-
     db, clock, ops = active
     for whole in (False, True):
         for actual in (-11, 0, 2, 11):
@@ -463,25 +455,14 @@ def test_desktop_groups_responsive_tables_filters_and_rendering(
     install_visual_system(screen)
     screen.resize(width, 950)
     screen.show()
-    screen.refresh()
-    qtbot.wait(60)
-    view = screen.quantile_content
-    assert view.isVisible()
-    assert not screen.empty_label.isVisible()
+    loaded(screen, qtbot)
+    view = adaptive_numeric(screen)
     assert "8 eligible" in view.summary.text()
+    view.supporting.disclosure_button.setChecked(True)
     for key, panel in (("continuous", view.continuous), ("whole", view.whole_number)):
         screen.scroll_area.ensureWidgetVisible(panel)
         qtbot.wait(30)
-        assert panel.chart.group.sample_size == 4
-        assert panel.table.rowCount() == 5
-        expected = (
-            QBoxLayout.Direction.LeftToRight
-            if width == 1600
-            else QBoxLayout.Direction.TopToBottom
-        )
-        assert panel.pair._layout.direction() == expected
-        if width == 1600:
-            assert abs(panel.chart.width() - panel.table.width()) <= 2
+        assert panel.chart.group.sample_size == 4 and panel.table.rowCount() == 5
         for table in (panel.table, *panel.balances):
             assert (
                 table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -498,21 +479,13 @@ def test_desktop_groups_responsive_tables_filters_and_rendering(
             assert table.accessibleDescription()
         axis_ticks.clear()
         assert panel.grab().save(str(tmp_path / f"{key}-{width}.png"))
-        assert axis_ticks
-        assert all(ticks == (5, 25, 50, 75, 95) for ticks in axis_ticks)
+        assert axis_ticks and all(ticks == (5, 25, 50, 75, 95) for ticks in axis_ticks)
         assert "95% Wilson" in panel.chart.accessibleDescription()
-    assert "not evidence" not in view.update_guidance.text()
-    assert "not evidence" in view.update_guidance.toolTip()
-    screen.type_filter.setCurrentIndex(
-        screen.type_filter.findData(PredictionType.NUMERIC)
-    )
-    screen.unit_filter.setCurrentIndex(screen.unit_filter.findData("items"))
-    assert screen._loaded_snapshot.quantile_numeric.whole_number.sample_size == 4
-    assert screen._loaded_snapshot.quantile_numeric.continuous.sample_size == 0
+    assert "hindsight" in view.updates.text()
+    view.unit_filter.setCurrentIndex(view.unit_filter.findData("items"))
+    report = loaded(screen, qtbot, refresh=False)
+    assert report.sections[1].data.whole_number.sample_size == 4
+    assert report.sections[1].data.continuous.sample_size == 0
     assert not view.continuous.pair.isVisible()
-    screen.type_filter.setCurrentIndex(
-        screen.type_filter.findData(PredictionType.BINARY)
-    )
-    assert not view.isVisible()
-    assert screen.empty_label.isVisible()
+    assert all(not s.isHidden() for s in screen.sections.values())
     assert db.schema_version == 21

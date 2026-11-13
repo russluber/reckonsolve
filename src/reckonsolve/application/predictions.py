@@ -25,6 +25,7 @@ from reckonsolve.analytics.quantiles import (
 from reckonsolve.analytics.trajectory import trajectory_scorecard
 from reckonsolve.application.journal import JournalOperations
 from reckonsolve.application.one_shot import OneShotOperations
+from reckonsolve.application.performance import PerformanceOperations
 from reckonsolve.application.quantiles import QuantileOperations
 from reckonsolve.clock import Clock, SystemClock, as_utc
 from reckonsolve.data.analytics import AnalyticsRepository
@@ -229,6 +230,7 @@ class PredictionOperations:
         )
         self._local_timezone = local_timezone
         self.journal = JournalOperations(database, self._clock, local_timezone)
+        self.performance = PerformanceOperations(database)
 
     def create_prediction(
         self,

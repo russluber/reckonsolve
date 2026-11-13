@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QTableWidget,
     QVBoxLayout,
@@ -184,6 +185,7 @@ class _ResponsiveChartTable(QWidget):
         *,
         object_name: str,
         parent: QWidget,
+        collapsible_table: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setObjectName(object_name)
@@ -200,6 +202,13 @@ class _ResponsiveChartTable(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(int(Spacing.SECTION))
         self._layout.addWidget(chart)
+        self.table_toggle = None
+        if collapsible_table:
+            self.table_toggle = QPushButton("Calibration table", self)
+            self.table_toggle.setCheckable(True)
+            self.table_toggle.toggled.connect(table.setVisible)
+            self._layout.addWidget(self.table_toggle)
+            table.hide()
         self._layout.addWidget(table)
         self._synchronize_surfaces()
         self._fit_table_height()
@@ -221,7 +230,7 @@ class _ResponsiveChartTable(QWidget):
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        side_by_side = event.size().width() >= 1100
+        side_by_side = self.table_toggle is None and event.size().width() >= 1100
         direction = (
             QBoxLayout.Direction.LeftToRight
             if side_by_side

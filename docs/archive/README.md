@@ -19,6 +19,7 @@ These excerpts retain original section numbers and historical wording. Legacy-co
 ## Release evidence
 
 - [Journal/workspace checkpoint review](releases/2026-11-11-journal-workspace-review.md) — accepted first-slice walkthrough, source/test evidence and remaining integration limits; unreleased.
+- [Performance/Settings verification](releases/2026-11-12-performance-settings-verification.md) — third-slice source evidence, responsiveness measurements and pending native review; unreleased.
 - [New Prediction/Detail verification](releases/2026-11-11-prediction-detail-verification.md) — second-slice automated/capture evidence and pending native acceptance; unreleased.
 - [v0.6 visual verification](releases/v0.6-visual-verification.md) — dated palette, scaling, layout, and interaction acceptance.
 - [v0.8 manual acceptance](releases/v0.8-acceptance.md) — accepted M59 and M60 checklists.

@@ -12,12 +12,14 @@ from reckonsolve.domain.analytics import (
     TrajectoryScoringRecord,
 )
 from reckonsolve.domain.forecast_contracts import ForecastCohort, ForecastContract
+from reckonsolve.domain.one_shot import OneShotRecord
 from reckonsolve.domain.predictions import (
     BinaryResolutionHistory,
     ForecastRevision,
     NumericResolutionHistory,
 )
 from reckonsolve.domain.quantiles import QuantileDefinition, QuantileRevision
+from reckonsolve.domain.tags import TagLibraryItem
 
 from .database import Database
 from .forecast_contracts import (
@@ -26,6 +28,7 @@ from .forecast_contracts import (
 )
 from .one_shot_facts import read_one_shot
 from .quantiles import read_definition, read_revisions
+from .tags import _list_tags
 from .terminal_history import (
     _select_binary_resolution_history,
     _select_numeric_resolution_history,
@@ -42,36 +45,25 @@ class AnalyticsRepository:
         """Read corrected facts and current tags together in one checked snapshot."""
         with self._database.transaction() as connection:
             check_forecast_contract_integrity(connection)
-            rows = connection.execute(
-                """
-                SELECT p.id, p.question FROM predictions AS p
-                JOIN prediction_forecast_contracts AS c ON c.prediction_id = p.id
-                WHERE p.status = 'resolved' AND (
-                    (c.forecast_model = 'binary-one-shot-v1'
-                     AND c.scoring_contract = 'binary-one-shot-brier-v1') OR
-                    (c.forecast_model = 'numeric-one-shot-5-v1'
-                     AND c.scoring_contract = 'numeric-one-shot-wis-v1')
-                )
-                ORDER BY p.id
-                """
-            ).fetchall()
-            records = []
-            for row in rows:
-                prediction_id = int(row["id"])
-                contract = select_supported_contract(connection, prediction_id)
-                assert contract is not None
-                record = read_one_shot(connection, prediction_id, contract)
-                tags = tuple(
-                    str(tag[0])
-                    for tag in connection.execute(
-                        "SELECT t.display_name FROM tags AS t "
-                        "JOIN prediction_tags AS pt ON pt.tag_id = t.id "
-                        "WHERE pt.prediction_id = ? ORDER BY t.normalized_name, t.id",
-                        (prediction_id,),
-                    )
-                )
-                records.append(OneShotScoringRecord(str(row["question"]), record, tags))
-            return OneShotAnalyticsSource(tuple(records))
+            return _load_one_shot_source(connection)
+
+    def get_performance_sources(
+        self,
+    ) -> tuple[
+        TrajectoryAnalyticsSource,
+        QuantileAnalyticsSource,
+        OneShotAnalyticsSource,
+        tuple[TagLibraryItem, ...],
+    ]:
+        """One admitted read-only snapshot for all four report populations."""
+        one_shots: dict[int, OneShotRecord] = {}
+        with self._database.read_snapshot(one_shots=one_shots) as connection:
+            return (
+                _load_trajectory_source(connection),
+                _load_quantile_source(connection),
+                _load_one_shot_source(connection, one_shots),
+                _list_tags(connection),
+            )
 
     def get_quantile_source(
         self, prediction_id: int
@@ -307,3 +299,40 @@ def _group_tags(
             available_tags.append(display_name)
             seen_tags.add(normalized_name)
     return tags_by_prediction, tuple(available_tags)
+
+
+def _load_one_shot_source(
+    connection: sqlite3.Connection, one_shots: dict[int, OneShotRecord] | None = None
+) -> OneShotAnalyticsSource:
+    rows = connection.execute(
+        """
+        SELECT p.id, p.question FROM predictions AS p
+        JOIN prediction_forecast_contracts AS c ON c.prediction_id = p.id
+        WHERE p.status = 'resolved' AND (
+            (c.forecast_model = 'binary-one-shot-v1'
+             AND c.scoring_contract = 'binary-one-shot-brier-v1') OR
+            (c.forecast_model = 'numeric-one-shot-5-v1'
+             AND c.scoring_contract = 'numeric-one-shot-wis-v1')
+        )
+        ORDER BY p.id
+        """
+    ).fetchall()
+    records = []
+    for row in rows:
+        prediction_id = int(row["id"])
+        contract = select_supported_contract(connection, prediction_id)
+        assert contract is not None
+        record = (one_shots or {}).get(prediction_id) or read_one_shot(
+            connection, prediction_id, contract
+        )
+        tags = tuple(
+            str(tag[0])
+            for tag in connection.execute(
+                "SELECT t.display_name FROM tags AS t "
+                "JOIN prediction_tags AS pt ON pt.tag_id = t.id "
+                "WHERE pt.prediction_id = ? ORDER BY t.normalized_name, t.id",
+                (prediction_id,),
+            )
+        )
+        records.append(OneShotScoringRecord(str(row["question"]), record, tags))
+    return OneShotAnalyticsSource(tuple(records))

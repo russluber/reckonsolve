@@ -10,7 +10,7 @@ from main_window_helpers import (
     _required_child,
     _select_tag_rows,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
@@ -43,13 +43,19 @@ def test_prediction_browser_opens_secondary_tag_manager(
     operations = FakePredictionOperations()
     opened: list[FakePredictionOperations] = []
 
-    class FakeTagDialog:
+    class FakeTagDialog(QObject):
+        change_committed = Signal(object)
+        result_reported = Signal(str, bool)
+        archive_refused = Signal(object)
+        archive_error = None
+        latest_result = None
         changed = False
 
         def __init__(self, supplied_operations, _parent) -> None:
+            super().__init__()
             opened.append(supplied_operations)
 
-        def show(self) -> int:
+        def exec(self) -> int:
             return 0
 
     monkeypatch.setattr(
@@ -80,6 +86,8 @@ def test_tag_manager_filters_and_confirms_rename_merge_and_delete(
     ]
     dialog = TagManagerDialog(operations)
     qtbot.addWidget(dialog)
+    committed = []
+    dialog.change_committed.connect(committed.append)
     table = _required_child(dialog, QTableWidget, "tagManagerTable")
     filter_input = _required_child(dialog, QLineEdit, "tagManagerFilter")
 
@@ -157,6 +165,11 @@ def test_tag_manager_filters_and_confirms_rename_merge_and_delete(
         == StatusTone.SUCCESS.value
     )
     assert dialog.changed
+    assert [c.kind for c in committed] == ["rename", "merge", "delete"]
+    assert committed[0].source_ids == (1,) and committed[0].target_id == 1
+    assert committed[1].source_ids == (2,) and committed[1].target_id == 1
+    assert committed[1].target_name == "Career"
+    assert committed[2].source_ids == (3,) and committed[2].target_id is None
 
 
 def test_tag_manager_cancellation_leaves_library_unchanged(
@@ -168,6 +181,8 @@ def test_tag_manager_cancellation_leaves_library_unchanged(
     operations.tag_library = [original]
     dialog = TagManagerDialog(operations)
     qtbot.addWidget(dialog)
+    committed = []
+    dialog.change_committed.connect(committed.append)
     table = _required_child(dialog, QTableWidget, "tagManagerTable")
     _select_tag_rows(table, "Work")
     monkeypatch.setattr(
@@ -182,3 +197,4 @@ def test_tag_manager_cancellation_leaves_library_unchanged(
 
     assert operations.tag_library == [original]
     assert not dialog.changed
+    assert not committed

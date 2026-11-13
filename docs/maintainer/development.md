@@ -83,6 +83,20 @@ Repeat affected states at the supported minimum and 100%/150%/200% Windows scali
 
 For a focused long-history responsiveness recheck, open the `detail` profile and search **Long history**. In both Adaptive types, alternate Newest first / Oldest first, open Resolve and Keep forecast, then cancel. Open Revise, enter a draft and alternate Overview / Revision: movement should be smooth in both directions and retain inputs. Save one Review and verify the appended event, retained forecast and prompt next task opening. Repeat in both appearances and a smaller window; normal wrapping and scrolling must return after movement. If Windows disables animations, the pane change is immediate by design. Carry the other combined-review feedback forward rather than repeating that whole checklist for this repair.
 
+### Performance and ordinary Settings review
+
+```powershell
+uv run python tools/run_visual_review.py performance
+```
+
+This disposable profile seeds 12 answered observations per contract, both Numeric value constraints and two exact units, tagged/untagged predictions, updating and corrected One-Shot facts. **No results yet** belongs only to an unresolved prediction. It opens the same isolated temporary application identity as the other profiles; no personal journal is used. Close the window to discard the fixture. The `empty` profile remains useful for whole-report emptiness.
+
+1. Open Performance and inspect both paired rows, scroll through One-Shot, expand calibration tables and Numeric supporting detail. Compare normal/minimum widths and Light/Dark. The introduction scrolls away while one Tag/Reset strip stays visible; charts have counts and text alternatives.
+2. Filter Work/Personal; set different units in the two Numeric sections. Visit Settings and use Back: selections, disclosures and useful report position remain while committed results refresh. Select No results yet to check truthful zero observations. Reset View restores All tags/both All units, collapsed details and the top without deleting data.
+3. In Settings, save a disposable backup/export under an ignored build folder or a temporary directory, repair search, and try confirmed tag maintenance. Each latest result stays beside its tool; paths/errors can be selected. Cancelled file dialogs change nothing. Leave/re-enter Settings to clear visit results while Last successful backup remains. Back returns through Performance to its independent origin. All changes stay in this temporary journal.
+
+Automated fault injection separately covers isolated/whole-report failure, retry, unit disappearance, failed tag reads, confirmed merge provenance, stale worker publication and global archive refusal. It never corrupts a personal database to manufacture an error. The native pass remains an acceptance input for actual Windows focus, scaling and perceived responsiveness.
+
 ## Documentation checks
 
 After editing or moving documentation, run:

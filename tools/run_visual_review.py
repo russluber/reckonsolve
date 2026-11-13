@@ -45,14 +45,16 @@ def main() -> int:
     )
     parser.add_argument(
         "profile",
-        choices=("empty", "representative", "long-text", "detail"),
+        choices=("empty", "representative", "long-text", "detail", "performance"),
         help="Fixture shape to display; all data is deleted after the window closes.",
     )
     arguments = parser.parse_args()
 
     with TemporaryDirectory(prefix="reckonsolve-visual-review-") as temporary:
         database_path = Path(temporary) / "reckonsolve.sqlite3"
-        if arguments.profile != "empty":
+        if arguments.profile == "performance":
+            _seed_performance_database(database_path)
+        elif arguments.profile != "empty":
             _seed_review_database(
                 database_path,
                 long_text=arguments.profile == "long-text",
@@ -63,6 +65,116 @@ def main() -> int:
             database_path=database_path,
             identity=DEVELOPMENT_APPLICATION,
         )
+
+
+def _seed_performance_database(database_path: Path, *, per_cohort: int = 12) -> None:
+    """Four independent populations, exact units, ties and a zero-result tag.
+
+    Controlled canonical writes also support larger disposable timing runs; no
+    historical timestamps, scores or applied migrations are patched with SQL.
+    """
+    database = Database.open(database_path)
+    clock = _ReviewClock(datetime(2026, 11, 1, 12, tzinfo=UTC))
+    operations = PredictionOperations(database, clock)
+    try:
+        for index in range(per_cohort):
+            clock.instant = datetime(2026, 11, 1, 12, tzinfo=UTC) + timedelta(
+                minutes=index * 5
+            )
+            deadline = clock.instant + timedelta(days=5)
+            tags = () if index % 3 == 0 else ("Work" if index % 3 == 1 else "Personal",)
+            probability = (20, 50, 75, 90)[index % 4]
+            whole = index % 2 == 1
+            precision = 0 if whole else 1
+            constraint = (
+                NumericValueConstraint.WHOLE_NUMBER
+                if whole
+                else NumericValueConstraint.CONTINUOUS
+            )
+            unit = "days" if index % 4 < 2 else "items"
+            values = {5: -10, 25: -2, 50: 0, 75: 4, 95: 12}
+            actual = (-12, -2, 0, 3, 15)[index % 5]
+            binary = operations.create_prediction(
+                f"Adaptive Binary report example {index + 1}",
+                probability,
+                forecast_deadline=deadline,
+                tags=tags,
+            )
+            numeric = operations.create_numeric_prediction(
+                f"Adaptive Numeric report example {index + 1}",
+                unit,
+                precision,
+                values,
+                value_constraint=constraint,
+                forecast_deadline=deadline,
+                tags=tags,
+            )
+            clock.instant += timedelta(days=1)
+            if index % 2 == 0:
+                binary = operations.revise_forecast(
+                    binary.prediction_id,
+                    60,
+                    expected_revision_id=binary.current_revision_id,
+                    expected_metadata_version=binary.metadata_version,
+                )
+                numeric = operations.revise_quantile_forecast(
+                    numeric.prediction_id,
+                    {5: -10, 25: -1, 50: 1, 75: 5, 95: 12},
+                    expected_revision_id=numeric.current_revision.revision_id,
+                    expected_metadata_version=numeric.metadata_version,
+                )
+            clock.instant = (
+                deadline - timedelta(hours=12) if index % 2 == 0 else deadline
+            )
+            outcome = BinaryOutcome.YES if index % 3 else BinaryOutcome.NO
+            operations.resolve_prediction(
+                binary.prediction_id,
+                outcome,
+                use_recorded_time=True,
+                expected_revision_id=binary.current_revision_id,
+                expected_metadata_version=binary.metadata_version,
+            )
+            operations.resolve_numeric_prediction(
+                numeric.prediction_id,
+                actual,
+                use_recorded_time=True,
+                expected_revision_id=numeric.current_revision.revision_id,
+                expected_metadata_version=numeric.metadata_version,
+            )
+            one = operations.one_shots.create(
+                NewOneShotPrediction(
+                    f"One-Shot Binary report example {index + 1}",
+                    one_shot_contract(PredictionType.BINARY),
+                    OneShotValues(probability_percent=probability, answer=outcome),
+                    tags=tags,
+                )
+            )
+            operations.one_shots.create(
+                NewOneShotPrediction(
+                    f"One-Shot Numeric report example {index + 1}",
+                    one_shot_contract(PredictionType.NUMERIC),
+                    OneShotValues(
+                        quantiles=FiveQuantiles.from_values(values, precision),
+                        answer=FixedPrecisionValue.from_value(actual, precision),
+                    ),
+                    QuantileDefinition(unit, precision, constraint),
+                    tags=tags,
+                )
+            )
+            if index == 0:
+                clock.instant += timedelta(minutes=1)
+                operations.one_shots.correct(
+                    one,
+                    replace(one.record.effective, probability_percent=30),
+                )
+        operations.create_prediction(
+            "Unresolved-only tag: no eligible Performance results",
+            50,
+            forecast_deadline=clock.instant + timedelta(days=30),
+            tags=("No results yet",),
+        )
+    finally:
+        database.close()
 
 
 def _seed_review_database(

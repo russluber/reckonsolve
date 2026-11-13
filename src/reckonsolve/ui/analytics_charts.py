@@ -71,6 +71,7 @@ class CalibrationChart(QWidget):
         super().__init__(parent)
         self._scatter = scatter
         self._bins: tuple[CalibrationBin, ...] = ()
+        self._intervals: tuple[tuple[float, float] | None, ...] = ()
         self.setObjectName("calibrationChart")
         self.setAccessibleName("Calibration reliability diagram")
         self.setAccessibleDescription("No scored predictions are available.")
@@ -81,8 +82,16 @@ class CalibrationChart(QWidget):
     def bins(self) -> tuple[CalibrationBin, ...]:
         return self._bins
 
-    def set_bins(self, bins: Iterable[CalibrationBin]) -> None:
+    def set_bins(
+        self,
+        bins: Iterable[CalibrationBin],
+        *,
+        intervals: tuple[tuple[float, float] | None, ...] = (),
+    ) -> None:
         self._bins = tuple(bins)
+        if intervals and len(intervals) != len(self._bins):
+            raise ValueError("Calibration uncertainty must match the displayed bins.")
+        self._intervals = intervals
         occupied = tuple(item for item in self._bins if item.count)
         if not occupied:
             description = "No scored predictions are available."
@@ -154,6 +163,16 @@ class CalibrationChart(QWidget):
                 )
         painter.setBrush(accent)
         for marker in markers:
+            index = self._bins.index(marker.calibration_bin)
+            interval = self._intervals[index] if self._intervals else None
+            if interval is not None:
+                x = marker.coordinate.x
+                low, high = (
+                    plot.bottom() - endpoint * plot.height() for endpoint in interval
+                )
+                painter.drawLine(QPointF(x, low), QPointF(x, high))
+                for y in (low, high):
+                    painter.drawLine(QPointF(x - 4, y), QPointF(x + 4, y))
             if self._scatter:
                 x, y = marker.coordinate.x, marker.coordinate.y
                 painter.drawPolygon(

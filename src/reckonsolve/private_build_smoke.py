@@ -9,6 +9,7 @@ from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from shutil import copyfile
+from time import monotonic, sleep
 from zipfile import ZipFile
 
 from PySide6.QtWidgets import (
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from reckonsolve.app import create_runtime
 from reckonsolve.application.errors import SearchUnavailableError
+from reckonsolve.application.performance import Section
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli import run as run_cli
 from reckonsolve.data.database import Database
@@ -314,16 +316,33 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
             runtime.qt_app.processEvents()
             if not runtime.window._prediction_detail_host._one_shot_detail.isVisible():
                 raise RuntimeError("Frozen One-Shot Detail did not load.")
-        runtime.window.navigate_to("Analytics")
+        runtime.window.navigate_to("Performance")
         analytics_screen = runtime.window._analytics_screen
-        analytics_screen.mode_filter.setCurrentIndex(1)
-        runtime.qt_app.processEvents()
-        if analytics_screen.one_shot_content.isHidden():
-            raise RuntimeError("Frozen One-Shot Analytics did not load.")
-        analytics_screen.mode_filter.setCurrentIndex(0)
+        timeout = monotonic() + 15
+        while analytics_screen.loading and monotonic() < timeout:
+            runtime.qt_app.processEvents()
+            sleep(0.005)
+        report = analytics_screen.report
+        if analytics_screen.loading or report is None:
+            raise RuntimeError(
+                "The current comprehensive Performance report did not load."
+            )
+        if any(result.error for result in report.sections) or any(
+            section.results.isHidden() for section in analytics_screen.sections.values()
+        ):
+            raise RuntimeError("Performance did not show all four analytical sections.")
+        one_shot_report = operations.get_one_shot_analytics()
+        displayed = {result.section: result.data for result in report.sections}
+        if (
+            displayed[Section.ONE_SHOT_BINARY] != one_shot_report.binary
+            or displayed[Section.ONE_SHOT_NUMERIC] != one_shot_report.numeric
+        ):
+            raise RuntimeError(
+                "Performance lost the effective corrected One-Shot facts."
+            )
         if _sqlite_logical_snapshot(database_path) != before_presentation:
             raise RuntimeError(
-                "Using the presentation rewrote supported schema-version-20 data."
+                "Using the presentation rewrote supported canonical journal data."
             )
 
         operations.create_backup(backup_path)

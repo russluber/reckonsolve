@@ -46,3 +46,12 @@ def pytest_runtest_teardown():
                 for workspace in widget.findChildren(DetailWorkspace):
                     workspace.clear_editor()
     yield
+
+
+@pytest.fixture
+def performance_archive(tmp_path):
+    """One reusable disposable four-cohort archive for report checks."""
+    from performance_helpers import performance_database
+
+    with performance_database(tmp_path) as archive:
+        yield archive

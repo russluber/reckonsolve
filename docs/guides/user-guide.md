@@ -150,10 +150,13 @@ entering your five numbers, through interpreting outcomes, to judging revisions.
 For Binary basics, start with Section 4. For One-Shot exercises, start with Section 11;
 timing and updating guidance elsewhere applies to Adaptive predictions.
 
-The cards intentionally keep explanations out of the way. Hover a card title for
-its scope or a timing value for its meaning; this guide contains the longer
-interpretations and cautions. Counts, chart axes, table values, and empty states
-remain visible in the app.
+Performance always shows all four sections: Adaptive Binary/Numeric, then One-Shot Binary/Numeric. Pairs stack when space is limited. It is the same report from Journal or Detail and does not inherit their filters. Binary sections lead with score and calibration; Numeric sections lead with 90% interval, Median and 50% interval balances, separately for continuous-style and whole-number quantities. Expand calibration tables, percentile detail or updating diagnostics when needed.
+
+The compact **Tag / Reset View** strip stays visible while you scroll. Tag applies to every section and lists the current shared tag library, including tags with no eligible results. Each Numeric section has its own exact **Unit** selector. These controls change scope, not forecasting history or score rules.
+
+During this app session, Performance retains tag, both units, expanded detail and reading position across visits while refreshing committed results. A fresh app session starts with All tags, All units, collapsed details and the top of the report. **Reset View** restores those same defaults without deleting results or changing history.
+
+An existing tag with zero eligible observations remains selected. A verified deleted tag returns to All tags with an explanation; a confirmed merge follows its known target, including that target's earlier members once each. A failed read proves neither deletion nor unit disappearance. An unavailable selected unit stays selected with a section error until you explicitly change it. Empty results, an unavailable section with Try again, and a whole-report load failure have distinct messages; failures do not show old values as current results.
 
 Quick navigation: [Binary calibration](#4-binary-calibration-read-the-table-first),
 [Trajectory Binary numbers](#5-trajectory-binary-what-the-compact-summary-means),
@@ -211,8 +214,8 @@ solve that problem.
 
 ### 1. A useful five-minute review
 
-1. **Choose the forecasts you mean to study.** Choose Adaptive or One-Shot,
-   then All types, Binary, or Numeric. Use a
+1. **Choose the forecasts you mean to study.** Read the relevant Adaptive or
+   One-Shot section. Use a
    meaningful tag if you want to study one subject. Avoid choosing a subset only
    because it makes your results look good.
 2. **Check the sample size.** Only eligible resolved predictions count. A graph
@@ -223,7 +226,7 @@ solve that problem.
    outcomes fall below, inside, or above your intervals.
 4. **Pick one persistent pattern to investigate.** For example: “My high-probability
    Yes forecasts happen less often than I say,” or “Actual quantities keep landing
-   above my upper bound.” Open some of those predictions from Predictions and
+   above my upper bound.” Open some of those predictions from Journal and
    read their reasoning, revisions, and outcome evidence.
 5. **Write one concrete experiment in your journal or Postmortem.** For example:
    “Before my next delivery-time forecast, check similar past deliveries and list
@@ -235,10 +238,7 @@ The app does not automatically recommend or modify probabilities or percentiles.
 
 ### 2. Know which forecasts you are looking at
 
-**Prediction mode** starts at **Adaptive**. Choose **One-Shot** for exercises
-where you settled a forecast before checking an answer that already existed.
-Within either mode, “All types” displays separate Binary and Numeric sections;
-it does not calculate one universal score or combine modes.
+The Adaptive pair covers future-event forecasts with a fixed Deadline. The One-Shot pair covers exercises where you settled a forecast before checking an existing answer. All four sections remain present; there is no mode/type view selector, universal score or combined-mode denominator.
 
 | Section | Which predictions? | Main feedback |
 |---|---|---|
@@ -249,13 +249,7 @@ it does not calculate one universal score or combine modes.
 
 These four contracts cover Binary and Numeric in Adaptive and One-Shot modes. An archive containing older models is refused as a whole, never converted or partly displayed (Section 9). Continuous-style and whole-number Numeric predictions have separate calibration displays.
 
-**Filters:** Forecast type and Tag select the relevant resolved observations.
-Numeric unit is an exact unit-label filter, not a conversion tool. Choose Numeric
-before selecting a unit. `days` and `hours` do not become comparable automatically.
-All visible analytical results follow the selected filters, but each section still
-uses its own eligible model and measurement group. Counts in different sections
-therefore need not match. Performance has no date-range control; date filtering in
-Predictions is a separate browsing feature.
+**Filters:** Tag scopes the whole report; each Numeric Unit selector affects only its own section. Unit matches the exact saved label, without conversion: `days` and `hours` remain different. Each section uses its own eligible model and measurement group, so counts need not match. Performance has no date-range control; Journal dates filter browsing separately.
 
 **What does not count:** Open, Locked, and Invalid predictions do not score.
 For Adaptive, an outcome already fixed at or before the initial forecast is
@@ -391,6 +385,8 @@ question selection matter. A score below 0.25 beats holding 50% under the same
 contract, but does not by itself prove expertise.
 
 #### Timing
+
+Expand **Timing and updating diagnostics** in Adaptive Binary for these supporting facts. They explain the score rather than prescribe forecasting behavior.
 
 - **Resolved before deadline:** Effective outcome time was earlier than Deadline.
 - **Reached deadline:** Effective outcome time was at or after Deadline.
@@ -901,11 +897,7 @@ Useful Postmortem template:
 
 ### 11. One-Shot Analytics
 
-Open **Performance → Prediction mode → One-Shot**. All types shows separate Binary and
-Numeric sections. Choose a type and a tag to study a topic. Choosing Numeric also enables
-the unit filter, which matches the exact saved label: `m` and `cm` are different, and
-Reckonsolve does not convert between them. All units can share calibration frequencies
-because each outcome is compared with its own forecast before the counts are combined.
+Read the **One-Shot** pair in Performance. The report-wide Tag scopes Binary and Numeric; the local Numeric Unit matches the exact saved label. `m` and `cm` are different, without conversion. All units can share calibration frequencies because each outcome is compared with its own forecast before the counts are combined.
 
 Each answered One-Shot contributes once using the latest corrected forecast and answer.
 Waiting for answer and Invalid records contribute nothing. Saving the answer together
@@ -962,6 +954,8 @@ the [Forecasting Rulebook](forecasting-guide.md#forecasting-rulebook), and the
 For implementation boundaries, see [Architecture](../architecture.md).
 
 ## Back up and export
+
+Settings groups appearance, selectable database-location facts and local tools in one page. Each tool keeps its latest result beside it during that visit. Running another tool does not erase an earlier result; errors and destination paths remain selectable. Leaving Settings clears these visit-local messages. The separate Last successful backup fact survives visits and app restarts. Database relocation is not available in this slice.
 
 Use **Settings → Back Up Now** or the matching CLI for a verified SQLite backup. It preserves the complete current journal, corrections, tags, provenance and database settings. The separately verified pre-upgrade copy retains retired Saved View configurations. Keep recovery backups outside generated development/build directories.
 

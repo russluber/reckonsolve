@@ -14,6 +14,7 @@ from main_window_helpers import (
 from main_window_helpers import (
     window as window,  # noqa: PLC0414 - pytest fixture registration
 )
+from performance_helpers import loaded
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtWidgets import (
     QLabel,
@@ -21,8 +22,8 @@ from PySide6.QtWidgets import (
 )
 from pytestqt.qtbot import QtBot
 
+from reckonsolve.application.performance import Section
 from reckonsolve.ui import MainWindow
-from reckonsolve.ui.components import ContentPanel
 from reckonsolve.ui.presentation_settings import (
     MemoryPresentationSettings,
     WindowPresentationState,
@@ -78,11 +79,12 @@ def test_window_geometry_and_maximized_state_restore_without_minimized_state(
     assert reopened.normalGeometry() == QRect(140, 90, 1100, 720)
 
 
-def test_analytics_screen_replaces_the_placeholder(window: MainWindow) -> None:
-    window.navigate_to("Analytics")
-
-    assert _required_child(window, QWidget, "analyticsScreen").objectName() == (
-        "analyticsScreen"
+def test_analytics_screen_replaces_the_placeholder(window: MainWindow, qtbot) -> None:
+    window.navigate_to("Performance")
+    loaded(window._analytics_screen, qtbot, refresh=False)
+    assert (
+        _required_child(window, QWidget, "analyticsScreen").objectName()
+        == "analyticsScreen"
     )
     assert window.findChild(QLabel, "analyticsScreenPlaceholder") is None
 
@@ -93,21 +95,18 @@ def test_analytics_empty_state_is_honest_for_a_new_database(qtbot: QtBot) -> Non
     qtbot.addWidget(window)
     window.resize(1600, 900)
     window.show()
-
-    window.navigate_to("Analytics")
-
-    assert _required_child(window, QLabel, "analyticsEmpty").text() == (
-        "No scored predictions yet. Resolve a prediction to begin analytics."
-    )
-    assert _required_child(window, QWidget, "analyticsScrollArea").isHidden()
-    filters = _required_child(window, ContentPanel, "analyticsFiltersPanel")
-    empty_region = _required_child(window, QWidget, "analyticsEmptyRegion")
-    empty_label = _required_child(window, QLabel, "analyticsEmpty")
-    assert filters.height() <= filters.sizeHint().height()
-    assert empty_region.isVisible()
-    assert empty_label.isVisible()
-    assert empty_label.mapTo(empty_region, empty_label.rect().topLeft()).y() == 0
-    assert empty_region.height() > empty_label.height()
+    window.navigate_to("Performance")
+    screen = window._analytics_screen
+    loaded(screen, qtbot, refresh=False)
+    assert "No eligible results" in screen.message.text()
+    assert screen.scroll_area.isVisible()
+    assert screen.tag_filter.isEnabled() and screen.reset_button.isEnabled()
+    assert all(section.isVisible() for section in screen.sections.values())
+    assert all(result.error is None for result in screen.report.sections)
+    for key in (Section.ADAPTIVE_BINARY, Section.ONE_SHOT_BINARY):
+        section = screen.sections[key]
+        assert section.count.text() == "0" and section.score.text() == "Not available"
+        assert section.comparison.isHidden()
 
 
 def test_main_window_can_be_shown_and_closed(
