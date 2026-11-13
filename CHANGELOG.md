@@ -4,13 +4,13 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is also accepted with recorded limits. Journal relocation is implemented for native review; final integrated acceptance remains. Not a published release.
+Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is also accepted with recorded limits. The requested Journal-relocation walkthrough is accepted with recorded limits; final integrated acceptance remains. Not a published release.
 
 - Settings folder chooser and move review with complete verified recovery/destination copies, shared identity-first GUI/CLI resolution, protected old paths and explicit interruption recovery. Fresh-runtime restart retains appearance/geometry. Configured missing, empty or unrelated files never become new journals.
 - Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
 - Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Performance is a comprehensive four-section hub; Settings organizes local tools with separate visit-local results.
 - Performance retains independent tag/unit scope, supporting disclosures and reading position for the session, refreshes current results on return and restores defaults with Reset View. A compact Tag/Reset strip stays visible while reading. Read-only background requests admit the whole archive and publish only the current request; isolated and whole-report failures never masquerade as empty results.
-- Settings keeps selectable backup/export/tag/search results beside each tool, with separate canonical last-successful-backup metadata. Confirmed tag merges follow the known target in Performance; failed reads never infer deletion or silently broaden units. Database location remains informational pending the separate relocation slice.
+- Settings keeps selectable backup/export/tag/search results beside each tool, with separate canonical last-successful-backup metadata. Confirmed tag merges follow the known target in Performance; failed reads never infer deletion or silently broaden units. Database location includes reviewed relocation with verified recovery and restart.
 - Recovery-backed schema 21 retires Saved Views after review where configurations exist, blocks stale writers and records explicit One-Shot reflection provenance. CSV format 6 includes that provenance.
 - CLI-only `settings attention-days [--set N]`; retired Saved View commands fail before data access.
 - Corrected effective-reflection classification and affected save-response reads without rewriting forecasting history.

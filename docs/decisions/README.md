@@ -87,7 +87,7 @@ earlier record.
 - [0021: Preserve One-Shot originals with separate transcription snapshots](0021-one-shot-originals-and-transcription-snapshots.md) — Accepted 2026-09-26
 
 - [0022: Protect Journal upgrades with verified recovery and persistent writer guards](0022-reviewed-journal-upgrades-and-writer-guards.md) — Accepted for the first slice, 2026-11-10; native acceptance pending
-- [0023: Coordinate native journal relocation and explicit recovery](0023-native-journal-relocation-and-recovery.md) — Accepted for the authorized fourth slice, 2026-11-12; native user review pending
+- [0023: Coordinate native journal relocation and explicit recovery](0023-native-journal-relocation-and-recovery.md) — Accepted for the authorized fourth slice, 2026-11-12; requested walkthrough accepted with recorded limits
 
 ## Current applicability
 

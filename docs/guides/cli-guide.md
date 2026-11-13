@@ -1,6 +1,6 @@
 # CLI guide
 
-This checkout includes the unreleased Journal redesign. The first three requested native walkthroughs are accepted with recorded limits; journal relocation is implemented for its separate review. Installed v0.8.0 snapshots retain their released interface until deliberately replaced.
+This checkout includes the unreleased Journal redesign. The four requested native walkthroughs, including journal relocation, are accepted with recorded limits; final integrated acceptance remains. Installed v0.8.0 snapshots retain their released interface until deliberately replaced.
 
 ## Choose the matching identity
 

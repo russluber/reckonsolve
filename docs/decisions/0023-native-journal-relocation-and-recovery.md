@@ -1,6 +1,6 @@
 # 0023: Coordinate native journal relocation and explicit recovery
 
-- Status: Accepted for the authorized fourth redesign slice; source verification complete, user review pending
+- Status: Accepted for the authorized fourth redesign slice; source verification complete, [requested walkthrough accepted with recorded limits](../archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12)
 - Date: 2026-11-12
 
 ## Context

@@ -3,7 +3,7 @@
 This records the unreleased [authorized fourth slice](../../product-spec.md#3813-authorized-fourth-implementation-slice-journal-relocation),
 based on public `336abb5` (`ux-redesign`). The prior acceptance-only edits were already
 present and preserved. The first three requested walkthroughs remain accepted with
-their recorded limits. Source verification, human review and publication stay separate.
+their recorded limits. Source verification, the reported acceptance below and publication stay separate.
 
 ## Implemented package
 
@@ -97,5 +97,30 @@ that disposable tree and are discarded after the final window closes.
    persistent failure, both palettes and reachable controls in a smaller window.
 
 Concurrency, refusal and forced interruption are covered by disposable automation;
-do not manufacture them on a personal journal. Human review remains pending. Final
-integrated redesign acceptance and installed-tool replacement/publication remain later.
+do not manufacture them on a personal journal. The reported acceptance below closes
+this requested walkthrough. Final integrated redesign acceptance and installed-tool
+replacement/publication remain later.
+
+## Reported slice 4 acceptance — 2026-11-12
+
+The user accepted the supplied relocation walkthrough, reported “Everything’s good,”
+and reported staging, committing and pushing both checkpoints. Public `ux-redesign`
+was verified clean at `961d202` (`feat: add recovery-backed journal relocation and restart`),
+matching its locally cached upstream reference, before this acceptance update.
+Push completion is user-reported; the agent did not fetch, stage, commit or push.
+
+This closes the requested fourth-slice native-review gate with the limits above.
+All four requested software-slice walkthroughs are now accepted with recorded limits.
+No defect was reported, and no already accepted preference or journey is reopened.
+This does not establish every scaling/accessibility/device condition, physical
+power-loss resilience or final integrated redesign acceptance.
+
+The next gate is a final integrated review: reconcile the implemented package and
+current documentation with the approved contract, carry forward existing test and
+human evidence, and identify only actual gaps that still need a decision or bounded
+review. Installed-tool replacement, personal journal operations, packaging, version/tag
+selection and publication remain separate, unperformed steps.
+
+This acceptance update changes documentation only. Public/private link/reference,
+stable-ID/asset preservation and whitespace checks passed. The 1,208-test source result
+above remains tied to `961d202`; no redundant runtime suite was run for these edits.

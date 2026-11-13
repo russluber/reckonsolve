@@ -18,7 +18,7 @@ These excerpts retain original section numbers and historical wording. Legacy-co
 
 ## Release evidence
 
-- [Journal relocation verification](releases/2026-11-12-journal-relocation-verification.md) — fourth-slice native storage/process-interruption evidence and pending user review; unreleased.
+- [Journal relocation verification](releases/2026-11-12-journal-relocation-verification.md) — fourth-slice native storage/process-interruption evidence and reported walkthrough acceptance; unreleased.
 
 - [Journal/workspace checkpoint review](releases/2026-11-11-journal-workspace-review.md) — accepted first-slice walkthrough, source/test evidence and remaining integration limits; unreleased.
 - [Performance/Settings verification](releases/2026-11-12-performance-settings-verification.md) — third-slice source evidence, responsiveness measurements and reported three-journey acceptance; unreleased.

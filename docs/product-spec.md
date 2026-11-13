@@ -1858,7 +1858,7 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, implemented in part. Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is accepted with recorded limits under Section 38.12. Journal relocation is implemented for native review under Section 38.13; final integrated acceptance remains. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, four bounded software slices implemented; final integrated acceptance remains. Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is accepted with recorded limits under Section 38.12. The requested Journal-relocation walkthrough is accepted with recorded limits under Section 38.13. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
 **Separately authorized work — updated 2026-11-12:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), and Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), and journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
@@ -2076,7 +2076,7 @@ publication; other protected history, scoring, compatibility and recovery rules 
 
 ### 38.13 Authorized fourth implementation slice: journal relocation
 
-**Explicitly authorized 2026-11-12; implemented locally for native user review.** The [fourth-slice verification record](archive/releases/2026-11-12-journal-relocation-verification.md) separates final source checks, native safety evidence and pending human acceptance.
+**Authorized and implemented; requested relocation walkthrough accepted at `961d202` on 2026-11-12, with recorded limits.** The [fourth-slice verification record](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12) separates final source checks, native safety evidence, reported acceptance and publication.
 The user instructed implementation of the next relocation slice. Implement the
 existing Sections 38.7–38.8 Choose folder → review → Move and restart → fresh
 Journal contract. Preserve the accepted first three slices and their recorded
