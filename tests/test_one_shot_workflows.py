@@ -1,12 +1,12 @@
 """M57 public entry, correction and GUI/CLI handoff on disposable archives."""
 
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from io import StringIO
 
 import pytest
 from PySide6.QtCore import QDate, Qt, QTime
-from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton
+from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QToolButton, QWidget
 from supported_fixtures import create_binary, create_numeric
 from test_one_shot_persistence import Clock, request
 
@@ -368,6 +368,111 @@ def test_main_window_one_shot_route_defaults_and_detail(app, qtbot):
     window.navigate_to("Dashboard")
     window.navigate_to("New Prediction")
     assert window._creation_stack.currentWidget() is window._new_prediction_screen
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_one_shot_results_hierarchy_and_keyboard_disclosures(app, qtbot, numeric):
+    _, _, operations = app
+    prediction = operations.one_shots.create(request(numeric))
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.resize(1200, 850)
+    window.show()
+    window._open_prediction(prediction.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    qtbot.waitUntil(lambda: screen.scorecard.width() > 300)
+    assert screen.scorecard.parentWidget() is screen.answer_panel.parentWidget()
+    assert screen.scorecard.geometry().top() > screen.answer_panel.geometry().bottom()
+    assert screen.scorecard.width() >= screen.results.body.width() - 2
+    assert (
+        screen.score_value.font().pointSizeF()
+        > screen.answer_result.font().pointSizeF()
+    )
+    assert operations.one_shots.get(prediction.prediction_id) == prediction
+    for name in (
+        "oneShotTimelineDisclosure",
+        "oneShotRecordedFactsDisclosure",
+        "oneShotCorrectionHistoryDisclosure",
+    ):
+        section = screen.findChild(QWidget, name)
+        toggle = section.disclosure_button
+        assert isinstance(toggle, QToolButton)
+        assert toggle.width() < section.width()
+        assert not toggle.isChecked()
+        screen.workspace.ensureWidgetVisible(toggle)
+        toggle.setFocus()
+        qtbot.keyClick(toggle, Qt.Key.Key_Space)
+        assert toggle.isChecked()
+        assert section.disclosure_body.isVisible()
+        assert toggle.arrowType() is Qt.ArrowType.DownArrow
+        qtbot.keyClick(toggle, Qt.Key.Key_Space)
+        assert not section.disclosure_body.isVisible()
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_one_shot_skip_is_settled_and_later_reflection_preserves_completion(
+    app, qtbot, monkeypatch, numeric
+):
+    _, clock, operations = app
+    prediction = operations.one_shots.create(request(numeric))
+    score = operations.one_shots.score(prediction)
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    window._open_prediction(prediction.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    assert screen.add_postmortem_button.isVisible()
+    assert not screen.later_postmortem_action.isVisible()
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_args: QMessageBox.StandardButton.Cancel
+    )
+    screen.skip_postmortem_button.click()
+    assert operations.one_shots.get(prediction.prediction_id) == prediction
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_args: QMessageBox.StandardButton.Yes
+    )
+    clock.instant += timedelta(minutes=1)
+    screen.skip_postmortem_button.click()
+    skipped = operations.one_shots.get(prediction.prediction_id)
+    completion = skipped.postmortem_completion
+    assert completion is not None
+    assert screen.add_postmortem_button.isHidden()
+    assert screen.skip_postmortem_button.isHidden()
+    assert screen.later_postmortem_action.isVisible()
+    assert (
+        screen.findChild(QLabel, "oneShotPostmortemCompletion")
+        .text()
+        .startswith("Postmortem Skipped")
+    )
+    assert not operations.get_dashboard().needs_postmortem_predictions
+    screen.later_postmortem_action.trigger()
+    assert screen.workspace.inline
+    screen.workspace.editor.reject()
+    assert operations.one_shots.get(prediction.prediction_id) == skipped
+    assert screen.add_postmortem_button.isHidden()
+    assert screen.later_postmortem_action.isVisible()
+    screen.later_postmortem_action.trigger()
+    screen.workspace.editor.body_input.setPlainText("A deliberate later reflection.")
+    clock.instant += timedelta(minutes=1)
+    screen.workspace.editor.submit()
+    saved = operations.one_shots.get(prediction.prediction_id)
+    assert saved.record.original == prediction.record.original
+    assert saved.postmortem_completion == completion
+    assert saved.record.effective.postmortem == "A deliberate later reflection."
+    assert operations.one_shots.score(saved) == score
+    assert not any(
+        "Uses effective corrected facts" in label.text()
+        for label in screen.scorecard.findChildren(QLabel)
+    )
+    assert screen.add_postmortem_button.text() == "Edit Postmortem"
+    qtbot.waitUntil(screen.add_postmortem_button.isVisible)
+    assert not screen.later_postmortem_action.isVisible()
+    assert (
+        screen.findChild(QLabel, "oneShotPostmortemCompletion")
+        .text()
+        .startswith("Previously Skipped")
+    )
+    assert not operations.get_dashboard().needs_postmortem_predictions
 
 
 def test_desktop_invalid_numeric_input_retains_draft_and_cancels(app, qtbot):

@@ -536,6 +536,20 @@ QPushButton[reckonsolveActionRole="quiet"]:hover {{
     color: {color.on_accent_soft};
     border-color: {color.accent_soft};
 }}
+QToolButton[reckonsolveDisclosure="true"] {{
+    background-color: transparent;
+    color: {color.text};
+    border: 1px solid transparent;
+    border-radius: 0px;
+    padding: 4px 2px;
+}}
+QToolButton[reckonsolveDisclosure="true"]:hover {{
+    background-color: {color.accent_soft};
+    color: {color.on_accent_soft};
+}}
+QToolButton[reckonsolveDisclosure="true"]:focus {{
+    border-color: {color.accent};
+}}
 QPushButton[reckonsolveNavigationActive="true"] {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};

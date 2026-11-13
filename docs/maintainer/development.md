@@ -137,6 +137,19 @@ The user checked the combined journeys and requested the [workspace refinements]
 
 The [dated refinement evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md) separates local timing/source checks from this pending human judgment. All data and preferences must remain disposable; do not use installed personal profiles to test restart or date changes.
 
+### One-Shot results and reflection follow-up
+
+The eight focused checks above were reported accepted at `7af51f5`; the user reopened
+One-Shot visual quality. Reuse `uv run python tools/run_visual_review.py integrated`
+for this narrower pass, carrying the other accepted checks forward:
+
+1. Inspect answered Binary and Numeric One-Shots in both appearances and at the supported minimum window. Checked Answer should sit above a full-width, prominent scorecard. Postmortem and Journal Entries should read as separate sections. Open/close the compact history/facts/originals chevrons with both mouse and keyboard; content should remain readable without the former full-width button bars.
+2. On each type, cancel Skip once, then confirm it. Check a dated Postmortem Skipped state without prominent Write/Skip. Open More → Write Postmortem, cancel, then reopen and save reflection. Check ordinary readable reflection/Edit and the preserved earlier Skip date. Neither the score nor Needs Postmortem membership should be changed by later reflection.
+
+The [same dated evidence record](../archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-results-and-reflection-follow-up)
+separates the earlier accepted package from this pending visual follow-up. Record
+actual window/Windows scale and any mismatch. No personal or installed profile is needed.
+
 ## Documentation checks
 
 After editing or moving documentation, run:

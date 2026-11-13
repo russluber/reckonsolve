@@ -4,7 +4,7 @@ This is the unreleased [authorized feedback package](../../product-spec.md#3815-
 based on clean public `fe6a3df` (`ux-redesign`). The user checked the combined
 journeys successfully, then reported eight presentation/responsiveness refinements.
 Earlier four-slice acceptance and successful functional feedback remain scoped;
-this package awaits focused human recheck. It authorizes no installed-tool change,
+the initial package was subsequently reviewed as recorded below. It authorizes no installed-tool change,
 personal-data operation, packaging, version/tag selection or publication.
 
 ## Changes and evidence
@@ -79,8 +79,62 @@ Adaptive terminal/task hierarchy in both appearances and reviewed window/scale.
 The profile confines data/preferences/move artifacts to its temporary tree and is
 discarded after closing. Automated injected runtimes separately verify preference
 restart/relocation. Do not repeat all accepted slice walkthroughs or use personal
-data for presentation checks. This focused human acceptance is **pending**.
+data for presentation checks. Human acceptance was pending at that initial checkpoint;
+the subsequent reported checks and reopened One-Shot concern are recorded below.
 
 Application/data/domain/analytics code, bundled assets, migrations 1–21, search
 projection, CSV format, dependencies and private visual references are unchanged.
 The agent performed no staging, commit, tag, push or publication.
+
+## One-Shot results and reflection follow-up
+
+At saved public `7af51f5`, the user reported acceptance of the eight focused checks,
+while reopening One-Shot visual quality. The earlier 1,240-test result/captures above
+remain tied to that initial package. This follow-up is authorized by the explicit
+presentation feedback under Section 38.15; it adds no scoring/history/storage rule.
+
+Checked Answer now precedes a full-pane-width scorecard with a prominent exact score
+and secondary interpretation/breakdown. Results, Postmortem and Journal Entries have
+separate hierarchy; history, times/facts and originals use compact keyboard-accessible
+chevron headings rather than wide rounded action buttons. Historical target bodies
+retain their identity and automatic reveal. Other screens retain their disclosure defaults.
+
+The user explicitly selected retaining Skip as completion with later reflection
+through More. One-Shot now shows Postmortem Skipped with its original date and no
+prominent Write/Skip. Cancelling later writing retains that settled state; saving
+reflection preserves the original completion, score and queue exclusion while showing
+ordinary reflection/Edit. Confirmation explains the option to write later. This
+corrects the misleading unchanged task presentation without permanently locking reflection.
+
+Four new Binary/Numeric regressions cover actual stacked geometry, score prominence,
+compact keyboard disclosures and the cancel/Skip/later-write journey with immutable
+completion, original forecast, score and queue checks. Existing focused One-Shot/
+retrieval/workspace checks passed 77 cases before these additions; all four new
+cases also passed after the final provenance-label adjustment.
+
+Final-source native captures cover ten Binary/Numeric compositions: Waiting,
+Resolved awaiting reflection, Skipped, written after Skip, and Invalid. Each was
+captured at 1200 × 850 in both palettes, with Dark minimum-window probes at
+760 × 520 and 9/12/15-point Segoe UI. All outer/left/right horizontal-overflow
+checks passed. Inline writers were also captured. Representative scorecards,
+settled/written states and enlarged-text scrolling were inspected. Generated
+artifacts stay ignored under `build/ux-oneshot-polish/`; this is not a full human
+Windows scaling, screen-reader or native-dialog matrix.
+
+Native inspection also exposed a misleading scorecard note after a reflection-only
+save. The effective-corrected-facts note now requires actual transcription provenance;
+a Postmortem save does not imply that forecasting/scoring facts were repaired. The
+later-write regression covers this distinction without changing canonical replay.
+
+Final full-source verification after that adjustment: **1,244 passed in 446.51
+seconds**, with zero failures, errors or skips. Ruff check/format passed for 319
+Python files. Public/private documentation checks passed 338/300 local links;
+whitespace checks passed in both repositories. The preservation audit verified
+89 current public-reference mirrors, all stable private IDs/withdrawals, unchanged
+reference assets and protected lower layers/migrations/dependencies. These results
+supersede earlier focused/intermediate runs for this follow-up's final source.
+
+The [two-part One-Shot recheck](../../maintainer/development.md#one-shot-results-and-reflection-follow-up)
+is **pending**. Carry the accepted functional/Journal/date/Adaptive checks forward.
+All runtime evidence uses disposable data; no personal journal, installed tool,
+private reference, protected lower layer, migration, dependency or Git publication changed.

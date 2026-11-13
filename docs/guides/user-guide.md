@@ -99,7 +99,7 @@ At the Forecast Deadline, an unanswered Adaptive prediction becomes **Locked**. 
 
 Adaptive Detail keeps the committed forecast above independently scrolling TIMELINE and OVERVIEW panes. Open/Locked reading gives more room to Timeline; Resolved/Invalid reading gives both panes equal width. Revise and Journal writing open on the right with more writing space. **Overview / Revision · unsaved** lets you consult saved context without losing the draft; the tab identifies Overview without a repeated heading beneath it. **Commit Revision** saves a complete changed forecast; failed saves retain entered values. **Current Revision**, beside the Timeline heading, jumps to its marked saved event. It remains reachable with the Newest first / Oldest first control while history scrolls. Expand longer Journal text and earlier body versions when needed. Long criteria have a wider read-only view.
 
-Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot shares the two-pane style: results, inline later reflection and visible Journal Entries are on the left; context and disclosed original facts/corrections are on the right. Waiting for answer leads with the saved forecast; answered reading leads with the checked answer and pure score. Resolved and Invalid reading uses equal-width panes. One-Shot has no Adaptive updating controls.
+Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot shares the two-pane style: results, inline later reflection and visible Journal Entries are on the left; context and disclosed original facts/corrections are on the right. Waiting for answer leads with the saved forecast. Answered reading gives Checked Answer its own line, followed by a prominent full-width Brier or WIS scorecard. Postmortem and Journal Entries have separate headings; compact chevrons expand recorded history, times/facts and originals/corrections. Resolved and Invalid reading uses equal-width panes. One-Shot has no Adaptive updating controls.
 
 ## Add an answer
 
@@ -114,6 +114,8 @@ Overview holds factual Resolution notes, saved Postmortem and supporting score d
 One-Shot **Add Answer** records the checked answer and optionally when you checked it. The answer can predate the guess physically; you must have guessed before looking. Documentary times do not create an Adaptive scoring window.
 
 Resolution is a one-way terminal decision. **Write Postmortem** adds reflection later: on the right for Adaptive, inline below One-Shot results. A nonblank reflection-only addition/edit saves directly. Clearing it, **Skip**, and mixed factual corrections retain confirmation. **Needs Postmortem** surfaces resolved entries without reflection; Skip dismisses the queue item while permitting reflection later.
+
+On One-Shot Detail, confirming Skip shows **Postmortem Skipped** with its date, without a prominent Write button. To change your mind later, choose **More → Write Postmortem**. The original Skip remains in history; later reflection appears normally with **Edit Postmortem**, and the entry stays out of Needs Postmortem.
 
 ## Correct a mistake
 

@@ -2208,3 +2208,23 @@ Use disposable current-contract data, meaningful regressions, native captures an
 focused/full verification. Give a bounded recheck of the eight feedback points.
 Personal data, installed tools, packaging, version/tag changes, staging, commits,
 pushes and publication remain outside this refinement package.
+
+**One-Shot visual follow-up — authorized 2026-11-13:** After checking and saving the
+package above, the user reopened Binary/Numeric One-Shot presentation. Give the
+scorecard its own full pane width beneath a separate Checked Answer, with the score
+prominent and supporting interpretation/breakdown secondary. Results, Postmortem and
+Journal Entries have distinct reading hierarchy. Recorded History, reported/recorded
+facts and originals/corrections use compact chevron disclosures rather than full-width
+rounded action buttons; retain exact historical reveal and keyboard access.
+
+The user explicitly retained Skip's existing meaning: complete the Postmortem task
+while permitting later reflection. On One-Shot Detail show Postmortem Skipped and its
+date as a settled state, remove prominent Write/Skip controls, and offer later
+Write Postmortem through More. A later reflection preserves the original Skip fact;
+written reflection remains readable with Edit available. Keep the existing inline
+writer, exit/stale/save guards and immutable history/scoring. This is presentation
+refinement, not a permanent ban on later reflection or a new completion policy.
+
+This follow-up is implemented locally with passing source verification; its
+[narrow One-Shot visual recheck](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-results-and-reflection-follow-up)
+remains separate from the previously accepted focused checks and publication.

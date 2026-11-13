@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QScrollArea,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -372,19 +373,41 @@ class HeaderTiming(QWidget):
         row.addWidget(deadline, 2)
 
 
-def collapse_section(widget: QWidget, title: str, *, expanded: bool = False) -> QWidget:
+def collapse_section(
+    widget: QWidget, title: str, *, expanded: bool = False, compact: bool = False
+) -> QWidget:
     """A disclosure retains selectable content and its original identity."""
     container = QWidget(widget.parentWidget())
     container.setObjectName(widget.objectName() + "Disclosure")
     layout = QVBoxLayout(container)
     layout.setContentsMargins(0, 0, 0, 0)
-    toggle = QPushButton(title, container)
+    if compact:
+        toggle = QToolButton(container)
+        toggle.setText(title.replace("&", "&&"))
+        toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        toggle.setAutoRaise(True)
+        toggle.setProperty("reckonsolveDisclosure", "true")
+        toggle.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        apply_text_role(toggle, TextRole.LABEL)
+
+        def update_arrow(checked: bool) -> None:
+            toggle.setArrowType(
+                Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow
+            )
+
+        toggle.toggled.connect(update_arrow)
+        update_arrow(expanded)
+    else:
+        toggle = QPushButton(title, container)
     toggle.setCheckable(True)
     toggle.setChecked(expanded)
     toggle.setAccessibleName(title)
     toggle.toggled.connect(widget.setVisible)
     widget.setVisible(expanded)
-    layout.addWidget(toggle)
+    if compact:
+        layout.addWidget(toggle, 0, Qt.AlignmentFlag.AlignLeft)
+    else:
+        layout.addWidget(toggle)
     layout.addWidget(widget)
     container.disclosure_button = toggle
     container.disclosure_body = widget

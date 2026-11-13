@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from fractions import Fraction
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -34,6 +35,7 @@ from reckonsolve.one_shot_display import (
     status_text,
     values_lines,
 )
+from reckonsolve.quantile_display import exact_score_text
 from reckonsolve.ui.components import (
     ContentPanel,
     StatusBadge,
@@ -213,6 +215,14 @@ class OneShotDetailScreen(QWidget):
             "Correct Transcription", lambda: self.open_values(correction=True)
         )
         self.edit_button = menu.addAction("Edit Details", self.open_metadata)
+        self.later_postmortem_action = menu.addAction(
+            "Write Postmortem", self.add_postmortem
+        )
+        self.later_postmortem_action.setVisible(
+            detail.status is PredictionStatus.RESOLVED
+            and detail.postmortem_completion is not None
+            and not record.effective.postmortem
+        )
         self.invalid_reason_action = menu.addAction(
             "Correct Invalid reason", self.correct_invalid_reason
         )
@@ -289,18 +299,39 @@ class OneShotDetailScreen(QWidget):
             )
             self.results.body_layout.addWidget(self.answer_result)
         self.scorecard = ContentPanel("Scorecard", parent=self.results)
-        lines = score_lines(self._operations.one_shots.score(detail), unit)
+        self.scorecard.setObjectName("oneShotScorecard")
+        saved_score = self._operations.one_shots.score(detail)
+        lines = score_lines(saved_score, unit)
         if lines:
-            score = text_label(lines[0], self)
-            apply_text_role(score, TextRole.FORECAST)
-            self.scorecard.body_layout.addWidget(score)
+            numeric_score = not isinstance(saved_score, Fraction)
+            self.scorecard.title_label.setText(
+                "Weighted Interval Score (WIS)" if numeric_score else "Brier Score"
+            )
+            self.scorecard.title_label.setWordWrap(True)
+            self.scorecard.title_label.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
+            self.scorecard.title_label.parentWidget().layout().setStretch(0, 1)
+            self.score_value = text_label(
+                exact_score_text(saved_score.wis if numeric_score else saved_score)
+                + (f" {unit}" if numeric_score and unit else ""),
+                self.scorecard,
+            )
+            self.score_value.setObjectName("oneShotScoreValue")
+            apply_text_role(self.score_value, TextRole.PAGE_TITLE)
+            self.scorecard.body_layout.addWidget(self.score_value)
+            self.scorecard.body_layout.addWidget(
+                text_label("Lower is better.", self.scorecard)
+            )
             if len(lines) > 1:
                 self.scorecard.body_layout.addWidget(
                     collapse_section(
-                        text_label("\n".join(lines[1:]), self), "Score Breakdown"
+                        text_label("\n".join(lines[1:]), self),
+                        "Score Breakdown",
+                        compact=True,
                     )
                 )
-            if record.corrections:
+            if transcription:
                 self.scorecard.body_layout.addWidget(
                     text_label(
                         "Uses effective corrected facts. Originals remain available below.",
@@ -310,20 +341,16 @@ class OneShotDetailScreen(QWidget):
         else:
             self.scorecard.hide()
         if detail.status is PredictionStatus.RESOLVED:
-            pair = QWidget(self)
-            pair_row = QHBoxLayout(pair)
-            pair_row.setContentsMargins(0, 0, 0, 0)
             self.results.body_layout.removeWidget(self.answer_result)
-            self.answer_panel = ContentPanel("Checked Answer", parent=pair)
+            self.answer_panel = ContentPanel("Checked Answer", parent=self.results)
             apply_surface_role(self.answer_panel, SurfaceRole.CANVAS)
             self.answer_result.setAccessibleName(self.answer_result.text())
             self.answer_result.setText(
                 self.answer_result.text().removeprefix("Answer: ")
             )
             self.answer_panel.body_layout.addWidget(self.answer_result)
-            pair_row.addWidget(self.answer_panel, 1, Qt.AlignmentFlag.AlignTop)
-            pair_row.addWidget(self.scorecard, 1, Qt.AlignmentFlag.AlignTop)
-            self.results.body_layout.addWidget(pair)
+            self.results.body_layout.addWidget(self.answer_panel)
+            self.results.body_layout.addWidget(self.scorecard)
             if record.effective.resolution_notes:
                 self.results.body_layout.addWidget(
                     text_label(
@@ -335,17 +362,49 @@ class OneShotDetailScreen(QWidget):
                     text_label("Correction note: " + transcription[-1].note, self)
                 )
 
-        self.reflection = ContentPanel("Postmortem", parent=self)
+        self.reflection = ContentPanel("POSTMORTEM", parent=self)
+        self.reflection.setObjectName("oneShotPostmortem")
         self.reflection.setVisible(detail.status is PredictionStatus.RESOLVED)
+        self.reflection_copy = QWidget(self.reflection)
+        reflection_copy_layout = QVBoxLayout(self.reflection_copy)
+        reflection_copy_layout.setContentsMargins(0, 0, 0, 0)
+        self.reflection.body_layout.addWidget(self.reflection_copy)
         if record.effective.postmortem:
-            self.reflection.body_layout.addWidget(
+            reflection_copy_layout.addWidget(
                 text_label(record.effective.postmortem, self)
             )
+        elif detail.postmortem_completion is None:
+            reflection_copy_layout.addWidget(
+                text_label(
+                    "Optional reflection on what you learned from this result.", self
+                )
+            )
+        if detail.postmortem_completion:
+            completion = text_label(
+                (
+                    "Previously Skipped · "
+                    if record.effective.postmortem
+                    else "Postmortem Skipped · "
+                )
+                + _format_local_timestamp(
+                    detail.postmortem_completion.completed_at, widget=self
+                ),
+                self,
+            )
+            completion.setObjectName("oneShotPostmortemCompletion")
+            reflection_copy_layout.addWidget(completion)
+            if not record.effective.postmortem:
+                reflection_copy_layout.addWidget(
+                    text_label("Marked complete. You can write later from More.", self)
+                )
         self.add_postmortem_button = QPushButton(
             "Edit Postmortem" if record.effective.postmortem else "Write Postmortem",
             self,
         )
         self.add_postmortem_button.clicked.connect(self.add_postmortem)
+        self.add_postmortem_button.setVisible(
+            bool(record.effective.postmortem) or detail.postmortem_completion is None
+        )
         reflection_actions = QWidget(self)
         reflection_row = QHBoxLayout(reflection_actions)
         reflection_row.setContentsMargins(0, 0, 0, 0)
@@ -359,17 +418,7 @@ class OneShotDetailScreen(QWidget):
         reflection_row.addWidget(self.skip_postmortem_button)
         reflection_row.addStretch()
         self.reflection.body_layout.addWidget(reflection_actions)
-        if detail.postmortem_completion:
-            self.reflection.body_layout.addWidget(
-                text_label(
-                    "Postmortem skipped: "
-                    + _format_local_timestamp(
-                        detail.postmortem_completion.completed_at, widget=self
-                    ),
-                    self,
-                )
-            )
-        self.journals = ContentPanel("Journal Entries", parent=self)
+        self.journals = ContentPanel("JOURNAL ENTRIES", parent=self)
         self.journals.setObjectName("oneShotJournalEntries")
         if not detail.journals:
             self.journals.body_layout.addWidget(text_label("No Journal entries.", self))
@@ -487,7 +536,9 @@ class OneShotDetailScreen(QWidget):
                     self,
                 )
             )
-        history_disclosure = collapse_section(history, "Original Facts and Corrections")
+        history_disclosure = collapse_section(
+            history, "Originals & Corrections", compact=True
+        )
         overview.append(history_disclosure)
         if detail.definition_changes:
             definitions = ContentPanel("", parent=self)
@@ -496,7 +547,9 @@ class OneShotDetailScreen(QWidget):
             body = definitions.body_layout
             for change in detail.definition_changes:
                 body.addWidget(_definition_change_widget(change, self))
-            overview.append(collapse_section(definitions, "Definition History"))
+            overview.append(
+                collapse_section(definitions, "Definition History", compact=True)
+            )
         for panel in [
             self.results,
             self.scorecard,
@@ -508,8 +561,11 @@ class OneShotDetailScreen(QWidget):
             apply_surface_role(panel, SurfaceRole.CANVAS)
         if detail.status is PredictionStatus.RESOLVED:
             self.results.title_label.hide()
-            for panel in (self.results, self.answer_panel, self.scorecard):
-                apply_surface_role(panel, SurfaceRole.BASE)
+            apply_surface_role(self.scorecard, SurfaceRole.RAISED)
+            self.answer_panel.layout().setContentsMargins(0, 0, 0, 0)
+        for panel in (self.results, self.reflection, self.journals, facts, history):
+            panel.layout().setContentsMargins(0, 0, 0, 0)
+        facts.title_label.hide()
         extras = [
             widget for widget in overview if widget not in (facts, history_disclosure)
         ]
@@ -523,7 +579,7 @@ class OneShotDetailScreen(QWidget):
         reading_heading = text_label(
             "ARCHIVAL RECORD"
             if detail.status is PredictionStatus.INVALID
-            else "RESULTS & JOURNAL"
+            else "RESULTS"
             if detail.status is PredictionStatus.RESOLVED
             else "JOURNAL & RECORD",
             self,
@@ -541,12 +597,12 @@ class OneShotDetailScreen(QWidget):
                 ),
                 self.reflection,
                 self.journals,
-                collapse_section(timeline, "Recorded History"),
+                collapse_section(timeline, "Recorded History", compact=True),
             ],
             [
                 self.overview_heading,
                 *extras,
-                collapse_section(facts, "Reported Times and Recorded Facts"),
+                collapse_section(facts, "Times & Recorded Facts", compact=True),
                 history_disclosure,
             ],
         )
@@ -843,7 +899,8 @@ class OneShotDetailScreen(QWidget):
             QMessageBox.question(
                 self,
                 "Skip Postmortem?",
-                "Mark reflection complete without writing a Postmortem? This decision remains in history.",
+                "Mark reflection complete without writing a Postmortem? "
+                "This decision remains in history. You can write later from More.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Cancel,
             )
@@ -877,6 +934,8 @@ class OneShotDetailScreen(QWidget):
         self.workspace.begin_inline_editor(editor, self.reflection)
         self.add_postmortem_button.hide()
         self.skip_postmortem_button.hide()
+        self.later_postmortem_action.setVisible(False)
+        self.reflection_copy.hide()
         # The surrounding section supplies the single visible heading.
         editor.findChild(QLabel).hide()
 
@@ -884,7 +943,11 @@ class OneShotDetailScreen(QWidget):
         if kind != "Postmortem" or self._prediction is None:
             return
         resolved = self._prediction.status is PredictionStatus.RESOLVED
-        self.add_postmortem_button.setVisible(resolved)
+        has_body = bool(self._prediction.record.effective.postmortem)
+        skipped = self._prediction.postmortem_completion is not None
+        self.reflection_copy.show()
+        self.add_postmortem_button.setVisible(resolved and (has_body or not skipped))
+        self.later_postmortem_action.setVisible(resolved and skipped and not has_body)
         self.skip_postmortem_button.setVisible(
             resolved
             and not self._prediction.record.effective.postmortem
