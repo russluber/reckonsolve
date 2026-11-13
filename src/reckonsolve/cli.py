@@ -35,6 +35,8 @@ from reckonsolve.cli_text import terminal_text
 from reckonsolve.cli_transfer import backup_interactively, export_csv_interactively
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
+from reckonsolve.data.journal_location import RuntimeLocation
+from reckonsolve.data.location_native import LocationError
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.domain.attention import DashboardSnapshot
 from reckonsolve.domain.browser import (
@@ -85,7 +87,7 @@ from reckonsolve.identity import (
     ApplicationIdentity,
 )
 from reckonsolve.one_shot_display import detail_lines
-from reckonsolve.paths import ApplicationDataPathError, resolve_database_path
+from reckonsolve.paths import ApplicationDataPathError, open_runtime_location
 from reckonsolve.quantile_display import quantile_scorecard_lines
 
 
@@ -96,11 +98,14 @@ class CliRuntime:
     database: Database
     operations: PredictionOperations
     identity: ApplicationIdentity
+    location: RuntimeLocation | None = None
 
     def close(self) -> None:
         """Close persistence deterministically."""
 
         self.database.close()
+        if self.location is not None:
+            self.location.close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,21 +141,34 @@ def create_runtime(
     *,
     database_path: Path | None = None,
     identity: ApplicationIdentity = STABLE_APPLICATION,
+    bootstrap_directory: Path | None = None,
 ) -> CliRuntime:
     """Compose the CLI against the identity-selected canonical database."""
 
     QCoreApplication.setApplicationName(identity.application_name)
-    resolved_database_path = resolve_database_path(database_path)
-    database = Database.open(resolved_database_path)
+    location = open_runtime_location(
+        database_path, identity, bootstrap_directory=bootstrap_directory
+    )
     try:
+        database = Database.open(
+            location.database_path, allow_create=location.allow_create
+        )
+    except BaseException:
+        location.close()
+        raise
+    try:
+        if location.store is not None:
+            location.store.mark_initialized()
         operations = PredictionOperations(database)
     except BaseException:
         database.close()
+        location.close()
         raise
     return CliRuntime(
         database=database,
         operations=operations,
         identity=identity,
+        location=location,
     )
 
 
@@ -259,6 +277,7 @@ def run(
         return 130
     except (
         ApplicationDataPathError,
+        LocationError,
         ApplicationError,
         ForecastContractIntegrityError,
         MigrationError,

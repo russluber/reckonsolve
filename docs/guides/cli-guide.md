@@ -1,6 +1,6 @@
 # CLI guide
 
-This checkout includes the unreleased first Journal/workspace slice, pending native acceptance. Installed v0.8.0 snapshots retain their released interface until deliberately replaced.
+This checkout includes the unreleased Journal redesign. The first three requested native walkthroughs are accepted with recorded limits; journal relocation is implemented for its separate review. Installed v0.8.0 snapshots retain their released interface until deliberately replaced.
 
 ## Choose the matching identity
 
@@ -14,6 +14,8 @@ rsc --help
 rsc create --help
 rsc search --help
 ```
+
+Folder relocation starts in Settings, not a new CLI command. Matching updated GUI/CLI builds use the same fixed identity bootstrap and active journal location. Close other matching commands/windows before a move. Pending or unavailable locations fail clearly without creating another journal; finish recovery in the matching updated desktop. Host location metadata and older installed snapshots are explained in [the user guide](user-guide.md#move-your-journal).
 
 These examples use development data:
 

@@ -45,12 +45,31 @@ def main() -> int:
     )
     parser.add_argument(
         "profile",
-        choices=("empty", "representative", "long-text", "detail", "performance"),
+        choices=(
+            "empty",
+            "representative",
+            "long-text",
+            "detail",
+            "performance",
+            "relocation",
+        ),
         help="Fixture shape to display; all data is deleted after the window closes.",
     )
     arguments = parser.parse_args()
 
     with TemporaryDirectory(prefix="reckonsolve-visual-review-") as temporary:
+        if arguments.profile == "relocation":
+            bootstrap = Path(temporary) / DEVELOPMENT_APPLICATION.application_name
+            bootstrap.mkdir()
+            _seed_performance_database(bootstrap / "reckonsolve.sqlite3", per_cohort=3)
+            for name in ("New journal folder", "Another journal folder"):
+                (Path(temporary) / name).mkdir()
+            print(f"Disposable move destinations: {Path(temporary)}")
+            return run(
+                argv=["reckonsolve-visual-review"],
+                identity=DEVELOPMENT_APPLICATION,
+                bootstrap_directory=bootstrap,
+            )
         database_path = Path(temporary) / "reckonsolve.sqlite3"
         if arguments.profile == "performance":
             _seed_performance_database(database_path)

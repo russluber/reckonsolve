@@ -1,6 +1,6 @@
 # Performance and ordinary Settings verification — 2026-11-12
 
-This is the unreleased third implementation slice authorized in [Section 38.12](../../product-spec.md#3812-authorized-third-implementation-slice), based on clean public `589b55a` (`ux-redesign`). It records local source/Qt evidence, not human acceptance, installed-tool replacement or publication. The [earlier accepted Journal/Detail walkthroughs](2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12) remain constraints.
+This is the unreleased third implementation slice authorized in [Section 38.12](../../product-spec.md#3812-authorized-third-implementation-slice), based on clean public `589b55a` (`ux-redesign`). It records local source/Qt evidence and the reported acceptance below, separately from installed-tool replacement or publication. The [earlier accepted Journal/Detail walkthroughs](2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12) remain constraints.
 
 ## Implemented scope
 
@@ -37,10 +37,20 @@ On the dense run, the initiating callbacks returned in 30/9/15 ms respectively. 
 
 Actual Qt output was captured locally at normal and supported minimum widths, including Light/Dark, lower One-Shot sections, Settings and a zero-result tag. The larger-font minimum-width Settings capture deliberately injected long-path success/error messages to check wrapping; it is rendering evidence, not proof those synthetic destinations were written. The separate source smoke check creates and verifies real disposable backup/export artifacts. Generated artifacts are ignored under `build/ux-performance-settings/`; reviewed design references remain unchanged. Automation checks actual painted chart/table backgrounds through repeated appearance changes, readable geometry, uncertainty/text alternatives and responsive stacking. No generated mockup substitutes for executable evidence.
 
-Human native acceptance remains pending. Offscreen checks do not establish perceived desktop responsiveness, the full Windows scaling/focus/accessibility matrix, relocation/recovery safety, or integrated redesign/release acceptance.
+The reported native acceptance below closes the requested three-journey review. It does not establish an individually enumerated Windows scaling/focus/accessibility matrix, relocation/recovery safety, or integrated redesign/release acceptance; offscreen evidence retains its stated limits.
 
 ## Bounded native review
 
-Run `uv run python tools/run_visual_review.py performance` from the repository root. Use only that temporary window. The [maintainer walkthrough](../../maintainer/development.md#performance-and-ordinary-settings-review) covers four sections/supporting detail and palettes, tag/independent units/zero-result/reset/session return, and ordinary Settings tools/results. Back from Settings must preserve Performance's independent origin. Review failures are covered through controlled automated injection rather than corrupting an archive. Record feedback against the evaluated checkpoint before closing this slice.
+Run `uv run python tools/run_visual_review.py performance` from the repository root. Use only that temporary window. The [maintainer walkthrough](../../maintainer/development.md#performance-and-ordinary-settings-review) covers four sections/supporting detail and palettes, tag/independent units/zero-result/reset/session return, and ordinary Settings tools/results. Back from Settings must preserve Performance's independent origin. Review failures are covered through controlled automated injection rather than corrupting an archive. The reported completion below closes this requested review at its evaluated checkpoint.
 
 Relocation/Choose folder/Move and restart remains the next separately gated software scope; final integrated review and release remain later gates. The user owns staging, commits and pushes.
+
+## Reported slice 3 acceptance — 2026-11-12
+
+The user reviewed and checked all three supplied journeys, reported no notes or mismatches, described the result as perfect, and reported staging, committing and pushing both repositories. Before recording this acceptance, public `ux-redesign` was verified clean at `336abb5` (`feat: implement comprehensive Performance hub and organized Settings tools`), matching its locally cached upstream reference. Push completion is user-reported; no remote fetch or publication was performed by the agent.
+
+This accepts the requested Performance/ordinary Settings package and closes its bounded native-review gate. Carry the accepted first/second-slice behavior forward; do not reopen settled preferences or request another full review without a demonstrated new change. This report does not imply every scaling/accessibility condition was individually checked or that the entire redesign is released.
+
+The next work is a concrete relocation safety plan and separately authorized software scope, under the existing [location/recovery contract](../../product-spec.md#387-performance-and-ordinary-settings). It must address verified recovery, legacy entry/active handles, interruption and restart before offering Choose folder / Move and restart. No personal-data move, installed-tool replacement or release is authorized by this acceptance. Final integrated review remains later.
+
+This acceptance checkpoint changes documentation only. Public/private documentation checks passed 297/286 local links across 53/5 Markdown files; both whitespace checks and the stable-ID/reference preservation audit passed. The 1,169-test source evidence above remains tied to `336abb5`; no redundant runtime suite was run. The agent did not stage, commit or push.

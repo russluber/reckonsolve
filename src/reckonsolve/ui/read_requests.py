@@ -95,3 +95,8 @@ class ReadRequests[Request, Result](QObject):
         self.generation += 1
         self.pool.clear()
         self.pool.waitForDone(30_000)
+
+    def drain(self) -> bool:
+        """Expire publication and wait for owned read connections before a move."""
+        self.invalidate()
+        return self.pool.waitForDone(10_000)

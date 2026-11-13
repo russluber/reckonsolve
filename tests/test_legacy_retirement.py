@@ -197,8 +197,15 @@ def test_both_launchers_refuse_whole_database_unchanged(
         message = messages[0]
     else:
         output, errors = StringIO(), StringIO()
-        monkeypatch.setattr(cli, "resolve_database_path", lambda *_: path)
-        assert cli.run(["list", "--type", "binary"], stdout=output, stderr=errors) == 1
+        assert (
+            cli.run(
+                ["list", "--type", "binary"],
+                database_path=path,
+                stdout=output,
+                stderr=errors,
+            )
+            == 1
+        )
         message = errors.getvalue()
     assert "retired" in message
     assert "No conversion or deletion occurred" in message

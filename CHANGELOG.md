@@ -4,8 +4,9 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. Performance and ordinary Settings are implemented for native review. Relocation and final integrated acceptance remain. Not a published release.
+Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is also accepted with recorded limits. Journal relocation is implemented for native review; final integrated acceptance remains. Not a published release.
 
+- Settings folder chooser and move review with complete verified recovery/destination copies, shared identity-first GUI/CLI resolution, protected old paths and explicit interruption recovery. Fresh-runtime restart retains appearance/geometry. Configured missing, empty or unrelated files never become new journals.
 - Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
 - Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Performance is a comprehensive four-section hub; Settings organizes local tools with separate visit-local results.
 - Performance retains independent tag/unit scope, supporting disclosures and reading position for the session, refreshes current results on return and restores defaults with Reset View. A compact Tag/Reset strip stays visible while reading. Read-only background requests admit the whole archive and publish only the current request; isolated and whole-report failures never masquerade as empty results.

@@ -97,6 +97,20 @@ This disposable profile seeds 12 answered observations per contract, both Numeri
 
 Automated fault injection separately covers isolated/whole-report failure, retry, unit disappearance, failed tag reads, confirmed merge provenance, stale worker publication and global archive refusal. It never corrupts a personal database to manufacture an error. The native pass remains an acceptance input for actual Windows focus, scaling and perceived responsiveness.
 
+### Journal relocation review
+
+```powershell
+uv run python tools/run_visual_review.py relocation
+```
+
+This managed disposable profile contains 13 predictions: three answered per contract plus one unresolved-only case. It prints the temporary parent containing **New journal folder** and **Another journal folder**. Use only these precreated destinations; source, recovery, metadata and moved journals remain in that temporary tree and are discarded after the final window closes. Other explicit-file profiles intentionally bypass user bootstrap and do not expose relocation.
+
+1. In Settings, cancel folder selection and then cancel a review. Check unchanged current location and data. Review the current/new/recovery paths in both appearances and a smaller window; long paths remain selectable and Move and restart/Cancel remain reachable.
+2. Choose New journal folder and Move and restart. Check fresh Journal, all four contracts/history and Performance counts, the new Settings path, retained appearance/window size, and fresh transient browsing/report state.
+3. Select the current folder to check an explicit conflict without overwrite. Review Another journal folder and cancel, or complete a second move. Confirm failure remains readable beside location controls and that unrelated Settings tools still behave normally.
+
+Automated native tests separately cover shared/exclusive access, older GUI/CLI handles/entry points, committed WAL, refused archives, exact complete images and killed-process recovery at every phase. They never move a personal journal or force-close another process. Source smoke/restart/backup tests remain part of the full suite; no frozen bundle or installed tool is replaced by these source checks. Read [ADR 0023](../decisions/0023-native-journal-relocation-and-recovery.md) before changing ordering/ownership, and retain the evaluated source/device limits in the [dated record](../archive/releases/2026-11-12-journal-relocation-verification.md).
+
 ## Documentation checks
 
 After editing or moving documentation, run:

@@ -4,6 +4,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
 
+from reckonsolve.data.journal_location import RuntimeLocation, open_location
+from reckonsolve.identity import ApplicationIdentity
+
 DATABASE_FILENAME = "reckonsolve.sqlite3"
 
 
@@ -32,3 +35,21 @@ def resolve_database_path(
         app_data_directory = Path(location)
 
     return Path(app_data_directory) / DATABASE_FILENAME
+
+
+def open_runtime_location(
+    explicit_path: Path | None,
+    identity: ApplicationIdentity,
+    *,
+    bootstrap_directory: Path | None = None,
+) -> RuntimeLocation:
+    """GUI/CLI shared resolver; injected files never consult user bootstrap."""
+    if explicit_path is not None:
+        if bootstrap_directory is not None:
+            raise ValueError(
+                "Inject either a database file or an isolated bootstrap, not both."
+            )
+        path = Path(explicit_path)
+        return RuntimeLocation(path, path.parent / "presentation.ini")
+    root = bootstrap_directory or resolve_database_path().parent
+    return open_location(root, identity.application_name)

@@ -1858,9 +1858,9 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, implemented in part. Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. Performance/ordinary Settings are implemented for native review under Section 38.12. Relocation and final integrated acceptance remain. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, implemented in part. Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is accepted with recorded limits under Section 38.12. Journal relocation is implemented for native review under Section 38.13; final integrated acceptance remains. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
-**Separately authorized work — updated 2026-11-12:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), and Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
+**Separately authorized work — updated 2026-11-12:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), and Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), and journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
 For this future desktop, the Journal-centered shell, filtering/rows, source-aware returns, creation completion, Detail writing/confirmation, comprehensive Performance, Settings results and manual appearance rules below deliberately replace the corresponding earlier desktop presentation/workflow requirements. The recovery-backed Saved View retirement and CLI-only threshold route are explicit future compatibility/interface changes. All other protected shared/Adaptive/One-Shot history, exactness, lifecycle, scoring, refusal and recovery requirements remain in force. Earlier interface requirements continue to describe current behavior until their affected slice is implemented and accepted; do not silently apply future rules to the current software.
 
@@ -2035,7 +2035,7 @@ commits and pushes remain outside this package.
 
 ### 38.12 Authorized third implementation slice
 
-**Authorized 2026-11-12; implemented locally for native review.** The [third-slice checkpoint](archive/releases/2026-11-12-performance-settings-verification.md) separates source verification from pending human acceptance and publication. The user
+**Authorized and implemented; requested three-journey review accepted at `336abb5` on 2026-11-12, with recorded limits.** The [third-slice checkpoint](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12) separates source verification, reported acceptance and publication. The user
 explicitly approved implementing the third slice: Performance and ordinary Settings
 under Section 38.7, preserving the accepted Journal/New/Detail and shared workspace.
 
@@ -2073,3 +2073,60 @@ this slice pending their recovery/legacy-writer/interruption proof. Do not expos
 chooser implying an implemented move. Personal data, installed-tool replacement,
 packaging/release, staging, commits and pushes remain excluded. The user owns Git
 publication; other protected history, scoring, compatibility and recovery rules stay.
+
+### 38.13 Authorized fourth implementation slice: journal relocation
+
+**Explicitly authorized 2026-11-12; implemented locally for native user review.** The [fourth-slice verification record](archive/releases/2026-11-12-journal-relocation-verification.md) separates final source checks, native safety evidence and pending human acceptance.
+The user instructed implementation of the next relocation slice. Implement the
+existing Sections 38.7–38.8 Choose folder → review → Move and restart → fresh
+Journal contract. Preserve the accepted first three slices and their recorded
+evidence limits. This grants software/test/documentation work, not an actual move
+of either personal journal, installed-tool replacement, packaging or Git publication.
+
+Keep one fixed bootstrap directory per existing identity, containing location/move
+state and presentation preferences. Both GUI and CLI resolve the same active journal
+before SQLite opens; explicit test database paths remain isolated from user bootstrap.
+Only a genuinely new uninitialized default profile may create a database. Existing
+managed locations require recognized migration history and open without create rights;
+an empty/unrelated existing file must not be initialized.
+Missing/unreadable/malformed configured targets, identity conflicts and interrupted
+moves fail visibly without initializing a replacement or selecting another copy.
+Ordinary concurrent GUI/CLI use remains supported; only relocation needs exclusivity.
+
+The bounded storage target is a local fixed NTFS volume on Windows, without reparse
+aliases, hard-linked journals or known cloud/synchronization roots. Reject network,
+removable, conflicting and unavailable targets; preserve unrelated files. Arbitrary
+third-party synchronization cannot be inferred reliably, so the chooser/review and
+guide must require an unsynchronized local folder. No existing journal or retired
+location notice is overwritten by folder selection. Moving to a new unused folder
+again is supported; arbitrary switching/import is not introduced.
+
+Before enabling the chooser, prove the mechanism against native current/older
+connections and process interruption. Use an identity-scoped shared-runtime / exclusive
+move lease plus a Windows source write fence that also excludes already-open writable
+SQLite handles. Capture a checked, complete SQLite image under quiescence, retain and
+verify a distinct recovery copy, and verify destination equivalence before retiring
+the source. Persist a companion move notice and native read-only protection before
+retiring the source header to a non-SQLite notice, without a missing-path window. This
+also blocks legacy writes when WAL can supply page one. If interruption precedes the
+header notice, explicit verified completion may retain the original read-only source
+with its companion notice; never temporarily unprotect it to finish a move. Older
+ordinary entry points cannot create a writable empty replacement there.
+This changes location/compatibility artifacts, not historical facts in either verified
+SQLite copy. Explain the retained recovery and notice in the move review and guide.
+
+A durable phase record precedes multi-file changes. Do not pretend filesystem writes
+and the locator form one database transaction. Verify identity, hashes, paths and
+phase before explicit interrupted-move recovery; ambiguous/tampered states block.
+No writes resume until a single authority is selected, verified and resolved through
+the shared boundary. Preserve recovery and identified staging artifacts; no automatic
+personal cleanup is authorized. Failed moves before source retirement retain its
+authority; later failure blocks with actionable recovery. Restart recreates the
+runtime with the same identity, preserved appearance/geometry and fresh transient
+workspace state. Complete only after reopening/verifying the intended journal.
+
+Keep schema 21, applied migrations, scoring, projection 3, CSV 6 and dependencies
+unchanged. Add meaningful native lease/legacy-handle, complete-data/WAL, refusal,
+alias/conflict/space/permission, restart and interruption tests using disposable roots.
+Run focused/full checks, align architecture/guides and give one bounded native review.
+If a required gate fails, keep relocation unavailable rather than weakening it.

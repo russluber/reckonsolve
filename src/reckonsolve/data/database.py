@@ -14,6 +14,7 @@ from .migrations import (
     MigrationError,
     apply_migrations,
     current_schema_version,
+    validate_migration_source,
 )
 from .search_index import (
     SearchIndexError,
@@ -59,15 +60,20 @@ class Database:
         *,
         migrations: Sequence[Migration] = MIGRATIONS,
         confirm_upgrade: Callable[[UpgradeReview], bool] | None = None,
+        allow_create: bool = True,
     ) -> "Database":
         """Open, configure, and migrate the database at an explicit path."""
 
         database_path = Path(path)
-        database_path.parent.mkdir(parents=True, exist_ok=True)
+        if allow_create:
+            database_path.parent.mkdir(parents=True, exist_ok=True)
         connection: sqlite3.Connection | None = None
         try:
             connection = sqlite3.connect(
-                database_path,
+                database_path
+                if allow_create
+                else database_path.resolve().as_uri() + "?mode=rw",
+                uri=not allow_create,
                 autocommit=True,
                 timeout=5.0,
             )
@@ -79,6 +85,17 @@ class Database:
                     "SQLite foreign-key enforcement could not be enabled."
                 )
             connection.execute("PRAGMA busy_timeout = 5000")
+            if not allow_create:
+                # A configured/previously initialized location must never turn
+                # an empty or unrelated existing file into a new journal.
+                connection.execute("BEGIN")
+                try:
+                    if validate_migration_source(connection, migrations) < 1:
+                        raise MigrationError(
+                            "The existing journal has no recognized migration history. It was not initialized."
+                        )
+                finally:
+                    connection.execute("ROLLBACK")
             if any(migration.version >= 14 for migration in migrations):
                 require_fts5(connection)
             if any(migration.version == 21 for migration in migrations):
@@ -207,6 +224,16 @@ class Database:
             return
         self._connection = None
         connection.close()
+
+    def reconnect(self) -> None:
+        """Resume unchanged object references after an abandoned location move."""
+        if self.is_open:
+            raise RuntimeError("Close the database before reconnecting.")
+        reopened = type(self).open(
+            self.path, migrations=self.migrations, allow_create=False
+        )
+        self._connection, reopened._connection = reopened._connection, None
+        self._search_enabled = reopened._search_enabled
 
     def rebuild_search_index(self) -> None:
         """Deterministically replace the derived full-text projection."""

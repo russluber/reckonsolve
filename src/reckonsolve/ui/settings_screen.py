@@ -113,6 +113,8 @@ class SettingsScreen(QWidget):
         layout.addWidget(appearance)
         location = ContentPanel("Database location", parent=content)
         location.setObjectName("dataManagementPanel")
+        self.location_panel = location
+        self.location_controls = None
         apply_surface_role(location, SurfaceRole.CANVAS)
         self.database_path_label = _label("Database: loading…", location.body)
         self.database_path_label.setObjectName("databaseLocation")
@@ -230,6 +232,12 @@ class SettingsScreen(QWidget):
         for tool in self.tools:
             tool.clear_result()
         self.data_status_label.clear_message()
+        if self.location_controls is not None:
+            self.location_controls.clear_result()
+
+    def add_location_controls(self, controls: QWidget) -> None:
+        self.location_controls = controls
+        self.location_panel.body_layout.addWidget(controls)
 
     def set_appearance(self, mode: AppearanceMode) -> None:
         with QSignalBlocker(self.appearance_mode):

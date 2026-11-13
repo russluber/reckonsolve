@@ -955,21 +955,33 @@ For implementation boundaries, see [Architecture](../architecture.md).
 
 ## Back up and export
 
-Settings groups appearance, selectable database-location facts and local tools in one page. Each tool keeps its latest result beside it during that visit. Running another tool does not erase an earlier result; errors and destination paths remain selectable. Leaving Settings clears these visit-local messages. The separate Last successful backup fact survives visits and app restarts. Database relocation is not available in this slice.
+Settings groups appearance, selectable database-location facts and local tools in one page. Each tool keeps its latest result beside it during that visit. Running another tool does not erase an earlier result; errors and destination paths remain selectable. Leaving Settings clears these visit-local messages. The separate Last successful backup fact survives visits and app restarts. Choose folder and Move and restart are described under [Where data lives](#where-data-lives).
 
 Use **Settings → Back Up Now** or the matching CLI for a verified SQLite backup. It preserves the complete current journal, corrections, tags, provenance and database settings. The separately verified pre-upgrade copy retains retired Saved View configurations. Keep recovery backups outside generated development/build directories.
 
 **Export CSV Bundle** creates a format-6 ZIP with relational history and a data dictionary. It includes both modes, exact Numeric values, originals and complete corrections, including One-Shot source_action. Settings and search-index rows are excluded. CSV is for analysis, not restoration.
 
-For recovery, close the app and matching CLI, preserve the current database, and restore a verified compatible SQLite backup to that identity's database path. Reopen and check the archive; use Settings search repair if the derived index needs rebuilding. Do not restore CSV files as a database or replace stable data with test data.
+For recovery, close the app and matching CLI, preserve the current database, and restore a verified compatible SQLite backup to the active database path shown in Settings. After relocation, keep the fixed identity/location metadata; do not assume the original default path is still active. Reopen and check the archive; use Settings search repair if the derived index needs rebuilding. Do not restore CSV files as a database or replace stable data with test data.
 
 ## Where data lives
 
-| Identity | Desktop / CLI | Database |
+| Identity | Desktop / CLI | Bootstrap and original default database |
 | --- | --- | --- |
 | Stable | `reckonsolve` / `rsc` | `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3` |
 | Development | `reckonsolve-dev` / `rscd` | `%LOCALAPPDATA%\Reckonsolve Dev\reckonsolve.sqlite3` |
 
-Each identity has a separate `presentation.ini` for window/appearance preferences outside canonical history and excluded from backups/exports. GUI and CLI share the matching database directly; refresh or reopen the GUI after a CLI change. They do not sync across identities.
+Each identity keeps its own fixed settings/bootstrap folder. `presentation.ini` stores window/appearance preferences outside canonical history and is excluded from backups/exports. Location/identity/move metadata is separate from that preference file, so clearing appearance preferences does not lose the journal location. GUI and CLI share the matching active journal directly; refresh/reopen after a CLI change. They do not sync across identities.
+
+### Move your journal
+
+In **Settings → Database location → Choose folder…**, select an unused folder on an unsynchronized local fixed NTFS drive. The review shows the complete current/new paths and where a verified complete recovery copy will be retained. Cancel changes no location. Close other matching Reckonsolve windows and CLI commands, then choose **Move and restart**.
+
+Reckonsolve verifies the complete copy and restarts at a fresh Journal. Predictions, immutable history, tags, scores and database settings remain; appearance/window size are retained. Search, report filters/disclosures and drafts start fresh. Existing backups/exports elsewhere stay in place. The automatic move recovery copy is separate from the Last successful backup fact.
+
+Keep the fixed bootstrap folder, recovery copies and old-location notices. Older builds do not follow the new location and cannot keep writing at the protected old path; use matching updated GUI/CLI builds. A move is not an open/switch-journal feature. Existing journals, earlier notices and reserved files are refused as destinations; select another unused folder. Linked, network/removable and unsupported drives or known cloud folders are refused. Avoid other synchronization services even when their folders are not detected automatically.
+
+If interrupted, the updated desktop offers **Keep current location** while the source remains unprotected, or **Verify and finish move** after protection. Verification failure stops without selecting a copy. In the latter case, the old location may retain a read-only original alongside its notice. Do not remove protection, delete location records or create an empty replacement. Preserve all files if recovery stops; the message identifies the record/copies needed for recovery. CLI opening refuses a pending recovery and identifies its move record. Reopen the matching updated desktop to review recovery.
+
+SQLite backups still preserve the complete journal, not host appearance/location configuration. Restoring a supported older backup at the active path follows the existing upgrade/review policy; an empty or unrelated existing file is refused. If bootstrap location information is lost or inconsistent, preserve it and the verified copies for recovery rather than initializing another journal.
 
 Any pre-v0.7 Binary-final or interval-v1 Numeric record prevents an archive from opening in v0.8.0. Mixed archives and missing, unknown, or mismatched identities are also refused before mutation. Nothing is converted or deleted; preserve the original for a compatible earlier version.
