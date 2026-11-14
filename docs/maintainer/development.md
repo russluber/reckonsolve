@@ -113,6 +113,13 @@ Automated native tests separately cover shared/exclusive access, older GUI/CLI h
 
 ### Final integrated review
 
+**Review-status note:** The requested combined journeys and latest refinements were
+subsequently checked and accepted with recorded limits. The dated recipes below
+retain their original checkpoint context, including then-pending wording. Reuse only
+the cases affected by a later change; they are not a fresh review queue. The current
+[readiness record](../archive/releases/2026-11-13-redesign-readiness.md) owns acceptance,
+source-package results and remaining environment limits.
+
 ```powershell
 uv run python tools/run_visual_review.py integrated
 ```
@@ -226,6 +233,24 @@ Reuse `uv run python tools/run_visual_review.py integrated` on disposable data:
 Try both palettes and record only a concrete mismatch. The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#final-toolbar-and-presentation-follow-up)
 keeps source/native limits. These checks extend the existing combined checkpoint;
 they do not reopen accepted journeys or authorize personal/installed-data operations.
+
+### Source-package readiness checks
+
+For an installed-tool candidate, build its source distribution and wheel with
+`uv build --out-dir build/package-review`. Inspect their member paths for accidental
+private notes, tests, caches or runtime data, and verify bundled resources/licenses.
+Generate runtime constraints using `uv export --locked --no-dev --no-emit-project`.
+Test installation only with explicit disposable `UV_TOOL_DIR` and `UV_TOOL_BIN_DIR`
+under ignored build output; verify those resolved locations before installing. Do
+not update the shell or use the normal installed-tool directory for this check.
+
+Exercise database-free version/help entry points and inject explicit temporary
+database/presentation paths for GUI/CLI workflow, recovery and restart checks. Qt
+scale-factor probes are supplemental evidence; identify them separately from human
+Windows scaling/accessibility review. A wheel check does not establish a fresh
+PyInstaller build. The [readiness record](../archive/releases/2026-11-13-redesign-readiness.md)
+retains candidate-specific artifacts, results and remaining limits. Ordinary-use
+adoption follows the [user guide](../guides/user-guide.md#adopt-the-redesigned-source).
 
 ## Documentation checks
 

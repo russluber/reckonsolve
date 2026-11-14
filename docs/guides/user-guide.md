@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. All four requested slice walkthroughs are accepted with recorded limits; the final integration pass awaits its bounded combined review. Installed v0.8.0 snapshots retain their released interface until deliberately replaced.
+This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. The requested slice walkthroughs, combined journeys and latest refinements are accepted with recorded limits. Installed v0.8.0 snapshots retain their earlier interface until deliberately replaced; use the controlled update procedure below when adopting the redesigned source.
 
 Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
@@ -29,6 +29,56 @@ uv tool update-shell
 Reopen the terminal and run `reckonsolve`. `rsc --help` opens help for its matching CLI. After updating the checkout, `uv tool install --force .` refreshes the installed commands; installed tools do not automatically follow source edits.
 
 For development, use `uv sync --locked`, then `uv run reckonsolve-dev` or `uv run rscd`. These use a separate development database. [Development and testing](../maintainer/development.md) also describes disposable test profiles.
+
+### Adopt the redesigned source
+
+An installed tool is a separate snapshot. Both the released app and this unreleased
+candidate currently report 0.8.0; identify the approved source checkpoint and retain
+its dependency lock rather than relying on the version string alone. Updating the
+tool is a separate step from testing the checkout.
+
+1. In the currently compatible app, record the active database path from Settings,
+   including any previously selected location. Keep the fixed identity/bootstrap
+   folder and its location metadata.
+2. Use the currently compatible app's **Back Up Now** to create a verified complete
+   SQLite recovery file outside generated build/test folders. Close all stable and
+   development desktop windows and matching CLI commands before replacing the tool.
+   Retain a compatible earlier build and the backup together. CSV is analytical.
+3. From the approved clean checkout, prepare the same runtime versions used in
+   verification. These commands create only the checkout environment and a dependency
+   constraints file:
+
+   ```powershell
+   uv sync --locked
+   uv export --locked --no-dev --no-emit-project --output-file build/adoption/runtime-constraints.txt
+   ```
+
+4. Once the update is approved, refresh the complete installed GUI/CLI tool together:
+
+   ```powershell
+   uv tool install --force --python .venv/Scripts/python.exe --constraints build/adoption/runtime-constraints.txt .
+   ```
+
+   The interpreter comes from the verified checkout environment. Keep generated
+   constraints/artifacts available until the update succeeds. Do not run an older
+   GUI or CLI against the upgraded active journal.
+5. Open the updated desktop first. A supported older journal receives a verified
+   pre-upgrade SQLite copy. If Saved Views exist, review their retirement and recovery
+   location; cancellation retains the old active journal. Unsupported archives are
+   refused before migration or repair. Do not combine adoption with a journal move.
+6. Confirm the same active path, representative existing predictions and history,
+   separate four-contract Performance results, and the matching updated CLI. Make
+   another verified SQLite backup after successful adoption. Keep the pre-upgrade
+   copy and earlier build until their cleanup is explicitly chosen.
+
+For a return to the earlier build, preserve a complete current backup first, close
+all matching processes and restore the **pre-upgrade** recovery copy at the same
+recorded active path before opening the compatible earlier build. Reinstalling old
+code does not downgrade schema 21. That older copy cannot contain later work; retain
+the current backup and do not merge or rewrite its history. After any relocation,
+follow [location recovery](#move-your-journal) rather than deleting bootstrap files,
+old-path protection or location notices. Stop and preserve the files if authority
+or compatibility is uncertain.
 
 ## Choose a mode
 

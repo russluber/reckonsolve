@@ -18,7 +18,9 @@ These excerpts retain original section numbers and historical wording. Legacy-co
 
 ## Release evidence
 
-- [Post-review workspace refinement verification](releases/2026-11-13-workspace-refinement-verification.md) — Journal return/idle stability, tailored One-Shot Detail, date preferences and terminal/task hierarchy; focused human recheck pending, unreleased.
+- [Redesign readiness](releases/2026-11-13-redesign-readiness.md) — accepted latest refinements, isolated locked wheel installation, recovery/rollback and current adoption procedure; unreleased, with source/environment limits retained.
+
+- [Post-review workspace refinement verification](releases/2026-11-13-workspace-refinement-verification.md) — Journal/Detail/Performance/toolbar refinements and later reported acceptance, with version/environment limits retained; unreleased.
 
 - [Final integration verification](releases/2026-11-13-final-integration-verification.md) — combined contract/evidence reconciliation, Journal keyboard-focus repair and pending integrated review; unreleased.
 

@@ -4,7 +4,11 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings and Journal-relocation walkthroughs are also accepted with recorded limits. Combined journeys, eight focused checks and the latest label/gold/fact-panel fixes were reported accepted, with positive One-Shot layout/Skip feedback retained. Adaptive Overview chevrons and Numeric definition placement await their narrow recheck. Not a published release.
+The latest saved refinements were subsequently checked and accepted by the user.
+Source-package readiness and a controlled ordinary-use update procedure are recorded
+separately; no installed-tool replacement or publication has occurred.
+
+Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, relocation and the requested later refinements are accepted with recorded limits. Source-package readiness is separate from any later everyday-use update and release. Not a published release.
 
 - Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
 - One-Shot Detail uses shared-style result/reflection/Journal and context/originals panes, with equal terminal reading widths. Adaptive Resolved/Invalid reading also uses 50/50 panes; contextual tabs omit duplicate Overview headings. Main pane headings and principal action labels have consistent hierarchy and capitalization.
@@ -16,6 +20,7 @@ Journal/workspace and the requested New Prediction/Prediction Detail walkthrough
 - Adaptive Numeric Unit and Decimal Places remain visible beneath Resolution Criteria in Overview/Archival Context, with long-unit wrapping and no duplicate inside More Information.
 - Desktop One-Shot status reads Answer Pending. Reset View retains full text on focus, Performance supporting detail uses compact chevrons, and Performance/Settings offer a direct Journal icon alongside their independent source-aware Back action.
 - Settings also offers Performance directly, retaining report scope/position and the underlying Journal/Prediction return destination without a Back cycle.
+- Aligned CLI export help and verification diagnostics with CSV format 6; clarified relocated active paths and the locked-dependency update/recovery procedure.
 
 - Returning to refreshed Journal results and background result replacement retain usable keyboard focus. Current nearby results/search/retry provide safe fallbacks without changing query membership, following reordered rows or stealing focus from another action.
 - Numeric interval labels reflow after font/style changes, retaining exact values and percentile labels when text is enlarged.

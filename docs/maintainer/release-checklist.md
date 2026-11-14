@@ -1,6 +1,6 @@
 # Source release checklist
 
-Use this repeatable process for a source release. Completed acceptance and dated test results belong in [the archive](../archive/README.md), not in the next release's checklist. The current baseline is v0.8.0, schema 20, CSV format 5, and four supported contracts; a later authorized release must state its own baseline.
+Use this repeatable process for a source release. Completed acceptance and dated test results belong in [the archive](../archive/README.md), not in the next release's checklist. Published v0.8.0 is the schema-20/CSV-5 baseline. The unreleased redesigned source uses schema 21/CSV 6 and the same four supported contracts; its package version is still 0.8.0. Identify a candidate by source checkpoint and artifact as well as version, and select the next release version separately.
 
 ## Verify the candidate
 
@@ -34,11 +34,13 @@ Use this repeatable process for a source release. Completed acceptance and dated
 
 ## Refresh the installed tool
 
-From the updated checkout:
+Follow the user guide's [controlled update and recovery procedure](../guides/user-guide.md#adopt-the-redesigned-source). From the approved clean checkout, use the lockfile's runtime constraints and matching Python environment:
 
 ```powershell
-uv tool install --force .
+uv sync --locked
+uv export --locked --no-dev --no-emit-project --output-file build/adoption/runtime-constraints.txt
+uv tool install --force --python .venv/Scripts/python.exe --constraints build/adoption/runtime-constraints.txt .
 rsc --version
 ```
 
-Reopen the shell if needed. This refreshes GUI/CLI scripts and their development counterparts, not either database.
+Reopen the shell if needed. This refreshes GUI/CLI scripts and their development counterparts without opening either database. The first subsequent desktop open can perform a supported recovery-backed upgrade and retirement review; version output alone does not confirm adoption. Installed-tool replacement and personal-data operations require their own authorization.

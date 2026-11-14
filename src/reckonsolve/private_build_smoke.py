@@ -354,7 +354,7 @@ def run_private_build_smoke(database_path: Path, backup_path: Path) -> None:
         operations.export_csv_bundle(export_path)
         with ZipFile(export_path) as archive:
             if "Format version: 6" not in archive.read("README.txt").decode("utf-8"):
-                raise RuntimeError("Frozen CSV export did not use format 5.")
+                raise RuntimeError("Frozen CSV export did not use format 6.")
             predictions_csv = archive.read("predictions.csv").decode("utf-8")
             if not all(
                 model in predictions_csv

@@ -1858,7 +1858,7 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, four bounded software slices implemented; final integrated acceptance remains. Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs and long-history tuning are accepted with recorded limits. The requested Performance/ordinary Settings walkthrough is accepted with recorded limits under Section 38.12. The requested Journal-relocation walkthrough is accepted with recorded limits under Section 38.13. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, four bounded software slices and requested refinements implemented. The requested slice walkthroughs, combined journeys and latest refinements are accepted with recorded limits. The readiness continuation under Section 38.14 verifies the source-package/adoption handoff separately. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
 **Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), final integration in [Section 38.14](#3814-authorized-final-integration-pass), and the feedback refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
@@ -1972,7 +1972,7 @@ Required software evidence includes supported schema-16/17 Binary and schema-18/
 
 ### 38.9 Acceptance and implementation gates
 
-The following criteria govern the combined desktop. The slice records identify the source/tests and requested human walkthroughs already evaluated; final integrated acceptance remains pending:
+The following criteria govern the combined desktop. The slice/readiness records identify the source, requested human walkthroughs and latest refinement acceptance actually evaluated; retain their environment and version limits instead of inferring a complete Windows/device matrix:
 
 - Exercise all four creation mode/type combinations and Detail Open/Locked/Resolved/Invalid/Waiting for answer, preserving exact facts, originals, anchors, and distinct current/draft/scoring-eligible context. Failed/no-op/stale/expired/cancelled writes append nothing; successful saves are complete and visible immediately.
 - Exercise these integrated journeys: historical retrieval/reflection/changed membership; retained revision/Overview → guarded Settings; Detail → Performance → Settings → retained Performance → original Detail; and creation cancellation versus ordinary/answered save landings. Include other editor/window-close, unavailable/current-target and failure cases as applicable.
@@ -2134,7 +2134,7 @@ If a required gate fails, keep relocation unavailable rather than weakening it.
 
 ### 38.14 Authorized final integration pass
 
-**Authorized and implemented locally — 2026-11-13; source verification passed.** The user subsequently checked the combined journeys successfully and requested the refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements); that focused recheck remains open. The [final integration record](archive/releases/2026-11-13-final-integration-verification.md) identifies the evaluated changes, regression/capture evidence and remaining limits. Following
+**Authorized and implemented locally — 2026-11-13; source verification passed.** The user subsequently checked the combined journeys and latest refinements successfully. Their scoped acceptance and the technical readiness continuation are recorded separately below. The [final integration record](archive/releases/2026-11-13-final-integration-verification.md) identifies the evaluated changes, regression/capture evidence and remaining limits. Following
 acceptance of the four requested slice walkthroughs and the saved acceptance edits,
 the user explicitly instructed implementation of the final integrated review and
 readiness work. Audit the combined approved package against Sections 38.1–38.13,
@@ -2155,19 +2155,31 @@ Check both palettes, baseline/larger geometry and scaled text/native scaling whe
 available; state the difference between simulated scale and human Windows evidence.
 Add meaningful regressions for demonstrated repairs, run focused and full checks,
 and give one bounded combined walkthrough for remaining integration/review gaps.
-Final integrated human acceptance remains separate. No personal-data operations,
+Human acceptance is recorded separately from technical checks. No personal-data operations,
 installed-tool replacement, packaging, version/tag change, commit, push or publication
 is authorized by this pass.
 
 
+**Readiness continuation — authorized 2026-11-13:** The user explicitly requested
+readiness implementation and checks, and subsequently reported the latest saved
+refinements checked with no remaining issues. Carry that scoped human acceptance
+forward without claiming an unreported Windows scaling/accessibility matrix.
+Audit the agreed implementation and existing delivery/recovery instructions; repair
+demonstrated defects within the selected behavior. Validate source distributions and
+wheels in disposable environments with locked runtime dependencies, complete recovery,
+supported upgrades/refusal and database-free help/version entry points. Prepare a
+reviewable everyday-use backup/update/recovery plan. This continuation authorizes
+isolated source-package checks, not an installed-tool replacement, personal-data
+operation, frozen executable release, version/tag change, merge, commit or push.
+
 ### 38.15 Authorized post-review workspace refinements
 
 **Authorized and implemented locally — 2026-11-13; source verification passed,
-focused human recheck pending.** The [refinement record](archive/releases/2026-11-13-workspace-refinement-verification.md)
+focused human recheck accepted with recorded limits.** The [refinement record](archive/releases/2026-11-13-workspace-refinement-verification.md)
 identifies source/capture/timing evidence and limits. The user checked the combined
 journeys at `fe6a3df` and reported eight presentation/responsiveness refinements.
-Preserve that functional feedback and prior slice acceptance, while keeping this
-refinement/recheck open. Implement the following package without changing history,
+Preserve that functional feedback, prior slice acceptance and the later refinement
+acceptance recorded below. Implement the following package without changing history,
 scoring, migration, analytical export or protected time-entry rules.
 
 - Same-retrieval refresh keeps current readable rows while a fresh checked read runs;
@@ -2227,7 +2239,7 @@ refinement, not a permanent ban on later reflection or a new completion policy.
 
 This follow-up is implemented locally with passing source verification; its
 [narrow One-Shot visual recheck](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-results-and-reflection-follow-up)
-remains separate from the previously accepted focused checks and publication.
+is included in the later reported acceptance below; publication remains separate.
 
 **Journal preview rhythm and Adaptive disclosure — authorized 2026-11-13:** After
 accepting the One-Shot follow-up, the user requested closer Numeric Journal groups,
@@ -2244,7 +2256,8 @@ This is presentation tuning; retrieval, scoring eligibility, history and storage
 unchanged. Other accepted journeys/checks carry forward; recheck only these refinements.
 
 This tuning is implemented locally with passing source verification. The narrow
-three-point visual recheck remains open; it grants no publication or additional scope.
+three-point visual recheck is included in the later reported acceptance below; it grants
+no publication or additional scope.
 
 **Further presentation feedback — authorized 2026-11-13:** Journal percentile
 headings use 5th / 25th / 50th / 75th / 95th; omit Median only in Journal previews,
@@ -2259,7 +2272,8 @@ ordinary disclosure defaults. These refinements extend the uncommitted presentat
 checkpoint, without changing history, scoring, storage or the user-owned Git boundary.
 
 The combined candidate is implemented locally with passing source verification;
-the scoped label/marker/expanded-facts visual recheck remains separate and open.
+the scoped label/marker/expanded-facts visual recheck is included in later reported
+acceptance below.
 
 **Adaptive Overview disclosure consistency — authorized 2026-11-13:** Following
 acceptance of the preceding fixes, the user requested compact chevron reveals for
@@ -2272,7 +2286,8 @@ dialog actions keep their existing behavior. This extends the uncommitted presen
 checkpoint and changes no history, scoring, data or dependency boundary.
 
 This reveal consistency pass is implemented locally with passing source verification;
-its short visual recheck remains separate from the accepted earlier fixes and release.
+its short visual recheck is included in later reported acceptance below. Release
+remains separate.
 
 **Adaptive Numeric definition visibility — authorized 2026-11-13:** Unit and Decimal
 Places are essential interpretation facts. Show their existing immutable values as a
@@ -2286,8 +2301,8 @@ change, new canonical fact or scoring/storage behavior and extends the same unco
 candidate. Other accepted journeys/defaults carry forward.
 
 This placement is implemented locally with passing source verification. The preceding
-label/marker/expanded-facts fixes are user-accepted; the new placement and remaining
-Adaptive reveal check await scoped human review, separately from publication.
+label/marker/expanded-facts fixes, new placement and remaining Adaptive reveal check
+are included in the scoped reported acceptance below, separately from publication.
 
 **Final utility/presentation follow-up — authorized 2026-11-13:** Use Answer Pending
 for the desktop One-Shot nonterminal status chip and matching Detail heading, retaining
@@ -2308,7 +2323,7 @@ Settings visit-result and Performance continuity safeguards remain. This extends
 same uncommitted presentation checkpoint; the user retains staging/commits/pushes.
 
 This follow-up is implemented locally with passing full-source verification. Its
-four-point visual recheck remains separate from earlier acceptance and publication.
+four-point visual recheck was later reported accepted below; publication remains separate.
 
 **Settings Performance access — authorized 2026-11-13:** Settings also exposes the
 existing Performance chart icon beside Journal and appearance. Opening Performance
@@ -2321,4 +2336,13 @@ and the direct Journal action remain unchanged. This extends the same uncommitte
 presentation checkpoint, with commits/pushes retained by the user.
 
 This Settings extension is implemented locally with passing full-source verification;
-its focused toolbar/return recheck is part of the existing pending visual checkpoint.
+its focused toolbar/return recheck is included in the reported acceptance below.
+
+**Latest reported acceptance — 2026-11-13:** During the separately authorized readiness
+pass, the user explicitly reported the latest saved refinements, including Settings →
+Performance, checked with no remaining issues. Earlier pending recheck descriptions
+above identify their pre-acceptance checkpoint states. Preserve prior accepted journeys
+and the actual review limits; no Windows scaling percentage or complete accessibility
+matrix was supplied. The [readiness record](archive/releases/2026-11-13-redesign-readiness.md)
+owns technical source-package checks and the controlled adoption handoff. No installed
+tool, personal data, version/tag, merge or publication is changed by this acceptance.

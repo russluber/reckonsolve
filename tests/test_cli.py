@@ -100,6 +100,15 @@ def test_cli_version_and_help_do_not_open_a_database(tmp_path, capsys) -> None:
     assert "--tag TAG" in help_output.out
     assert not database_path.exists()
 
+    with pytest.raises(SystemExit) as export_help_exit:
+        run(["export-csv", "--help"], database_path=database_path)
+    export_help_output = capsys.readouterr()
+
+    assert export_help_exit.value.code == 0
+    assert "format-version-six" in export_help_output.out
+    assert "not a recovery format" in export_help_output.out
+    assert not database_path.exists()
+
     with pytest.raises(SystemExit) as search_help_exit:
         run(["search", "--help"], database_path=database_path)
     search_help_output = capsys.readouterr()

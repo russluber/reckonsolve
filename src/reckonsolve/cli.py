@@ -545,9 +545,9 @@ def _build_parser(identity: ApplicationIdentity) -> argparse.ArgumentParser:
 
     export_parser = commands.add_parser(
         "export-csv",
-        help="Create a documented format-version-five CSV ZIP.",
+        help="Create a documented format-version-six CSV ZIP.",
         description=(
-            "Create the same format-version-five relational analytical CSV ZIP as the "
+            "Create the same format-version-six relational analytical CSV ZIP as the "
             "desktop application. This is not a recovery format."
         ),
     )

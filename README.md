@@ -1,6 +1,6 @@
 # Reckonsolve
 
-The checkout includes the unreleased Journal/workspace and New Prediction/Prediction Detail slices, with their requested walkthroughs and subsequent tuning [accepted with recorded limits](docs/archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12). The comprehensive Performance hub and organized Settings tools are [accepted with recorded limits](docs/archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12), as is [Journal relocation](docs/archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12). Combined journeys, eight focused checks and the latest label/gold/fact-panel fixes were reported accepted. The [latest toolbar, status and supporting-detail refinements](docs/archive/releases/2026-11-13-workspace-refinement-verification.md#final-toolbar-and-presentation-follow-up) await a bounded recheck within the combined presentation checkpoint. The installed/published v0.8.0 release is unchanged.
+The checkout includes the unreleased Journal-centered redesign. The four requested implementation walkthroughs, combined journeys and latest presentation/navigation refinements are accepted with recorded limits. The [readiness record](docs/archive/releases/2026-11-13-redesign-readiness.md) distinguishes source/package checks from those human reviews. Use the [controlled update procedure](docs/guides/user-guide.md#adopt-the-redesigned-source) before replacing an everyday installation. The installed/published v0.8.0 release is unchanged.
 
 A personal forecasting journal for Windows. Record uncertain judgments, preserve your reasoning, resolve answers, and study calibration. Reckonsolve works offline and stores your data locally.
 
@@ -45,7 +45,7 @@ Immutable forecasts, audited corrections, Journals, and Postmortems preserve the
 
 ## Data and compatibility
 
-The stable desktop and `rsc` share `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3`. Development desktop and `rscd` share a separate database under `%LOCALAPPDATA%\Reckonsolve Dev`. Switching commands never copies data between them.
+The stable desktop and `rsc` share one active journal, originally `%LOCALAPPDATA%\Reckonsolve\reckonsolve.sqlite3`. Development desktop and `rscd` use a separate identity, originally under `%LOCALAPPDATA%\Reckonsolve Dev`. After a reviewed relocation, matching GUI/CLI builds follow that identity's recorded active location; the bootstrap folders stay fixed. Switching commands never copies data between identities.
 
 Use verified **SQLite backups** for recovery. CSV format 6 is analytical history with a data dictionary; it cannot restore the application. Window, appearance and date-format preferences live separately in `presentation.ini` and are excluded from SQLite backups.
 

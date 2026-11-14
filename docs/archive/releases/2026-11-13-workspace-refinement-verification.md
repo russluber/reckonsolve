@@ -394,3 +394,14 @@ links; both whitespace checks passed. Preservation verified 94 current public-re
 mirrors, every J/R identifier and withdrawal, unchanged reference assets and protected
 lower layers/migrations/dependencies, and ignored private notes. This supersedes the
 preceding candidate's source result; scoped human toolbar/return review remains pending.
+
+## Reported latest refinement acceptance
+
+During readiness on 2026-11-13 the user explicitly reported the latest saved refinements,
+including Settings → Performance, checked with no remaining issues. This records scoped
+acceptance of the saved visual candidate at `e6690aa`, carrying earlier accepted
+journeys forward. Actual Windows scaling percentage and a complete device/accessibility
+matrix were not supplied. Earlier pending labels above retain their historical source
+scope. The [readiness record](2026-11-13-redesign-readiness.md) owns subsequent technical
+checks and the controlled adoption plan; installed-tool/data operations and publication
+remain separate.
