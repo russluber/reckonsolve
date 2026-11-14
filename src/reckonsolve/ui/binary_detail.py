@@ -34,6 +34,7 @@ from reckonsolve.ui.components import (
     EmptyStateLabel,
     PageHeader,
     StatusBadge,
+    TagChips,
 )
 from reckonsolve.ui.date_display import format_date
 from reckonsolve.ui.detail_reading import (
@@ -184,12 +185,8 @@ class PredictionDetailScreen(QWidget):
         self.status.setAccessibleName("Prediction status")
         apply_badge_role(self.status)
 
-        self.tags = QLabel("", self.detail_content)
+        self.tags = TagChips(self.detail_content)
         self.tags.setObjectName("predictionDetailTags")
-        self.tags.setWordWrap(True)
-        self.tags.setTextFormat(Qt.TextFormat.PlainText)
-        _make_selectable(self.tags)
-        apply_text_role(self.tags, TextRole.SECONDARY)
 
         current_forecast_label = QLabel("Current Forecast", self.detail_content)
         current_forecast_label.setObjectName("currentForecastLabel")
@@ -523,15 +520,14 @@ class PredictionDetailScreen(QWidget):
             self.detail_content,
         )
         identity_row = QWidget(summary_panel)
-        identity_layout = QHBoxLayout(identity_row)
+        identity_layout = FlowLayout(identity_row)
         identity_layout.setContentsMargins(0, 0, 0, 0)
         identity_layout.setSpacing(int(Spacing.CONTROL))
         identity_layout.addWidget(self.forecast_type)
         identity_layout.addWidget(self.status)
-        identity_layout.addStretch()
-        summary_layout.addWidget(identity_row)
+        identity_layout.addWidget(self.tags)
         summary_layout.addWidget(self.question)
-        summary_layout.addWidget(self.tags)
+        summary_layout.addWidget(identity_row)
         summary_layout.addSpacing(int(Spacing.CONTROL))
         summary_layout.addWidget(current_forecast_label)
         summary_layout.addWidget(self.probability)
@@ -963,7 +959,7 @@ class PredictionDetailScreen(QWidget):
                 "Predictions with meaningful history are preserved. Use Mark Invalid "
                 "when appropriate."
             )
-        self.tags.setText("  ".join(f"#{tag}" for tag in prediction.tags))
+        self.tags.set_tags(prediction.tags)
         self.tags.setHidden(not prediction.tags)
         self._show_optional_metadata(prediction)
         self._show_terminal_information(prediction)

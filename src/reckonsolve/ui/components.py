@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -27,6 +27,75 @@ from reckonsolve.ui.visual_system import (
     apply_surface_role,
     apply_text_role,
 )
+
+
+class SectionRule(QFrame):
+    """A palette-aware structural separator with no interactive behavior."""
+
+    def __init__(self, parent: QWidget, *, vertical: bool = False) -> None:
+        super().__init__(parent)
+        self.setProperty("reckonsolveRule", "vertical" if vertical else "horizontal")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        if vertical:
+            self.setFixedWidth(1)
+        else:
+            self.setFixedHeight(1)
+
+
+class _TagChip(QLabel):
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        # Long tag names may wrap without forcing a wider metadata row.
+        hint.setWidth(0)
+        return hint
+
+
+class TagChips(QWidget):
+    """Selectable, noninteractive tag names in a naturally wrapping group."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.names: tuple[str, ...] = ()
+        self.chips: list[QLabel] = []
+        self.flow = FlowLayout(self)
+        self.setMinimumWidth(0)
+        self.hide()
+
+    def set_tags(self, names: tuple[str, ...]) -> None:
+        if names == self.names:
+            return
+        self.flow.clear_widgets()
+        self.names, self.chips = tuple(names), []
+        for name in self.names:
+            chip = _TagChip(name, self)
+            chip.setTextFormat(Qt.TextFormat.PlainText)
+            chip.setWordWrap(True)
+            chip.setMinimumWidth(0)
+            chip.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+                | Qt.TextInteractionFlag.TextSelectableByKeyboard
+            )
+            chip.setProperty("reckonsolveTagChip", "true")
+            apply_text_role(chip, TextRole.SECONDARY)
+            self.chips.append(chip)
+            self.flow.addWidget(chip)
+        self.setAccessibleName("Tags: " + ", ".join(self.names))
+        self.setVisible(bool(self.names))
+        self.updateGeometry()
+
+    def clear(self) -> None:
+        self.set_tags(())
+
+    def sizeHint(self) -> QSize:
+        sizes = [chip.sizeHint() for chip in self.chips]
+        return QSize(
+            sum(size.width() for size in sizes)
+            + max(0, len(sizes) - 1) * self.flow.spacing(),
+            max((size.height() for size in sizes), default=0),
+        )
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, self.flow.minimumSize().height())
 
 
 class ProbabilityPresets(QWidget):

@@ -1,14 +1,12 @@
 """One compact toolbar, with page-appropriate actions and no navigation stack."""
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QWidget
 
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.visual_system import (
     ActionRole,
-    TextRole,
     apply_action_role,
-    apply_text_role,
 )
 from reckonsolve.ui.workspace_state import Route
 
@@ -37,14 +35,12 @@ class WorkspaceToolbar(QWidget):
     settings_requested = Signal()
     appearance_requested = Signal()
 
-    def __init__(self, title: str, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("workspaceToolbar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 10, 20, 10)
-        identity = QLabel(title, self)
-        apply_text_role(identity, TextRole.SECTION_TITLE)
-        layout.addWidget(identity)
         self.back = self._button(
             "", "workspaceBack", self.back_requested, LucideIcon.ARROW_LEFT
         )

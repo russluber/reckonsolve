@@ -1,7 +1,7 @@
 """Complete Detail reading, reflection and preserved-history journeys."""
 
 import runpy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
@@ -296,6 +296,157 @@ def test_workspace_outline_separates_gutters_without_changing_routes(
             assert pixel(0, 20) == QColor(colors.outer_canvas)
             assert colors.outer_canvas != colors.canvas
         assert window.current_screen_name == route
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_detail_metadata_chips_follow_question_with_visible_literal_tags(
+    workspace, qtbot, numeric, one_shot
+):
+    from test_one_shot_persistence import request
+
+    from reckonsolve.ui.numeric_interval import IntervalLegend
+
+    window, operations, clock, _database = workspace
+    tags = ("C#", "Visual review with a longer tag name")
+    if one_shot:
+        prediction = operations.one_shots.create(
+            replace(request(numeric, answered=False), tags=tags)
+        )
+    elif numeric:
+        prediction = operations.create_numeric_prediction(
+            "Read the question before its metadata",
+            "items",
+            0,
+            {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=clock.now() + timedelta(days=10),
+            tags=tags,
+        )
+    else:
+        prediction = operations.create_prediction(
+            "Read the question before its metadata",
+            65,
+            forecast_deadline=clock.now() + timedelta(days=10),
+            tags=tags,
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(70)
+            assert screen.tags.isVisible()
+            assert set(screen.tags.names) == set(tags)
+            question_bottom = (
+                screen.question.mapTo(screen, QPoint()).y() + screen.question.height()
+            )
+            assert screen.tags.mapTo(screen, QPoint()).y() >= question_bottom
+            for chip in screen.tags.chips:
+                assert chip.isVisible() and chip.width() > 0
+                assert chip.text() in tags
+                assert chip.textFormat() is Qt.TextFormat.PlainText
+                assert chip.height() >= chip.heightForWidth(chip.width())
+            if numeric:
+                legend = screen.findChild(IntervalLegend)
+                assert legend is not None and legend.isVisible()
+                assert {label.text() for label in legend.findChildren(QLabel)} == {
+                    "90% interval",
+                    "50% interval",
+                    "Median",
+                }
+                assert all(
+                    legend.findChild(QWidget, "intervalLegend" + kind).isVisible()
+                    for kind in ("Outer", "Inner", "Median")
+                )
+                if width == 1600:
+                    assert (
+                        len(
+                            {
+                                label.mapTo(legend, QPoint()).y()
+                                for label in legend.findChildren(QLabel)
+                            }
+                        )
+                        == 1
+                    )
+            assert screen.workspace.horizontalScrollBar().maximum() == 0
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_structural_rules_track_pane_motion_and_keep_drafts(workspace, qtbot, numeric):
+    from PySide6.QtGui import QAction
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    assert not window._toolbar.findChildren(QLabel)
+    window.navigate_to("Journal")
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading and bool(journal.cards))
+    assert journal.results_rule.y() > journal.filters_button.geometry().bottom()
+    assert journal.results_rule.y() < journal.cards[0].y()
+    actions = [
+        action
+        for action in journal.search_input.findChildren(QAction)
+        if action.objectName() == "lucideLeadingIcon"
+    ]
+    assert len(actions) == 1 and not actions[0].icon().isNull()
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    pane = screen.workspace
+    window.resize(1200, 850)
+    qtbot.wait(50)
+
+    def aligned():
+        return (
+            pane.pane_divider.x()
+            == pane.timeline_column.geometry().right() + 1 + pane.columns.spacing() // 2
+        )
+
+    qtbot.waitUntil(aligned)
+    assert pane.header_rule.geometry().bottom() < pane.panes.y()
+    assert pane.pane_divider.height() == pane.panes.height()
+    reading_x = pane.pane_divider.x()
+    screen.open_revise_forecast()
+    editor = pane.editor
+    editor.rationale_input.setPlainText("Preserve this uncommitted explanation.")
+    qtbot.waitUntil(lambda: pane._proportion == 400 and pane.timeline.widgetResizable())
+    qtbot.waitUntil(aligned)
+    assert pane.pane_divider.x() < reading_x
+    pane.tabs.setCurrentIndex(0)
+    qtbot.waitUntil(lambda: pane._proportion == 600 and pane.timeline.widgetResizable())
+    qtbot.waitUntil(aligned)
+    assert abs(pane.pane_divider.x() - reading_x) <= 1
+    window.appearance.toggle()
+    assert pane.editor is editor
+    assert (
+        editor.rationale_input.toPlainText() == "Preserve this uncommitted explanation."
+    )
+    assert (
+        len(
+            [
+                action
+                for action in journal.search_input.findChildren(QAction)
+                if action.objectName() == "lucideLeadingIcon"
+            ]
+        )
+        == 1
+    )
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
 
 
@@ -1006,6 +1157,13 @@ def test_terminal_panes_are_equal_and_task_tabs_own_the_context_heading(
     )
     pane = screen.workspace
     qtbot.waitUntil(lambda: pane._proportion == 500)
+    qtbot.waitUntil(
+        lambda: (
+            pane.pane_divider.x()
+            == pane.timeline_column.geometry().right() + 1 + pane.columns.spacing() // 2
+        )
+    )
+    assert pane.pane_divider.height() == pane.panes.height()
     assert pane.columns.stretch(0) == pane.columns.stretch(1)
     assert screen.overview_heading.text() == (
         "ARCHIVAL CONTEXT" if invalid else "OVERVIEW"

@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits, including narrative Detail and wider Journal; the latest workspace framing awaits human visual review. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
+This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits, including narrative Detail, wider Journal and workspace framing; the latest structural rules and Detail headers await human visual review. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
 
 Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
@@ -19,6 +19,12 @@ track, the mouse wheel and ordinary keyboard scrolling remain available.
 Detail uses flat reading sections. Thin lines separate Timeline entries, with the
 event name and recorded date/time together. Narrow panes wrap these headings while
 keeping the full text and historical actions available.
+
+The toolbar is separated from the page by a thin rule. Journal's search field has
+a magnifying glass, with another rule separating its controls from results. Detail
+places the Question above mode/status and outlined tag names. Its two panes share
+a vertical separator that follows the current reading/writing proportions. Numeric
+intervals include thin-line, thick-line and median-mark legend symbols beside text.
 
 ## In this guide
 

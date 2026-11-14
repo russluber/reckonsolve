@@ -1,7 +1,7 @@
 # Post-review workspace refinement verification — 2026-11-13
 
-The later [focused workspace continuation](#focused-workspace-widths-and-journal-rhythm)
-is implemented with its own evidence and pending human review. Earlier acceptance
+The latest [structural rules and Detail headers](#structural-rules-and-detail-headers--2026-11-14)
+are implemented with their own evidence and pending human review. Earlier acceptance
 below remains tied to the previously evaluated refinements.
 
 This is the unreleased [authorized feedback package](../../product-spec.md#3815-authorized-post-review-workspace-refinements),
@@ -679,3 +679,68 @@ preservation passed. All stable J/R identifiers, withdrawals and reference packs
 boundaries remain intact; notes remain ignored. No executable code changed after
 these final runs. Subsequent edits close documentation/evidence only; the short
 human framing review remains pending.
+
+## Structural rules and Detail headers — 2026-11-14
+
+The user accepted framed workspaces and reports both checkpoints saved/pushed.
+Public `31c5197` on `ux-redesign` was locally clean. The next request separately
+authorizes reference-aligned structural rules, a clean toolbar, Question-first
+Detail metadata/tag chips and actual Numeric legend symbols. No consequential
+unresolved choice or protected-rule conflict was found.
+
+The shared toolbar omits the duplicate in-content product/development name while
+native window titles retain their identity. Its bottom rule separates navigation
+from content. Journal adds a rule between search/filter controls and results and
+uses the bundled Lucide magnifier inside its existing search field; Enter/Search,
+clear and Ctrl+F behavior remain. The icon refreshes with the palette without
+adding an input command or duplicate action.
+
+Detail has a persistent rule between forecast/actions and panes, plus a
+mouse-transparent vertical rule following the existing automatic 60/40, 40/60 and
+50/50 boundary through native layout movement. There is no manual splitter or
+forced history reflow. The full Question precedes wrapping mode/status/tag chips;
+literal selectable tag names use quiet outlines distinct from filled identity/
+status chips, without generated hashtag prefixes. Numeric Detail has matching
+thin 90%, thick 50% and vertical Median marks beside the legend text in both modes.
+Adaptive timing, complete values/units, accepted widths, flat reading and all
+history/scoring/storage rules remain.
+
+Final source passed all **1,308 tests** in three disjoint groups: **797 in 309.28
+seconds**, **490 in 241.04 seconds** and **21 visual-system cases in 0.93 seconds**,
+with zero failures, errors or skips. The groups partition the complete suite before
+`test_one_shot_workflows.py`, the remainder excluding `test_visual_system.py`, and
+that visual-system module independently, using separate disposable directories/
+caches. Six new final-source header/tag/legend/divider cases also passed in 7.35
+seconds. They cover all four contracts, visible literal wrapped tags below the
+Question, wide horizontal legends, both palettes and wide/minimum widths, moving
+rules and retained drafts. Earlier focused runs passed 138 reading/history/
+workflow/Journal/icon cases in 125.38 seconds before the final decorative-action
+naming adjustment, and 57 metadata/restart cases in 29.91 seconds.
+
+**264 native offscreen captures** cover Journal/Detail and Performance at Qt scales
+1/1.5/2 with real Windows Segoe UI: 204 reading/writing captures across 14 available
+contract/state combinations, and 60 report captures with paired/stacked sections,
+six supporting expansions and pinned controls. Both palettes, wide/minimum
+layouts, draft retention, horizontal overflow, notification containment, report
+identity and unchanged canonical facts passed. Representative final Journal,
+Numeric reading/revision and One-Shot result captures were inspected, including
+scaled minimum-width geometry. The final decorative-action naming change affects
+no painted geometry. Generated evidence remains ignored under
+`build/ux-focused-width/`. Simulations do not establish physical Windows/
+accessibility or human visual acceptance.
+
+The short human review uses `uv run python tools/run_visual_review.py detail`:
+inspect Journal's clean toolbar, rules and magnifier; compare Detail's Question-first
+chips and Numeric legend; retain a revision draft while consulting Overview and
+watch the divider through pane changes. Review both palettes and narrow/wide
+windows. Earlier acceptance remains scoped; this later composition awaits review.
+No executable code changed after the final suite runs. Installed tools, personal
+data and all Git/version/tag/publication actions remain user-owned and untouched.
+
+**Verification closure:** Locked offline sync, Ruff check/format (320 files),
+public/private documentation (356/315 local links), both whitespace checks and
+preservation passed. All stable J/R identifiers, withdrawals, reference packs and
+95 public-reference mirrors remain. Protected application/data/domain/analytics,
+bundled assets, migrations and dependencies are unchanged; notes remain ignored.
+Final edits only close documentation/evidence. Human review of this composition
+remains separate from these automated and offscreen checks.

@@ -44,6 +44,7 @@ from reckonsolve.domain.quantiles import (
     QuantileRevision,
 )
 from reckonsolve.ui import MainWindow
+from reckonsolve.ui.components import TagChips
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
@@ -308,8 +309,9 @@ def test_prediction_detail_shows_present_metadata_and_hides_missing_sections(
     window = MainWindow(FakePredictionOperations(latest))
     qtbot.addWidget(window)
 
-    assert _required_child(window, QLabel, "predictionDetailTags").text() == (
-        "#release  #desktop"
+    assert _required_child(window, TagChips, "predictionDetailTags").names == (
+        "release",
+        "desktop",
     )
     deadline = _required_child(window, QLabel, "predictionDetailForecastDeadline")
     assert "UTC" not in deadline.text()

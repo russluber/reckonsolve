@@ -35,8 +35,9 @@ from reckonsolve.domain.journal import (
     JournalView,
 )
 from reckonsolve.domain.search import SearchMatchMode
-from reckonsolve.ui.components import PageHeader
+from reckonsolve.ui.components import PageHeader, SectionRule
 from reckonsolve.ui.date_display import date_context, format_date
+from reckonsolve.ui.icons import LucideIcon, apply_lucide_leading_icon
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
     ActionRole,
@@ -108,6 +109,7 @@ class JournalScreen(QWidget):
         self.search_input.setPlaceholderText("Search predictions")
         self.search_input.setAccessibleName("Search predictions")
         self.search_input.setClearButtonEnabled(True)
+        apply_lucide_leading_icon(self.search_input, LucideIcon.SEARCH)
         search_row = QHBoxLayout()
         search_row.addWidget(self.search_input, 1)
         self.search_button = QPushButton("Search", self.content)
@@ -161,6 +163,9 @@ class JournalScreen(QWidget):
         self.count.setObjectName("journalResultCount")
         self.count.hide()
         self.body.addWidget(self.count)
+        self.results_rule = SectionRule(self.content)
+        self.results_rule.setObjectName("journalControlsRule")
+        self.body.addWidget(self.results_rule)
         self.message = QLabel("Loading Journal…", self.content)
         self.message.setObjectName("journalResultsState")
         self.message.setWordWrap(True)

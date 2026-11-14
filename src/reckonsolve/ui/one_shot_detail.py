@@ -39,6 +39,7 @@ from reckonsolve.quantile_display import exact_score_text
 from reckonsolve.ui.components import (
     ContentPanel,
     StatusBadge,
+    TagChips,
 )
 from reckonsolve.ui.contextual_forms import BodyEditor
 from reckonsolve.ui.date_display import format_date, format_reported_time
@@ -51,7 +52,7 @@ from reckonsolve.ui.detail_reading import (
 )
 from reckonsolve.ui.detail_workspace import DetailWorkspace, collapse_section
 from reckonsolve.ui.layouts import FlowLayout
-from reckonsolve.ui.numeric_interval import NumericInterval
+from reckonsolve.ui.numeric_interval import IntervalLegend, NumericInterval
 from reckonsolve.ui.one_shot import OneShotEditDialog, text_label
 from reckonsolve.ui.prediction_dialogs import (
     CorrectInvalidationReasonDialog,
@@ -138,7 +139,8 @@ class OneShotDetailScreen(QWidget):
         header = QVBoxLayout(summary)
         header.setContentsMargins(0, 0, 0, 0)
         badges = QWidget(summary)
-        badge_row = QHBoxLayout(badges)
+        badges.setObjectName("oneShotMetadataRow")
+        badge_row = FlowLayout(badges)
         badge_row.setContentsMargins(0, 0, 0, 0)
         badge_row.addWidget(
             StatusBadge(
@@ -160,12 +162,15 @@ class OneShotDetailScreen(QWidget):
                 parent=badges,
             )
         )
-        badge_row.addStretch()
-        header.addWidget(badges)
+        self.tags = TagChips(badges)
+        self.tags.setObjectName("oneShotTags")
+        self.tags.set_tags(detail.tags)
+        badge_row.addWidget(self.tags)
         self.question = text_label(detail.question, summary)
         self.question.setObjectName("oneShotQuestion")
         apply_text_role(self.question, TextRole.QUESTION)
         header.addWidget(self.question)
+        header.addWidget(badges)
         transcription = [
             item
             for item in record.corrections
@@ -190,13 +195,13 @@ class OneShotDetailScreen(QWidget):
             self.interval.set_forecast(record.effective.quantiles, unit)
             forecast_layout.addWidget(self.interval)
             self.forecast.hide()
-            forecast_layout.addWidget(
-                text_label(
-                    "90% interval · 50% interval · Median"
-                    + (f" · {unit}" if unit else ""),
-                    forecast_summary,
-                )
-            )
+            legend_row = QWidget(forecast_summary)
+            legend_layout = FlowLayout(legend_row)
+            legend_layout.addWidget(IntervalLegend(legend_row))
+            unit_label = text_label(unit, legend_row)
+            apply_text_role(unit_label, TextRole.SECONDARY)
+            legend_layout.addWidget(unit_label)
+            forecast_layout.addWidget(legend_row)
         else:
             forecast_layout.addWidget(self.forecast)
         forecast_layout.addWidget(
@@ -226,10 +231,6 @@ class OneShotDetailScreen(QWidget):
                 timing_tooltip=invalidation_exact_timing(invalid),
             )
             header.addWidget(self.terminal_summary)
-        if detail.tags:
-            self.tags = text_label("  ".join(f"#{t}" for t in detail.tags), summary)
-            self.tags.setObjectName("oneShotTags")
-            header.addWidget(self.tags)
         action_panel = QWidget(self)
         actions = FlowLayout(action_panel)
         self.answer_button = QPushButton("Add Answer", action_panel)

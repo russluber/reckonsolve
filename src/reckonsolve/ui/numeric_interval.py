@@ -4,10 +4,77 @@ from fractions import Fraction
 
 from PySide6.QtCore import QEvent, QPointF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 from reckonsolve.domain.quantiles import FiveQuantiles, quantile_summary
+from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import TextRole, apply_text_role, semantic_colors
+
+
+class IntervalLegend(QWidget):
+    """Text and matching stroke shapes explain the committed interval display."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setObjectName("numericIntervalLegend")
+        self.setAccessibleName(
+            "Numeric interval legend: thin line for 90% interval, thick line for 50% interval, vertical mark for median"
+        )
+        layout = FlowLayout(self)
+        for kind, title in (
+            ("outer", "90% interval"),
+            ("inner", "50% interval"),
+            ("median", "Median"),
+        ):
+            group = QWidget(self)
+            row = QHBoxLayout(group)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(4)
+            row.addWidget(_LegendSwatch(kind, group))
+            label = QLabel(title, group)
+            apply_text_role(label, TextRole.SECONDARY)
+            row.addWidget(label)
+            layout.addWidget(group)
+
+    def sizeHint(self) -> QSize:
+        layout = self.layout()
+        sizes = [layout.itemAt(index).sizeHint() for index in range(layout.count())]
+        return QSize(
+            sum(size.width() for size in sizes)
+            + max(0, len(sizes) - 1) * layout.spacing(),
+            max((size.height() for size in sizes), default=0),
+        )
+
+
+class _LegendSwatch(QWidget):
+    def __init__(self, kind: str, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.kind = kind
+        self.setObjectName("intervalLegend" + kind.title())
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+    def sizeHint(self) -> QSize:
+        return QSize(20, max(18, self.fontMetrics().height()))
+
+    def paintEvent(self, event) -> None:
+        colors = semantic_colors(self.window().palette())
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(
+            QPen(
+                QColor(colors.text if self.kind == "median" else colors.accent),
+                9 if self.kind == "inner" else 3,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.FlatCap,
+            )
+        )
+        if self.kind == "median":
+            x = self.width() / 2
+            painter.drawLine(QPointF(x, 3), QPointF(x, self.height() - 3))
+        else:
+            y = self.height() / 2
+            painter.drawLine(QPointF(1, y), QPointF(self.width() - 1, y))
+        painter.end()
 
 
 class NumericInterval(QWidget):

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from PySide6.QtCore import QEasingCurve, Qt, QVariantAnimation, Signal
+from PySide6.QtCore import QEasingCurve, QEvent, Qt, QVariantAnimation, Signal
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QCheckBox,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from reckonsolve.ui.components import SectionRule
 from reckonsolve.ui.creation_task import form_values
 from reckonsolve.ui.date_display import format_datetime
 from reckonsolve.ui.visual_system import (
@@ -67,6 +68,12 @@ class DetailWorkspace(QScrollArea):
         self.tabs.currentChanged.connect(self._tab_changed)
         self.columns.addWidget(self.timeline_column, 3)
         self.columns.addWidget(self.tabs, 2)
+        self.pane_divider = SectionRule(self.panes, vertical=True)
+        self.pane_divider.setObjectName("detailPaneDivider")
+        self.timeline_column.installEventFilter(self)
+        self.panes.installEventFilter(self)
+        self.header_rule = SectionRule(content)
+        self.header_rule.setObjectName("detailHeaderRule")
         self.editor: QDialog | None = None
         self.editor_scroll: QScrollArea | None = None
         self.kind = ""
@@ -86,6 +93,26 @@ class DetailWorkspace(QScrollArea):
     def set_timeline_controls(self, controls: QWidget) -> None:
         """Keep history navigation reachable independently of its scroll position."""
         self.timeline_column_layout.insertWidget(0, controls)
+
+    def eventFilter(self, watched, event) -> bool:
+        if (
+            hasattr(self, "pane_divider")
+            and watched in (self.panes, self.timeline_column)
+            and event.type()
+            in (
+                QEvent.Type.Resize,
+                QEvent.Type.Move,
+            )
+        ):
+            # Follow native layout geometry, including every animation frame,
+            # without adding a draggable splitter or reflowing history.
+            x = (
+                self.timeline_column.geometry().right()
+                + 1
+                + self.columns.spacing() // 2
+            )
+            self.pane_divider.setGeometry(x, 0, 1, self.panes.height())
+        return super().eventFilter(watched, event)
 
     def set_reading_context(self, heading: QLabel, *, terminal: bool) -> None:
         self.overview_heading = heading
@@ -129,6 +156,8 @@ class DetailWorkspace(QScrollArea):
         self.column.setSpacing(10)
         self.column.addWidget(summary)
         self.column.addWidget(actions)
+        self.column.addWidget(self.header_rule)
+        self.header_rule.show()
         self.column.addWidget(self.panes, 1)
         for widget in timeline:
             self.timeline_body.layout().addWidget(widget)
@@ -276,7 +305,9 @@ class DetailWorkspace(QScrollArea):
                     item.widget().deleteLater()
         while self.column.count():
             widget = self.column.takeAt(0).widget()
-            if widget is not None and widget is not self.panes:
+            if widget is self.header_rule:
+                widget.hide()
+            elif widget is not None and widget is not self.panes:
                 widget.hide()
                 widget.deleteLater()
 
@@ -348,7 +379,9 @@ class DetailWorkspace(QScrollArea):
 class HeaderTiming(QWidget):
     """Paired committed timing/Deadline labels; no draft-derived facts."""
 
-    def __init__(self, deadline: QWidget, parent: QWidget, caption: str) -> None:
+    def __init__(
+        self, deadline: QWidget, parent: QWidget, caption: str | QWidget
+    ) -> None:
         super().__init__(parent)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
@@ -356,9 +389,10 @@ class HeaderTiming(QWidget):
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(4)
-        label = QLabel(caption, left)
-        label.setWordWrap(True)
-        apply_text_role(label, TextRole.SECONDARY)
+        label = caption if isinstance(caption, QWidget) else QLabel(caption, left)
+        if isinstance(label, QLabel):
+            label.setWordWrap(True)
+            apply_text_role(label, TextRole.SECONDARY)
         left_layout.addWidget(label)
         self.activity = QLabel(self)
         self.activity.setWordWrap(True)

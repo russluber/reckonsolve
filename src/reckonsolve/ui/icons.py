@@ -7,9 +7,9 @@ from functools import lru_cache
 from importlib.resources import files
 
 from PySide6.QtCore import QByteArray, QEvent, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QAbstractButton, QWidget
+from PySide6.QtWidgets import QAbstractButton, QLineEdit, QWidget
 
 from reckonsolve.ui.assets import icons as icon_resources
 from reckonsolve.ui.visual_system import (
@@ -81,6 +81,18 @@ def apply_lucide_icon(
         button.setAccessibleName(button.text().replace("&", ""))
 
 
+def apply_lucide_leading_icon(edit: QLineEdit, name: LucideIcon) -> None:
+    """Add a decorative leading symbol without adding a second input command."""
+    edit.setProperty(_ICON_NAME_PROPERTY, name.value)
+    action = edit.findChild(QAction, "lucideLeadingIcon")
+    if action is None:
+        action = edit.addAction(QIcon(), QLineEdit.ActionPosition.LeadingPosition)
+        action.setObjectName("lucideLeadingIcon")
+        action.setText(edit.accessibleName() or "Search")
+        action.setEnabled(False)
+    action.setIcon(lucide_icon(name, edit.palette()))
+
+
 def refresh_lucide_icons(root: QWidget) -> None:
     """Re-render remembered button icons after the active Qt palette changes."""
 
@@ -94,6 +106,10 @@ def refresh_lucide_icons(root: QWidget) -> None:
             LucideIcon(raw_name),
             size=size if isinstance(size, int) else 18,
         )
+    for edit in root.findChildren(QLineEdit):
+        raw_name = edit.property(_ICON_NAME_PROPERTY)
+        if isinstance(raw_name, str) and raw_name:
+            apply_lucide_leading_icon(edit, LucideIcon(raw_name))
 
 
 def is_palette_change(event: QEvent) -> bool:

@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
         self.appearance = AppearanceController(
             self._presentation_state.appearance, self
         )
-        self._toolbar = WorkspaceToolbar(window_title, self)
+        self._toolbar = WorkspaceToolbar(self)
         self._screen_stack = QStackedWidget(self)
         self._screen_stack.setObjectName("screenStack")
         self._journal_screen = JournalScreen(

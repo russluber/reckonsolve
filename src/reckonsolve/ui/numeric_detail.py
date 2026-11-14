@@ -36,6 +36,7 @@ from reckonsolve.ui.components import (
     EmptyStateLabel,
     PageHeader,
     StatusBadge,
+    TagChips,
 )
 from reckonsolve.ui.date_display import format_date
 from reckonsolve.ui.detail_reading import (
@@ -64,7 +65,7 @@ from reckonsolve.ui.detail_workspace import (
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.layouts import FlowLayout
-from reckonsolve.ui.numeric_interval import NumericInterval
+from reckonsolve.ui.numeric_interval import IntervalLegend, NumericInterval
 from reckonsolve.ui.postmortem_action import PostmortemSkipButton
 from reckonsolve.ui.prediction_contracts import (
     NumericPredictionSnapshot,
@@ -170,12 +171,8 @@ class NumericPredictionDetailScreen(QWidget):
         _make_selectable(self.question)
         apply_text_role(self.question, TextRole.PAGE_TITLE)
 
-        self.tags = QLabel("", self.detail_content)
+        self.tags = TagChips(self.detail_content)
         self.tags.setObjectName("numericPredictionTags")
-        self.tags.setTextFormat(Qt.TextFormat.PlainText)
-        self.tags.setWordWrap(True)
-        _make_selectable(self.tags)
-        apply_text_role(self.tags, TextRole.SECONDARY)
 
         self.forecast_type = StatusBadge(
             "Adaptive · Numeric",
@@ -525,15 +522,14 @@ class NumericPredictionDetailScreen(QWidget):
             self.detail_content,
         )
         identity_row = QWidget(summary_panel)
-        identity_layout = QHBoxLayout(identity_row)
+        identity_layout = FlowLayout(identity_row)
         identity_layout.setContentsMargins(0, 0, 0, 0)
         identity_layout.setSpacing(int(Spacing.CONTROL))
         identity_layout.addWidget(self.forecast_type)
         identity_layout.addWidget(self.status)
-        identity_layout.addStretch()
-        summary_layout.addWidget(identity_row)
+        identity_layout.addWidget(self.tags)
         summary_layout.addWidget(self.question)
-        summary_layout.addWidget(self.tags)
+        summary_layout.addWidget(identity_row)
         summary_layout.addSpacing(int(Spacing.CONTROL))
         summary_layout.addWidget(forecast_label)
         summary_layout.addWidget(self.interval)
@@ -612,7 +608,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.header_timing = HeaderTiming(
             self.forecast_deadline_row,
             summary_panel,
-            "90% interval · 50% interval · Median",
+            IntervalLegend(summary_panel),
         )
         summary_layout.addWidget(self.header_timing)
         self.terminal_summary = TerminalSummary(summary_panel)
@@ -889,7 +885,7 @@ class NumericPredictionDetailScreen(QWidget):
 
         revision = prediction.current_revision
         self.question.setText(prediction.question)
-        self.tags.setText("  ".join(f"#{tag}" for tag in prediction.tags))
+        self.tags.set_tags(prediction.tags)
         self.tags.setHidden(not prediction.tags)
         self.status.setText(prediction.status.value.upper())
         apply_badge_role(self.status, _status_tone(prediction.status))

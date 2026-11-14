@@ -365,6 +365,21 @@ QWidget#workspaceSurface {{
     border: 1px solid {color.workspace_border};
     border-radius: {panel_radius}px;
 }}
+QWidget#workspaceToolbar {{
+    border: none;
+    border-bottom: 1px solid {color.workspace_border};
+}}
+QFrame[reckonsolveRule="horizontal"], QFrame[reckonsolveRule="vertical"] {{
+    border: none;
+    background-color: {color.workspace_border};
+}}
+QLabel[reckonsolveTagChip="true"] {{
+    color: {color.secondary_text};
+    background-color: transparent;
+    border: 1px solid {color.workspace_border};
+    border-radius: {int(Radius.SMALL)}px;
+    padding: 2px 6px;
+}}
 
 QScrollArea#dashboardScrollArea,
 QScrollArea#settingsScrollArea,

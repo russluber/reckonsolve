@@ -33,6 +33,7 @@ from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
 from reckonsolve.data.migrations import MIGRATIONS, MigrationError
 from reckonsolve.identity import DEVELOPMENT_APPLICATION, STABLE_APPLICATION
+from reckonsolve.ui.components import TagChips
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 
@@ -991,7 +992,7 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
         QLabel,
         "predictionDetailResolutionCriteria",
     )
-    reopened_tags = second_runtime.window.findChild(QLabel, "predictionDetailTags")
+    reopened_tags = second_runtime.window.findChild(TagChips, "predictionDetailTags")
     reopened_deadline = second_runtime.window.findChild(
         QLabel,
         "predictionDetailForecastDeadline",
@@ -1011,7 +1012,7 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     assert question.text() == "Will the M3 workflow persist after restart?"
     assert reopened_background.text() == "End-to-end metadata context."
     assert reopened_criteria.text() == ("Yes if the same details reopen from SQLite.")
-    assert reopened_tags.text() == "#m3  #persistence"
+    assert reopened_tags.names == ("m3", "persistence")
     assert "UTC" not in reopened_deadline.text()
     assert (
         datetime.fromisoformat(

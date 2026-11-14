@@ -45,6 +45,7 @@ from reckonsolve.domain.quantiles import (
     FiveQuantiles,
 )
 from reckonsolve.ui import MainWindow
+from reckonsolve.ui.components import TagChips
 
 
 def test_numeric_edit_details_reuses_metadata_dialog_and_preserves_definition(
@@ -285,13 +286,16 @@ def test_user_definition_text_is_always_rendered_as_plain_text(qtbot: QtBot) -> 
 
     for object_name in (
         "predictionDetailQuestion",
-        "predictionDetailTags",
         "predictionDetailBackground",
         "predictionDetailResolutionCriteria",
         "definitionChange4Question",
     ):
         label = _required_child(window, QLabel, object_name)
         assert label.textFormat() is Qt.TextFormat.PlainText
+    assert all(
+        chip.textFormat() is Qt.TextFormat.PlainText
+        for chip in _required_child(window, TagChips, "predictionDetailTags").chips
+    )
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == markup
     assert (
         "<em>Old literal</em>"
@@ -457,8 +461,9 @@ def test_unprotected_edit_saves_without_warning_and_refreshes_detail(
     assert _required_child(window, QLabel, "predictionDetailBackground").text() == (
         "New background"
     )
-    assert _required_child(window, QLabel, "predictionDetailTags").text() == (
-        "#launch  #ui"
+    assert _required_child(window, TagChips, "predictionDetailTags").names == (
+        "launch",
+        "ui",
     )
     assert (
         "2026"

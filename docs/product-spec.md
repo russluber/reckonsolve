@@ -2436,3 +2436,27 @@ This is shared shell presentation only, with no new setting, shadow/animation
 effect, dependency, workflow or data change. Check actual border/background paint,
 all routes, both palettes and narrow/scaled geometry. Human visual acceptance of
 the new framing remains separate from the accepted interior composition.
+
+**Structural rules and Detail headers — authorized 2026-11-14:** The user accepted
+the framed workspaces, then requested closer alignment with the Journal/Detail
+references. Omit the duplicate product/development name from the shared toolbar;
+retain the native window's stable/development identity and all toolbar action scopes.
+New stays above Journal in the toolbar. Add a quiet toolbar/content rule and a
+Journal rule between search/filter controls and results. Use the bundled Lucide
+search symbol at the leading edge of Search predictions, retaining explicit
+Enter/Search submission, clear behavior, keyboard focus and palette refresh.
+
+Detail adds a rule below its question/forecast/actions block and a noninteractive
+vertical rule between Timeline and Overview/task content. Follow actual automatic
+60/40, 40/60 and 50/50 pane geometry through resize and motion without a manual
+splitter or history rebuild. Place the full Question first, followed by mode/type,
+status and tags in a wrapping metadata row. Show exact selectable tag names as
+quiet outlined chips without a generated hashtag prefix, distinct from filled
+type/status chips. Preserve original names, search/history targets and all tag
+relationships. Numeric Detail's interval legend uses an actual thin 90% line,
+thick 50% line and vertical Median mark alongside readable text, matching the
+committed interval's palette and leaving exact values, ties and units unchanged.
+Apply the shared presentation consistently across supported Detail contracts,
+retaining guards, focus, draft/source/scroll state, disclosure defaults and scoring/
+storage boundaries. Verify rules, metadata/legend wrapping, pane motion, both
+palettes and narrow/scaled geometry; human visual review remains separate.

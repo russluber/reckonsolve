@@ -5,14 +5,15 @@ All notable changes to Reckonsolve are documented here.
 ## Unreleased
 
 Earlier saved refinements were checked and accepted by the user; the latest
-workspace-framing follow-up awaits visual review.
+structural-rule and Detail-header follow-up awaits visual review.
 Source-package readiness and a controlled ordinary-use update procedure are recorded
 separately; no installed-tool replacement or publication has occurred.
 
 Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, relocation and the requested later refinements are accepted with recorded limits. Source-package readiness is separate from any later everyday-use update and release. Not a published release.
 
 - Centered Journal and Prediction Detail at the same comfortable reading width while retaining native resizing and remembered geometry; balanced Journal typography and corrected excess height in wrapping Timeline headings. Narrative reading and the wider Journal have scoped user acceptance.
-- A quiet outer workspace outline and slightly deeper side margins separate the centered working surface in both appearances, retaining the accepted interior palette and flat reading sections. This latest framing awaits human visual review.
+- A quiet outer workspace outline and slightly deeper side margins separate the centered working surface in both appearances, retaining the accepted interior palette and flat reading sections. This framing has scoped user acceptance.
+- Structural rules separate the toolbar, Journal controls/results and Detail header/panes. The shared toolbar omits its duplicate product label; Journal uses a bundled Lucide search symbol. Detail places mode/status and outlined literal tag names below Question, and Numeric intervals include real thin/thick/median legend marks. This latest composition awaits human visual review.
 - Performance also uses a centered, wider report workspace, retaining paired/stacked sections, pinned Tag / Reset View controls and session scope/disclosures.
 - Quieter shared scrollbars retain a wider grab area and native scrolling controls. Prediction Detail has a slightly wider reading area while preserving side margins and pane proportions.
 - Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
