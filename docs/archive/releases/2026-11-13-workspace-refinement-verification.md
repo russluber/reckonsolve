@@ -515,3 +515,58 @@ are unchanged, and notes remain ignored by the public repository. The 60 native
 captures and focused tests above supplement this full run. Human visual acceptance
 is pending. Subsequent edits only close documentation/evidence; executable code did
 not change after the full-suite run.
+
+## Quieter scrollbars and roomier Detail — 2026-11-14
+
+**Authorized and implemented; human review pending.** The user reported the
+Performance checkpoint saved/pushed, then requested less intrusive side scrollbars
+and a little more Detail width while retaining side margins. This continuation
+starts from locally clean public `79989a6` on `ux-redesign`. Earlier accepted
+journeys and test runs retain their original source scope.
+
+Detail's shared content cap increases from 1,120 to 1,200 logical pixels, reducing
+each side margin by 40 pixels in a sufficiently wide window. Smaller windows use
+available width. Journal/Performance retain their 1,024/1,280 limits. Native window
+geometry/preferences, four-contract pane proportions/motion, source context,
+drafts and canonical history remain unchanged.
+
+The shared native scrollbar stylesheet uses transparent tracks and rounded neutral
+8-pixel thumb fills inside a 14-pixel slider hit lane. Hover, pressed and focus
+states remain visible. End-arrow boxes are omitted; Qt still owns track paging,
+wheel, dragging and keyboard actions. Both orientations, existing visibility
+policies and independent Detail panes remain. There is no custom scrolling engine,
+auto-hide behavior, preference, dependency or lower-layer change.
+
+Final executable source passed **1,296 tests in 712.70 seconds**, with zero
+failures, errors or skips. The ten focused scrollbar interaction/contrast cases
+also passed independently in 0.89 seconds across Light/Dark, both orientations
+and windows11/Fusion styles. They cover the inset hit lane, dragging,
+Home/End/Page Down, track paging and native wheel input.
+
+Disposable fixtures produced **264 native offscreen captures** across simulated
+Qt scales 1/1.5/2: 204 Journal/Detail captures and 60 Performance captures. The
+Journal/Detail matrix covers both palettes, 14 available four-contract/lifecycle
+reading combinations at wide/minimum sizes, Binary/Numeric revision drafts,
+appearance/width changes, pane ratios and notification containment. The Performance
+matrix covers paired/stacked widths, six supporting expansions and pinned controls.
+Horizontal-overflow, draft retention, report identity and unchanged canonical
+snapshot/report facts checks passed. Representative wide/minimum reading,
+writing and expanded report captures were inspected. Offscreen simulations do not
+establish physical Windows scaling, accessibility or human visual acceptance.
+Generated evidence remains ignored under `build/ux-focused-width/`.
+
+For the bounded human review, use the existing disposable detail and performance
+profiles. Compare both palettes, drag/wheel/key-scroll in Journal, independent
+Detail panes and Performance, then maximize/narrow Detail and switch appearance
+with a revision draft present. Confirm the additional room still leaves side
+margins at wide sizes. Installed tools and personal data are unchanged. All Git,
+version/tag and publication steps remain user-owned.
+
+**Verification closure:** Locked offline sync, Ruff check/format, public/private
+documentation (356/307 local links), both whitespace checks and preservation
+passed. All 66 J IDs, 42 R IDs, withdrawn R-33/R-34 and reference packs remain;
+95 public-reference mirrors and lower-layer boundaries were checked. Protected
+application/data/domain/analytics, migrations, assets and dependencies are unchanged;
+private notes remain ignored. No executable code changed after the full-suite
+run; subsequent edits only close documentation/evidence. Human visual acceptance
+of this source remains pending.

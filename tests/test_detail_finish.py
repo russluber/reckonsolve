@@ -140,7 +140,7 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
         )
         window._open_prediction(prediction.prediction_id)
         qtbot.wait(60)
-        assert content.width() == min(window.width(), 1120)
+        assert content.width() == min(window.width(), 1200)
         assert (
             abs(
                 content.geometry().center().x()

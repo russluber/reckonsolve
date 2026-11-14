@@ -55,7 +55,7 @@ class ContentWidth(IntEnum):
     """Comfortable workspace widths in Qt logical pixels, not window limits."""
 
     JOURNAL = 1024
-    DETAIL = 1120
+    DETAIL = 1200
     PERFORMANCE = 1280
 
 
@@ -131,6 +131,7 @@ class SemanticColors:
     input: str
     text: str
     secondary_text: str
+    scroll_thumb: str
     border: str
     disabled_text: str
     disabled_surface: str
@@ -231,6 +232,12 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         "#75808c" if is_dark else "#66717d",
         minimum=2.0,
     )
+    scroll_thumb = _mix_colors(canvas, text, 0.5)
+    if any(
+        contrast_ratio(scroll_thumb, background) < 3.0
+        for background in (canvas, surface, raised, input_color)
+    ):
+        scroll_thumb = text
 
     if is_dark:
         return SemanticColors(
@@ -241,6 +248,7 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
             input=input_color,
             text=text,
             secondary_text=secondary_text,
+            scroll_thumb=scroll_thumb,
             border=border,
             disabled_text="#89928d",
             disabled_surface="#2a302d",
@@ -274,6 +282,7 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         input=input_color,
         text=text,
         secondary_text=secondary_text,
+        scroll_thumb=scroll_thumb,
         border=border,
         disabled_text="#747b78",
         disabled_surface="#e3e7e5",
@@ -340,6 +349,62 @@ QScrollArea#numericPredictionDetailScrollArea > QWidget > QWidget,
 QScrollArea#predictionBrowserControlsScrollArea > QWidget > QWidget {{
     background-color: transparent;
     border: none;
+}}
+
+/* Keep a 14-pixel native hit lane while painting an inset 8-pixel thumb.
+   A canvas-colored border preserves rounded inner corners in Qt's box model. */
+QScrollBar:vertical {{
+    width: 14px;
+    margin: 0;
+    border: none;
+    background: transparent;
+}}
+QScrollBar:horizontal {{
+    height: 14px;
+    margin: 0;
+    border: none;
+    background: transparent;
+}}
+QScrollBar::handle:vertical {{
+    min-height: 28px;
+    border: 3px solid {color.canvas};
+    border-radius: 7px;
+    background: {color.scroll_thumb};
+}}
+QScrollBar::handle:horizontal {{
+    min-width: 28px;
+    border: 3px solid {color.canvas};
+    border-radius: 7px;
+    background: {color.scroll_thumb};
+}}
+QScrollBar::handle:hover {{
+    background-color: {color.secondary_text};
+}}
+QScrollBar::handle:focus {{
+    background-color: {color.accent};
+}}
+QScrollBar::handle:pressed {{
+    background-color: {color.text};
+}}
+QScrollBar::handle:disabled {{
+    background-color: {color.disabled_text};
+}}
+QScrollBar::add-line, QScrollBar::sub-line {{
+    width: 0;
+    height: 0;
+    border: none;
+    background: transparent;
+}}
+QScrollBar::add-page, QScrollBar::sub-page,
+QAbstractScrollArea::corner {{
+    border: none;
+    background: transparent;
+}}
+QScrollBar::up-arrow, QScrollBar::down-arrow,
+QScrollBar::left-arrow, QScrollBar::right-arrow {{
+    width: 0;
+    height: 0;
+    image: none;
 }}
 
 QLabel[reckonsolveTextRole="secondary"],

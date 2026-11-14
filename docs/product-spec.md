@@ -2383,3 +2383,20 @@ the remaining screens keep their existing behavior. No new setting, schema,
 dependency, installed-tool/data operation or Git/release action is selected. Verify
 wide/narrow layouts and retained scope/disclosures in both palettes; human visual
 review remains separate from source checks.
+
+**Scrollbar and Detail width tuning — authorized 2026-11-14:** The user requested
+less intrusive scrollbars across the redesigned screens and slightly more Detail
+width while retaining side margins. Increase Detail's maximum working width from
+1,120 to 1,200 logical pixels; Journal and Performance retain their existing limits.
+Preserve native window sizing/preferences and the existing reading/writing pane
+proportions, exact forecast context, source returns and retained drafts/scroll state.
+
+Use a shared quiet scrollbar treatment in both palettes: transparent tracks, rounded
+neutral thumbs, clearer hover/pressed/focus feedback and no end-arrow boxes. Keep a
+usable native hit area around the narrower painted thumb, visible position feedback
+when scrolling is available, and readable nontext contrast. Retain native wheel,
+keyboard, track paging and dragging; keep existing scrollbar visibility policies and
+independent Detail panes. Add no custom scrolling engine, auto-hide behavior, setting,
+dependency or canonical data change. Verify both orientations/palettes and native
+styles, screen overflow, draft retention and supported scaled/narrow geometry.
+Technical evidence and human visual acceptance remain separate.

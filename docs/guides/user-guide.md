@@ -10,6 +10,9 @@ area for paired sections and charts. Journal keeps questions, forecasts and cont
 together. Each fits smaller windows, and Reckonsolve remembers your chosen window
 size and maximized state.
 
+Scrollbars use a slim rounded thumb with a wider grab area. Dragging, clicking the
+track, the mouse wheel and ordinary keyboard scrolling remain available.
+
 ## In this guide
 
 - [Install and open the app](#install-and-open-the-app).

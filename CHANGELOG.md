@@ -12,6 +12,7 @@ Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, reloc
 
 - Centered Journal and Prediction Detail at comfortable reading widths while retaining native resizing and remembered geometry; balanced Journal typography and corrected excess height in wrapping Timeline headings. The latest focused-width refinement awaits human visual review.
 - Performance also uses a centered, wider report workspace, retaining paired/stacked sections, pinned Tag / Reset View controls and session scope/disclosures.
+- Quieter shared scrollbars retain a wider grab area and native scrolling controls. Prediction Detail has a slightly wider reading area while preserving side margins and pane proportions.
 - Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
 - One-Shot Detail uses shared-style result/reflection/Journal and context/originals panes, with equal terminal reading widths. Adaptive Resolved/Invalid reading also uses 50/50 panes; contextual tabs omit duplicate Overview headings. Main pane headings and principal action labels have consistent hierarchy and capitalization.
 - Settings offers three remembered desktop date orders and read-only Windows time-zone information. Ordinary timestamps omit repeated offsets; exact entry/terminal confirmation retains offset and daylight-saving cues. Canonical facts, CLI and analytical formats are unchanged.

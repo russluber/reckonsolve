@@ -4,15 +4,17 @@ import ast
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QColor, QPalette, QWheelEvent
 from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollBar,
     QSpinBox,
     QStyle,
     QStyleFactory,
+    QStyleOptionSlider,
     QStyleOptionSpinBox,
     QVBoxLayout,
     QWidget,
@@ -160,6 +162,10 @@ def test_semantic_colors_are_palette_aware_and_contrast_safe(
     assert colors.caution != colors.destructive
     assert contrast_ratio(colors.error, colors.error_surface) >= 4.5
     assert contrast_ratio(colors.secondary_text, colors.canvas) >= 4.5
+    assert all(
+        contrast_ratio(colors.scroll_thumb, background) >= 3.0
+        for background in (colors.canvas, colors.surface, colors.raised, colors.input)
+    )
     assert contrast_ratio(colors.text, colors.surface) >= 4.5
     assert contrast_ratio(colors.text, colors.raised) >= 4.5
     assert contrast_ratio(colors.text, colors.input) >= 4.5
@@ -176,6 +182,102 @@ def test_dark_palette_rejects_white_native_alternate_surface() -> None:
     assert QColor(colors.raised).lightnessF() < 0.5
     assert contrast_ratio(colors.text, colors.raised) >= 4.5
     assert f"background-color: {colors.raised};" in build_stylesheet(palette)
+
+
+@pytest.mark.parametrize("style_name", ["windows11", "Fusion"])
+@pytest.mark.parametrize("dark", [False, True])
+@pytest.mark.parametrize(
+    "orientation", [Qt.Orientation.Vertical, Qt.Orientation.Horizontal]
+)
+def test_quiet_scrollbars_retain_full_hit_lane_and_native_navigation(
+    qtbot, qapp, style_name, dark, orientation
+):
+    original_style = qapp.style().objectName()
+    root = QWidget()
+    qtbot.addWidget(root)
+    palette = (
+        _test_palette("#171a18", "#202421", "#edf3ef", "#505852")
+        if dark
+        else _test_palette("#f4f5f4", "#ffffff", "#1c211f", "#c7ceca")
+    )
+    try:
+        qapp.setStyle(style_name)
+        root.setPalette(palette)
+        root.setAutoFillBackground(True)
+        bar = QScrollBar(orientation, root)
+        bar.setRange(0, 1000)
+        bar.setPageStep(100)
+        if orientation is Qt.Orientation.Vertical:
+            bar.setGeometry(0, 0, 14, 240)
+        else:
+            bar.setGeometry(0, 0, 240, 14)
+        root.resize(260, 260)
+        install_visual_system(root, palette=palette)
+        root.show()
+        qtbot.wait(30)
+        option = QStyleOptionSlider()
+        bar.initStyleOption(option)
+        slider = bar.style().subControlRect(
+            QStyle.ComplexControl.CC_ScrollBar,
+            option,
+            QStyle.SubControl.SC_ScrollBarSlider,
+            bar,
+        )
+        point = (
+            QPoint(1, slider.center().y())
+            if orientation is Qt.Orientation.Vertical
+            else QPoint(slider.center().x(), 1)
+        )
+        assert (
+            bar.style().hitTestComplexControl(
+                QStyle.ComplexControl.CC_ScrollBar, option, point, bar
+            )
+            is QStyle.SubControl.SC_ScrollBarSlider
+        )
+        image = bar.grab().toImage()
+        canvas = QColor(semantic_colors(palette).canvas)
+        assert image.pixelColor(point) == canvas
+        assert image.pixelColor(slider.center()) != canvas
+        qtbot.mousePress(bar, Qt.MouseButton.LeftButton, pos=point)
+        destination = point + (
+            QPoint(0, 100) if orientation is Qt.Orientation.Vertical else QPoint(100, 0)
+        )
+        qtbot.mouseMove(bar, destination)
+        qtbot.mouseRelease(bar, Qt.MouseButton.LeftButton, pos=destination)
+        assert bar.value() > 0
+        bar.setFocus()
+        qtbot.keyClick(bar, Qt.Key.Key_End)
+        assert bar.value() == 1000
+        qtbot.keyClick(bar, Qt.Key.Key_Home)
+        assert bar.value() == 0
+        qtbot.keyClick(bar, Qt.Key.Key_PageDown)
+        assert bar.value() == 100
+        bar.setValue(0)
+        bar.initStyleOption(option)
+        page = bar.style().subControlRect(
+            QStyle.ComplexControl.CC_ScrollBar,
+            option,
+            QStyle.SubControl.SC_ScrollBarAddPage,
+            bar,
+        )
+        qtbot.mouseClick(bar, Qt.MouseButton.LeftButton, pos=page.center())
+        assert bar.value() == 100
+        bar.setValue(0)
+        wheel = QWheelEvent(
+            QPointF(slider.center()),
+            QPointF(bar.mapToGlobal(slider.center())),
+            QPoint(),
+            QPoint(0, -120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+        qapp.sendEvent(bar, wheel)
+        assert bar.value() > 0
+    finally:
+        root.close()
+        qapp.setStyle(original_style)
 
 
 def test_stylesheet_covers_semantic_roles_and_interaction_states() -> None:
