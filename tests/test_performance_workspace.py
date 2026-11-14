@@ -28,6 +28,58 @@ from reckonsolve.ui.settings_screen import SettingsScreen
 from reckonsolve.ui.tag_manager import TagChange, TagManagerDialog
 
 
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_focused_report_width_preserves_scope_expansions_and_pinned_controls(
+    qtbot, performance_archive, appearance
+):
+    database, operations = performance_archive
+    window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
+    qtbot.addWidget(window)
+    window.resize(1600, 900)
+    window.show()
+    window.appearance.select(appearance)
+    window.navigate_to("Performance")
+    screen = window._analytics_screen
+    report = loaded(screen, qtbot, refresh=False)
+    tag = report.tags[0]
+    screen.tag_filter.setCurrentIndex(screen.tag_filter.findData(tag.tag_id))
+    report = loaded(screen, qtbot, refresh=False)
+    adaptive_binary(screen).comparison.table_toggle.setChecked(True)
+    adaptive_numeric(screen).supporting.disclosure_button.setChecked(True)
+    request = screen.state.request
+    before = database._require_connection().total_changes
+    binary = adaptive_binary(screen)
+    numeric = adaptive_numeric(screen)
+    for width in (1600, 760, 1280, 1100):
+        window.resize(width, 900)
+        qtbot.wait(80)
+        content = window._workspace_content
+        assert content.width() == min(width, 1280)
+        assert (
+            abs(
+                content.geometry().center().x()
+                - window.centralWidget().rect().center().x()
+            )
+            <= 1
+        )
+        assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+        if width == 760:
+            assert numeric.y() > binary.y() and numeric.x() == binary.x()
+        else:
+            assert numeric.x() > binary.x() and numeric.y() == binary.y()
+        screen.scroll_area.verticalScrollBar().setValue(400)
+        qtbot.wait(30)
+        assert screen.controls.y() == 0
+        assert (
+            screen.controls.geometry().right() < screen.scroll_area.viewport().width()
+        )
+        assert screen.state.request == request and screen.report is report
+        assert binary.comparison.table_toggle.isChecked()
+        assert numeric.supporting.disclosure_button.isChecked()
+    assert database._require_connection().total_changes == before
+    window.close()
+
+
 @pytest.mark.parametrize("detour", ["Journal", "Settings"])
 def test_session_scope_disclosures_position_and_reset_without_canonical_writes(
     qtbot, performance_archive, detour

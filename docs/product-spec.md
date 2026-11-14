@@ -2369,3 +2369,17 @@ all four Detail contracts and retained editing/focus. This is presentation work;
 history, scoring, storage, dependencies, installed tools and user-owned Git/release
 operations remain outside the change. Human review of the implemented result remains
 separate from the accepted comparison.
+
+**Focused Performance sizing — authorized 2026-11-13:** The user explicitly
+approved extending the focused-width treatment to Performance. Center its shared
+toolbar/report workspace at a maximum of 1,280 logical pixels, using available
+width in narrower windows. Retain the existing paired Adaptive and One-Shot sections,
+stacking at the current narrow-width breakpoint, and align the pinned Tag / Reset
+View strip with the report. Preserve typography, expanded supporting charts/tables,
+session tag/unit/disclosure state, useful reading position, source-aware returns,
+truthful loading/error/empty states and all score/population meanings. Use the same
+native layout constraint as Journal/Detail; native window geometry/preferences and
+the remaining screens keep their existing behavior. No new setting, schema,
+dependency, installed-tool/data operation or Git/release action is selected. Verify
+wide/narrow layouts and retained scope/disclosures in both palettes; human visual
+review remains separate from source checks.

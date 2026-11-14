@@ -56,6 +56,7 @@ class ContentWidth(IntEnum):
 
     JOURNAL = 1024
     DETAIL = 1120
+    PERFORMANCE = 1280
 
 
 class MotionDuration(IntEnum):

@@ -471,3 +471,47 @@ and canonical snapshots passed at each factor. These simulated offscreen scales
 do not establish the user's physical Windows scaling/accessibility acceptance.
 The focused human check above remains pending. No runtime code changed after the
 full-suite run; subsequent edits only close documentation/evidence.
+
+## Focused Performance report width
+
+**Authorized and implemented — 2026-11-13; human review pending.** After saving the
+Journal/Detail refinement at public `1d7b85c`, the user separately approved the
+recommended focused Performance treatment. One shared ContentWidth token and its
+route constraint center the existing toolbar/report at a maximum of 1,280 logical
+pixels. Smaller windows use available width. The existing paired/stacked breakpoint,
+pinned scope strip, typography, exact report populations/statistics, retained
+tag/unit/disclosure state and source returns are unchanged. Other destinations and
+native window geometry/preferences retain their existing behavior.
+
+The focused Performance/Journal run passed **48 tests in 68.82 seconds**. Two new
+palette cases exercise the centered maximum at 1,600/1,280/1,100/760-pixel widths,
+paired versus stacked sections, pinned controls inside the viewport, the same report
+identity/request, retained supporting expansions and zero canonical writes. Existing
+session/reset, failure and navigation regressions were included.
+
+A controlled-clock disposable archive with 12 answered observations per contract
+produced **60 native offscreen captures** across simulated Qt scales 1/1.5/2,
+Light/Dark, collapsed/expanded content and scrolled pinned controls. Wide paired and
+narrow stacked views, all six ordinary supporting expansions, no horizontal page
+overflow, current report identity and exact unchanged report facts passed.
+Representative wide and expanded/narrow captures were inspected. These simulations
+do not establish physical Windows scaling/accessibility or user visual acceptance.
+Generated evidence remains ignored under `build/ux-focused-width/`.
+
+The bounded human check uses the existing disposable `performance` profile:
+maximize/narrow, expand supporting charts/tables, scroll with Tag / Reset View pinned,
+and retain tag/unit/disclosure scope across a Journal or Settings detour. Reset View
+retains its existing meaning. No personal-data or installed-tool operation, migration,
+dependency, staging, commit, push, version/tag or publication is performed by this
+continuation. Final source verification is recorded below.
+
+**Verification closure:** Final executable source passed **1,288 tests in
+533.11 seconds**, with no failures, errors or skips. Locked offline sync, Ruff
+check/format, public/private documentation (356/302 local links), both whitespace
+checks and preservation passed. All 66 J IDs, 42 R IDs, both withdrawals and existing
+reference assets remain; 95 public-reference mirrors and lower-layer boundaries
+were checked. Protected application/data/domain/analytics, migrations and dependencies
+are unchanged, and notes remain ignored by the public repository. The 60 native
+captures and focused tests above supplement this full run. Human visual acceptance
+is pending. Subsequent edits only close documentation/evidence; executable code did
+not change after the full-suite run.
