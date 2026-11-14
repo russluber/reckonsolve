@@ -3,10 +3,11 @@
 import runpy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -14,9 +15,11 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QPushButton,
+    QToolButton,
     QWidget,
 )
 
+from reckonsolve.application.errors import ApplicationError
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.domain.journal import JournalRequest
@@ -86,6 +89,240 @@ def context(prediction, numeric):
     }
 
 
+@pytest.mark.parametrize("status", ["open", "locked", "resolved", "invalid"])
+@pytest.mark.parametrize("points", [9, 12])
+def test_numeric_definition_stays_visible_below_criteria_without_duplicate_metadata(
+    workspace, qtbot, qapp, status, points
+):
+    window, operations, clock, _database = workspace
+    unit = "centimetres above reference level" if points == 12 else "items"
+    precision = 2 if points == 12 else 0
+    prediction = operations.create_numeric_prediction(
+        "A readable Numeric definition",
+        unit,
+        precision,
+        {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+        value_constraint=NumericValueConstraint.CONTINUOUS,
+        forecast_deadline=clock.now() + timedelta(days=10),
+        resolution_criteria=None
+        if status == "resolved"
+        else "Use the published measurement.",
+        background="Supporting context stays in More Information."
+        if points == 12
+        else None,
+    )
+    clock.advance()
+    if status == "locked":
+        clock.instant += timedelta(days=11)
+    elif status == "resolved":
+        operations.resolve_numeric_prediction(
+            prediction.prediction_id,
+            1,
+            use_recorded_time=True,
+            **context(prediction, True),
+        )
+    elif status == "invalid":
+        operations.invalidate_numeric_prediction(
+            prediction.prediction_id,
+            reason="The source was withdrawn.",
+            **context(prediction, True),
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    original_font = QFont(qapp.font())
+    try:
+        qapp.setFont(QFont("Segoe UI", points))
+        window._open_prediction(prediction.prediction_id)
+        screen = window._numeric_prediction_detail_screen
+        for width in (1200, 760):
+            window.resize(width, 850)
+            qtbot.waitUntil(screen.workspace.timeline.widgetResizable)
+            qtbot.wait(30)
+            assert screen.unit.text() == unit
+            assert screen.precision.text() == str(precision)
+            assert screen.unit.isVisible() and screen.precision.isVisible()
+            assert not screen.metadata_disclosure.disclosure_button.isChecked()
+            assert not screen.metadata_panel.isAncestorOf(screen.unit)
+            assert not screen.metadata_panel.isAncestorOf(screen.precision)
+            assert screen.workspace.overview_body.isAncestorOf(
+                screen.definition_summary
+            )
+            assert (
+                screen.definition_summary.y()
+                >= screen.resolution_criteria_section.geometry().bottom()
+            )
+            assert (
+                screen.unit_row.mapTo(screen.definition_summary, QPoint()).x()
+                < screen.precision_row.mapTo(screen.definition_summary, QPoint()).x()
+            )
+            assert screen.unit.height() >= screen.unit.heightForWidth(
+                screen.unit.width()
+            )
+            assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        screen.metadata_disclosure.disclosure_button.setChecked(True)
+        assert screen.metadata_empty.isVisible() == (points == 9)
+        if points == 12:
+            assert screen.background.isVisible()
+        assert (
+            operations.get_prediction_for_navigation(prediction.prediction_id) == before
+        )
+    finally:
+        qapp.setFont(original_font)
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_more_information_does_not_call_unavailable_history_empty(
+    workspace, qtbot, monkeypatch, numeric
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+
+    def unavailable(_identifier):
+        raise ApplicationError("History could not be read.")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(operations, "list_definition_changes", unavailable)
+        window._open_prediction(prediction.prediction_id)
+        screen = (
+            window._numeric_prediction_detail_screen
+            if numeric
+            else window._prediction_detail_screen
+        )
+        screen.metadata_disclosure.disclosure_button.setChecked(True)
+        assert screen.metadata_empty.text() == "Definition history is unavailable."
+        if numeric:
+            assert screen.unit.isVisible()
+    screen.refresh()
+    qtbot.wait(20)
+    assert screen.metadata_empty.text() == "No additional information recorded."
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("status", ["open", "resolved", "invalid"])
+def test_adaptive_overview_reveals_use_compact_chevrons_and_keep_defaults(
+    workspace, qtbot, numeric, status
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    if status == "invalid":
+        operation = (
+            operations.invalidate_numeric_prediction
+            if numeric
+            else operations.invalidate_prediction
+        )
+        operation(
+            prediction.prediction_id,
+            reason="An archival example",
+            **context(prediction, numeric),
+        )
+    elif status == "resolved":
+        operation = (
+            operations.resolve_numeric_prediction
+            if numeric
+            else operations.resolve_prediction
+        )
+        operation(
+            prediction.prediction_id,
+            1 if numeric else BinaryOutcome.YES,
+            use_recorded_time=True,
+            **context(prediction, numeric),
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    history = screen.distribution_disclosure if numeric else screen.chart_disclosure
+    has_history_toggle = status != "open" if numeric else status == "invalid"
+    qtbot.wait(30)
+    assert history.disclosure_button.isVisible() == has_history_toggle
+    assert history.disclosure_body.isVisible() != has_history_toggle
+    controls = [screen.metadata_disclosure]
+    if has_history_toggle:
+        controls.append(history)
+    for mode in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(mode)
+        for control in controls:
+            toggle = control.disclosure_button
+            assert isinstance(toggle, QToolButton)
+            assert not toggle.isChecked()
+            screen.workspace.overview.ensureWidgetVisible(toggle)
+            toggle.setFocus()
+            qtbot.keyClick(toggle, Qt.Key.Key_Space)
+            assert control.disclosure_body.isVisible()
+            assert toggle.arrowType() is Qt.ArrowType.DownArrow
+            qtbot.keyClick(toggle, Qt.Key.Key_Space)
+            assert not control.disclosure_body.isVisible()
+        window.resize(760, 520)
+        qtbot.wait(30)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_journal_preview_spacing_and_shared_forecast_size(workspace, qtbot, one_shot):
+    from test_one_shot_persistence import request
+
+    from reckonsolve.ui.journal.rows import QuestionLabel
+    from reckonsolve.ui.visual_system import TextRole, apply_text_role
+
+    window, operations, clock, _database = workspace
+    if one_shot:
+        binary = operations.one_shots.create(request(False))
+        numeric = operations.one_shots.create(request(True))
+    else:
+        binary = create(operations, clock, False)
+        numeric = create(operations, clock, True)
+    originals = operations.journal.query(JournalRequest())
+    window.navigate_to("Journal")
+    journal = window._journal_screen
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    binary_card = next(
+        c for c in journal.cards if c.prediction_id == binary.prediction_id
+    )
+    numeric_card = next(
+        c for c in journal.cards if c.prediction_id == numeric.prediction_id
+    )
+    binary_value = next(
+        label
+        for label in binary_card.findChildren(QLabel)
+        if label.text().endswith("% Yes")
+    )
+    preview = numeric_card.findChild(
+        QWidget, f"journalNumericForecast{numeric.prediction_id}"
+    )
+    numbers = [
+        preview.findChild(QLabel, f"journalPercentile{numeric.prediction_id}_{level}")
+        for level in (5, 25, 50, 75, 95)
+    ]
+    assert "50th" in {label.text() for label in preview.findChildren(QLabel)}
+    assert not any("Median" in label.text() for label in preview.findChildren(QLabel))
+    detail_forecast = QLabel(window)
+    apply_text_role(detail_forecast, TextRole.FORECAST)
+    assert all(number.font() == binary_value.font() for number in numbers)
+    assert binary_value.font().pointSizeF() < detail_forecast.font().pointSizeF()
+    assert (
+        binary_value.font().pointSizeF()
+        < binary_card.findChild(QuestionLabel).font().pointSizeF()
+    )
+    spans = []
+    for width in (1600, 1100, 760):
+        window.resize(width, 850)
+        qtbot.wait(60)
+        cells = [
+            QRect(number.mapTo(preview, QPoint()), number.size()) for number in numbers
+        ]
+        gaps = [right.x() - left.right() - 1 for left, right in pairwise(cells)]
+        assert len(set(gaps)) == 1 and gaps[0] >= 12
+        assert cells[-1].right() < numeric_card.width() * 0.75
+        assert journal.scroll.horizontalScrollBar().maximum() == 0
+        spans.append(cells[-1].right() - cells[0].left())
+    assert max(spans) - min(spans) <= 2
+    assert operations.journal.query(JournalRequest()) == originals
+
+
 @pytest.mark.parametrize("numeric", [False, True])
 def test_resolved_body_reflection_actions_and_real_terminal_chronology(
     workspace, qtbot, numeric
@@ -114,6 +351,15 @@ def test_resolved_body_reflection_actions_and_real_terminal_chronology(
         else window._prediction_detail_screen
     )
     card = screen.quantile_scorecard if numeric else screen.scorecard_section
+    disclosure = screen.terminal_summary.context
+    assert isinstance(disclosure.disclosure_button, QToolButton)
+    assert not disclosure.disclosure_button.isChecked()
+    disclosure.disclosure_button.setFocus()
+    qtbot.keyClick(disclosure.disclosure_button, Qt.Key.Key_Space)
+    assert disclosure.disclosure_body.isVisible()
+    assert disclosure.disclosure_button.arrowType() is Qt.ArrowType.DownArrow
+    qtbot.keyClick(disclosure.disclosure_button, Qt.Key.Key_Space)
+    assert not disclosure.disclosure_body.isVisible()
     assert screen.workspace.overview_body.isAncestorOf(card)
     assert screen.action_strip.isAncestorOf(screen.write_postmortem_button)
     assert screen.action_strip.isAncestorOf(screen.skip_postmortem_button)
@@ -382,13 +628,23 @@ def test_long_history_small_window_keeps_reading_and_revision_controls_reachable
         screen.open_revise_forecast()
         editor = screen.workspace.editor
         qtbot.waitUntil(lambda: screen.workspace._proportion == 400)
+        # The proportion can round to 400 before the final animation frame.
+        # Inspect overflow after normal Timeline wrapping has resumed.
+        qtbot.waitUntil(screen.workspace.timeline.widgetResizable)
         qtbot.wait(20)
         for pane in (
             screen.workspace,
             screen.workspace.timeline,
             screen.workspace.editor_scroll,
         ):
-            assert pane.horizontalScrollBar().maximum() == 0
+            assert pane.horizontalScrollBar().maximum() == 0, (
+                pane.objectName(),
+                screen.workspace.timeline.widgetResizable(),
+                screen.workspace._transition.state(),
+                screen.workspace._transition.currentTime(),
+                screen.workspace._transition.duration(),
+                screen.workspace.timeline.widget().minimumSizeHint(),
+            )
         if numeric:
             for field in editor.quantile_input.inputs.values():
                 screen.workspace.ensureWidgetVisible(field)

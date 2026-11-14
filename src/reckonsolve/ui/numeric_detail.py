@@ -214,13 +214,29 @@ class NumericPredictionDetailScreen(QWidget):
             "numericUnitRow",
             "numericUnitValue",
             self.detail_content,
+            stacked=True,
         )
         self.precision_row, self.precision = _detail_value_row(
-            "Decimal places",
+            "Decimal Places",
             "numericPrecisionRow",
             "numericPrecisionValue",
             self.detail_content,
+            stacked=True,
         )
+        self.definition_summary = QWidget(self.detail_content)
+        self.definition_summary.setObjectName("numericDefinitionSummary")
+        definition_layout = QGridLayout(self.definition_summary)
+        definition_layout.setContentsMargins(0, 0, 0, 0)
+        definition_layout.setHorizontalSpacing(int(Spacing.SECTION))
+        for column, field in enumerate((self.unit_row, self.precision_row)):
+            definition_layout.addWidget(field, 0, column, Qt.AlignmentFlag.AlignTop)
+            definition_layout.setColumnStretch(column, 1)
+            for label in field.findChildren(QLabel):
+                label.setWordWrap(True)
+                label.setMinimumWidth(0)
+                policy = label.sizePolicy()
+                policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+                label.setSizePolicy(policy)
         self.forecast_deadline_row, self.forecast_deadline = _detail_value_row(
             "Forecast deadline",
             "numericForecastDeadlineRow",
@@ -459,6 +475,7 @@ class NumericPredictionDetailScreen(QWidget):
 
         history_label = QLabel("Interval History", self.detail_content)
         history_label.setObjectName("numericHistoryLabel")
+        history_label.setWordWrap(True)
         history_font = QFont(history_label.font())
         history_font.setBold(True)
         history_label.setFont(history_font)
@@ -546,12 +563,14 @@ class NumericPredictionDetailScreen(QWidget):
             "numericPredictionMetadataPanel",
             self.detail_content,
         )
-        metadata_heading = QLabel("Prediction details", self.metadata_panel)
-        metadata_heading.setObjectName("numericPredictionMetadataHeading")
-        apply_text_role(metadata_heading, TextRole.SECTION_TITLE)
-        metadata_layout.addWidget(metadata_heading)
-        metadata_layout.addWidget(self.unit_row)
-        metadata_layout.addWidget(self.precision_row)
+        self.metadata_empty = QLabel(
+            "No additional information recorded.", self.metadata_panel
+        )
+        self.metadata_empty.setObjectName("numericMetadataEmptyMessage")
+        self.metadata_empty.setWordWrap(True)
+        _make_selectable(self.metadata_empty)
+        apply_text_role(self.metadata_empty, TextRole.SECONDARY)
+        metadata_layout.addWidget(self.metadata_empty)
         metadata_layout.addWidget(self.forecast_deadline_row)
         metadata_layout.addWidget(self.expected_resolution_row)
         metadata_layout.addWidget(self.background_section)
@@ -672,21 +691,25 @@ class NumericPredictionDetailScreen(QWidget):
             self.detail_content,
         )
         self.distribution_disclosure = collapse_section(
-            history_panel, "Latest committed distribution"
+            history_panel, "Latest Committed Distribution", compact=True
+        )
+        self.metadata_disclosure = collapse_section(
+            self.metadata_panel, "More Information", compact=True
         )
         apply_action_role(self.write_postmortem_button, ActionRole.SECONDARY)
         overview = [
             self.resolution_criteria_section,
+            self.definition_summary,
             self.reading_sections.notes,
             self.reading_sections.reflection,
             self.quantile_scorecard,
             self.resolution_history,
             self.invalidation_history,
             self.distribution_disclosure,
-            collapse_section(self.metadata_panel, "More information"),
+            self.metadata_disclosure,
         ]
         self.scored_forecast_disclosure = collapse_section(
-            self.resolution_scoring, "Scored forecast context"
+            self.resolution_scoring, "Scored Forecast Context", compact=True
         )
         self.resolution_section.layout().removeWidget(self.resolution_scoring)
         self.resolution_section.layout().addWidget(self.scored_forecast_disclosure)
@@ -890,10 +913,8 @@ class NumericPredictionDetailScreen(QWidget):
             "Revise all five numeric percentiles"
         )
         self.unit.setText(prediction.unit)
-        decimal_label = (
-            "decimal place" if prediction.decimal_places == 1 else "decimal places"
-        )
-        self.precision.setText(f"{prediction.decimal_places} {decimal_label}")
+        self.precision.setText(str(prediction.decimal_places))
+        self.precision.setAccessibleName(f"Decimal places: {prediction.decimal_places}")
         self._show_optional_metadata(prediction)
         self.rationale.setText(revision.rationale or "")
         self.rationale_section.setHidden(not revision.rationale)
@@ -1275,6 +1296,8 @@ class NumericPredictionDetailScreen(QWidget):
             changes = self._operations.list_definition_changes(prediction_id)
         except ApplicationError as error:
             self.definition_history.setHidden(True)
+            self.metadata_empty.setText("Definition history is unavailable.")
+            self.metadata_empty.show()
             self._show_error(str(error))
             return
 
@@ -1288,6 +1311,18 @@ class NumericPredictionDetailScreen(QWidget):
         self.definition_history.setHidden(not changes)
         if changes:
             self.metadata_panel.setHidden(False)
+        self.metadata_empty.setText("No additional information recorded.")
+        self.metadata_empty.setVisible(
+            all(
+                section.isHidden()
+                for section in (
+                    self.expected_resolution_row,
+                    self.background_section,
+                    self.rationale_section,
+                    self.definition_history,
+                )
+            )
+        )
 
     def _clear_timeline(self) -> None:
         self.timeline_rows.clear()

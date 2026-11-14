@@ -48,9 +48,12 @@ class WorkspaceToolbar(QWidget):
         self.back = self._button(
             "", "workspaceBack", self.back_requested, LucideIcon.ARROW_LEFT
         )
-        self.home = self._button("Journal", "journalHomeButton", self.journal_requested)
+        self.home = self._button(
+            "", "journalHomeButton", self.journal_requested, LucideIcon.NOTEBOOK_PEN
+        )
+        self.home.setAccessibleName("Journal")
+        self.home.setToolTip("Journal")
         layout.addWidget(self.back)
-        layout.addWidget(self.home)
         self.new = self._button(
             "+ New", "newPredictionNavigationButton", self.new_requested
         )
@@ -76,7 +79,7 @@ class WorkspaceToolbar(QWidget):
         )
         self.settings.setAccessibleName("Settings")
         self.settings.setToolTip("Settings (Ctrl+,)")
-        for button in (self.performance, self.appearance, self.settings):
+        for button in (self.home, self.performance, self.appearance, self.settings):
             layout.addWidget(button)
 
     def _button(self, text, name, signal, icon=None):
@@ -91,13 +94,15 @@ class WorkspaceToolbar(QWidget):
         button.clicked.connect(signal)
         return button
 
-    def update_route(self, route: Route, back: str, *, separate_home: bool) -> None:
+    def update_route(self, route: Route, back: str) -> None:
         self.back.setText(back)
         self.back.setAccessibleName(back)
         self.back.setVisible(route is not Route.JOURNAL)
-        self.home.setVisible(separate_home)
+        self.home.setVisible(route in (Route.PERFORMANCE, Route.SETTINGS))
         self.new.setVisible(route in (Route.JOURNAL, Route.DETAIL, Route.PERFORMANCE))
-        self.performance.setVisible(route in (Route.JOURNAL, Route.DETAIL))
+        self.performance.setVisible(
+            route in (Route.JOURNAL, Route.DETAIL, Route.SETTINGS)
+        )
         self.settings.setVisible(
             route in (Route.JOURNAL, Route.DETAIL, Route.PERFORMANCE)
         )

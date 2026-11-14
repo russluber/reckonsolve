@@ -150,6 +150,83 @@ The [same dated evidence record](../archive/releases/2026-11-13-workspace-refine
 separates the earlier accepted package from this pending visual follow-up. Record
 actual window/Windows scale and any mismatch. No personal or installed profile is needed.
 
+### Journal preview and scoring disclosure recheck
+
+Carry the positive One-Shot layout/Skip feedback forward. Run
+`uv run python tools/run_visual_review.py integrated` for just the new presentation checks:
+
+1. At a wide window, read a Numeric Journal row: the five exact percentile/value groups should stay close together with comfortable consistent gaps. Resize toward the supported minimum and inspect long values; a label stays with its value when reflow is needed.
+2. Compare a Binary percentage and Numeric values in the same Journal. They should have the same smaller forecast size while the Question remains primary. Detail forecast headers retain their existing size.
+3. Open Resolved Adaptive Binary and Numeric Detail. Expand/collapse Forecast used for scoring with the compact chevron using mouse and keyboard Space. The same forecast facts/default and existing score should remain. Check both palettes and record the actual window/Windows scale reviewed.
+
+The [dated preview/disclosure evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#journal-preview-rhythm-and-scoring-disclosure)
+records source/capture limits. No repeated full journey review or personal data is needed.
+
+### Expanded facts and marker recheck
+
+The earlier Journal spacing/font and scoring-chevron candidate remains uncommitted;
+the latest feedback extends that same checkpoint. Run
+`uv run python tools/run_visual_review.py integrated` and check only the refinements:
+
+1. Journal shows 50th without Median, while Detail's interval retains its Median label. The earlier compact spacing and matching Binary/Numeric value size remain.
+2. Open Numeric WIS Breakdown, then switch light/dark/light. Actual diamonds should stay gold, distinct from the interval and median tick.
+3. On corrected One-Shot Binary and Numeric examples, expand Times & Recorded Facts and Originals & Corrections. Both bodies should have matching rounded frames and inset text. Scroll through original/Before/After/notes at a large and smaller window; check wrapping and access to the final line. Keep compact chevrons and exact history navigation. Record actual Windows scale and any mismatch.
+
+The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#further-labels-marker-and-expanded-facts-refinement)
+separates source/native checks from pending human acceptance. Carry other accepted
+journeys forward; the suggested checkpoint message covers all uncommitted refinements.
+
+### Adaptive Overview reveal recheck
+
+The label/marker/fact-panel fixes were reported accepted. Reuse
+`uv run python tools/run_visual_review.py integrated` for just the remaining reveals:
+
+- On an Invalid Adaptive Binary, expand/collapse Probability History.
+- On both Adaptive types, expand/collapse More Information. Binary should show context directly without a nested Prediction Details heading, or a clear message when no additional information is recorded.
+- On a Resolved or Invalid Adaptive Numeric, expand/collapse Latest Committed Distribution.
+
+These should be compact chevrons with the same content/defaults. Try keyboard Space,
+both palettes and a smaller window; nonterminal charts should retain their ordinary
+direct visibility. Carry accepted journeys forward and record any actual mismatch.
+The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-overview-reveal-consistency)
+records source/capture limits. The save point still includes the earlier uncommitted
+presentation tuning; no personal or installed profile is needed.
+
+### Adaptive Numeric definition visibility recheck
+
+Reuse `uv run python tools/run_visual_review.py integrated`. Open the Resolved
+Adaptive Numeric example, then an Open/Locked or Invalid Numeric record. Unit and
+Decimal Places should be visible as two fields immediately below Resolution
+Criteria, before optional notes/reflection and scores. More Information should
+contain no duplicate of those fields; absent optional context should be stated
+clearly. Try both palettes and a smaller window with a long unit, checking wrapping
+and selectable values. The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-numeric-definition-visibility)
+records source/native checks and limits. Carry earlier accepted journeys forward;
+the remaining compact-reveal check above can be combined with this short visit.
+
+### Final toolbar and presentation recheck
+
+Reuse `uv run python tools/run_visual_review.py integrated` on disposable data:
+
+1. Pending One-Shot Binary and Numeric badges/headings should read Answer Pending,
+   retaining yellow status styling and Add Answer.
+2. Click Reset View on Journal; its final letter should remain complete. Check the
+   corresponding Performance button and a smaller window as well.
+3. Expand Performance's Binary calibration tables, timing/updating diagnostics and
+   Numeric percentile detail. They should be compact chevrons, work with Space and
+   retain the existing figures, session behavior and reset defaults.
+4. From Prediction Detail, open Performance then Settings. The right-side notebook
+   icon should have tooltip Journal and open Journal directly. Back should still
+   return to Prediction or Performance respectively. Also check the direct icon
+   when Back already leads to Journal. It stays absent on Journal, Detail and New.
+   From Settings, the Performance chart icon should return to the report with its
+   filters, expanded detail and useful position retained. Back from that report
+   should still reach the original Journal or Prediction without cycling to Settings.
+
+Try both palettes and record only a concrete mismatch. The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#final-toolbar-and-presentation-follow-up)
+keeps source/native limits. These checks extend the existing combined checkpoint;
+they do not reopen accepted journeys or authorize personal/installed-data operations.
+
 ## Documentation checks
 
 After editing or moving documentation, run:

@@ -7,7 +7,7 @@ from fractions import Fraction
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPalette
-from PySide6.QtWidgets import QGroupBox, QLabel
+from PySide6.QtWidgets import QGroupBox, QLabel, QWidget
 
 from reckonsolve.analytics.quantiles import QuantileScorecard, weighted_interval_score
 from reckonsolve.domain.predictions import FixedPrecisionValue
@@ -20,7 +20,11 @@ from reckonsolve.domain.quantiles import (
 from reckonsolve.quantile_display import exact_score_text
 from reckonsolve.ui.quantile_scorecard import QuantileScorecardPanel
 from reckonsolve.ui.scorecard_chart import ScoredIntervalsChart
-from reckonsolve.ui.visual_system import install_visual_system
+from reckonsolve.ui.visual_system import (
+    contrast_ratio,
+    install_visual_system,
+    semantic_colors,
+)
 
 
 def make_card(values=(1, 3, 5, 7, 9), actual=6, precision=1):
@@ -45,6 +49,39 @@ def make_card(values=(1, 3, 5, 7, 9), actual=6, precision=1):
         actual_value=actual,
         scoring_revision=revision,
     )
+
+
+def test_actual_diamond_stays_gold_through_palette_switches(qtbot, qapp):
+    original = QPalette(qapp.palette())
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    chart = ScoredIntervalsChart(make_card(), parent)
+    chart.resize(600, chart.height())
+    parent.show()
+    chart.show()
+    positions = chart.marker_positions()
+    try:
+        for dark in (False, True, False):
+            palette = QPalette(original)
+            for role in (QPalette.ColorRole.Window, QPalette.ColorRole.Base):
+                palette.setColor(role, QColor("#202020" if dark else "#ffffff"))
+            for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text):
+                palette.setColor(role, QColor("#ffffff" if dark else "#202020"))
+            qapp.setPalette(palette)
+            qtbot.wait(20)
+            rendered = chart.grab().toImage()
+            ratio = rendered.devicePixelRatio()
+            y = chart.label_layout()[0][0] - 17
+            pixel = rendered.pixelColor(round(positions[5] * ratio), round(y * ratio))
+            colors = semantic_colors(chart.palette())
+            assert pixel.name() == colors.actual_fill
+            assert 35 <= pixel.hue() <= 55 and pixel.value() >= 200
+            assert contrast_ratio(colors.actual_outline, colors.canvas) >= 3
+            if not dark:
+                assert colors.actual_fill != colors.warning
+            assert chart.marker_positions() == positions
+    finally:
+        qapp.setPalette(original)
 
 
 @pytest.mark.parametrize(

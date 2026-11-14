@@ -8,7 +8,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -27,6 +26,7 @@ from reckonsolve.domain.search import (
 )
 from reckonsolve.ui.components import StatusBadge
 from reckonsolve.ui.date_display import date_context, format_date, format_datetime
+from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
@@ -137,20 +137,27 @@ class JournalCard(QFrame):
             )
         self._label(row.forecast_label)
         if row.probability_percent is not None:
-            self._label(f"{row.probability_percent}% Yes", TextRole.FORECAST)
+            self._label(f"{row.probability_percent}% Yes", TextRole.ROW_FORECAST)
         elif row.quantiles is not None:
             self._label(f"Unit: {prediction.numeric_unit}")
-            values = QGridLayout()
-            values.setHorizontalSpacing(int(Spacing.ORDINARY))
-            for index, (level, value) in enumerate(
-                zip((5, 25, 50, 75, 95), row.quantiles.values, strict=True)
+            # Surplus viewport width belongs after the complete forecast,
+            # rather than between neighboring percentile/value groups.
+            preview = QWidget(self)
+            preview.setObjectName(f"journalNumericForecast{self.prediction_id}")
+            values = FlowLayout(preview)
+            values.setSpacing(int(Spacing.SECTION))
+            for level, value in zip(
+                (5, 25, 50, 75, 95), row.quantiles.values, strict=True
             ):
-                heading = QLabel(
-                    f"{level}th" + (" · Median" if level == 50 else ""), self
-                )
+                group = QWidget(preview)
+                column = QVBoxLayout(group)
+                column.setContentsMargins(0, 0, 0, 0)
+                column.setSpacing(int(Spacing.COMPACT))
+                heading = QLabel(f"{level}th", group)
                 apply_text_role(heading, TextRole.SECONDARY)
-                number = QLabel(str(value), self)
-                apply_text_role(number, TextRole.LABEL)
+                number = QLabel(str(value), group)
+                number.setObjectName(f"journalPercentile{self.prediction_id}_{level}")
+                apply_text_role(number, TextRole.ROW_FORECAST)
                 number.setAccessibleName(
                     f"{level}th percentile: {value} {prediction.numeric_unit}"
                 )
@@ -159,10 +166,10 @@ class JournalCard(QFrame):
                 number.setTextInteractionFlags(
                     Qt.TextInteractionFlag.TextSelectableByMouse
                 )
-                values.addWidget(heading, 0, index)
-                values.addWidget(number, 1, index)
-                values.setColumnStretch(index, 1)
-            self.layout_body.addLayout(values)
+                column.addWidget(heading)
+                column.addWidget(number)
+                values.addWidget(group)
+            self.layout_body.addWidget(preview)
         if row.actual is not None:
             self._label(
                 f"{'Outcome' if isinstance(row.actual, str) else 'Actual'}: {str(row.actual).title() if isinstance(row.actual, str) else str(row.actual)}"
@@ -174,7 +181,7 @@ class JournalCard(QFrame):
             self._label(row.correction_label)
         one_shot = prediction.forecast_contract.is_one_shot
         status = (
-            "Waiting for answer"
+            "Answer Pending"
             if one_shot and prediction.status is PredictionStatus.OPEN
             else prediction.status.value.title()
         )
@@ -187,7 +194,7 @@ class JournalCard(QFrame):
         )
         tone = (
             StatusTone.WARNING
-            if status in ("Locked", "Waiting for answer")
+            if status in ("Locked", "Answer Pending")
             else StatusTone.SUCCESS
             if status == "Resolved"
             else StatusTone.CAUTION

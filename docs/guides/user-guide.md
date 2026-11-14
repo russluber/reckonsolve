@@ -79,7 +79,7 @@ Background, Rationale, and Tags are visible in the main Forecast card. Backgroun
 
 **Record date and time** is optional. It supplies a calendar date picker and segmented time field: type hours, Tab, minutes, Tab, then A or P. Shift+Tab moves backward; Up/Down adjusts the selected section. Dates start at today when enabled. Reported times may be approximate, missing, or equal to the same minute. They document the external record and do not affect scoring. Reckonsolve separately retains when you entered the record into the app.
 
-Select **Include the answer now** to enter the Yes/No answer or measured value in the same form. Save records forecast and answer atomically. Scores appear only after Save. Without an answer, Detail shows **Waiting for answer** and offers **Add Answer** later.
+Select **Include the answer now** to enter the Yes/No answer or measured value in the same form. Save records forecast and answer atomically. Scores appear only after Save. Without an answer, Detail shows **Answer Pending** and offers **Add Answer** later.
 
 One-Shot has no Forecast Deadline, Expected Resolution, ordinary forecast updates, or Forecast Reviews. It is not a deadline bypass for ongoing future-event forecasts.
 
@@ -99,7 +99,11 @@ At the Forecast Deadline, an unanswered Adaptive prediction becomes **Locked**. 
 
 Adaptive Detail keeps the committed forecast above independently scrolling TIMELINE and OVERVIEW panes. Open/Locked reading gives more room to Timeline; Resolved/Invalid reading gives both panes equal width. Revise and Journal writing open on the right with more writing space. **Overview / Revision · unsaved** lets you consult saved context without losing the draft; the tab identifies Overview without a repeated heading beneath it. **Commit Revision** saves a complete changed forecast; failed saves retain entered values. **Current Revision**, beside the Timeline heading, jumps to its marked saved event. It remains reachable with the Newest first / Oldest first control while history scrolls. Expand longer Journal text and earlier body versions when needed. Long criteria have a wider read-only view.
 
-Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot shares the two-pane style: results, inline later reflection and visible Journal Entries are on the left; context and disclosed original facts/corrections are on the right. Waiting for answer leads with the saved forecast. Answered reading gives Checked Answer its own line, followed by a prominent full-width Brier or WIS scorecard. Postmortem and Journal Entries have separate headings; compact chevrons expand recorded history, times/facts and originals/corrections. Resolved and Invalid reading uses equal-width panes. One-Shot has no Adaptive updating controls.
+Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot shares the two-pane style: results, inline later reflection and visible Journal Entries are on the left; context and disclosed original facts/corrections are on the right. Answer Pending leads with the saved forecast. Answered reading gives Checked Answer its own line, followed by a prominent full-width Brier or WIS scorecard. Postmortem and Journal Entries have separate headings; compact chevrons expand recorded history, times/facts and originals/corrections. Resolved and Invalid reading uses equal-width panes. One-Shot has no Adaptive updating controls.
+
+Adaptive Overview also uses compact chevrons for **More Information**, **Probability History** on Invalid Binary records and **Latest Committed Distribution** on terminal Numeric records. Click or focus the control and press Space to reveal its existing content. Fresh ordinary visits use the established collapsed defaults; directly visible charts on nonterminal records stay visible.
+
+On Adaptive Numeric records, **Unit** and **Decimal Places** stay visible directly below Resolution Criteria in Overview or Archival Context. These fixed definition facts are selectable; they are not repeated inside More Information. That disclosure holds remaining optional context and definition history, with an explicit message when nothing additional is recorded.
 
 ## Add an answer
 
@@ -129,13 +133,17 @@ Journal corrections show the latest body at the original Timeline position. Open
 
 ## Find and organize your journal
 
-Journal is home. **All**, **Unresolved** and **Needs Postmortem** are quiet views without counters. Unresolved includes Open/Locked Adaptive and One-Shot Waiting for answer. Needs Postmortem includes Resolved records with blank effective reflection and no explicit Skip.
+Journal is home. **All**, **Unresolved** and **Needs Postmortem** are quiet views without counters. Unresolved includes Open/Locked Adaptive and One-Shot Answer Pending. Needs Postmortem includes Resolved records with blank effective reflection and no explicit Skip.
+
+In Performance and Settings, the notebook icon in the right-hand toolbar has the tooltip **Journal**. It opens your current Journal view directly, retaining its search and filters. **Back to …** separately returns to the recorded source page, even when that destination is also Journal.
+
+Settings also offers the **Performance** chart icon. It opens the report with its current session filters, expanded detail and useful reading position. Back from Performance continues to the underlying Journal or Prediction; a Settings detour preserves that original return destination.
 
 Enter ordinary words in **Search predictions**, then press **Enter** or **Search**. Editing text removes the prior listing/count until you submit, so old rows cannot be mistaken for the new query. Clearing text retrieves the blank-search view. All words is the default; quoted phrases match within one source. Search narrows the selected view and filters. Results explain non-Question matches; extra passages are behind a disclosure. **Include superseded history** permits clearly labeled earlier versions and opens their exact source in Detail. A formerly current Journal passage that changes is opened at its original entry with current text and a changed-text explanation, without false match emphasis.
 
 **Filters** edits one draft: mode/type, searchable existing tags with All/Any matching, optional inclusive From/Through dates, word matching and history inclusion. Each date boundary has its own checkbox. Unchecked boundaries are ignored; incomplete or reversed enabled dates apply nothing. Apply commits the complete draft; Cancel changes nothing. Clear filters clears only that draft. Applied constraints appear as removable chips. **Reset View** restores the complete Journal default, including text, view, constraints and sort.
 
-Automatic sort is **Recently active** for blank text and **Relevance** for search. An applicable manual sort persists until changed/reset; clearing text discards manual Relevance. Last active reflects substantive committed work, not reading, automatic locking, ordinary repairs or Skip. Numeric rows retain five exact horizontal values with their unit once. Resolved Adaptive rows identify the scoring-eligible forecast and excluded later revisions; Invalid and unscored cases remain explicit. Load more continues the same retrieval.
+Automatic sort is **Recently active** for blank text and **Relevance** for search. An applicable manual sort persists until changed/reset; clearing text discards manual Relevance. Last active reflects substantive committed work, not reading, automatic locking, ordinary repairs or Skip. Numeric rows keep five exact percentile/value groups close together with consistent gaps and the unit once; the headings are 5th, 25th, 50th, 75th and 95th. Unusually long values reflow in order with their labels. Binary percentages and Numeric values use the same forecast text size, below the Question's emphasis. Resolved Adaptive rows identify the scoring-eligible forecast and excluded later revisions; Invalid and unscored cases remain explicit. Load more continues the same retrieval.
 
 The full matching-Prediction count accompanies text/advanced results; ordinary browsing, a quick view alone or a manual sort alone has no count. A return or background check of the same retrieval keeps readable rows while checking current data, retaining unchanged rows and focus. A new retrieval still hides the previous listing until its own results arrive. Failure clears retained results and has a different message from successful zero results. Try again is offered for an identified temporary read failure; Repair search opens Settings only for an identified rebuildable projection problem.
 
@@ -847,7 +855,7 @@ The Numeric graphic uses one shared quantity scale for both scored intervals.
 The thicker band distinguishes the inner 50% interval from the outer 90% interval;
 thickness is not an extra probability or score. Each row labels its own endpoints
 and median in matching text; tied values share a label and crowded labels stagger.
-The vertical tick marks the median; the diamond marks the effective actual,
+The vertical tick marks the median; the gold diamond marks the effective actual,
 with its value labeled below on each row, including when it falls outside the
 outer interval. A clear, separated actual shows only its number; crowded labels
 add “actual” for clarity. If the actual equals an endpoint or median, their shared label
@@ -906,7 +914,7 @@ Useful Postmortem template:
 Read the **One-Shot** pair in Performance. The report-wide Tag scopes Binary and Numeric; the local Numeric Unit matches the exact saved label. `m` and `cm` are different, without conversion. All units can share calibration frequencies because each outcome is compared with its own forecast before the counts are combined.
 
 Each answered One-Shot contributes once using the latest corrected forecast and answer.
-Waiting for answer and Invalid records contribute nothing. Saving the answer together
+Answer Pending and Invalid records contribute nothing. Saving the answer together
 with the forecast or adding it later leads to the same summary. Missing, approximate, or
 equal-minute reported times do not change the score or its weight. Correcting a copied
 number can change the results; it does not add a second observation.

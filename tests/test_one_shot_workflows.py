@@ -5,7 +5,8 @@ from datetime import UTC, date, datetime, timedelta
 from io import StringIO
 
 import pytest
-from PySide6.QtCore import QDate, Qt, QTime
+from PySide6.QtCore import QDate, QPoint, QRect, Qt, QTime
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QToolButton, QWidget
 from supported_fixtures import create_binary, create_numeric
 from test_one_shot_persistence import Clock, request
@@ -337,6 +338,7 @@ def test_main_window_one_shot_route_defaults_and_detail(app, qtbot):
     window._open_prediction(1)
     detail = window._prediction_detail_host._one_shot_detail
     assert detail.isVisible()
+    assert "Answer Pending" in {label.text() for label in detail.findChildren(QLabel)}
     assert detail.answer_button.isVisible()
     assert detail.correct_button.isVisible()
     assert detail.edit_button.isVisible()
@@ -407,6 +409,70 @@ def test_one_shot_results_hierarchy_and_keyboard_disclosures(app, qtbot, numeric
         assert toggle.arrowType() is Qt.ArrowType.DownArrow
         qtbot.keyClick(toggle, Qt.Key.Key_Space)
         assert not section.disclosure_body.isVisible()
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("font_size", [9, 15])
+def test_expanded_one_shot_fact_panels_keep_padding_and_complete_wrapped_text(
+    app, qtbot, qapp, numeric, font_size
+):
+    _, clock, operations = app
+    initial = operations.one_shots.create(request(numeric))
+    clock.instant += timedelta(minutes=1)
+    corrected = operations.one_shots.correct(
+        initial,
+        replace(
+            initial.record.effective,
+            answer=FixedPrecisionValue(100, 2) if numeric else BinaryOutcome.NO,
+            resolution_notes="A detailed measurement explanation. " * 25,
+        ),
+        note="A copied fact was repaired after checking the source. " * 20,
+    )
+    original_font = QFont(qapp.font())
+    window = MainWindow(operations)
+    qtbot.addWidget(window)
+    window.show()
+    try:
+        qapp.setFont(QFont("Segoe UI", font_size))
+        window._open_prediction(corrected.prediction_id)
+        screen = window._prediction_detail_host._one_shot_detail
+        panels = []
+        for name in ("oneShotRecordedFacts", "oneShotCorrectionHistory"):
+            disclosure = screen.findChild(QWidget, name + "Disclosure")
+            disclosure.disclosure_button.setChecked(True)
+            panels.append(disclosure.disclosure_body)
+        for width in (1200, 760):
+            window.resize(width, 850)
+            qtbot.wait(50)
+            for panel in panels:
+                margins = panel.layout().contentsMargins()
+                assert (
+                    min(
+                        margins.left(), margins.top(), margins.right(), margins.bottom()
+                    )
+                    >= 12
+                )
+                inset = panel.rect().adjusted(12, 12, -12, -12)
+                for label in panel.findChildren(QLabel):
+                    if label.isVisible():
+                        bounds = QRect(label.mapTo(panel, QPoint()), label.size())
+                        assert inset.contains(bounds), (
+                            label.text()[:60],
+                            bounds,
+                            inset,
+                        )
+                        assert label.height() >= label.heightForWidth(label.width())
+            assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+            assert screen.workspace.horizontalScrollBar().maximum() == 0
+        text = "\n".join(label.text() for label in panels[1].findChildren(QLabel))
+        assert all(
+            heading in text for heading in ("Original Saved Facts", "Before", "After")
+        )
+        assert corrected.record.effective.resolution_notes in text
+        assert corrected.record.corrections[-1].note in text
+        assert operations.one_shots.get(corrected.prediction_id) == corrected
+    finally:
+        qapp.setFont(original_font)
 
 
 @pytest.mark.parametrize("numeric", [False, True])

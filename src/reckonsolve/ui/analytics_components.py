@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QLabel,
-    QPushButton,
     QSizePolicy,
     QTableWidget,
     QVBoxLayout,
@@ -15,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from .components import ContentPanel
+from .detail_workspace import collapse_section
 from .visual_system import (
     Spacing,
     SurfaceRole,
@@ -204,12 +204,13 @@ class _ResponsiveChartTable(QWidget):
         self._layout.addWidget(chart)
         self.table_toggle = None
         if collapsible_table:
-            self.table_toggle = QPushButton("Calibration table", self)
-            self.table_toggle.setCheckable(True)
-            self.table_toggle.toggled.connect(table.setVisible)
-            self._layout.addWidget(self.table_toggle)
-            table.hide()
-        self._layout.addWidget(table)
+            self.table_disclosure = collapse_section(
+                table, "Calibration table", compact=True
+            )
+            self.table_toggle = self.table_disclosure.disclosure_button
+            self._layout.addWidget(self.table_disclosure)
+        else:
+            self._layout.addWidget(table)
         self._synchronize_surfaces()
         self._fit_table_height()
 

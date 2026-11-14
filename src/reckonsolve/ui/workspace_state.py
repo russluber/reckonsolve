@@ -30,7 +30,12 @@ class WorkspaceState:
             if destination.route is Route.NEW:
                 self.new_origin = self.current
             elif destination.route is Route.PERFORMANCE:
-                self.performance_origin = self.current
+                if self.current.route is Route.SETTINGS:
+                    # Settings is a detour, not another link in a Back stack.
+                    if self.settings_origin.route is not Route.PERFORMANCE:
+                        self.performance_origin = self.settings_origin
+                else:
+                    self.performance_origin = self.current
             elif destination.route is Route.SETTINGS:
                 self.settings_origin = self.current
         self.current = destination

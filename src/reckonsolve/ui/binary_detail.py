@@ -560,10 +560,14 @@ class PredictionDetailScreen(QWidget):
             "predictionDetailMetadataPanel",
             self.detail_content,
         )
-        metadata_heading = QLabel("Prediction details", self.metadata_panel)
-        metadata_heading.setObjectName("predictionDetailMetadataHeading")
-        apply_text_role(metadata_heading, TextRole.SECTION_TITLE)
-        metadata_layout.addWidget(metadata_heading)
+        self.metadata_empty = QLabel(
+            "No additional information recorded.", self.metadata_panel
+        )
+        self.metadata_empty.setObjectName("binaryMetadataEmptyMessage")
+        self.metadata_empty.setWordWrap(True)
+        _make_selectable(self.metadata_empty)
+        apply_text_role(self.metadata_empty, TextRole.SECONDARY)
+        metadata_layout.addWidget(self.metadata_empty)
         metadata_layout.addWidget(self.forecast_deadline_row)
         metadata_layout.addWidget(self.expected_resolution_row)
         metadata_layout.addWidget(self.background_section)
@@ -674,12 +678,17 @@ class PredictionDetailScreen(QWidget):
         self.criteria_read_button = criteria_reader(
             self.resolution_criteria_section, self.resolution_criteria
         )
-        self.chart_disclosure = collapse_section(chart_panel, "Probability history")
+        self.chart_disclosure = collapse_section(
+            chart_panel, "Probability History", compact=True
+        )
+        self.metadata_disclosure = collapse_section(
+            self.metadata_panel, "More Information", compact=True
+        )
         overview = [
             self.resolution_criteria_section,
             self.scorecard_section,
             self.chart_disclosure,
-            collapse_section(self.metadata_panel, "More information"),
+            self.metadata_disclosure,
         ]
         self.reading_sections = AdaptiveReadingSections(
             self.resolution_notes,
@@ -705,7 +714,7 @@ class PredictionDetailScreen(QWidget):
         ):
             label.hide()
         self.scored_forecast_disclosure = collapse_section(
-            self.resolution_scoring_forecast, "Scored forecast context"
+            self.resolution_scoring_forecast, "Scored Forecast Context", compact=True
         )
         self.resolution_section.layout().removeWidget(self.resolution_scoring_forecast)
         self.resolution_section.layout().addWidget(self.scored_forecast_disclosure)
@@ -1466,6 +1475,8 @@ class PredictionDetailScreen(QWidget):
             changes = self._operations.list_definition_changes(prediction_id)
         except ApplicationError as error:
             self.definition_history.setHidden(True)
+            self.metadata_empty.setText("Definition history is unavailable.")
+            self.metadata_empty.show()
             self._show_error(str(error))
             return
 
@@ -1479,6 +1490,17 @@ class PredictionDetailScreen(QWidget):
         self.definition_history.setHidden(not changes)
         if changes:
             self.metadata_panel.setHidden(False)
+        self.metadata_empty.setText("No additional information recorded.")
+        self.metadata_empty.setVisible(
+            all(
+                section.isHidden()
+                for section in (
+                    self.expected_resolution_row,
+                    self.background_section,
+                    self.definition_history,
+                )
+            )
+        )
 
     def _load_timeline(self, prediction_id: int) -> bool:
         try:

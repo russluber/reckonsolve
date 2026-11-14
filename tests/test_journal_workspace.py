@@ -55,9 +55,99 @@ def test_shared_toolbar_and_independent_performance_origin(workspace, qtbot):
     assert window.workspace.current.prediction_id == prediction.prediction_id
 
 
+@pytest.mark.parametrize("origin", ["Journal", "Prediction Detail", "Performance"])
+def test_settings_performance_action_retains_underlying_source_without_back_cycle(
+    workspace, qtbot, origin
+):
+    from PySide6.QtCore import Qt
+
+    window, operations = workspace
+    prediction = create_binary(operations, "Settings Performance return", 60)
+    if origin != "Journal":
+        window._open_prediction(prediction.prediction_id)
+    underlying_source = window.workspace.current
+    if origin == "Performance":
+        window.navigate_to("Performance")
+    window.navigate_to("Settings")
+    assert window._toolbar.performance.isVisible()
+    assert window._toolbar.home.isVisible()
+    assert not window._toolbar.new.isVisible()
+    assert not window._toolbar.performance.icon().isNull()
+    assert window._toolbar.performance.toolTip() == "Performance"
+    assert window._toolbar.home.x() < window._toolbar.performance.x()
+    assert window._toolbar.performance.x() < window._toolbar.appearance.x()
+    window._toolbar.performance.setFocus()
+    qtbot.keyClick(window._toolbar.performance, Qt.Key.Key_Space)
+    assert window.current_screen_name == "Performance"
+    qtbot.waitUntil(lambda: not window._analytics_screen.loading, timeout=10000)
+    assert window.workspace.back_destination() == underlying_source
+    assert window.workspace.performance_origin == underlying_source
+    assert not window._toolbar.performance.isVisible()
+    window._toolbar.settings.click()
+    assert window._toolbar.back.text() == "Back to Performance"
+    window._toolbar.back.click()
+    assert window.current_screen_name == "Performance"
+    assert window.workspace.back_destination() == underlying_source
+    window._toolbar.back.click()
+    assert window.workspace.current == underlying_source
+
+
+@pytest.mark.parametrize(
+    ("origin", "target"),
+    [
+        ("Journal", "Performance"),
+        ("Prediction Detail", "Performance"),
+        ("Journal", "Settings"),
+        ("Prediction Detail", "Settings"),
+        ("Performance", "Settings"),
+    ],
+)
+def test_direct_journal_action_preserves_view_and_independent_back(
+    workspace, qtbot, origin, target
+):
+    from PySide6.QtCore import Qt
+
+    window, operations = workspace
+    prediction = create_binary(operations, "Workspace home journey", 60)
+    journal = window._journal_screen
+    journal.search_input.setText("Workspace")
+    journal.submit_search()
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    request = journal.state.request
+    assert not window._toolbar.home.isVisible()
+    if origin != "Journal":
+        window._open_prediction(prediction.prediction_id)
+        assert not window._toolbar.home.isVisible()
+    if origin == "Performance":
+        window.navigate_to("Performance")
+    source = window.workspace.current
+    window.navigate_to(target)
+    assert window.workspace.back_destination() == source
+    assert window._toolbar.home.isVisible()
+    assert window._toolbar.home.accessibleName() == "Journal"
+    assert window._toolbar.home.toolTip() == "Journal"
+    assert not window._toolbar.home.icon().isNull()
+    assert window._toolbar.home.x() < window._toolbar.appearance.x()
+    assert window._toolbar.home.x() > window._toolbar.width() // 2
+    window._toolbar.back.click()
+    assert window.workspace.current == source
+    window.navigate_to(target)
+    assert window.workspace.back_destination() == source
+    window._toolbar.home.setFocus()
+    qtbot.keyClick(window._toolbar.home, Qt.Key.Key_Space)
+    assert window.current_screen_name == "Journal"
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    assert journal.state.request == request
+    assert not window._toolbar.home.isVisible()
+    assert (
+        operations.get_prediction_for_navigation(prediction.prediction_id) is not None
+    )
+
+
 @pytest.mark.parametrize("mode", [AppearanceMode.LIGHT, AppearanceMode.DARK])
-def test_new_button_fits_its_complete_label_with_and_without_focus(
-    workspace, qtbot, mode
+@pytest.mark.parametrize("action", ["new", "journal_reset", "performance_reset"])
+def test_compact_action_fits_its_complete_label_with_and_without_focus(
+    workspace, qtbot, mode, action
 ):
     from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionButton
@@ -66,7 +156,14 @@ def test_new_button_fits_its_complete_label_with_and_without_focus(
     window.resize(760, 520)
     window.activateWindow()
     window.appearance.select(mode)
-    button = window._toolbar.new
+    if action == "performance_reset":
+        window.navigate_to("Performance")
+        qtbot.waitUntil(lambda: not window._analytics_screen.loading, timeout=10000)
+        button = window._analytics_screen.reset_button
+    elif action == "journal_reset":
+        button = window._journal_screen.reset_button
+    else:
+        button = window._toolbar.new
     original_font = QFont(button.font())
     for size in (None, 11, 13):
         if size is not None:
@@ -74,7 +171,7 @@ def test_new_button_fits_its_complete_label_with_and_without_focus(
             font.setPointSize(size)
             button.setFont(font)
         widths = []
-        for focused in (button, window._journal_screen.search_input):
+        for focused in (window._toolbar.appearance, button):
             focused.setFocus()
             QApplication.processEvents()
             qtbot.wait(40)

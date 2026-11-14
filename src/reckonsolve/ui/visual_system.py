@@ -68,6 +68,7 @@ class TextRole(StrEnum):
     PAGE_TITLE = "page-title"
     METRIC = "metric"
     FORECAST = "forecast"
+    ROW_FORECAST = "row-forecast"
 
 
 class SurfaceRole(StrEnum):
@@ -132,6 +133,8 @@ class SemanticColors:
     info_surface: str
     warning: str
     warning_surface: str
+    actual_fill: str
+    actual_outline: str
     caution: str
     caution_surface: str
     error: str
@@ -149,6 +152,7 @@ _TEXT_ROLE_DELTAS = {
     TextRole.PAGE_TITLE: 11.0,
     TextRole.METRIC: 7.0,
     TextRole.FORECAST: 7.0,
+    TextRole.ROW_FORECAST: 5.0,
 }
 
 _TEXT_ROLE_WEIGHTS = {
@@ -160,6 +164,7 @@ _TEXT_ROLE_WEIGHTS = {
     TextRole.PAGE_TITLE: QFont.Weight.Bold,
     TextRole.METRIC: QFont.Weight.Bold,
     TextRole.FORECAST: QFont.Weight.Bold,
+    TextRole.ROW_FORECAST: QFont.Weight.Bold,
 }
 
 
@@ -230,6 +235,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
             info_surface="#20344e",
             warning="#f0c66d",
             warning_surface="#3a2f17",
+            actual_fill="#f0c66d",
+            actual_outline="#f0c66d",
             caution="#ffb66e",
             caution_surface="#3e291a",
             error="#ff9a92",
@@ -261,6 +268,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         info_surface="#e9f2ff",
         warning="#765200",
         warning_surface="#fff2c2",
+        actual_fill="#e5b943",
+        actual_outline="#987000",
         caution="#a64b00",
         caution_surface="#fff1e6",
         error="#a82a23",
@@ -327,7 +336,8 @@ QLabel[reckonsolveTextRole="page-title"] {{
 QLabel[reckonsolveTextRole="metric"] {{
     color: {color.text};
 }}
-QLabel[reckonsolveTextRole="forecast"] {{
+QLabel[reckonsolveTextRole="forecast"],
+QLabel[reckonsolveTextRole="row-forecast"] {{
     color: {color.accent};
 }}
 
@@ -487,7 +497,9 @@ QPushButton:disabled {{
 
 /* Reserve focus borders so compact actions never lose label space on focus. */
 QPushButton[reckonsolveProbabilityPreset="true"],
-QPushButton#newPredictionNavigationButton {{
+QPushButton#newPredictionNavigationButton,
+QPushButton#resetJournalViewButton,
+QPushButton#resetPerformanceView {{
     border-width: 2px;
 }}
 QPushButton[reckonsolveProbabilityPreset="true"]:focus {{

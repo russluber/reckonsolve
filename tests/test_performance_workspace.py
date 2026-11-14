@@ -3,6 +3,7 @@
 from dataclasses import replace
 from threading import Event
 
+import pytest
 from main_window_fakes import FakePredictionOperations
 from performance_helpers import (
     adaptive_binary,
@@ -11,7 +12,7 @@ from performance_helpers import (
     one_shot_numeric,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QToolButton
 
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.application.performance import PerformanceRequest, Section
@@ -27,8 +28,9 @@ from reckonsolve.ui.settings_screen import SettingsScreen
 from reckonsolve.ui.tag_manager import TagChange, TagManagerDialog
 
 
+@pytest.mark.parametrize("detour", ["Journal", "Settings"])
 def test_session_scope_disclosures_position_and_reset_without_canonical_writes(
-    qtbot, performance_archive
+    qtbot, performance_archive, detour
 ):
     database, operations = performance_archive
     window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
@@ -59,8 +61,11 @@ def test_session_scope_disclosures_position_and_reset_without_canonical_writes(
     position = bar.value()
     request = screen.state.request
     before = database._require_connection().total_changes
-    window.navigate_to("Journal")
-    window.navigate_to("Performance")
+    window.navigate_to(detour)
+    if detour == "Settings":
+        window._toolbar.performance.click()
+    else:
+        window.navigate_to("Performance")
     loaded(screen, qtbot, refresh=False)
     assert screen.state.request == request
     assert bar.value() == position
@@ -79,6 +84,38 @@ def test_session_scope_disclosures_position_and_reset_without_canonical_writes(
     assert fresh.state.request == PerformanceRequest()
     assert fresh.state.position == 0
     window.close()
+
+
+def test_report_supporting_reveals_use_keyboard_chevrons_without_writes(
+    qtbot, performance_archive
+):
+    database, operations = performance_archive
+    screen = PerformanceScreen(operations)
+    qtbot.addWidget(screen)
+    screen.resize(1200, 900)
+    screen.show()
+    report = loaded(screen, qtbot)
+    before = database._require_connection().total_changes
+    controls = [
+        control
+        for section in screen.sections.values()
+        for control in section.findChildren(QToolButton)
+        if control.property("reckonsolveDisclosure") == "true" and control.isVisible()
+    ]
+    assert len(controls) == 6
+    for control in controls:
+        assert not control.isChecked()
+        assert control.arrowType() is Qt.ArrowType.RightArrow
+        screen.scroll_area.ensureWidgetVisible(control)
+        control.setFocus()
+        qtbot.keyClick(control, Qt.Key.Key_Space)
+        assert control.isChecked()
+        assert control.arrowType() is Qt.ArrowType.DownArrow
+        assert control.parentWidget().disclosure_body.isVisible()
+        qtbot.keyClick(control, Qt.Key.Key_Space)
+        assert not control.parentWidget().disclosure_body.isVisible()
+    assert screen.report == report
+    assert database._require_connection().total_changes == before
 
 
 def test_confirmed_merge_follows_target_and_verified_deletion_broadens(
@@ -267,6 +304,7 @@ def test_archive_refusal_is_global_instead_of_isolated_empty_result(qtbot, monke
     assert window._analytics_screen.report is None
     assert window.archive_blocked
     assert not window._toolbar.new.isEnabled()
+    assert not window._toolbar.home.isEnabled()
     assert not window._screen_stack.isEnabled()
 
 

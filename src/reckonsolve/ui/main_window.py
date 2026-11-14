@@ -276,11 +276,7 @@ class MainWindow(QMainWindow):
             text = "Back to Prediction"
         else:
             text = f"Back to {origin.route.value}"
-        self._toolbar.update_route(
-            route,
-            text,
-            separate_home=route is Route.PERFORMANCE and origin.route is Route.DETAIL,
-        )
+        self._toolbar.update_route(route, text)
         self._toolbar.update_appearance(self.appearance.dark)
         self._settings_screen.set_appearance(self.appearance.mode)
         self._settings_screen.set_date_format(self.display_date_format)
@@ -439,6 +435,7 @@ class MainWindow(QMainWindow):
         self._journal_screen.block_archive(error)
         self._screen_stack.setEnabled(False)
         self._toolbar.new.setEnabled(False)
+        self._toolbar.home.setEnabled(False)
         self._toolbar.performance.setEnabled(False)
         self._toolbar.settings.setEnabled(False)
         QMessageBox.critical(self, "Journal cannot be opened", str(error))

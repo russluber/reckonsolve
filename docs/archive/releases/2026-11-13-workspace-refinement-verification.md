@@ -134,7 +134,263 @@ whitespace checks passed in both repositories. The preservation audit verified
 reference assets and protected lower layers/migrations/dependencies. These results
 supersede earlier focused/intermediate runs for this follow-up's final source.
 
-The [two-part One-Shot recheck](../../maintainer/development.md#one-shot-results-and-reflection-follow-up)
-is **pending**. Carry the accepted functional/Journal/date/Adaptive checks forward.
+The user subsequently reported that the layouts improved and the settled Skip/later-
+writing treatment was good at saved public `f552dc8`. This is scoped positive feedback
+on those refinements, retaining the recorded content/device limits. Carry those
+directions and the accepted functional/Journal/date/Adaptive checks forward.
 All runtime evidence uses disposable data; no personal journal, installed tool,
 private reference, protected lower layer, migration, dependency or Git publication changed.
+
+## Journal preview rhythm and scoring disclosure
+
+Based on clean public `f552dc8`, the user requested tighter Numeric Journal previews,
+a slightly smaller Binary percentage with matching Numeric values, and compact
+Forecast used for scoring disclosure. Section 38.15 authorizes this presentation
+tuning; forecasting facts, retrieval, scoring and history are unchanged.
+
+Journal now uses a row-specific forecast role, two points smaller than Detail's
+existing forecast role. Binary percentages and all five Numeric values share that
+size/weight/accent. Percentile labels remain secondary. Content-sized groups use
+the existing wrapping FlowLayout with a fixed gap, rather than stretching five
+columns across the window. A long label/value pair stays intact and reflows in
+q05/q25/q50/q75/q95 order; signs, exact precision and the single unit label remain.
+Both modes share this row grammar. Terminal forecast context uses the existing
+compact keyboard-accessible chevron without changing its facts or initial disclosure.
+
+Two new mode-specific native regressions compare real row geometry at 1600/1100/760
+logical widths, matching Binary/Numeric fonts, Detail/Question hierarchy, constant
+gaps, compact span and unchanged checked facts. Existing Binary/Numeric terminal
+journeys now exercise the compact disclosure with Space and verify its open/closed
+body and arrow. Four final focused cases passed in 3.98 seconds. The earlier 45-case
+focused run preceded the final long-value FlowLayout refinement and is not final-source
+evidence for that reflow.
+
+Actual Qt captures show a mixed Journal at 1200 × 900 in both palettes and resolved
+Binary/Numeric scored-forecast disclosures collapsed/expanded. Dark 760 × 720 probes
+at 9/12/15-point Segoe UI covered ordinary and large signed six-decimal quantities;
+no horizontal overflow or clipped value height remained. Representative mixed,
+long-value and compact-context captures were inspected. Artifacts remain ignored under
+`build/ux-row-rhythm/`; these do not claim a complete human Windows scaling matrix.
+
+Final full-source suite: **1,246 passed in 474.04 seconds**, with zero failures,
+errors or skips. Ruff check/format passed for 319 Python files. Public/private
+documentation checks passed 339/302 local links and both whitespace checks passed.
+The preservation audit verified 90 current public-reference mirrors, all 66 J IDs,
+all 42 R IDs/both withdrawals, unchanged reference assets and protected lower layers,
+migrations and dependencies. Earlier focused results remain tied to their stated source.
+
+The [narrow three-point recheck](../../maintainer/development.md#journal-preview-and-scoring-disclosure-recheck)
+remains **pending**. No personal data, installed tool, protected lower layer, migration,
+dependency, private reference or Git publication changed.
+
+## Further labels, marker and expanded facts refinement
+
+The row/disclosure changes above remained uncommitted at public `f552dc8` when the
+user requested three corrections. This pass preserves that candidate and extends
+its checkpoint: Journal uses 50th without Median, WIS Actual diamonds remain gold
+in light/dark, and both expanded One-Shot facts/history panels have consistent
+rounded borders, padding and readable snapshots. Section 38.15 records this scope.
+
+The marker had borrowed the warning-text color, making it brown in light mode.
+Dedicated fill/outline tokens preserve gold and visible edges without reducing
+warning-text contrast or changing projection/score. The facts/history frame insets
+had been removed during the prior layout cleanup. Restored insets and width-flexible
+wrapped labels now keep text inside both frames; original, correction heading/date,
+Before, After and notes have distinct internal spacing. Compact chevrons, complete
+facts and historical destinations remain. Detail interval labels still name Median.
+
+Seven focused cases passed in 5.00 seconds. They include real rendered marker pixels
+through light → dark → light, outline contrast and unchanged marker positions; four
+Binary/Numeric × 9/15-point cases verify expanded panel insets, label bounds, complete
+wrapped text/notes, no horizontal overflow at 1200/760 widths and unchanged canonical
+facts. The existing two row cases also require 50th and no Median in Journal.
+
+Actual Qt captures cover both One-Shot types' expanded times, originals and scrolled
+Before/After views in both palettes; 760 × 720 probes at 9/15-point Segoe UI retained
+complete label height and no horizontal overflow. Both WIS palettes were captured
+with the breakdown open. Representative expanded Numeric originals/correction,
+Binary times and light WIS marker were inspected. Artifacts remain ignored under
+`build/ux-fact-panels/`; this is not a full human Windows scaling/accessibility matrix.
+
+Final combined-source suite: **1,251 passed in 516.11 seconds**, with zero failures,
+errors or skips. Ruff check/format passed for 319 Python files. Public/private
+documentation checks passed 341/303 local links and both whitespace checks passed.
+The preservation audit verified 91 current public-reference mirrors, all 66 J IDs,
+all 42 R IDs/both withdrawals, unchanged reference assets and protected lower layers,
+migrations and dependencies. This supersedes the earlier candidate's source result
+for the combined uncommitted checkpoint.
+
+The user subsequently reported acceptance of the
+[combined candidate recheck](../../maintainer/development.md#expanded-facts-and-marker-recheck),
+then requested the remaining Adaptive reveal consistency below. Earlier source results
+remain version-scoped; no personal data, installed
+tool, scoring/history rule, migration, dependency or Git publication was changed.
+
+## Adaptive Overview reveal consistency
+
+The user accepted the label/marker/fact-panel fixes and requested compact chevron
+controls for the remaining inline Adaptive Overview button reveals. Probability
+History on Invalid Binary, More Information on both types, Latest Committed
+Distribution on terminal Numeric and supporting scored-forecast wrappers now reuse
+the existing compact control. No content, chart selection, disclosure default,
+historical destination or editor/dialog action was changed.
+
+Six new Binary/Numeric × Open/Resolved/Invalid regressions exercise both palettes,
+Space-key expansion/collapse, arrow/body state, existing direct-chart/default
+visibility, minimum-width scrolling and unchanged canonical snapshots. Together
+with the existing current-versus-scored distribution case, seven focused checks
+passed in 6.79 seconds.
+
+The broad run exposed a timing-sensitive long-history geometry assertion: its
+integer pane ratio can reach the target before the final animation frame restores
+normal Timeline wrapping. The check now waits for that restoration before inspecting
+settled overflow, with runtime motion unchanged. All four 9/12-point Binary/Numeric
+long-history cases then passed in 19.54 seconds; final full verification follows below.
+
+Actual Qt captures cover all six reading compositions collapsed/expanded in both
+palettes at 1200 × 850, plus Dark 760 × 520 horizontal-access checks. Invalid Binary
+and Resolved Numeric collapsed views were inspected. Generated evidence stays ignored
+under `build/ux-adaptive-reveals/`; this is not a complete human Windows device or
+accessibility matrix. The [short reveal recheck](../../maintainer/development.md#adaptive-overview-reveal-recheck)
+remains pending; accepted earlier presentation checks carry forward.
+
+This work extends the same uncommitted checkpoint at public `f552dc8`; private notes
+remain separate and ignored. No personal data, installed tools, protected lower
+layers, migration, dependency, staging, commit, tag, push or publication changed.
+
+Final combined-source verification after strengthening the settled-animation check:
+**1,257 passed in 472.44 seconds**, with zero failures, errors or skips. Ruff
+check/format passed for 319 Python files. Documentation checked 343/303 public/private
+local links; both whitespace checks passed. The preservation audit verified 92 current
+public-reference mirrors, all 66 J IDs, all 42 R IDs/both withdrawals, unchanged
+reference assets and protected lower layers/migrations/dependencies. This final run
+supersedes the intermediate timing-sensitive failure and earlier source counts.
+
+## Adaptive Numeric definition visibility
+
+The user requested that Unit and Decimal Places be visible near Resolution Criteria
+rather than hidden in More Information. This extends the same uncommitted source
+candidate at public `f552dc8`, under Section 38.15. Both fixed values now appear in
+a two-field row immediately below criteria in Open, Locked, Resolved and Invalid
+Adaptive Numeric reading. More Information retains optional context/history without
+duplicate fields, distinguishing no additional information from unavailable history.
+One-Shot definitions, editing, canonical precision and scoring are unchanged.
+
+Nine focused regressions passed in **5.40 seconds**: four lifecycle states at 9/12-point
+text, ordinary/minimum widths, exact selectable values, placement, long-unit wrapping,
+no horizontal overflow, optional/empty metadata and canonical equality, plus a
+definition-history failure/recovery case. The larger-text check exposed an existing
+unwrapped current-distribution heading; allowing that heading to wrap removes its
+eight-pixel minimum-width overflow without changing chart content.
+
+Actual Qt captures cover all four states at 9/12-point Segoe UI in both appearances,
+1200 × 850 and 760 × 720, plus expanded More Information. Resolved ordinary Light
+and long-unit Dark captures were inspected. Generated evidence stays ignored under
+`build/ux-numeric-definition/`; it does not establish a complete human Windows
+scaling, accessibility or device matrix. The [short placement recheck](../../maintainer/development.md#adaptive-numeric-definition-visibility-recheck)
+remains pending alongside the prior reveal check; accepted earlier journeys carry
+forward. No personal-data operation, installed-tool replacement, protected lower-layer,
+migration, dependency or Git publication change is involved.
+
+Final combined-source suite: **1,266 passed in 487.76 seconds**, with zero failures,
+errors or skips. Ruff check/format passed for 319 Python files; documentation checked
+345/303 public/private local links and both whitespace checks passed. The preservation
+audit verified 93 current public-reference mirrors, all 66 J IDs and 42 R IDs including
+both withdrawals, unchanged reference assets, protected lower layers, migrations and
+dependencies, and ignored private notes. This supersedes the preceding candidate's
+source result; it does not imply human acceptance or a published release. Nothing
+was staged, committed or pushed by the agent.
+
+**Binary More Information cleanup:** The user subsequently found the redundant
+Prediction Details heading beneath More Information on Invalid Adaptive Binary.
+The shared Binary body now starts directly with its recorded context, with no
+duplicate heading in any lifecycle state. When optional context/history is absent,
+it uses the same explicit empty message as Numeric; unavailable definition history
+remains an error. Existing disclosure defaults and all recorded facts are preserved.
+
+All **57 focused Detail/metadata checks passed in 59.18 seconds**, including the
+extended Binary/Numeric definition-history failure/recovery case. Actual Qt captures
+of populated/empty Invalid Binary in both palettes at 1200 × 850 and 760 × 720 verified
+the missing heading, retained context, canonical equality and no horizontal overflow;
+representative Light empty/Dark populated captures were inspected. Artifacts remain
+ignored under `build/ux-binary-information/`. Ruff check/format, both documentation
+checks, preservation and whitespace checks passed. The 1,266-test full-suite result
+above precedes this small cleanup and is not final-source evidence for it. This is
+routine tuning within the existing pending visual checkpoint; check the same expanded
+Invalid Binary panel, carrying accepted earlier journeys forward. No personal data,
+installed tool, protected lower layer, Git staging, commit or push was changed.
+
+## Final toolbar and presentation follow-up
+
+At the unchanged saved public `f552dc8` baseline, the user requested four further
+refinements before saving the combined checkpoint. Desktop One-Shot badges and
+matching Detail headings now read Answer Pending, retaining warning yellow and the
+existing Open lifecycle. CLI wording remains unchanged. Reset View on Journal and
+Performance reserves its focus border; a baseline regression reproduced 54 pixels
+available for a 56-pixel Journal label. The completed fix retains full text and the
+same button width at normal/11/13-point text in both palettes.
+
+Performance's diagnostics, percentile detail and Binary calibration tables reuse
+the existing compact chevrons, preserving exact content, keyboard activation, body
+identities, session retention and Reset View defaults. Actual reset/retry actions
+remain buttons. Performance and Settings always offer an icon-only notebook action
+with tooltip/accessibility label Journal beside the right-hand utilities. This is an
+explicit user-authorized replacement of the earlier different-destination-only home
+rule in Section 38.2; source-aware Back remains independent. Journal retrieval is
+retained and no home self-action or creation/Detail destination is added. Global
+archive refusal disables this navigation action as well.
+
+All **91 focused checks passed in 63.67 seconds**. Coverage includes complete focused
+New/Journal Reset/Performance Reset text in both palettes at normal/11/13-point fonts;
+five Journal/Prediction/Performance origins for direct Journal versus source Back;
+six report disclosures with Space-key arrows/body state and no canonical writes;
+existing report session/reset/refresh/failure/return journeys; desktop One-Shot
+wording and unchanged CLI behavior.
+
+Actual Qt captures cover Journal, both pending One-Shot types, Performance and
+Settings in both palettes, 1200 × 900 and 760 × 720 where applicable, with expanded
+percentile support and focused Reset View. Journal and Settings direct returns and
+unchanged pending records were checked; representative Performance Light, Settings
+Dark, pending badges and focused Journal captures were inspected. Generated evidence
+remains ignored under `build/ux-final-utilities/`, without a complete human device,
+Windows scaling or accessibility claim. The [four-point recheck](../../maintainer/development.md#final-toolbar-and-presentation-recheck)
+is pending, carrying earlier accepted journeys forward. This extends the same
+uncommitted save point; no personal data, installed tools, protected lower layers,
+migration, dependency, staging, commit, tag, push or publication changed.
+
+Final combined-source suite after the four utility/presentation fixes:
+**1,277 passed in 510.55 seconds**, with zero failures, errors or skips. Ruff
+check/format passed for 319 Python files. Documentation checked 347/303 public/private
+local links; both whitespace checks passed. The preservation audit verified 94 current
+public-reference mirrors, all 66 J IDs/42 R IDs including both withdrawals, unchanged
+R1/R2 reference assets, protected lower layers/migrations/dependencies and ignored
+private notes. This supersedes earlier candidate source results, including the
+focused-only Binary heading follow-up; it does not claim human acceptance or release.
+
+**Settings Performance access:** The user then requested the existing chart icon
+on Settings. It now appears beside Journal and appearance, while New remains absent.
+Within the existing one-source navigation model, opening Performance from Settings
+inherits its underlying Journal/Prediction source. A return from a Performance detour
+retains the report's independent origin rather than creating a Settings/Performance
+Back cycle. Current report refresh, session scope/disclosures/position, Settings
+visit-local cleanup and archive refusal remain unchanged. Section 38.2 explicitly
+updates the prior Settings action scope; Section 38.15 records this authorized extension.
+
+All **46 focused workspace/Performance checks passed in 60.83 seconds**, including
+Journal, Prediction and Performance origins through the Settings chart action, keyboard
+activation, utility placement, two successive Back returns, and retained report state
+after both Journal and Settings detours without canonical writes. Actual Qt captures
+cover Settings in Light/Dark at 1200 × 900 and 760 × 720 and the retained report return;
+the smaller Dark Settings composition was inspected. Generated evidence remains
+ignored under `build/ux-settings-performance/`. The same bounded navigation recheck
+now includes this chart action; prior human acceptance remains version-scoped, and
+the 1,277-test result above precedes this extension. No personal data, installed tool,
+protected lower layer, migration, dependency, staging, commit or push changed.
+
+Final combined-source verification including Settings Performance access:
+**1,281 passed in 502.91 seconds**, with zero failures, errors or skips. Ruff
+check/format passed for 319 files. Public/private documentation checked 347/303 local
+links; both whitespace checks passed. Preservation verified 94 current public-reference
+mirrors, every J/R identifier and withdrawal, unchanged reference assets and protected
+lower layers/migrations/dependencies, and ignored private notes. This supersedes the
+preceding candidate's source result; scoped human toolbar/return review remains pending.

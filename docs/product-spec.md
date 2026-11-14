@@ -1876,9 +1876,9 @@ Preserve the four closed mode/type/model/scoring contracts, exact quantities and
 | --- | --- | --- | --- | --- | --- |
 | Journal | Yes | Yes | Yes | Yes | Journal is home; omit redundant home self-navigation. |
 | Prediction Detail | Yes | Yes | Yes | Yes | One Journal return restores its retrieval and useful browsing vicinity. |
-| Performance | Yes | No self-action | Yes | Yes | Return to its originating Prediction or Journal. Show separate Journal home only when it has a different destination. |
+| Performance | Yes | No self-action | Yes | Yes | Back returns to its originating Prediction or Journal. A separate Journal icon in the right-hand utilities always opens Journal. |
 | New Prediction | No | No | No | Yes | Untouched cancellation returns to its origin; entered work uses the selected discard guard. Successful landings are specified below. |
-| Settings | No | No | No self-action | Yes | Return to its recorded Journal/Detail/Performance source. Completed tools stay for inspection until a deliberate return. |
+| Settings | No | Yes | No self-action | Yes | Back returns to its recorded Journal/Detail/Performance source. Journal and Performance utility icons open those destinations directly. Completed tools stay for inspection until deliberate navigation. |
 
 Use a compact persistent shared app bar, no persistent sidebar or peer destination tabs, and one clear Journal page heading. Keep ordinary actions blue across both palettes while preserving semantic status/caution/destructive/analytical roles. Preserve existing brand assets and verify their legibility at representative sizes in both appearances.
 
@@ -1890,7 +1890,7 @@ Keep one current source per workspace rather than a general navigation stack. An
 
 ### 38.3 Journal retrieval, filters and ordering
 
-Default to All, blank search, default All words, no advanced/history constraints and automatic Recently active. All includes every supported lifecycle/mode/type; Unresolved includes Open/Locked Adaptive and One-Shot Waiting for answer; Needs postmortem includes Resolved with blank effective reflection and no explicit Skip. Waiting for answer is a One-Shot display label, not a new canonical lifecycle. Show the three quiet quick views without badges, persistent attention queues or catch-up prompts.
+Default to All, blank search, default All words, no advanced/history constraints and automatic Recently active. All includes every supported lifecycle/mode/type; Unresolved includes Open/Locked Adaptive and One-Shot Answer Pending; Needs postmortem includes Resolved with blank effective reflection and no explicit Skip. Answer Pending is the desktop One-Shot display label for the same nonterminal state, not a new canonical lifecycle; CLI wording remains Waiting for answer. Show the three quiet quick views without badges, persistent attention queues or catch-up prompts.
 
 Search is immediately available with the visible placeholder Search predictions and a stable accessible name. Preserve the current full corpus/ranking/matching meanings; remembered Question words are the main cue, not the only searchable content. Search, quick views, Filters and Sort scroll with the page; the shared bar remains. Search narrows the chosen view and applied constraints. Switching view or Mode retains query and applied constraints, including valid zero-result combinations. Do not introduce hidden per-view settings or silently remove constraints to manufacture results.
 
@@ -2228,3 +2228,97 @@ refinement, not a permanent ban on later reflection or a new completion policy.
 This follow-up is implemented locally with passing source verification; its
 [narrow One-Shot visual recheck](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-results-and-reflection-follow-up)
 remains separate from the previously accepted focused checks and publication.
+
+**Journal preview rhythm and Adaptive disclosure — authorized 2026-11-13:** After
+accepting the One-Shot follow-up, the user requested closer Numeric Journal groups,
+a slightly smaller Binary row forecast with matching Numeric value size, and compact
+Forecast used for scoring disclosure in Adaptive Detail. Keep Numeric values in
+q05/q25/q50/q75/q95 order with exact signs/precision and the unit once. Size the group
+to its content with consistent comfortable gaps instead of stretching five columns
+across a wide window. Both modes use the same Journal preview grammar. Use one smaller
+row-specific forecast text role for Binary percentages and Numeric values; retain
+secondary percentile labels and unchanged Detail forecast typography. Preserve small-
+window reflow and selectable values. Use the existing compact chevron disclosure for
+terminal forecast context, retaining its current facts/default and keyboard access.
+This is presentation tuning; retrieval, scoring eligibility, history and storage remain
+unchanged. Other accepted journeys/checks carry forward; recheck only these refinements.
+
+This tuning is implemented locally with passing source verification. The narrow
+three-point visual recheck remains open; it grants no publication or additional scope.
+
+**Further presentation feedback — authorized 2026-11-13:** Journal percentile
+headings use 5th / 25th / 50th / 75th / 95th; omit Median only in Journal previews,
+retaining its role label on Detail's proportional intervals. The WIS Actual diamond
+uses a distinct gold chart fill/contrasting outline in both appearances rather than
+borrowing the warning-text color. Warning/readout contrast and exact geometry remain.
+One-Shot expanded Times & Recorded Facts and Originals & Corrections use consistent
+rounded content panels with inset padding and wrapping text. Group original, Before
+and After snapshots with clear spacing, preserving every value, note, reported time,
+immutable version and historical destination. Keep compact chevron controls and
+ordinary disclosure defaults. These refinements extend the uncommitted presentation
+checkpoint, without changing history, scoring, storage or the user-owned Git boundary.
+
+The combined candidate is implemented locally with passing source verification;
+the scoped label/marker/expanded-facts visual recheck remains separate and open.
+
+**Adaptive Overview disclosure consistency — authorized 2026-11-13:** Following
+acceptance of the preceding fixes, the user requested compact chevron reveals for
+the other inline Overview disclosures: Probability History on Invalid Adaptive
+Binary, More Information on both types, and Latest Committed Distribution on
+terminal Adaptive Numeric. Apply the same treatment to supporting scored-forecast
+context. Preserve content, visibility, fresh-visit defaults, exact search reveal and
+ongoing-task retention; charts that were directly visible remain so. Editing and
+dialog actions keep their existing behavior. This extends the uncommitted presentation
+checkpoint and changes no history, scoring, data or dependency boundary.
+
+This reveal consistency pass is implemented locally with passing source verification;
+its short visual recheck remains separate from the accepted earlier fixes and release.
+
+**Adaptive Numeric definition visibility — authorized 2026-11-13:** Unit and Decimal
+Places are essential interpretation facts. Show their existing immutable values as a
+compact two-field row directly below Resolution Criteria at the top of Overview or
+Archival Context, before notes/reflection/score details. Keep the values selectable
+and long units readable at supported widths, with no duplicate in More Information.
+That disclosure retains the remaining optional context and definition history; empty
+content is stated clearly and an unavailable history remains an error, not a false
+empty result. This presentation refinement adds no editing, conversion, precision
+change, new canonical fact or scoring/storage behavior and extends the same uncommitted
+candidate. Other accepted journeys/defaults carry forward.
+
+This placement is implemented locally with passing source verification. The preceding
+label/marker/expanded-facts fixes are user-accepted; the new placement and remaining
+Adaptive reveal check await scoped human review, separately from publication.
+
+**Final utility/presentation follow-up — authorized 2026-11-13:** Use Answer Pending
+for the desktop One-Shot nonterminal status chip and matching Detail heading, retaining
+warning yellow and the existing Open lifecycle. This supersedes earlier desktop
+Waiting for answer wording; CLI, storage and eligibility are unchanged. Reserve full
+Reset View text space before/after focus and clicks in Journal and Performance.
+Performance's supporting diagnostics, percentile detail and Binary calibration tables
+use the existing compact chevrons, retaining content, keyboard access, session state
+and Reset View defaults. Actual actions such as retry and reset remain actions.
+
+Performance and Settings always offer a quiet notebook icon beside the right-hand
+utilities, with tooltip/accessibility label **Journal**, opening the current Journal
+view without resetting its retrieval. This explicitly replaces the earlier
+different-destination-only home rule. Back remains source-aware and independent,
+including when both actions lead to Journal. Omit the home self-action on Journal
+and do not add it to focused creation or Detail. Existing exit, archive refusal,
+Settings visit-result and Performance continuity safeguards remain. This extends the
+same uncommitted presentation checkpoint; the user retains staging/commits/pushes.
+
+This follow-up is implemented locally with passing full-source verification. Its
+four-point visual recheck remains separate from earlier acceptance and publication.
+
+**Settings Performance access — authorized 2026-11-13:** Settings also exposes the
+existing Performance chart icon beside Journal and appearance. Opening Performance
+from Settings retains the underlying Journal/Prediction origin. If Settings was a
+Performance detour, retain that report's existing independent origin, scope and useful
+position. Back must not form a Settings/Performance cycle; this extends the existing
+one-origin model without introducing a navigation stack. Settings visit-local results
+still clear on leaving. Creation restrictions, archive refusal, report refresh/reset
+and the direct Journal action remain unchanged. This extends the same uncommitted
+presentation checkpoint, with commits/pushes retained by the user.
+
+This Settings extension is implemented locally with passing full-source verification;
+its focused toolbar/return recheck is part of the existing pending visual checkpoint.

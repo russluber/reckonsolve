@@ -193,7 +193,7 @@ class BinarySection(ReportSection):
         self.results_layout.addWidget(self.caveat)
         self.diagnostics = _label("", self.results)
         self.diagnostics_section = collapse_section(
-            self.diagnostics, "Timing and updating diagnostics"
+            self.diagnostics, "Timing and updating diagnostics", compact=True
         )
         self.results_layout.addWidget(self.diagnostics_section)
         self.diagnostics_section.setVisible(self.adaptive)
@@ -436,11 +436,13 @@ class NumericSection(ReportSection):
         layout.addWidget(self.continuous)
         layout.addWidget(self.whole_number)
         self.supporting = collapse_section(
-            supporting, "Percentile calibration and tables"
+            supporting, "Percentile calibration and tables", compact=True
         )
         self.results_layout.addWidget(self.supporting)
         self.updates = _label("", self.results)
-        self.update_section = collapse_section(self.updates, "Updating diagnostics")
+        self.update_section = collapse_section(
+            self.updates, "Updating diagnostics", compact=True
+        )
         self.update_section.setVisible(self.adaptive)
         self.results_layout.addWidget(self.update_section)
 

@@ -4,12 +4,18 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings and Journal-relocation walkthroughs are also accepted with recorded limits. Combined journeys and eight post-review focused checks were reported accepted; a subsequent One-Shot visual follow-up awaits its narrower recheck. Not a published release.
+Journal/workspace and the requested New Prediction/Prediction Detail walkthroughs, including long-history responsiveness tuning, are accepted with recorded limits. The requested Performance/ordinary Settings and Journal-relocation walkthroughs are also accepted with recorded limits. Combined journeys, eight focused checks and the latest label/gold/fact-panel fixes were reported accepted, with positive One-Shot layout/Skip feedback retained. Adaptive Overview chevrons and Numeric definition placement await their narrow recheck. Not a published release.
 
 - Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
 - One-Shot Detail uses shared-style result/reflection/Journal and context/originals panes, with equal terminal reading widths. Adaptive Resolved/Invalid reading also uses 50/50 panes; contextual tabs omit duplicate Overview headings. Main pane headings and principal action labels have consistent hierarchy and capitalization.
 - Settings offers three remembered desktop date orders and read-only Windows time-zone information. Ordinary timestamps omit repeated offsets; exact entry/terminal confirmation retains offset and daylight-saving cues. Canonical facts, CLI and analytical formats are unchanged.
 - Refined One-Shot reading with a full-width scorecard below Checked Answer, distinct reflection/Journal sections and compact chevron disclosures. Confirmed Skip shows a dated completion state; later writing moves into More and preserves the original Skip history.
+- Journal forecast previews use a smaller shared Binary/Numeric value size; Numeric groups stay close together with consistent gaps and readable long-value reflow. Adaptive scored-forecast context uses the compact chevron disclosure.
+- Journal's middle percentile heading is 50th. WIS Actual diamonds retain a gold fill in both appearances. Expanded One-Shot facts/history use matching padded rounded panels and separated original/Before/After snapshots without clipped text.
+- Adaptive Overview's Probability History, More Information and Latest Committed Distribution reveals use compact chevrons, preserving their content and lifecycle/default visibility. Binary More Information omits the redundant Prediction Details heading and distinguishes empty context from unavailable history.
+- Adaptive Numeric Unit and Decimal Places remain visible beneath Resolution Criteria in Overview/Archival Context, with long-unit wrapping and no duplicate inside More Information.
+- Desktop One-Shot status reads Answer Pending. Reset View retains full text on focus, Performance supporting detail uses compact chevrons, and Performance/Settings offer a direct Journal icon alongside their independent source-aware Back action.
+- Settings also offers Performance directly, retaining report scope/position and the underlying Journal/Prediction return destination without a Back cycle.
 
 - Returning to refreshed Journal results and background result replacement retain usable keyboard focus. Current nearby results/search/retry provide safe fallbacks without changing query membership, following reordered rows or stealing focus from another action.
 - Numeric interval labels reflow after font/style changes, retaining exact values and percentile labels when text is enlarged.

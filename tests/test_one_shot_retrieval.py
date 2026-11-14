@@ -276,7 +276,7 @@ def test_one_shot_journal_rows_keep_all_exact_values_at_minimum_width(qtbot, jou
     )
     labels = card.findChildren(QLabel)
     assert any(
-        label.text() == "Waiting for answer"
+        label.text() == "Answer Pending"
         for label in screen.cards[1].findChildren(QLabel)
     )
     for value in numeric.record.effective.quantiles.values:

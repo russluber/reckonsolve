@@ -51,7 +51,9 @@ class TerminalSummary(QWidget):
         layout.addWidget(self.timing)
         layout.addWidget(self.note)
         self.facts = self._label("terminalForecastFacts", TextRole.BODY)
-        self.context = collapse_section(self.facts, "Forecast used for scoring")
+        self.context = collapse_section(
+            self.facts, "Forecast used for scoring", compact=True
+        )
         self.context.setObjectName("terminalForecastContext")
         layout.addWidget(self.context)
         self.hide()
