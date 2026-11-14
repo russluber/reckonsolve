@@ -38,6 +38,7 @@ class Spacing(IntEnum):
     COMPACT = 6
     CONTROL = 8
     ORDINARY = 12
+    GROUP = 16
     SECTION = 20
     PAGE = 24
 
@@ -48,6 +49,13 @@ class Radius(IntEnum):
     SMALL = 4
     CONTROL = 7
     PANEL = 10
+
+
+class ContentWidth(IntEnum):
+    """Comfortable workspace widths in Qt logical pixels, not window limits."""
+
+    JOURNAL = 1024
+    DETAIL = 1120
 
 
 class MotionDuration(IntEnum):
@@ -69,6 +77,10 @@ class TextRole(StrEnum):
     METRIC = "metric"
     FORECAST = "forecast"
     ROW_FORECAST = "row-forecast"
+    ROW_QUESTION = "row-question"
+    ROW_BODY = "row-body"
+    ROW_SECONDARY = "row-secondary"
+    ROW_LABEL = "row-label"
 
 
 class SurfaceRole(StrEnum):
@@ -152,7 +164,11 @@ _TEXT_ROLE_DELTAS = {
     TextRole.PAGE_TITLE: 11.0,
     TextRole.METRIC: 7.0,
     TextRole.FORECAST: 7.0,
-    TextRole.ROW_FORECAST: 5.0,
+    TextRole.ROW_FORECAST: 3.0,
+    TextRole.ROW_QUESTION: 6.0,
+    TextRole.ROW_BODY: 1.0,
+    TextRole.ROW_SECONDARY: 1.0,
+    TextRole.ROW_LABEL: 1.0,
 }
 
 _TEXT_ROLE_WEIGHTS = {
@@ -165,6 +181,10 @@ _TEXT_ROLE_WEIGHTS = {
     TextRole.METRIC: QFont.Weight.Bold,
     TextRole.FORECAST: QFont.Weight.Bold,
     TextRole.ROW_FORECAST: QFont.Weight.Bold,
+    TextRole.ROW_QUESTION: QFont.Weight.DemiBold,
+    TextRole.ROW_BODY: QFont.Weight.Normal,
+    TextRole.ROW_SECONDARY: QFont.Weight.Normal,
+    TextRole.ROW_LABEL: QFont.Weight.DemiBold,
 }
 
 
@@ -321,7 +341,8 @@ QScrollArea#predictionBrowserControlsScrollArea > QWidget > QWidget {{
     border: none;
 }}
 
-QLabel[reckonsolveTextRole="secondary"] {{
+QLabel[reckonsolveTextRole="secondary"],
+QLabel[reckonsolveTextRole="row-secondary"] {{
     color: {color.secondary_text};
 }}
 QLabel[reckonsolveTextRole="label"] {{
@@ -1045,6 +1066,7 @@ __all__ = [
     "TEXT_ROLE_PROPERTY",
     "VISUAL_SYSTEM_PROPERTY",
     "ActionRole",
+    "ContentWidth",
     "MotionDuration",
     "Radius",
     "SemanticColors",

@@ -10,6 +10,7 @@ separately; no installed-tool replacement or publication has occurred.
 
 Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, relocation and the requested later refinements are accepted with recorded limits. Source-package readiness is separate from any later everyday-use update and release. Not a published release.
 
+- Centered Journal and Prediction Detail at comfortable reading widths while retaining native resizing and remembered geometry; balanced Journal typography and corrected excess height in wrapping Timeline headings. The latest focused-width refinement awaits human visual review.
 - Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
 - One-Shot Detail uses shared-style result/reflection/Journal and context/originals panes, with equal terminal reading widths. Adaptive Resolved/Invalid reading also uses 50/50 panes; contextual tabs omit duplicate Overview headings. Main pane headings and principal action labels have consistent hierarchy and capitalization.
 - Settings offers three remembered desktop date orders and read-only Windows time-zone information. Ordinary timestamps omit repeated offsets; exact entry/terminal confirmation retains offset and daylight-saving cues. Canonical facts, CLI and analytical formats are unchanged.

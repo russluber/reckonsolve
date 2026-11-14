@@ -1,6 +1,6 @@
 """Shared native layouts for compact, wrapping controls."""
 
-from PySide6.QtCore import QPoint, QRect, QSize
+from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtWidgets import QLayout, QLayoutItem, QWidget
 
 from .visual_system import Spacing
@@ -33,6 +33,11 @@ class FlowLayout(QLayout):
 
     def hasHeightForWidth(self) -> bool:
         return True
+
+    def expandingDirections(self) -> Qt.Orientation:
+        # A wrapping control row needs its measured height, not a share of
+        # surplus pane height between its heading and the following prose.
+        return Qt.Orientation(0)
 
     def heightForWidth(self, width: int) -> int:
         return self._arrange(QRect(0, 0, width, 0), test_only=True)

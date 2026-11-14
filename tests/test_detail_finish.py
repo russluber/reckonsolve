@@ -89,6 +89,90 @@ def context(prediction, numeric):
     }
 
 
+def test_binary_journal_heading_does_not_absorb_timeline_height(workspace, qtbot):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, False)
+    clock.advance()
+    entry = operations.add_journal_entry(
+        prediction.prediction_id,
+        "The public notice gives a planned date, not a guaranteed opening.",
+        **context(prediction, False),
+    )
+    window._open_prediction(prediction.prediction_id)
+    screen = window._prediction_detail_screen
+    for width in (1600, 760, 1200):
+        window.resize(width, 1000)
+        qtbot.wait(80)
+        heading = screen.findChild(QLabel, f"journalEntryKind{entry.entry_id}")
+        row = heading.parentWidget()
+        assert row.height() <= row.layout().heightForWidth(row.width()) + 4
+        body = screen.findChild(QLabel, f"journalEntryBody{entry.entry_id}")
+        assert body.text() == entry.body
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_focused_widths_keep_native_window_geometry_and_detail_panes(
+    workspace, qtbot, numeric, one_shot
+):
+    from test_one_shot_persistence import request
+
+    window, operations, clock, _database = workspace
+    prediction = (
+        operations.one_shots.create(request(numeric, answered=False))
+        if one_shot
+        else create(operations, clock, numeric)
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    for width in (1600, 900, 760):
+        window.resize(width, 850)
+        window.navigate_to("Journal")
+        qtbot.waitUntil(lambda: not window._journal_screen.loading)
+        qtbot.wait(40)
+        content = window._workspace_content
+        assert content.width() == min(window.width(), 1024)
+        assert (
+            abs(
+                content.geometry().center().x()
+                - window.centralWidget().rect().center().x()
+            )
+            <= 1
+        )
+        window._open_prediction(prediction.prediction_id)
+        qtbot.wait(60)
+        assert content.width() == min(window.width(), 1120)
+        assert (
+            abs(
+                content.geometry().center().x()
+                - window.centralWidget().rect().center().x()
+            )
+            <= 1
+        )
+        screen = (
+            window._prediction_detail_host._one_shot_detail
+            if one_shot
+            else window._numeric_prediction_detail_screen
+            if numeric
+            else window._prediction_detail_screen
+        )
+        assert screen.workspace._proportion == 600
+        for pane in (
+            screen.workspace,
+            screen.workspace.timeline,
+            screen.workspace.overview,
+        ):
+            assert pane.horizontalScrollBar().maximum() == 0
+    window.resize(1600, 850)
+    window.navigate_to("Settings")
+    qtbot.wait(50)
+    assert window._workspace_content.width() == window.width()
+    window.navigate_to("Journal")
+    qtbot.wait(50)
+    window._save_presentation_state()
+    assert window._presentation_settings.state.normal_geometry[2] == 1600
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
 @pytest.mark.parametrize("status", ["open", "locked", "resolved", "invalid"])
 @pytest.mark.parametrize("points", [9, 12])
 def test_numeric_definition_stays_visible_below_criteria_without_duplicate_metadata(

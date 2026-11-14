@@ -1,5 +1,9 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The later [focused workspace continuation](#focused-workspace-widths-and-journal-rhythm)
+is implemented with its own evidence and pending human review. Earlier acceptance
+below remains tied to the previously evaluated refinements.
+
 This is the unreleased [authorized feedback package](../../product-spec.md#3815-authorized-post-review-workspace-refinements),
 based on clean public `fe6a3df` (`ux-redesign`). The user checked the combined
 journeys successfully, then reported eight presentation/responsiveness refinements.
@@ -405,3 +409,65 @@ matrix were not supplied. Earlier pending labels above retain their historical s
 scope. The [readiness record](2026-11-13-redesign-readiness.md) owns subsequent technical
 checks and the controlled adoption plan; installed-tool/data operations and publication
 remain separate.
+
+## Focused workspace widths and Journal rhythm
+
+**Authorized and implemented — 2026-11-13; human visual acceptance pending.** After
+reviewing the focused-width comparisons, the user explicitly instructed implementation
+for Journal and Prediction Detail. This continuation starts from saved public
+`4a4916c` on `ux-redesign`. Earlier acceptance above does not accept these later edits.
+
+- MainWindow centers its existing toolbar/page content with a 1,024-logical-pixel
+  Journal cap and a 1,120-pixel Detail cap, using available width in smaller windows.
+  Other routes retain their original sizing; the native window and its safe remembered
+  normal/maximized state are unchanged. Notifications remain inside the working area.
+- Shared row typography gives Journal semibold Questions, smaller matching Binary/
+  Numeric forecasts and larger supporting labels/dates, with tighter internal gaps
+  and clear row separation. Page-title hierarchy, selectable/wrapped Questions,
+  exact percentile values/units, query membership and historical navigation remain.
+  Detail's existing type roles and lifecycle/task pane proportions are unchanged.
+- A failing native regression reproduced the Binary Journal heading row growing to
+  415 pixels despite a 30-pixel measured wrapping height. FlowLayout inherited a
+  surplus-expansion request. Advertising no expanding directions retains native
+  height-for-width wrapping and prevents the artificial gap before the entry body.
+
+Focused UI verification passed **137 tests in 130.85 seconds**. Four new mode/type
+cases cover centered wide/narrow geometry, retained pane proportions, unchanged
+canonical snapshots and native window geometry saved independently of content width.
+The reproduced heading-height regression passes after the shared layout repair.
+Existing control, appearance, keyboard/source-return and long-history regressions
+were included. Full-source verification is recorded in the closure below.
+
+Controlled-clock disposable data produced **68 native offscreen captures** with
+Windows Segoe UI: Journal plus all 14 available mode/type/lifecycle reading
+combinations at 1,600 × 1,000 and 760 × 520 logical pixels in both palettes, then
+Binary/Numeric revision forms. Horizontal-overflow, reading/writing proportions,
+retained draft text through resizing/appearance/Overview consultation, notification
+containment and unchanged canonical snapshots passed. Representative wide Journal,
+Binary/Numeric reading and writing/minimum views were inspected. These are Qt
+offscreen checks, not complete physical Windows scaling/accessibility or user
+acceptance. Generated evidence remains ignored under `build/ux-focused-width/`.
+
+For the bounded human review, run the existing disposable `detail` profile. Compare
+Journal while maximizing/narrowing, read Binary/Numeric and One-Shot terminal/Answer
+Pending Detail, then resize and switch appearance during a revision and consult
+Overview. Check the Binary Journal prose follows its heading without the artificial
+hole. The installed snapshot is unchanged until the user deliberately updates it.
+No personal data, protected lower layer, migration, dependency, staging, commit,
+push, version/tag or publication is changed by this continuation.
+
+**Verification closure:** The final executable source passed **1,286 tests in
+512.69 seconds**, with zero failures, errors or skips. Locked offline sync, Ruff
+check and format check passed. Public/private documentation checked 356/300 local
+links with zero errors; both whitespace checks and preservation passed. The audit
+retained all 66 J IDs, 42 R IDs, both withdrawals, unchanged reference assets and
+95 public-reference mirrors; protected lower layers/migrations/dependencies remain
+unchanged and private notes remain ignored by the public repository.
+
+The same 68-capture matrix was repeated successfully at `QT_SCALE_FACTOR=1.5`
+and `2`, giving **204 native captures across simulated 100%/150%/200% Qt scaling**.
+Draft retention, pane proportions, horizontal overflow, notification containment
+and canonical snapshots passed at each factor. These simulated offscreen scales
+do not establish the user's physical Windows scaling/accessibility acceptance.
+The focused human check above remains pending. No runtime code changed after the
+full-suite run; subsequent edits only close documentation/evidence.

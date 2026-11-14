@@ -6,6 +6,7 @@ from PySide6.QtCore import QEvent, QRect, Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QHBoxLayout,
     QMainWindow,
     QMessageBox,
     QStackedWidget,
@@ -40,6 +41,7 @@ from reckonsolve.ui.screens import (
 )
 from reckonsolve.ui.settings_screen import SettingsScreen
 from reckonsolve.ui.visual_system import (
+    ContentWidth,
     install_visual_system,
     is_visual_system_change,
     refresh_visual_system,
@@ -147,7 +149,14 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         layout.addWidget(self._toolbar)
         layout.addWidget(self._screen_stack, 1)
-        self.setCentralWidget(content)
+        self._workspace_content = content
+        self._unbounded_content_width = content.maximumWidth()
+        frame = QWidget(self)
+        frame.setObjectName("workspaceFrame")
+        frame_layout = QHBoxLayout(frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.addWidget(content)
+        self.setCentralWidget(frame)
         self._notification_host = NotificationHost(content)
         self._toolbar.back_requested.connect(self.return_to_source)
         self._toolbar.journal_requested.connect(lambda: self.navigate_to("Journal"))
@@ -269,6 +278,14 @@ class MainWindow(QMainWindow):
 
     def _sync_toolbar(self) -> None:
         route = self.workspace.current.route
+        # Bound the toolbar and page together; Qt centers surplus width and
+        # still gives narrow windows their full available working area.
+        maximum_width = self._unbounded_content_width
+        if route is Route.JOURNAL:
+            maximum_width = int(ContentWidth.JOURNAL)
+        elif route is Route.DETAIL:
+            maximum_width = int(ContentWidth.DETAIL)
+        self._workspace_content.setMaximumWidth(maximum_width)
         origin = self.workspace.back_destination()
         if route is Route.DETAIL:
             text = "Back to Journal"

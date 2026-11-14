@@ -1858,7 +1858,7 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, four bounded software slices and requested refinements implemented. The requested slice walkthroughs, combined journeys and latest refinements are accepted with recorded limits. The readiness continuation under Section 38.14 verifies the source-package/adoption handoff separately. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements are accepted with recorded limits; the latest focused-width continuation under Section 38.15 is implemented with source checks and awaits human visual review. The readiness continuation under Section 38.14 verifies the earlier source-package/adoption handoff separately. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
 **Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), final integration in [Section 38.14](#3814-authorized-final-integration-pass), and the feedback refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
@@ -2346,3 +2346,26 @@ and the actual review limits; no Windows scaling percentage or complete accessib
 matrix was supplied. The [readiness record](archive/releases/2026-11-13-redesign-readiness.md)
 owns technical source-package checks and the controlled adoption handoff. No installed
 tool, personal data, version/tag, merge or publication is changed by this acceptance.
+
+**Focused Journal and Detail sizing — authorized 2026-11-13:** The user explicitly
+instructed implementation of the reviewed focused-width treatment on both screens,
+including Balanced Journal typography. Center the shared toolbar/page workspace at
+a comfortable maximum width: 1,024 logical pixels for Journal and 1,120 for Prediction
+Detail, shrinking to the available window width below those limits. These constrain
+content, not native window resizing. Preserve the existing safe initial geometry,
+remembered normal/maximized state and 760 × 520 minimum. Other destinations retain
+their existing sizing. No new display preference or outer-canvas palette is selected.
+
+Journal uses a calmer row-specific type scale: Question remains stronger/larger than
+forecast, forecast values share the same size across types/modes, and supporting
+labels/dates become more readable. Keep the page title above row Questions, full
+wrapping/selectability, compact exact Numeric groups and existing row facts/order.
+Retain Detail typography, committed-only forecast context, independent scrolling,
+60/40 nonterminal reading, 50/50 terminal reading and the existing contextual-writing
+ratios/motion. Notifications remain associated with the working area. Repair the
+demonstrated Binary Timeline heading-height gap without changing the Journal body,
+chronology or disclosure meaning. Verify both palettes, narrow/enlarged windows,
+all four Detail contracts and retained editing/focus. This is presentation work;
+history, scoring, storage, dependencies, installed tools and user-owned Git/release
+operations remain outside the change. Human review of the implemented result remains
+separate from the accepted comparison.

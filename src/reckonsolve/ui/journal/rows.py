@@ -78,7 +78,7 @@ class QuestionLabel(QLabel):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setProperty("reckonsolveQuestionLink", "true")
-        apply_text_role(self, TextRole.QUESTION)
+        apply_text_role(self, TextRole.ROW_QUESTION)
 
     def mouseReleaseEvent(self, event) -> None:
         super().mouseReleaseEvent(event)
@@ -110,9 +110,9 @@ class JournalCard(QFrame):
         self.setObjectName(f"journalPrediction{self.prediction_id}")
         self.layout_body = QVBoxLayout(self)
         self.layout_body.setContentsMargins(
-            0, int(Spacing.ORDINARY), 0, int(Spacing.ORDINARY)
+            0, int(Spacing.GROUP), 0, int(Spacing.GROUP)
         )
-        self.layout_body.setSpacing(int(Spacing.CONTROL))
+        self.layout_body.setSpacing(int(Spacing.COMPACT))
         question = QuestionLabel(
             emphasized(prediction.question, parsed, full=True),
             prediction.question,
@@ -154,7 +154,7 @@ class JournalCard(QFrame):
                 column.setContentsMargins(0, 0, 0, 0)
                 column.setSpacing(int(Spacing.COMPACT))
                 heading = QLabel(f"{level}th", group)
-                apply_text_role(heading, TextRole.SECONDARY)
+                apply_text_role(heading, TextRole.ROW_SECONDARY)
                 number = QLabel(str(value), group)
                 number.setObjectName(f"journalPercentile{self.prediction_id}_{level}")
                 apply_text_role(number, TextRole.ROW_FORECAST)
@@ -186,12 +186,12 @@ class JournalCard(QFrame):
             else prediction.status.value.title()
         )
         meta = QHBoxLayout()
-        meta.addWidget(
-            QLabel(
-                f"{'One-Shot' if one_shot else 'Adaptive'} · {prediction.prediction_type.value.title()}",
-                self,
-            )
+        mode = QLabel(
+            f"{'One-Shot' if one_shot else 'Adaptive'} · {prediction.prediction_type.value.title()}",
+            self,
         )
+        apply_text_role(mode, TextRole.ROW_BODY)
+        meta.addWidget(mode)
         tone = (
             StatusTone.WARNING
             if status in ("Locked", "Answer Pending")
@@ -201,7 +201,9 @@ class JournalCard(QFrame):
             if status == "Invalid"
             else StatusTone.NEUTRAL
         )
-        meta.addWidget(StatusBadge(status, tone=tone, parent=self))
+        badge = StatusBadge(status, tone=tone, parent=self)
+        apply_text_role(badge, TextRole.ROW_LABEL)
+        meta.addWidget(badge)
         meta.addStretch()
         self.layout_body.addLayout(meta)
         dates = []
@@ -252,7 +254,7 @@ class JournalCard(QFrame):
         separator.setFixedHeight(1)
         self.layout_body.addWidget(separator)
 
-    def _label(self, text: str, role: TextRole = TextRole.SECONDARY) -> QLabel:
+    def _label(self, text: str, role: TextRole = TextRole.ROW_SECONDARY) -> QLabel:
         label = QLabel(text, self)
         label.setTextFormat(Qt.TextFormat.PlainText)
         label.setWordWrap(True)
@@ -276,12 +278,13 @@ class JournalCard(QFrame):
         label = QLabel(heading, self)
         label.setWordWrap(True)
         label.setTextFormat(Qt.TextFormat.PlainText)
-        apply_text_role(label, TextRole.LABEL)
+        apply_text_role(label, TextRole.ROW_LABEL)
         destination.addWidget(label)
         excerpt = QLabel(emphasized(document.text, parsed), self)
         excerpt.setTextFormat(Qt.TextFormat.RichText)
         excerpt.setWordWrap(True)
         excerpt.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        apply_text_role(excerpt, TextRole.ROW_BODY)
         destination.addWidget(excerpt)
         action = QPushButton(
             "Open historical passage" if document.is_superseded else "Open passage",

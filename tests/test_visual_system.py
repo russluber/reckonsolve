@@ -71,6 +71,7 @@ def test_visual_tokens_form_small_shared_scales() -> None:
         Spacing.COMPACT,
         Spacing.CONTROL,
         Spacing.ORDINARY,
+        Spacing.GROUP,
         Spacing.SECTION,
         Spacing.PAGE,
     )
