@@ -50,9 +50,8 @@ from reckonsolve.ui.date_display import (
     input_date_format,
     update_date_inputs,
 )
-from reckonsolve.ui.detail_reading import progressive_body, quiet_event
+from reckonsolve.ui.detail_reading import TimelineEntry, progressive_body
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
-from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.one_shot import text_label
 from reckonsolve.ui.prediction_contracts import (
     ForecastReviewTimelineSnapshot,
@@ -753,16 +752,10 @@ def _definition_change_widget(
     change: DefinitionChange,
     parent: QWidget,
 ) -> QWidget:
-    frame = QFrame(parent)
+    frame = TimelineEntry("Definition Clarified", change.changed_at, parent)
     frame.setObjectName(f"definitionChange{change.change_id}")
-    frame.setFrameShape(QFrame.Shape.StyledPanel)
-    apply_surface_role(frame, SurfaceRole.BASE)
-    layout = QVBoxLayout(frame)
-    timestamp = QLabel(_format_local_timestamp(change.changed_at, widget=parent), frame)
-    timestamp.setObjectName(f"definitionChangeTimestamp{change.change_id}")
-    timestamp.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(timestamp, TextRole.SECONDARY)
-    layout.addWidget(timestamp)
+    layout = frame.column
+    frame.timestamp.setObjectName(f"definitionChangeTimestamp{change.change_id}")
     values = {
         "question": (change.old_question, change.new_question),
         "resolution_criteria": (
@@ -797,34 +790,29 @@ def _forecast_timeline_widget(
     *,
     scoring_excluded: bool = False,
 ) -> QWidget:
-    frame = QFrame(parent)
-    frame.setObjectName(f"forecastRevision{revision.revision_id}")
-    frame.setFrameShape(QFrame.Shape.StyledPanel)
-    apply_surface_role(frame, SurfaceRole.BASE)
-    layout = QVBoxLayout(frame)
-
-    timestamp = QLabel(
-        _format_local_timestamp(revision.created_at, widget=parent), frame
+    frame = TimelineEntry(
+        "Initial Forecast"
+        if revision.previous_probability_percent is None
+        else "Forecast Revision",
+        revision.created_at,
+        parent,
+        local_tooltip=True,
     )
-    timestamp.setToolTip(revision.created_at.astimezone().isoformat(sep=" "))
-    timestamp.setWordWrap(True)
-    _make_selectable(timestamp)
-    timestamp.setObjectName(f"forecastRevisionTimestamp{revision.revision_id}")
-    timestamp.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(timestamp, TextRole.SECONDARY)
-    layout.addWidget(timestamp)
+    frame.setObjectName(f"forecastRevision{revision.revision_id}")
+    layout = frame.column
+    frame.timestamp.setObjectName(f"forecastRevisionTimestamp{revision.revision_id}")
 
     if revision.previous_probability_percent is None:
-        probability_text = f"FORECAST  {revision.probability_percent}%"
+        probability_text = f"{revision.probability_percent}%"
     else:
         probability_text = (
-            f"FORECAST  {revision.previous_probability_percent}% "
+            f"{revision.previous_probability_percent}% "
             f"\N{RIGHTWARDS ARROW} {revision.probability_percent}%"
         )
     probability = QLabel(probability_text, frame)
     probability.setObjectName(f"forecastRevisionProbability{revision.revision_id}")
     probability.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(probability, TextRole.LABEL)
+    apply_text_role(probability, TextRole.DETAIL_EVENT)
     _make_selectable(probability)
     layout.addWidget(probability)
 
@@ -853,29 +841,14 @@ def _journal_entry_widget(
     parent: QWidget,
     correct_entry: Callable[[JournalTimelineSnapshot], None],
 ) -> QWidget:
-    frame = QFrame(parent)
+    frame = TimelineEntry("Journal Entry", entry.created_at, parent, local_tooltip=True)
     frame.setObjectName(f"journalEntry{entry.entry_id}")
-    frame.setFrameShape(QFrame.Shape.StyledPanel)
-    apply_surface_role(frame, SurfaceRole.BASE)
-    layout = QVBoxLayout(frame)
-
-    timestamp = QLabel(_format_local_timestamp(entry.created_at, widget=parent), frame)
-    timestamp.setToolTip(entry.created_at.astimezone().isoformat(sep=" "))
-    timestamp.setWordWrap(True)
-    _make_selectable(timestamp)
-    timestamp.setObjectName(f"journalEntryTimestamp{entry.entry_id}")
-    timestamp.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(timestamp, TextRole.SECONDARY)
-    layout.addWidget(timestamp)
-
-    heading_row = QWidget(frame)
-    heading_layout = FlowLayout(heading_row)
-    heading_layout.setContentsMargins(0, 0, 0, 0)
-    kind = QLabel("JOURNAL", heading_row)
+    layout = frame.column
+    frame.timestamp.setObjectName(f"journalEntryTimestamp{entry.entry_id}")
+    heading_row = frame.header
+    heading_layout = frame.header_layout
+    kind = frame.title
     kind.setObjectName(f"journalEntryKind{entry.entry_id}")
-    kind.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(kind, TextRole.LABEL)
-    heading_layout.addWidget(kind)
     if entry.current_correction_id is not None:
         latest_correction = entry.corrections[-1]
         edited = QLabel(
@@ -898,7 +871,6 @@ def _journal_entry_widget(
         lambda _checked=False, current=entry: correct_entry(current)
     )
     heading_layout.addWidget(correct_button)
-    layout.addWidget(heading_row)
 
     body = QLabel(entry.body, frame)
     body.setObjectName(f"journalEntryBody{entry.entry_id}")
@@ -906,7 +878,6 @@ def _journal_entry_widget(
     body.setWordWrap(True)
     _make_selectable(body)
     layout.addWidget(progressive_body(body))
-    quiet_event(frame)
 
     forecast_context = QLabel(
         f"Forecast at the time: {entry.forecast_probability_percent}%",
@@ -927,26 +898,15 @@ def _forecast_review_widget(
     review: ForecastReviewTimelineSnapshot,
     parent: QWidget,
 ) -> QWidget:
-    frame = QFrame(parent)
-    frame.setObjectName(f"forecastReview{review.review_id}")
-    frame.setFrameShape(QFrame.Shape.StyledPanel)
-    apply_surface_role(frame, SurfaceRole.BASE)
-    layout = QVBoxLayout(frame)
-    timestamp = QLabel(_format_local_timestamp(review.created_at, widget=parent), frame)
-    timestamp.setToolTip(review.created_at.astimezone().isoformat(sep=" "))
-    timestamp.setWordWrap(True)
-    _make_selectable(timestamp)
-    timestamp.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(timestamp, TextRole.SECONDARY)
-    heading = QLabel(
-        f"REVIEW  STILL AT {review.forecast_probability_percent}%",
-        frame,
+    frame = TimelineEntry(
+        f"Forecast Review · Still {review.forecast_probability_percent}%",
+        review.created_at,
+        parent,
+        local_tooltip=True,
     )
-    heading.setObjectName(f"forecastReviewHeading{review.review_id}")
-    heading.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(heading, TextRole.LABEL)
-    layout.addWidget(timestamp)
-    layout.addWidget(heading)
+    frame.setObjectName(f"forecastReview{review.review_id}")
+    layout = frame.column
+    frame.title.setObjectName(f"forecastReviewHeading{review.review_id}")
     if review.note:
         note = QLabel(review.note, frame)
         note.setObjectName(f"forecastReviewNote{review.review_id}")
@@ -954,7 +914,6 @@ def _forecast_review_widget(
         note.setWordWrap(True)
         _make_selectable(note)
         layout.addWidget(progressive_body(note))
-    quiet_event(frame)
     return frame
 
 
@@ -965,34 +924,18 @@ def _one_shot_journal_timeline_widget(
 ) -> QWidget:
     """Show the effective Journal text at its original position in the timeline."""
 
-    frame = QFrame(parent)
+    frame = TimelineEntry("Journal Entry", entry.created_at, parent, local_tooltip=True)
     frame.setObjectName(f"oneShotJournalEntry{entry.entry_id}")
-    frame.setFrameShape(QFrame.Shape.StyledPanel)
-    apply_surface_role(frame, SurfaceRole.BASE)
-    layout = QVBoxLayout(frame)
-
-    timestamp = text_label(
-        _format_local_timestamp(entry.created_at, widget=parent), frame
-    )
-    timestamp.setToolTip(entry.created_at.astimezone().isoformat(sep=" "))
-    apply_text_role(timestamp, TextRole.SECONDARY)
-    layout.addWidget(timestamp)
-
-    heading_row = QWidget(frame)
-    heading_layout = QHBoxLayout(heading_row)
-    heading_layout.setContentsMargins(0, 0, 0, 0)
-    kind = text_label("JOURNAL", heading_row)
-    apply_text_role(kind, TextRole.LABEL)
-    heading_layout.addWidget(kind)
+    layout = frame.column
+    heading_row = frame.header
+    heading_layout = frame.header_layout
     if entry.corrections:
         edited = text_label(
             f"Edited {_format_local_timestamp(entry.corrections[-1].corrected_at, widget=parent)}",
             heading_row,
         )
-        edited.setWordWrap(False)
         apply_text_role(edited, TextRole.SECONDARY)
         heading_layout.addWidget(edited)
-    heading_layout.addStretch()
     button = QPushButton("Correct Entry", heading_row)
     button.setObjectName(f"oneShotCorrectJournal{entry.entry_id}")
     apply_action_role(button, ActionRole.QUIET)
@@ -1004,12 +947,10 @@ def _one_shot_journal_timeline_widget(
         lambda _checked=False, entry_id=entry.entry_id: correct_entry(entry_id)
     )
     heading_layout.addWidget(button)
-    layout.addWidget(heading_row)
 
     body = text_label(entry.body, frame)
     body.setObjectName(f"oneShotJournalBody{entry.entry_id}")
     layout.addWidget(progressive_body(body))
-    quiet_event(frame)
     if entry.corrections:
         layout.addWidget(_journal_edit_history_widget(entry, frame))
     return frame

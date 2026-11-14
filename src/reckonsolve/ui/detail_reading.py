@@ -1,12 +1,14 @@
 """Small reading treatments shared by the four Prediction contracts."""
 
+from datetime import datetime
 from functools import wraps
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -29,6 +31,102 @@ from reckonsolve.ui.visual_system import (
     apply_text_role,
     refresh_widget_style,
 )
+
+
+class _TimelineHeaderLabel(QLabel):
+    def sizeHint(self) -> QSize:
+        # QLabel's wrapped preferred width can split a short heading even when
+        # its title and date both fit. FlowLayout still wraps at narrow widths.
+        return QSize(
+            self.fontMetrics().horizontalAdvance(self.text()),
+            self.fontMetrics().height(),
+        )
+
+
+class TimelineEntry(QFrame):
+    """An unframed historical entry with a wrapping title/date header and rule."""
+
+    def __init__(
+        self,
+        title: str,
+        instant: datetime,
+        parent: QWidget,
+        *,
+        local_tooltip: bool = False,
+    ) -> None:
+        super().__init__(parent)
+        self.setProperty("reckonsolveTimelineEntry", "true")
+        self.setMinimumWidth(0)
+        self.column = QVBoxLayout(self)
+        self.column.setContentsMargins(0, 12, 0, 16)
+        self.column.setSpacing(int(Spacing.CONTROL))
+        self.header = QWidget(self)
+        self.header_layout = FlowLayout(self.header)
+        self.title = self.text(title, TextRole.DETAIL_EVENT, self.header, header=True)
+        self.timestamp = self.text(
+            exact_detail_time(instant, widget=parent),
+            TextRole.DETAIL_TIME,
+            self.header,
+            header=True,
+        )
+        self.timestamp.setToolTip(
+            instant.astimezone().isoformat(sep=" ")
+            if local_tooltip
+            else instant.isoformat()
+        )
+        for label in (self.title, self.timestamp):
+            label.setMinimumHeight(self.title.sizeHint().height())
+            self.header_layout.addWidget(label)
+        self.column.addWidget(self.header)
+
+    @staticmethod
+    def text(
+        text: str, role: TextRole, parent: QWidget, *, header: bool = False
+    ) -> QLabel:
+        label = (_TimelineHeaderLabel if header else QLabel)(text, parent)
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setWordWrap(True)
+        label.setMinimumWidth(0)
+        label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        apply_text_role(label, role)
+        return label
+
+
+def reading_typography(root: QWidget) -> None:
+    """Promote new reading labels once; retained history avoids repeated repolishing."""
+    roles = {
+        None: TextRole.DETAIL_TEXT,
+        TextRole.BODY.value: TextRole.DETAIL_TEXT,
+        TextRole.LABEL.value: TextRole.DETAIL_EVENT,
+        TextRole.SECONDARY.value: TextRole.DETAIL_TIME,
+    }
+    for panel in root.findChildren(QFrame):
+        if panel.property("reckonsolveSurfaceRole") in (
+            "canvas",
+            "base",
+            "raised",
+        ) and not panel.property("reckonsolveReadingLayout"):
+            panel.setProperty("reckonsolveReadingLayout", True)
+            if panel.layout() is not None:
+                panel.layout().setContentsMargins(0, 0, 0, 0)
+    changed = False
+    for label in root.findChildren(QLabel):
+        role = roles.get(label.property("reckonsolveTextRole"))
+        if role is not None and not label.property("reckonsolveBadgeTone"):
+            apply_text_role(label, role)
+            changed = True
+    if changed:
+        # Hidden reading panels can retain height-for-width caches measured
+        # before their role fonts were assigned. Invalidate from the leaves.
+        for widget in reversed(root.findChildren(QWidget)):
+            if widget.layout() is not None:
+                widget.layout().invalidate()
+            widget.updateGeometry()
+        root.layout().invalidate()
+        root.layout().activate()
 
 
 class TerminalSummary(QWidget):
@@ -142,11 +240,12 @@ def timeline_controls(
     row.setObjectName("detailTimelineControls")
     row.setAccessibleName("Timeline controls")
     outer = QVBoxLayout(row)
-    outer.setContentsMargins(int(Spacing.ORDINARY), 0, int(Spacing.ORDINARY), 0)
+    outer.setContentsMargins(0, 0, 0, 0)
     controls = QWidget(row)
     layout = FlowLayout(controls)
     outer.addWidget(controls)
     apply_action_role(jump, ActionRole.QUIET)
+    apply_text_role(heading, TextRole.DETAIL_HEADING)
     jump.setToolTip("Jump to the saved revision establishing the current forecast.")
     heading.setMinimumHeight(max(jump.sizeHint().height(), order.sizeHint().height()))
     for control in (heading, jump, order):
@@ -193,16 +292,11 @@ def current_marker(row: QWidget) -> None:
     label.setWordWrap(True)
     label.setMinimumWidth(0)
     label.setObjectName("currentCommittedRevisionMarker")
-    apply_text_role(label, TextRole.LABEL)
+    apply_text_role(label, TextRole.DETAIL_TIME)
     row.layout().insertWidget(0, label)
-
-
-def quiet_event(row: QWidget) -> None:
-    """Use type/spacing for narrative events rather than competing forecast cards."""
-    from reckonsolve.ui.visual_system import SurfaceRole, apply_surface_role
-
-    apply_surface_role(row, SurfaceRole.CANVAS)
-    row.setStyleSheet("QFrame { border: 0; }")
+    row.setProperty("reckonsolveCurrentRevision", "true")
+    row.layout().setContentsMargins(10, 12, 0, 16)
+    refresh_widget_style(row)
 
 
 def reading_dialog(parent: QWidget, title: str, text: str) -> QDialog:
@@ -282,6 +376,10 @@ def reading_refresh(method):
             for pane in (workspace.timeline, workspace.overview)
         ]
         result = method(screen, prediction)
+        for body in (workspace.timeline_body, workspace.overview_body):
+            reading_typography(body)
+        if workspace.overview_heading is not None:
+            apply_text_role(workspace.overview_heading, TextRole.DETAIL_HEADING)
         reset_disclosures(screen, clear_matches=not keep)
         for name, checked in groups:
             group = screen.findChild(QGroupBox, name)

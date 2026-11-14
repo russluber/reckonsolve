@@ -107,6 +107,8 @@ class DetailWorkspace(QScrollArea):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         body = QWidget(scroll)
+        if name != "detailWritingPane":
+            body.setProperty("reckonsolveDetailReading", "true")
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(int(Spacing.ORDINARY))

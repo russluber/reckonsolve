@@ -2400,3 +2400,25 @@ independent Detail panes. Add no custom scrolling engine, auto-hide behavior, se
 dependency or canonical data change. Verify both orientations/palettes and native
 styles, screen overflow, draft retention and supported scaled/narrow geometry.
 Technical evidence and human visual acceptance remain separate.
+
+**Journal width and narrative Detail — authorized 2026-11-14:** The user accepted
+the preceding scrollbar/Detail-width review, then requested a wider Journal and
+Detail reading that follows the reviewed narrative references. Journal now shares
+Detail's 1,200-logical-pixel cap; Performance keeps its 1,280-wide chart workspace.
+All retain centered margins in larger windows and available width below their caps.
+
+Replace enclosing rounded reading cards in Prediction Detail with flat sections.
+Timeline forecasts, Reviews, Journal entries and recorded terminal/correction events
+use thin separators and a shared event heading with its recorded date/time beside
+it. Wrap naturally when a narrow pane or larger font cannot fit the complete header.
+Keep event names stronger than body prose, timestamps quieter, and pane headings
+above subsection/event headings. Preserve prominent forecast/score values, the
+current-revision marker/jump, selectable text, complete exact facts, correction and
+search anchors, disclosure defaults, retained row identities and useful scroll state.
+Apply the same reading treatment to One-Shot results, Journal entries, recorded
+history and original/corrected facts. This supersedes earlier rounded reading-panel
+directions; it adds no new workflow or fact. Inputs, native actions, dialogs and
+semantic status/error/focus feedback retain their established controls. Preserve
+task proportions/motion, draft guards and history/scoring/storage boundaries. Verify
+both palettes, all four contracts, narrow/scaled geometry, long-history reuse and
+historical search navigation; human visual acceptance remains separate.

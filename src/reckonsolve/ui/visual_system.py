@@ -54,7 +54,7 @@ class Radius(IntEnum):
 class ContentWidth(IntEnum):
     """Comfortable workspace widths in Qt logical pixels, not window limits."""
 
-    JOURNAL = 1024
+    JOURNAL = 1200
     DETAIL = 1200
     PERFORMANCE = 1280
 
@@ -82,6 +82,10 @@ class TextRole(StrEnum):
     ROW_BODY = "row-body"
     ROW_SECONDARY = "row-secondary"
     ROW_LABEL = "row-label"
+    DETAIL_HEADING = "detail-heading"
+    DETAIL_EVENT = "detail-event"
+    DETAIL_TEXT = "detail-text"
+    DETAIL_TIME = "detail-time"
 
 
 class SurfaceRole(StrEnum):
@@ -171,6 +175,10 @@ _TEXT_ROLE_DELTAS = {
     TextRole.ROW_BODY: 1.0,
     TextRole.ROW_SECONDARY: 1.0,
     TextRole.ROW_LABEL: 1.0,
+    TextRole.DETAIL_HEADING: 3.0,
+    TextRole.DETAIL_EVENT: 1.0,
+    TextRole.DETAIL_TEXT: 1.0,
+    TextRole.DETAIL_TIME: 0.0,
 }
 
 _TEXT_ROLE_WEIGHTS = {
@@ -187,6 +195,10 @@ _TEXT_ROLE_WEIGHTS = {
     TextRole.ROW_BODY: QFont.Weight.Normal,
     TextRole.ROW_SECONDARY: QFont.Weight.Normal,
     TextRole.ROW_LABEL: QFont.Weight.DemiBold,
+    TextRole.DETAIL_HEADING: QFont.Weight.DemiBold,
+    TextRole.DETAIL_EVENT: QFont.Weight.DemiBold,
+    TextRole.DETAIL_TEXT: QFont.Weight.Normal,
+    TextRole.DETAIL_TIME: QFont.Weight.Normal,
 }
 
 
@@ -408,6 +420,7 @@ QScrollBar::left-arrow, QScrollBar::right-arrow {{
 }}
 
 QLabel[reckonsolveTextRole="secondary"],
+QLabel[reckonsolveTextRole="detail-time"],
 QLabel[reckonsolveTextRole="row-secondary"] {{
     color: {color.secondary_text};
 }}
@@ -797,6 +810,28 @@ QLabel[reckonsolveMessageTone="destructive"] {{
     background-color: {color.error_surface};
     color: {color.error};
     border: 1px solid {color.error};
+}}
+
+/* Detail reading follows a document rhythm; inputs and actions keep their chrome. */
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveSurfaceRole="base"],
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveSurfaceRole="raised"],
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveSurfaceRole="canvas"],
+QWidget[reckonsolveDetailReading="true"] QGroupBox {{
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+}}
+QFrame[reckonsolveTimelineEntry="true"] {{
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {color.border};
+    border-radius: 0;
+}}
+QFrame[reckonsolveTimelineEntry="true"][reckonsolveCurrentRevision="true"] {{
+    border-left: 2px solid {color.accent};
+}}
+QLabel#currentCommittedRevisionMarker {{
+    color: {color.accent};
 }}
 
 QGroupBox {{

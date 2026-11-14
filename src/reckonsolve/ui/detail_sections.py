@@ -3,8 +3,7 @@
 from collections.abc import Callable
 from datetime import datetime
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from reckonsolve.domain.predictions import (
     BinaryResolutionHistory,
@@ -14,9 +13,8 @@ from reckonsolve.domain.predictions import (
 )
 from reckonsolve.ui.components import ContentPanel
 from reckonsolve.ui.date_display import date_context
-from reckonsolve.ui.detail_workspace import exact_detail_time
+from reckonsolve.ui.detail_reading import TimelineEntry
 from reckonsolve.ui.visual_system import (
-    Spacing,
     SurfaceRole,
     TextRole,
     apply_surface_role,
@@ -29,6 +27,7 @@ class TimelineRows:
 
     def __init__(self, layout: QVBoxLayout) -> None:
         self.layout = layout
+        self.layout.setSpacing(0)
         self.snapshot: tuple[object, ...] | None = None
         self.rows: list[tuple[datetime, int, QWidget]] = []
         self._rendered: dict[
@@ -158,34 +157,10 @@ def terminal_timeline_rows(
     rows: list[tuple[datetime, int, QWidget]] = []
 
     def add(instant: datetime, priority: int, name: str, title: str, body: str) -> None:
-        row = QFrame(parent)
+        row = TimelineEntry(title, instant, parent)
         row.setObjectName(name)
-        apply_surface_role(row, SurfaceRole.CANVAS)
-        layout = QVBoxLayout(row)
-        layout.setContentsMargins(
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-            int(Spacing.ORDINARY),
-            int(Spacing.CONTROL),
-        )
-        for text, role in (
-            (title, TextRole.LABEL),
-            (exact_detail_time(instant, widget=parent), TextRole.SECONDARY),
-            (body, TextRole.BODY),
-        ):
-            if not text:
-                continue
-            label = QLabel(text, row)
-            label.setTextFormat(Qt.TextFormat.PlainText)
-            label.setWordWrap(True)
-            label.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-                | Qt.TextInteractionFlag.TextSelectableByKeyboard
-            )
-            apply_text_role(label, role)
-            if role is TextRole.SECONDARY:
-                label.setToolTip(instant.isoformat())
-            layout.addWidget(label)
+        if body:
+            row.column.addWidget(row.text(body, TextRole.DETAIL_TEXT, row))
         rows.append((instant, priority, row))
 
     if resolution is not None:

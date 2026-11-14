@@ -130,7 +130,7 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
         qtbot.waitUntil(lambda: not window._journal_screen.loading)
         qtbot.wait(40)
         content = window._workspace_content
-        assert content.width() == min(window.width(), 1024)
+        assert content.width() == min(window.width(), 1200)
         assert (
             abs(
                 content.geometry().center().x()
@@ -170,6 +170,84 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
     qtbot.wait(50)
     window._save_presentation_state()
     assert window._presentation_settings.state.normal_geometry[2] == 1600
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_narrative_entries_keep_inline_dates_wrapping_and_history(
+    workspace, qtbot, numeric, one_shot
+):
+    from test_one_shot_persistence import request
+
+    from reckonsolve.ui.detail_reading import TimelineEntry
+
+    window, operations, clock, _database = workspace
+    prediction = (
+        operations.one_shots.create(request(numeric, answered=False))
+        if one_shot
+        else create(operations, clock, numeric)
+    )
+    clock.advance()
+    prose = "The published notice adds context without changing the forecast."
+    if one_shot:
+        operations.one_shots.add_journal(prediction, prose)
+    else:
+        add = (
+            operations.add_numeric_journal_entry
+            if numeric
+            else operations.add_journal_entry
+        )
+        add(prediction.prediction_id, prose, **context(prediction, numeric))
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    for mode in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(mode)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(70)
+            rows = [
+                row
+                for row in screen.workspace.timeline_body.findChildren(TimelineEntry)
+                if row.isVisible()
+            ]
+            assert rows
+            for row in rows:
+                qtbot.waitUntil(
+                    lambda row=row: (
+                        row.header.height()
+                        >= row.header.heightForWidth(row.header.width())
+                    )
+                )
+                assert row.title.font().pointSizeF() > row.timestamp.font().pointSizeF()
+                assert (
+                    screen.overview_heading.font().pointSizeF()
+                    > row.title.font().pointSizeF()
+                )
+                assert (
+                    row.timestamp.textInteractionFlags()
+                    & Qt.TextInteractionFlag.TextSelectableByKeyboard
+                )
+                if width == 1600:
+                    assert row.timestamp.y() == row.title.y()
+                    assert row.timestamp.x() > row.title.geometry().right()
+                    assert (
+                        row.title.heightForWidth(row.title.width())
+                        <= row.title.height()
+                    )
+            body = next(
+                label for label in screen.findChildren(QLabel) if label.text() == prose
+            )
+            assert body.font().pointSizeF() == rows[0].title.font().pointSizeF()
+            assert body.font().weight() < rows[0].title.font().weight()
+            assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
 
 
@@ -238,8 +316,11 @@ def test_numeric_definition_stays_visible_below_criteria_without_duplicate_metad
                 screen.unit_row.mapTo(screen.definition_summary, QPoint()).x()
                 < screen.precision_row.mapTo(screen.definition_summary, QPoint()).x()
             )
-            assert screen.unit.height() >= screen.unit.heightForWidth(
-                screen.unit.width()
+            qtbot.waitUntil(
+                lambda: (
+                    screen.unit.height()
+                    >= screen.unit.heightForWidth(screen.unit.width())
+                )
             )
             assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
         screen.metadata_disclosure.disclosure_button.setChecked(True)

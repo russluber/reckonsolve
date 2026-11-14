@@ -4,13 +4,14 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-The latest saved refinements were subsequently checked and accepted by the user.
+Earlier saved refinements were checked and accepted by the user; the latest
+narrative Detail and Journal-width follow-up awaits visual review.
 Source-package readiness and a controlled ordinary-use update procedure are recorded
 separately; no installed-tool replacement or publication has occurred.
 
 Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, relocation and the requested later refinements are accepted with recorded limits. Source-package readiness is separate from any later everyday-use update and release. Not a published release.
 
-- Centered Journal and Prediction Detail at comfortable reading widths while retaining native resizing and remembered geometry; balanced Journal typography and corrected excess height in wrapping Timeline headings. The latest focused-width refinement awaits human visual review.
+- Centered Journal and Prediction Detail at the same comfortable reading width while retaining native resizing and remembered geometry; balanced Journal typography and corrected excess height in wrapping Timeline headings. The latest narrative Detail and Journal-width refinement awaits human visual review.
 - Performance also uses a centered, wider report workspace, retaining paired/stacked sections, pinned Tag / Reset View controls and session scope/disclosures.
 - Quieter shared scrollbars retain a wider grab area and native scrolling controls. Prediction Detail has a slightly wider reading area while preserving side margins and pane proportions.
 - Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
@@ -18,7 +19,7 @@ Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, reloc
 - Settings offers three remembered desktop date orders and read-only Windows time-zone information. Ordinary timestamps omit repeated offsets; exact entry/terminal confirmation retains offset and daylight-saving cues. Canonical facts, CLI and analytical formats are unchanged.
 - Refined One-Shot reading with a full-width scorecard below Checked Answer, distinct reflection/Journal sections and compact chevron disclosures. Confirmed Skip shows a dated completion state; later writing moves into More and preserves the original Skip history.
 - Journal forecast previews use a smaller shared Binary/Numeric value size; Numeric groups stay close together with consistent gaps and readable long-value reflow. Adaptive scored-forecast context uses the compact chevron disclosure.
-- Journal's middle percentile heading is 50th. WIS Actual diamonds retain a gold fill in both appearances. Expanded One-Shot facts/history use matching padded rounded panels and separated original/Before/After snapshots without clipped text.
+- Journal's middle percentile heading is 50th. WIS Actual diamonds retain a gold fill in both appearances. Detail reading uses flat sections and ruled Timeline entries with event/date headings, coherent type hierarchy and separated original/Before/After snapshots.
 - Adaptive Overview's Probability History, More Information and Latest Committed Distribution reveals use compact chevrons, preserving their content and lifecycle/default visibility. Binary More Information omits the redundant Prediction Details heading and distinguishes empty context from unavailable history.
 - Adaptive Numeric Unit and Decimal Places remain visible beneath Resolution Criteria in Overview/Archival Context, with long-unit wrapping and no duplicate inside More Information.
 - Desktop One-Shot status reads Answer Pending. Reset View retains full text on focus, Performance supporting detail uses compact chevrons, and Performance/Settings offer a direct Journal icon alongside their independent source-aware Back action.

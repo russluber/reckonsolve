@@ -6,7 +6,6 @@ from datetime import date, datetime
 from fractions import Fraction
 
 from PySide6.QtWidgets import (
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -45,8 +44,10 @@ from reckonsolve.ui.contextual_forms import BodyEditor
 from reckonsolve.ui.date_display import format_date, format_reported_time
 from reckonsolve.ui.detail_reading import (
     TerminalSummary,
+    TimelineEntry,
     invalidation_exact_timing,
     invalidation_timing,
+    reading_typography,
 )
 from reckonsolve.ui.detail_workspace import DetailWorkspace, collapse_section
 from reckonsolve.ui.layouts import FlowLayout
@@ -601,7 +602,7 @@ class OneShotDetailScreen(QWidget):
             else "OVERVIEW",
             self,
         )
-        apply_text_role(self.overview_heading, TextRole.SECTION_TITLE)
+        apply_text_role(self.overview_heading, TextRole.DETAIL_HEADING)
         reading_heading = text_label(
             "ARCHIVAL RECORD"
             if detail.status is PredictionStatus.INVALID
@@ -610,7 +611,7 @@ class OneShotDetailScreen(QWidget):
             else "JOURNAL & RECORD",
             self,
         )
-        apply_text_role(reading_heading, TextRole.SECTION_TITLE)
+        apply_text_role(reading_heading, TextRole.DETAIL_HEADING)
         self.workspace.compose(
             summary,
             action_panel,
@@ -637,6 +638,8 @@ class OneShotDetailScreen(QWidget):
             terminal=detail.status
             in (PredictionStatus.RESOLVED, PredictionStatus.INVALID),
         )
+        for pane in (self.workspace.timeline_body, self.workspace.overview_body):
+            reading_typography(pane)
         if self.workspace.inline and self.workspace.editor is not None:
             self.reflection.body_layout.addWidget(self.workspace.editor)
             self.workspace.editor.show()
@@ -789,6 +792,8 @@ class OneShotDetailScreen(QWidget):
                 )
             )
         timeline = ContentPanel("Timeline", parent=self)
+        timeline.body_layout.setSpacing(0)
+        self.journals.body_layout.setSpacing(0)
         self.recorded_timeline = timeline
         timeline.setObjectName("oneShotTimeline")
         for index, (occurred_at, _, body, keys) in enumerate(
@@ -832,17 +837,20 @@ class OneShotDetailScreen(QWidget):
                             or card
                         )
                 continue
-            card = QFrame(timeline)
-            card.setFrameShape(QFrame.Shape.StyledPanel)
-            apply_surface_role(card, SurfaceRole.BASE)
-            card_layout = QVBoxLayout(card)
-            timestamp = text_label(
-                _format_local_timestamp(occurred_at, widget=self), card
-            )
-            apply_text_role(timestamp, TextRole.SECONDARY)
-            card_layout.addWidget(timestamp)
+            first, _, remainder = body.partition("\n")
+            title = first.split(": ", 1)[0]
+            card = TimelineEntry(title, occurred_at, timeline)
+            card_layout = card.column
             label = text_label(body, card)
             label.setObjectName(f"oneShotTimelineEvent{index}")
+            # Keep recorded facts in the body/search target; the header owns
+            # the event name and its immutable recorded time.
+            if first == title and remainder:
+                label.setText(remainder)
+            elif first.startswith(title + ": "):
+                label.setText(body[len(title) + 2 :])
+            elif first == title:
+                label.hide()
             card_layout.addWidget(label)
             timeline.body_layout.addWidget(card)
             for key in keys:

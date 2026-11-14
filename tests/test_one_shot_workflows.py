@@ -413,7 +413,7 @@ def test_one_shot_results_hierarchy_and_keyboard_disclosures(app, qtbot, numeric
 
 @pytest.mark.parametrize("numeric", [False, True])
 @pytest.mark.parametrize("font_size", [9, 15])
-def test_expanded_one_shot_fact_panels_keep_padding_and_complete_wrapped_text(
+def test_expanded_one_shot_facts_keep_flat_alignment_and_complete_wrapped_text(
     app, qtbot, qapp, numeric, font_size
 ):
     _, clock, operations = app
@@ -446,13 +446,8 @@ def test_expanded_one_shot_fact_panels_keep_padding_and_complete_wrapped_text(
             qtbot.wait(50)
             for panel in panels:
                 margins = panel.layout().contentsMargins()
-                assert (
-                    min(
-                        margins.left(), margins.top(), margins.right(), margins.bottom()
-                    )
-                    >= 12
-                )
-                inset = panel.rect().adjusted(12, 12, -12, -12)
+                assert margins.isNull()
+                inset = panel.contentsRect()
                 for label in panel.findChildren(QLabel):
                     if label.isVisible():
                         bounds = QRect(label.mapTo(panel, QPoint()), label.size())

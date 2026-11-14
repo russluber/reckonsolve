@@ -570,3 +570,65 @@ application/data/domain/analytics, migrations, assets and dependencies are uncha
 private notes remain ignored. No executable code changed after the full-suite
 run; subsequent edits only close documentation/evidence. Human visual acceptance
 of this source remains pending.
+
+## Narrative Detail and wider Journal — 2026-11-14
+
+The user reported both preceding scrollbar/Detail-width profiles checked and good.
+That accepts the supplied review scope; no physical Windows scaling/accessibility
+matrix or release approval is inferred. Public `0e6d913` on `ux-redesign` was locally
+clean at this continuation. New feedback separately requests a wider Journal and
+flat Detail reading closer to the reviewed references, with inline event dates and
+coherent hierarchy. Public Section 38.15 records the authorized presentation scope.
+
+Journal now matches Detail's 1,200-logical-pixel cap, while Performance keeps 1,280.
+Shared TimelineEntry uses a thin rule and a wrapping event/date header across
+Adaptive forecasts, Reviews, Journals, terminal events, One-Shot recorded/Journal
+history and definition changes. Detail-only reading styles remove enclosing cards
+and their insets. Pane headings lead event/subsection names, body prose is readable
+and dates quieter. Current Revision retains its accent marker/jump. Native controls,
+semantic status/error/focus feedback, pane ratios/motion, draft/source/scroll state,
+exact facts, immutable row identities and historical search targets remain.
+
+Final focused verification passed **92 tests in 101.07 seconds**, covering Detail
+reading/writing, long-history reuse, historical search/corrections and exact
+timestamp provenance. Four new contract cases exercise inline dates at wide width,
+natural narrow wrapping, heading/body/time hierarchy, selectable timestamps, both
+palettes and unchanged canonical snapshots. Existing local and canonical exact-time
+tooltip forms remain with their original callers.
+
+The 33 One-Shot workflow checks also passed in 9.39 seconds, including the updated
+flat-alignment/complete-text case at 9- and 15-point native fonts for both types.
+Expanded facts retain all original/Before/After values and notes without clipping
+or horizontal page overflow. The former padded-card assertion is superseded by
+the explicitly authorized flat reading contract.
+
+The composition produced **204 native offscreen Journal/Detail captures** at Qt
+scales 1/1.5/2 with real Windows Segoe UI. Both palettes, 14 available contract/state
+reading combinations, wide/minimum geometry, Binary/Numeric revision drafts,
+appearance/Overview consultation and notification containment passed their checks.
+Another **16 captures** cover long Binary/Numeric history and expanded corrected
+One-Shot facts/recorded history at wide/narrow widths in both palettes, retaining
+row identities through order changes and exact canonical snapshots with no writes.
+Representative ordinary, scaled and expanded/long-history captures were inspected.
+Generated evidence stays ignored under `build/ux-focused-width/`. These simulations
+do not establish physical Windows/accessibility or human acceptance.
+
+The bounded human review uses the existing disposable detail profile: compare
+Journal wide/narrow, inspect Binary/Numeric forecasts and Journal/Review headers,
+use Current Revision/order, expand One-Shot Recorded History and Originals &
+Corrections, and retain a revision draft while consulting Overview. Review both
+palettes. The agent changed no installed tool or personal data and performed no
+Git/version/tag/publication action. Human acceptance of this later source remains
+pending; prior checks retain their own artifact scope.
+
+**Verification closure:** Final source passed all **1,300 tests** in two disjoint
+alphabetic module groups: 789 in 286.07 seconds and 511 in 461.24 seconds, with zero
+failures, errors or skips. The groups partition the full collected suite before
+`test_one_shot_workflows.py` and from that module onward, using separate disposable
+test directories and caches. Locked offline sync, Ruff check/format, public/private
+documentation (356/310 local links), both whitespace checks and preservation passed.
+All 66 J IDs, 42 R IDs, withdrawn R-33/R-34, R1/R2 references and 95 public-reference
+mirrors remain. Protected lower layers, migrations, assets and dependencies are
+unchanged; private notes remain ignored. No executable code changed after the final
+group runs; subsequent edits only close documentation/evidence. The supplied
+visual review is the remaining human acceptance step for this source.

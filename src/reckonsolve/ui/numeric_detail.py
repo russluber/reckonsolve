@@ -6,7 +6,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QComboBox,
-    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -41,6 +40,7 @@ from reckonsolve.ui.components import (
 from reckonsolve.ui.date_display import format_date
 from reckonsolve.ui.detail_reading import (
     TerminalSummary,
+    TimelineEntry,
     criteria_reader,
     current_marker,
     interval_text,
@@ -48,7 +48,6 @@ from reckonsolve.ui.detail_reading import (
     invalidation_exact_timing,
     invalidation_timing,
     progressive_body,
-    quiet_event,
     reading_refresh,
     timeline_controls,
 )
@@ -1226,27 +1225,30 @@ class NumericPredictionDetailScreen(QWidget):
     def _quantile_timeline_row(
         self, event: QuantileTimelineEvent, previous: FiveQuantiles | None = None
     ) -> QWidget:
-        frame = QFrame(self.timeline_content)
-        frame.setObjectName(f"numericTimeline{event.kind.title()}{event.record_id}")
-        apply_surface_role(frame, SurfaceRole.BASE)
-        layout = QVBoxLayout(frame)
-        timestamp = QLabel(
-            _format_local_timestamp(event.created_at, widget=self), frame
-        )
-        timestamp.setTextFormat(Qt.TextFormat.PlainText)
-        timestamp.setToolTip(event.created_at.isoformat())
-        _make_selectable(timestamp)
-        layout.addWidget(timestamp)
         kind = {
-            "forecast": "FORECAST",
-            "journal": "JOURNAL",
-            "review": "REVIEW — FORECAST RETAINED",
+            "forecast": "Initial Forecast" if previous is None else "Forecast Revision",
+            "journal": "Journal Entry",
+            "review": "Forecast Review · Unchanged",
         }[event.kind]
+        frame = TimelineEntry(kind, event.created_at, self.timeline_content)
+        frame.setObjectName(f"numericTimeline{event.kind.title()}{event.record_id}")
+        layout = frame.column
+        forecast = frame.text(
+            interval_transition_text(
+                previous, event.revision.quantiles, self._prediction.unit
+            )
+            if previous is not None
+            else interval_text(event.revision.quantiles, self._prediction.unit),
+            TextRole.DETAIL_EVENT if event.kind == "forecast" else TextRole.DETAIL_TIME,
+            frame,
+        )
+        layout.addWidget(forecast)
         text = QLabel(
-            f"{kind}\n{interval_transition_text(previous, event.revision.quantiles, self._prediction.unit) if previous is not None else interval_text(event.revision.quantiles, self._prediction.unit)}\n{event.text or ''}",
+            event.text or "",
             frame,
         )
         text.setWordWrap(True)
+        text.setVisible(bool(event.text))
         text.setObjectName(f"numericTimelineBody{event.kind.title()}{event.record_id}")
         text.setTextFormat(Qt.TextFormat.PlainText)
         _make_selectable(text)
@@ -1256,8 +1258,6 @@ class NumericPredictionDetailScreen(QWidget):
             and event.record_id == self._prediction.current_revision.revision_id
         ):
             current_marker(frame)
-        elif event.kind != "forecast":
-            quiet_event(frame)
         if (
             event.kind == "forecast"
             and self._quantile_score is not None
@@ -1288,7 +1288,7 @@ class NumericPredictionDetailScreen(QWidget):
             apply_action_role(button, ActionRole.QUIET)
             apply_lucide_icon(button, LucideIcon.PENCIL)
             button.clicked.connect(lambda: self.open_correct_journal_entry(event))
-            layout.addWidget(button, 0, Qt.AlignmentFlag.AlignCenter)
+            frame.header_layout.addWidget(button)
         return frame
 
     def _load_definition_history(self, prediction_id: int) -> None:
