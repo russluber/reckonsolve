@@ -632,3 +632,50 @@ mirrors remain. Protected lower layers, migrations, assets and dependencies are
 unchanged; private notes remain ignored. No executable code changed after the final
 group runs; subsequent edits only close documentation/evidence. The supplied
 visual review is the remaining human acceptance step for this source.
+
+## Framed workspace surfaces — 2026-11-14
+
+The user explicitly accepted narrative Detail and wider Journal, particularly
+Timeline/Overview and ruled entries, and reported the checkpoints saved/pushed.
+Public `19cf7e6` on `ux-redesign` was locally clean at this continuation. The next
+request separately authorizes a visible outer outline and related margin tone to
+distinguish focused surfaces. This does not infer release approval or an unreported
+physical Windows scaling/accessibility review.
+
+The existing shared toolbar/page widget now paints one quiet 1-pixel outline with
+restrained 10-pixel outer corners. Its existing parent paints a slightly deeper,
+palette-relative outer canvas. Interior colors, flat reading sections, typography,
+spacing and width constraints remain. Settings/creation keep full-width sizing and
+share the boundary. Explicit native styled-background painting uses no graphics
+shadow/effect, new wrapper, animation, preference or dependency. Native geometry,
+notification parenting, focus, scroll, draft/source context and protected facts remain.
+
+Eight focused geometry/paint/contrast cases passed in **6.92 seconds**, including
+two new palette cases checking actual canvas, outline and gutter pixels across all
+five routes, unchanged widths and canonical snapshots. **264 native offscreen
+captures** cover Journal/Detail and Performance at Qt scales 1/1.5/2: 204 reading/
+writing captures across 14 available contract/state combinations, and 60 report
+captures with paired/stacked sections, six supporting expansions and pinned controls.
+Both palettes, wide/minimum layouts, draft retention, horizontal overflow,
+notification containment, report identity and unchanged canonical facts passed.
+Representative light/dark framed surfaces were inspected. Simulations do not
+establish physical Windows/accessibility or human visual acceptance. Generated
+evidence stays ignored under `build/ux-focused-width/`.
+
+The bounded human review compares Journal, Detail and Performance framing in both
+palettes, narrows the window and retains a Detail draft through appearance changes.
+The accepted interior composition should remain familiar. Installed tools, personal
+data and all Git/version/tag/publication operations remain user-owned.
+
+**Verification closure:** Final source passed all **1,302 tests** in three disjoint
+groups: 791 in 344.70 seconds, 490 in 301.95 seconds and the 21 visual-system cases
+in 0.88 seconds, with zero failures, errors or skips. The full collected suite is
+partitioned before `test_one_shot_workflows.py`, from that module onward excluding
+`test_visual_system.py`, and that visual-system module independently. Each uses
+separate disposable test directories/caches. Locked offline sync, Ruff check/format,
+public/private documentation (356/312 local links), both whitespace checks and
+preservation passed. All stable J/R identifiers, withdrawals and reference packs,
+95 mirrored public references and protected lower-layer/migration/dependency
+boundaries remain intact; notes remain ignored. No executable code changed after
+these final runs. Subsequent edits close documentation/evidence only; the short
+human framing review remains pending.

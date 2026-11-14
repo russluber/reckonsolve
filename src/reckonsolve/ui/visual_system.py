@@ -130,6 +130,8 @@ class SemanticColors:
 
     is_dark: bool
     canvas: str
+    outer_canvas: str
+    workspace_border: str
     surface: str
     raised: str
     input: str
@@ -208,6 +210,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
     canvas = _opaque(palette.color(QPalette.ColorRole.Window))
     text = _opaque(palette.color(QPalette.ColorRole.WindowText))
     is_dark = QColor(canvas).lightnessF() < 0.5
+    outer_canvas = _mix_colors(canvas, "#000000", 0.24 if is_dark else 0.055)
+    workspace_border = _mix_colors(canvas, text, 0.20 if is_dark else 0.14)
     surface = _theme_surface_color(
         _opaque(palette.color(QPalette.ColorRole.Base)),
         canvas,
@@ -255,6 +259,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         return SemanticColors(
             is_dark=True,
             canvas=canvas,
+            outer_canvas=outer_canvas,
+            workspace_border=workspace_border,
             surface=surface,
             raised=raised,
             input=input_color,
@@ -289,6 +295,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
     return SemanticColors(
         is_dark=False,
         canvas=canvas,
+        outer_canvas=outer_canvas,
+        workspace_border=workspace_border,
         surface=surface,
         raised=raised,
         input=input_color,
@@ -345,6 +353,17 @@ QStackedWidget#screenStack,
 QDialog {{
     background-color: {color.canvas};
     color: {color.text};
+}}
+
+/* One bounded workspace stands above the quieter surrounding canvas. */
+QWidget#workspaceFrame {{
+    background-color: {color.outer_canvas};
+    border: none;
+}}
+QWidget#workspaceSurface {{
+    background-color: {color.canvas};
+    border: 1px solid {color.workspace_border};
+    border-radius: {panel_radius}px;
 }}
 
 QScrollArea#dashboardScrollArea,

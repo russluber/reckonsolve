@@ -144,6 +144,8 @@ class MainWindow(QMainWindow):
         for screen in self._screens.values():
             self._screen_stack.addWidget(screen)
         content = QWidget(self)
+        content.setObjectName("workspaceSurface")
+        content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(12, 0, 12, 12)
         layout.setSpacing(12)
@@ -153,6 +155,7 @@ class MainWindow(QMainWindow):
         self._unbounded_content_width = content.maximumWidth()
         frame = QWidget(self)
         frame.setObjectName("workspaceFrame")
+        frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         frame_layout = QHBoxLayout(frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.addWidget(content)

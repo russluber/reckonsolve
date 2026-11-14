@@ -251,6 +251,54 @@ def test_narrative_entries_keep_inline_dates_wrapping_and_history(
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
 
 
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_workspace_outline_separates_gutters_without_changing_routes(
+    workspace, qtbot, appearance
+):
+    from PySide6.QtGui import QColor
+
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, False)
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window.resize(1600, 850)
+    for route, maximum in (
+        ("Journal", 1200),
+        ("Prediction Detail", 1200),
+        ("Performance", 1280),
+        ("Settings", 1600),
+        ("New Prediction", 1600),
+    ):
+        if route == "Prediction Detail":
+            window._open_prediction(prediction.prediction_id)
+        else:
+            if route == "New Prediction":
+                window.navigate_to("Journal")
+            window.navigate_to(route)
+        qtbot.wait(60)
+        content = window._workspace_content
+        assert content.width() == maximum
+        geometry = content.geometry()
+        colors = semantic_colors(window.palette())
+        image = window.centralWidget().grab().toImage()
+        ratio = image.devicePixelRatio()
+
+        def pixel(x, y, source=image, scale=ratio):
+            return source.pixelColor(int(x * scale), int(y * scale))
+
+        assert pixel(geometry.center().x(), 5) == QColor(colors.canvas)
+        assert pixel(geometry.left() + 0.5, geometry.center().y()) == QColor(
+            colors.workspace_border
+        )
+        if geometry.left() > 0:
+            assert pixel(0, 20) == QColor(colors.outer_canvas)
+            assert colors.outer_canvas != colors.canvas
+        assert window.current_screen_name == route
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
 @pytest.mark.parametrize("status", ["open", "locked", "resolved", "invalid"])
 @pytest.mark.parametrize("points", [9, 12])
 def test_numeric_definition_stays_visible_below_criteria_without_duplicate_metadata(

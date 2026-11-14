@@ -2422,3 +2422,17 @@ semantic status/error/focus feedback retain their established controls. Preserve
 task proportions/motion, draft guards and history/scoring/storage boundaries. Verify
 both palettes, all four contracts, narrow/scaled geometry, long-history reuse and
 historical search navigation; human visual acceptance remains separate.
+
+**Framed workspace surfaces — authorized 2026-11-14:** The user accepted the
+narrative Detail and wider Journal, then requested a visible boundary and tonal
+separation between centered content and the side margins, referring to the reviewed
+screen outlines. Give the shared toolbar/page workspace one quiet outline with
+restrained outer corners. Keep its accepted interior palette and flat reading
+sections; use a slightly deeper, related outer canvas in both appearances to lift
+the working surface. Apply the common boundary on other routes without changing
+their sizing. Preserve the 1,200 Journal/Detail and 1,280 Performance caps, native
+geometry, content spacing/type, pane proportions/motion, focus/scroll and drafts.
+This is shared shell presentation only, with no new setting, shadow/animation
+effect, dependency, workflow or data change. Check actual border/background paint,
+all routes, both palettes and narrow/scaled geometry. Human visual acceptance of
+the new framing remains separate from the accepted interior composition.
