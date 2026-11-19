@@ -2482,3 +2482,22 @@ proposals about margins, criteria visibility, pane ratios or document scrolling 
 not adopted by this presentation refinement. Verify both palettes/orientations,
 native styles, narrow/scaled geometry, complete wrapped context and retained drafts;
 human review remains separate from automated/offscreen evidence.
+
+**Wider focused workspaces and compact Settings — authorized 2026-11-19:** The user
+accepted the flat-surface/scrollbar refinement, retains proportional scroll-thumb
+lengths after explanation, and requests wider focused workspaces plus Settings with
+all ordinary options visible without scrolling. Increase Journal/Detail/Settings
+caps from 1,200 to 1,320 logical pixels and Performance from 1,280 to 1,440, retaining
+centering, available narrow width, native geometry, exact content and pane behavior.
+
+Settings uses compact paired sections, reduced redundant margins/gaps and a concise
+header, preserving readable text and existing controls, labels, shortcuts, results
+and source-aware navigation. Include the actual folder chooser controls in fit
+verification. Ordinary Settings must fit at supported minimum geometry and normal
+fonts without page scrolling. Retain safe overflow for unusually long paths/results
+or enlarged native fonts rather than clipping, hiding settings or reducing text
+below the shared readable scale. This is presentation only; no administration,
+relocation, data/history/scoring, preference, dependency or navigation-model change
+is authorized. Check both palettes, narrow/wide/scaled geometry, keyboard order,
+expanded tool results and retained Detail/Performance state. Human visual acceptance
+of the new widths/composition remains separate.

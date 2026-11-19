@@ -1,6 +1,6 @@
 # Post-review workspace refinement verification — 2026-11-13
 
-The latest [flat surfaces and scrollbar refinement](#flat-surfaces-and-scrollbar-refinement--2026-11-19)
+The latest [wider workspaces and compact Settings](#wider-workspaces-and-compact-settings--2026-11-19)
 are implemented with their own evidence and pending human review. Earlier acceptance
 below remains tied to the previously evaluated refinements.
 
@@ -808,3 +808,69 @@ checks and preservation passed. Stable identifiers/withdrawals/reference packs,
 95 current public-reference mirrors and protected lower-layer/migration/asset/
 dependency boundaries remain intact; notes remain ignored. Subsequent edits only
 close documentation/evidence; the short human review remains pending.
+
+## Wider workspaces and compact Settings — 2026-11-19
+
+The user accepted the flat-surface/expanding-scrollbar refinement, retained native
+proportional thumb lengths after explanation, and reports both checkpoints saved/
+pushed. Public `f08a361` on `ux-redesign` was locally clean; the separate private
+repository was also clean. This is scoped acceptance, not release approval or a
+supplied physical Windows/accessibility matrix. The next request authorizes wider
+focused workspaces and ordinary Settings with every option visible without scrolling.
+
+Journal/Detail/Settings caps increase to **1,320** logical pixels and Performance
+to **1,440**, retaining centered margins, available narrow width and native geometry.
+Settings replaces its long single column/920-wide inner cap with four paired rows:
+preferences/context left and the same administrative tools right. A concise header,
+reduced local gaps/padding and inline folder guidance/chooser keep the shared text/
+control scale. Explicit control tab order includes the chooser between date format
+and backup. Ordinary Settings have no scroll range at supported minimum geometry;
+exceptional long results/paths or enlarged native text retain complete safe overflow.
+No overflow is forced hidden. Existing tool results, visit clearing, navigation,
+relocation, exact facts, draft/report state and protected rules remain.
+
+Style-switch verification also reproduced queued Numeric metric work after widget
+destruction. A child-owned single-shot timer now cancels that work with the interval
+while preserving coalesced measurement, exact values and projection. The regression
+destroys an interval before queued delivery and verifies clean Qt event processing.
+
+Seven final focused cases passed in **24.07 seconds**: four two-palette/two-style
+Settings cases cover all ordinary controls, complete labels, no scrolling and
+keyboard order across wide/mid/minimum geometry; two preserve long-result text,
+overflow and visit clearing; one covers Numeric timer lifetime. Eight additional
+captures use real Segoe UI with complete representative paths and actual chooser
+controls across both palettes, Windows11/Fusion and ordinary/minimum geometry;
+all have zero horizontal/vertical scroll range. Minimum Light and enlarged Dark
+compositions were inspected. Final full-suite/scaled closure is recorded below.
+
+The short human review uses `uv run python tools/run_visual_review.py detail`:
+compare wider Journal/Detail/Performance, retain a Detail draft and report scope,
+and inspect every ordinary Settings option at wide/minimum sizes in both palettes.
+Include folder selection visibility and keyboard order; no actual move is needed.
+The agent changed no installed tool, personal database, dependency, migration or
+Git/release state. Human visual acceptance of this later composition remains pending.
+
+**Final verification closure:** All **1,321 tests** passed in three disjoint groups:
+**804 in 348.95 seconds**, **496 in 408.70 seconds** and **21 visual-system cases in
+1.47 seconds**, with zero failures, errors or skips. The complete suite is
+partitioned before `test_one_shot_workflows.py`, the remainder excluding
+`test_visual_system.py`, and that module independently, using separate disposable
+directories/caches. No executable source changed after these final runs.
+
+**356 native offscreen captures** cover final geometry: 288 Journal/Detail/task/
+Settings and 60 Performance captures at Qt scales 1/1.5/2, plus the eight dedicated
+real-font Settings captures above. The ordinary Settings captures include actual
+location controls and complete paths, with no horizontal/vertical scroll range at
+wide/minimum sizes in both palettes/scales. Fourteen available Detail contract/state
+combinations, all four contracts, reading/writing proportions, retained drafts,
+notification containment, complete text, report identity/disclosures and unchanged
+canonical facts passed their checks. Representative ordinary and scaled Settings
+captures were inspected. Evidence remains ignored under `build/ux-settings-fit/`;
+simulation is separate from physical Windows/accessibility and human acceptance.
+
+Locked offline sync, Ruff check/format (320 files), public/private documentation
+(356/320 local links), both whitespace checks and preservation passed. All stable
+J/R IDs, withdrawals, R1/R2 assets and 95 public-reference mirrors remain; protected
+application/data/domain/analytics, migrations, assets and dependencies are unchanged.
+Private notes remain ignored. Final edits only close documentation/evidence; the
+short visual review and user-owned Git handoff remain pending.

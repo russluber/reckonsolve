@@ -54,7 +54,7 @@ def test_focused_report_width_preserves_scope_expansions_and_pinned_controls(
         window.resize(width, 900)
         qtbot.wait(80)
         content = window._workspace_content
-        assert content.width() == min(width, 1280)
+        assert content.width() == min(width, 1440)
         assert (
             abs(
                 content.geometry().center().x()

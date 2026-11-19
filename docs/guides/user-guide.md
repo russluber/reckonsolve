@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits; the latest flat surfaces, expanding scroll thumbs and centered Settings await human visual review alongside the saved structural refinement. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
+This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits, including flat surfaces and expanding scroll thumbs; the latest wider workspaces and compact Settings await human visual review. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
 
 Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
@@ -9,6 +9,10 @@ window is wide. Journal and Detail share a reading width; Performance has a slig
 wider area for paired sections and charts. Journal keeps questions, forecasts and
 controls together. Each fits smaller windows, and Reckonsolve remembers your chosen window
 size and maximized state.
+
+Settings pairs preferences and journal location with the administration tools in a
+compact two-column layout. Its ordinary options fit together without scrolling.
+Long result messages, paths or enlarged text can still expand safely when needed.
 
 A subtle square-edged outline contains the working surface. In wider windows, a slightly deeper
 background separates the side margins from the centered content in both themes.

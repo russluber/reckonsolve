@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from main_window_fakes import (
     FakePredictionOperations,
 )
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QPushButton,
+    QStyleFactory,
     QWidget,
 )
 from pytestqt.qtbot import QtBot
@@ -26,6 +28,11 @@ from reckonsolve.application.errors import (
 )
 from reckonsolve.ui import MainWindow
 from reckonsolve.ui.components import ContentPanel
+from reckonsolve.ui.location_controls import LocationControls
+from reckonsolve.ui.presentation_settings import (
+    AppearanceMode,
+    MemoryPresentationSettings,
+)
 from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
     MESSAGE_TONE_PROPERTY,
@@ -34,6 +41,105 @@ from reckonsolve.ui.visual_system import (
     StatusTone,
     SurfaceRole,
 )
+
+
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+@pytest.mark.parametrize("style_name", ["windows11", "Fusion"])
+def test_compact_settings_fits_all_ordinary_options_and_preserves_keyboard_order(
+    qtbot, qapp, appearance, style_name
+):
+    available_styles = QStyleFactory.keys()
+    assert style_name in available_styles
+    original_style = qapp.style().objectName()
+    qapp.setStyle(style_name)
+    try:
+        operations = FakePredictionOperations()
+        operations.data_management_status = replace(
+            operations.data_management_status,
+            database_path=Path(
+                "C:/Users/visual/AppData/Local/Reckonsolve/reckonsolve.sqlite3"
+            ),
+        )
+        window = MainWindow(
+            operations, presentation_settings=MemoryPresentationSettings()
+        )
+        qtbot.addWidget(window)
+        screen = window._settings_screen
+
+        def unused(*_args):
+            pytest.fail("Layout and keyboard navigation must not move a journal")
+
+        controls = LocationControls(unused, unused, screen)
+        screen.add_location_controls(controls)
+        window.appearance.select(appearance)
+        window.show()
+        window.navigate_to("Settings")
+        fields = (
+            screen.appearance_mode,
+            screen.date_format_input,
+            controls.choose,
+            screen.backup_button,
+            screen.export_button,
+            screen.manage_tags_button,
+            screen.repair_search_button,
+        )
+        for width, height in ((1600, 1000), (1000, 700), (760, 520)):
+            window.resize(width, height)
+            qtbot.wait(70)
+            assert window._workspace_content.width() == min(width, 1320)
+            assert screen.scroll_area.verticalScrollBar().maximum() == 0
+            assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+            viewport = screen.scroll_area.viewport()
+            for field in fields:
+                assert field.isVisible()
+                top_left = field.mapTo(viewport, field.rect().topLeft())
+                bottom_right = field.mapTo(viewport, field.rect().bottomRight())
+                assert viewport.rect().contains(top_left)
+                assert viewport.rect().contains(bottom_right)
+            for label in screen.findChildren(QLabel):
+                if label.isVisible() and label.wordWrap():
+                    assert label.height() >= label.heightForWidth(label.width())
+        screen.appearance_mode.setFocus()
+        for expected in fields[1:]:
+            for _ in range(20):
+                qtbot.keyClick(window.focusWidget(), Qt.Key.Key_Tab)
+                if window.focusWidget() in fields:
+                    break
+            assert window.focusWidget() is expected
+        assert operations.backup_calls == []
+        assert operations.export_calls == []
+        assert operations.search_repair_calls == 0
+    finally:
+        qapp.setStyle(original_style)
+        # Flush restyle work while registered widgets still own their timers.
+        qapp.processEvents()
+
+
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_compact_settings_preserves_long_results_with_safe_overflow(qtbot, appearance):
+    window = MainWindow(
+        FakePredictionOperations(), presentation_settings=MemoryPresentationSettings()
+    )
+    qtbot.addWidget(window)
+    window.appearance.select(appearance)
+    window.resize(760, 520)
+    window.show()
+    window.navigate_to("Settings")
+    screen = window._settings_screen
+    message = "The backup destination could not be opened. " * 40
+    screen.backup_tool.show_result(message, StatusTone.ERROR)
+    qtbot.wait(60)
+    result = screen.backup_tool.result
+    assert result.text() == message
+    assert result.height() >= result.heightForWidth(result.width())
+    assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+    screen.scroll_area.ensureWidgetVisible(result)
+    assert result.isVisible()
+    window.navigate_to("Journal")
+    window.navigate_to("Settings")
+    qtbot.wait(60)
+    assert result.isHidden()
+    assert screen.scroll_area.verticalScrollBar().maximum() == 0
 
 
 def test_settings_displays_database_and_persisted_backup_status(qtbot: QtBot) -> None:

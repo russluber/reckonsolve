@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -98,16 +99,20 @@ class LocationControls(QWidget):
         self.preview, self.move = preview, move
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
         guidance = QLabel(
             "Move this complete journal to a local folder that isn't synchronized by another app.",
             self,
         )
         guidance.setWordWrap(True)
-        layout.addWidget(guidance)
+        row.addWidget(guidance, 1)
         self.choose = QPushButton("Choose folder…", self)
         self.choose.setObjectName("chooseJournalFolder")
         apply_action_role(self.choose, ActionRole.SECONDARY)
-        layout.addWidget(self.choose, 0, Qt.AlignmentFlag.AlignLeft)
+        row.addWidget(self.choose, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(row)
+        self.setFocusProxy(self.choose)
         self.result = PersistentMessageLabel(
             accessible_name="Journal location result", parent=self
         )

@@ -76,16 +76,13 @@ class SettingsScreen(QWidget):
         self._suggested_export_filename = "reckonsolve-export.zip"
         content = QWidget(self)
         content.setObjectName("settingsContent")
-        content.setMaximumWidth(920)
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(24, 16, 24, 24)
-        layout.setSpacing(int(Spacing.SECTION))
+        layout.setContentsMargins(16, 6, 16, 6)
+        layout.setSpacing(int(Spacing.CONTROL))
         layout.addWidget(
             PageHeader(
                 "Settings",
-                "Data, recovery and shared maintenance.",
                 title_object_name="settingsScreenTitle",
-                supporting_object_name="settingsIntroduction",
                 parent=content,
             )
         )
@@ -116,7 +113,6 @@ class SettingsScreen(QWidget):
                 AppearanceMode(self.appearance_mode.currentData())
             )
         )
-        layout.addWidget(appearance)
         dates = ContentPanel("Dates and Time", parent=content)
         apply_surface_role(dates, SurfaceRole.CANVAS)
         self.date_format_input = QComboBox(dates.body)
@@ -133,7 +129,6 @@ class SettingsScreen(QWidget):
         self.time_zone_label = _label(windows_zone_description(), dates.body)
         self.time_zone_label.setAccessibleName("Windows time zone")
         dates.body_layout.addWidget(self.time_zone_label)
-        layout.addWidget(dates)
         location = ContentPanel("Database location", parent=content)
         location.setObjectName("dataManagementPanel")
         self.location_panel = location
@@ -141,12 +136,12 @@ class SettingsScreen(QWidget):
         apply_surface_role(location, SurfaceRole.CANVAS)
         self.database_path_label = _label("Database: loading…", location.body)
         self.database_path_label.setObjectName("databaseLocation")
+        self.database_path_label.setMinimumWidth(0)
         self.database_path_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
             | Qt.TextInteractionFlag.TextSelectableByKeyboard
         )
         location.body_layout.addWidget(self.database_path_label)
-        layout.addWidget(location)
         self.backup_tool = SettingsTool(
             "Backups",
             "Complete SQLite backup for recovery.",
@@ -199,12 +194,12 @@ class SettingsScreen(QWidget):
             self.tag_tool,
             self.search_tool,
         )
-        for tool in self.tools:
-            layout.addWidget(tool)
         shortcuts = ContentPanel("Keyboard shortcuts", parent=content)
         shortcuts.setObjectName("keyboardShortcutsPanel")
         apply_surface_role(shortcuts, SurfaceRole.CANVAS)
         grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setVerticalSpacing(4)
         for row, (action, keys) in enumerate(
             (
                 ("New Prediction · Journal, Detail or Performance", "Ctrl+N"),
@@ -218,7 +213,22 @@ class SettingsScreen(QWidget):
             grid.addWidget(badge, row, 1, Qt.AlignmentFlag.AlignLeft)
         grid.setColumnStretch(0, 1)
         shortcuts.body_layout.addLayout(grid)
-        layout.addWidget(shortcuts)
+        # Pair preferences/context with administration so all ordinary options
+        # fit together without reducing the shared text/control scale.
+        self.sections = QGridLayout()
+        self.sections.setHorizontalSpacing(int(Spacing.PAGE))
+        self.sections.setVerticalSpacing(4)
+        for row, (left, right) in enumerate(
+            zip((appearance, dates, location, shortcuts), self.tools, strict=True)
+        ):
+            for column, panel in enumerate((left, right)):
+                panel.layout().setContentsMargins(0, 3, 0, 3)
+                panel.layout().setSpacing(4)
+                panel.body_layout.setSpacing(4)
+                self.sections.addWidget(panel, row, column, Qt.AlignmentFlag.AlignTop)
+        self.sections.setColumnStretch(0, 1)
+        self.sections.setColumnStretch(1, 1)
+        layout.addLayout(self.sections)
         layout.addStretch()
         self.scroll_area = QScrollArea(self)
         self.scroll_area.setObjectName("settingsScrollArea")
@@ -229,7 +239,8 @@ class SettingsScreen(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self.scroll_area)
-        self.setTabOrder(self.appearance_mode, self.backup_button)
+        self.setTabOrder(self.appearance_mode, self.date_format_input)
+        self.setTabOrder(self.date_format_input, self.backup_button)
         self.setTabOrder(self.backup_button, self.export_button)
         self.setTabOrder(self.export_button, self.manage_tags_button)
         self.setTabOrder(self.manage_tags_button, self.repair_search_button)
@@ -261,6 +272,9 @@ class SettingsScreen(QWidget):
     def add_location_controls(self, controls: QWidget) -> None:
         self.location_controls = controls
         self.location_panel.body_layout.addWidget(controls)
+        focus_target = controls.focusProxy() or controls
+        self.setTabOrder(self.date_format_input, focus_target)
+        self.setTabOrder(focus_target, self.backup_button)
 
     def set_appearance(self, mode: AppearanceMode) -> None:
         with QSignalBlocker(self.appearance_mode):

@@ -54,10 +54,10 @@ class Radius(IntEnum):
 class ContentWidth(IntEnum):
     """Comfortable workspace widths in Qt logical pixels, not window limits."""
 
-    JOURNAL = 1200
-    DETAIL = 1200
-    PERFORMANCE = 1280
-    SETTINGS = 1200
+    JOURNAL = 1320
+    DETAIL = 1320
+    PERFORMANCE = 1440
+    SETTINGS = 1320
 
 
 class MotionDuration(IntEnum):

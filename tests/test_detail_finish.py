@@ -80,6 +80,23 @@ def create(operations, clock, numeric):
     )
 
 
+def test_numeric_interval_destroyed_before_style_refresh_has_no_late_callback(qtbot):
+    from PySide6.QtCore import QEvent
+    from shiboken6 import delete, isValid
+
+    from reckonsolve.ui.numeric_interval import NumericInterval
+
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    interval = NumericInterval(parent)
+    QApplication.sendEvent(interval, QEvent(QEvent.Type.FontChange))
+    timer = interval._metrics_timer
+    assert timer.isActive()
+    delete(interval)
+    assert not isValid(timer)
+    qtbot.wait(20)
+
+
 def context(prediction, numeric):
     return {
         "expected_revision_id": prediction.current_revision.revision_id
@@ -130,7 +147,7 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
         qtbot.waitUntil(lambda: not window._journal_screen.loading)
         qtbot.wait(40)
         content = window._workspace_content
-        assert content.width() == min(window.width(), 1200)
+        assert content.width() == min(window.width(), 1320)
         assert (
             abs(
                 content.geometry().center().x()
@@ -140,7 +157,7 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
         )
         window._open_prediction(prediction.prediction_id)
         qtbot.wait(60)
-        assert content.width() == min(window.width(), 1200)
+        assert content.width() == min(window.width(), 1320)
         assert (
             abs(
                 content.geometry().center().x()
@@ -165,7 +182,7 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
     window.resize(1600, 850)
     window.navigate_to("Settings")
     qtbot.wait(50)
-    assert window._workspace_content.width() == 1200
+    assert window._workspace_content.width() == 1320
     for width in (900, 760):
         window.resize(width, 520)
         qtbot.wait(50)
@@ -326,10 +343,10 @@ def test_workspace_outline_separates_gutters_without_changing_routes(
     window.appearance.select(appearance)
     window.resize(1600, 850)
     for route, maximum in (
-        ("Journal", 1200),
-        ("Prediction Detail", 1200),
-        ("Performance", 1280),
-        ("Settings", 1200),
+        ("Journal", 1320),
+        ("Prediction Detail", 1320),
+        ("Performance", 1440),
+        ("Settings", 1320),
         ("New Prediction", 1600),
     ):
         if route == "Prediction Detail":

@@ -82,7 +82,9 @@ class NumericInterval(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._metrics_pending = False
+        self._metrics_timer = QTimer(self)
+        self._metrics_timer.setSingleShot(True)
+        self._metrics_timer.timeout.connect(self._refresh_metrics)
         self.setObjectName("committedNumericInterval")
         self.setAccessibleName("Current committed five-percentile forecast")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -147,14 +149,12 @@ class NumericInterval(QWidget):
         return super().eventFilter(watched, event)
 
     def _queue_metrics_refresh(self) -> None:
-        if not self._metrics_pending:
+        if not self._metrics_timer.isActive():
             # Styles can change child label metrics without resizing us.
-            # Measure their final metrics together after propagation finishes.
-            self._metrics_pending = True
-            QTimer.singleShot(0, self._refresh_metrics)
+            # Ownership cancels the queued work if this interval is destroyed.
+            self._metrics_timer.start(0)
 
     def _refresh_metrics(self) -> None:
-        self._metrics_pending = False
         self._arrange()
         self.updateGeometry()
         self.update()
