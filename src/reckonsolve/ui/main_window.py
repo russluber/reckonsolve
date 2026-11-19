@@ -290,6 +290,8 @@ class MainWindow(QMainWindow):
             maximum_width = int(ContentWidth.DETAIL)
         elif route is Route.PERFORMANCE:
             maximum_width = int(ContentWidth.PERFORMANCE)
+        elif route is Route.SETTINGS:
+            maximum_width = int(ContentWidth.SETTINGS)
         self._workspace_content.setMaximumWidth(maximum_width)
         origin = self.workspace.back_destination()
         if route is Route.DETAIL:

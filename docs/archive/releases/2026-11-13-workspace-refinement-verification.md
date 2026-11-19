@@ -1,6 +1,6 @@
 # Post-review workspace refinement verification — 2026-11-13
 
-The latest [structural rules and Detail headers](#structural-rules-and-detail-headers--2026-11-14)
+The latest [flat surfaces and scrollbar refinement](#flat-surfaces-and-scrollbar-refinement--2026-11-19)
 are implemented with their own evidence and pending human review. Earlier acceptance
 below remains tied to the previously evaluated refinements.
 
@@ -744,3 +744,67 @@ preservation passed. All stable J/R identifiers, withdrawals, reference packs an
 bundled assets, migrations and dependencies are unchanged; notes remain ignored.
 Final edits only close documentation/evidence. Human review of this composition
 remains separate from these automated and offscreen checks.
+
+## Flat surfaces and scrollbar refinement — 2026-11-19
+
+Both repositories were locally clean at public `f233faf` on `ux-redesign` and its
+separate private checkpoint. The direct feedback authorizes flat noninteractive
+surfaces, hover-expanding shared scroll thumbs and centered Settings. Earlier
+acceptance remains scoped; the prior saved structural refinement is not treated
+as blanket approval of this later source. Outside layout suggestions do not
+authorize a new navigation rail, pane ratio, criterion-collapse rule or scroll model.
+
+The shared stylesheet paints a 4-pixel resting thumb that expands to 8 on hover,
+focus or press inside the unchanged 14-pixel native hit lane. Native drag, track
+paging, wheel and keyboard actions remain. Ordinary read-only panels use flat
+rules, with square workspace/status/tag/message boundaries; interactive fields,
+buttons and dropdowns retain their treatment. Shared dialog presentation gives
+repeated forecast context complete, unboxed, selectable body text with shrinkable
+width and wrapped minimum height. Main committed forecasts stay prominent.
+Settings joins the 1,200-wide centered toolbar/page shell while retaining its
+existing 920-wide administration body. Journal/Detail stay 1,200; Performance stays
+1,280. Existing criteria, independent scroll, task proportions/motion, exact facts,
+guards and canonical boundaries remain.
+
+Six final context tests passed in **12.24 seconds**, covering Binary/Numeric Keep
+Forecast, Resolve and Add Journal Entry, both palettes, ordinary-font wide/minimum
+geometry and 15-point native fonts at wide geometry. Text height, body scale,
+transparent context background, mouse/keyboard selection, retained task identity,
+no page overflow and unchanged canonical snapshots are checked. Custom 15-point
+controls at minimum geometry are not claimed; they can require a wider window,
+independently of DPI scaling. The final shared visual module passed **21 tests in
+1.34 seconds**, including eight cross-style/orientation/palette cases checking
+actual 4/8-pixel paint, stable geometry, full-lane drag, focus, track paging, wheel
+and keyboard actions. An earlier focused **140-test** run passed in 186.91 seconds
+before the final body-scale adjustment; final full-source/native closure follows.
+
+The short human review uses `uv run python tools/run_visual_review.py detail`.
+Check the three task contexts and a retained draft, hover/focus/drag the page and
+pane scrollbars, and visit Settings in both palettes and wide/minimum windows.
+No installed tool, personal database, dependency, migration or Git/release state
+is changed by the agent. Human visual acceptance remains pending.
+
+**Final source closure:** All **1,314 tests** passed in three disjoint groups:
+**803 in 328.16 seconds**, **490 in 243.79 seconds**, and the **21 visual-system
+cases in 1.34 seconds**, with zero failures, errors or skips. The complete suite is
+partitioned before `test_one_shot_workflows.py`, the remainder excluding
+`test_visual_system.py`, and that module independently, with separate disposable
+test directories/caches. No executable source changed after these final runs.
+
+**348 native offscreen captures** cover the final source at Qt scales 1/1.5/2 with
+Windows Segoe UI: 288 Journal/Detail/task/Settings captures and 60 Performance
+captures. Both palettes, ordinary/minimum geometry, 14 available contract/state
+reading combinations, Binary/Numeric revision/Review/Resolution/Journal tasks,
+Settings width, wrapped text, notification containment, retained drafts and
+unchanged canonical snapshots passed. Performance retains paired/stacked sections,
+six supporting expansions, pinned controls and report identity/facts. Representative
+final task and ordinary/scaled Settings captures were inspected. Evidence stays
+ignored under `build/ux-flat-surfaces/`; simulation is not physical Windows/
+accessibility or human acceptance evidence.
+
+**Documentation/preservation closure:** Locked offline sync, Ruff check/format
+(320 files), public/private documentation (356/316 local links), both whitespace
+checks and preservation passed. Stable identifiers/withdrawals/reference packs,
+95 current public-reference mirrors and protected lower-layer/migration/asset/
+dependency boundaries remain intact; notes remain ignored. Subsequent edits only
+close documentation/evidence; the short human review remains pending.

@@ -1,24 +1,28 @@
 # User guide
 
-This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits, including narrative Detail, wider Journal and workspace framing; the latest structural rules and Detail headers await human visual review. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
+This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits; the latest flat surfaces, expanding scroll thumbs and centered Settings await human visual review alongside the saved structural refinement. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
 
 Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
-Journal, Prediction Detail and Performance keep a centered working area when the
+Journal, Prediction Detail, Performance and Settings keep a centered working area when the
 window is wide. Journal and Detail share a reading width; Performance has a slightly
 wider area for paired sections and charts. Journal keeps questions, forecasts and
 controls together. Each fits smaller windows, and Reckonsolve remembers your chosen window
 size and maximized state.
 
-A subtle outline contains the working surface. In wider windows, a slightly deeper
+A subtle square-edged outline contains the working surface. In wider windows, a slightly deeper
 background separates the side margins from the centered content in both themes.
 
-Scrollbars use a slim rounded thumb with a wider grab area. Dragging, clicking the
-track, the mouse wheel and ordinary keyboard scrolling remain available.
+Scrollbars show a thin thumb at rest, expanding on hover, keyboard focus or dragging
+inside the same wider grab area. Content stays in place. Dragging, clicking the track,
+the mouse wheel and ordinary keyboard scrolling remain available.
 
 Detail uses flat reading sections. Thin lines separate Timeline entries, with the
 event name and recorded date/time together. Narrow panes wrap these headings while
 keeping the full text and historical actions available.
+
+Other read-only sections also use flat edges and rules. Task forecast context is
+unboxed, selectable body text; editable fields and buttons remain visually distinct.
 
 The toolbar is separated from the page by a thin rule. Journal's search field has
 a magnifying glass, with another rule separating its controls from results. Detail

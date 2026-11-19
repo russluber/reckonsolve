@@ -165,7 +165,13 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
     window.resize(1600, 850)
     window.navigate_to("Settings")
     qtbot.wait(50)
-    assert window._workspace_content.width() == window.width()
+    assert window._workspace_content.width() == 1200
+    for width in (900, 760):
+        window.resize(width, 520)
+        qtbot.wait(50)
+        assert window._workspace_content.width() == width
+        assert window._settings_screen.scroll_area.horizontalScrollBar().maximum() == 0
+    window.resize(1600, 850)
     window.navigate_to("Journal")
     qtbot.wait(50)
     window._save_presentation_state()
@@ -251,6 +257,61 @@ def test_narrative_entries_keep_inline_dates_wrapping_and_history(
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
 
 
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize(
+    "task", ["forecast_review", "resolve_prediction", "add_journal_entry"]
+)
+def test_task_forecast_context_is_unboxed_complete_and_selectable(
+    workspace, qtbot, qapp, request, numeric, task
+):
+    from reckonsolve.ui.visual_system import SurfaceRole
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    getattr(screen, "open_" + task)()
+    pane = screen.workspace
+    editor = pane.editor
+    original_font = qapp.font()
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    for points in (9, 15):
+        qapp.setFont(QFont("Segoe UI", points))
+        window.setFont(QFont("Segoe UI", points))
+        for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+            window.appearance.select(appearance)
+            # Large native form controls need a wide window; minimum geometry
+            # is covered at the ordinary font and separately at scaled DPI.
+            for width in (1600, 760) if points == 9 else (1600,):
+                window.resize(width, 520)
+                qtbot.wait(90)
+                labels = [
+                    label
+                    for label in editor.findChildren(QLabel)
+                    if label.property("reckonsolveSurfaceRole") == SurfaceRole.SELECTED
+                    and label.isVisible()
+                ]
+                assert labels
+                for label in labels:
+                    assert label.wordWrap()
+                    assert label.font().pointSizeF() == window.font().pointSizeF()
+                    assert label.height() >= label.heightForWidth(label.width())
+                    assert (
+                        label.textInteractionFlags()
+                        & Qt.TextInteractionFlag.TextSelectableByKeyboard
+                    )
+                    image = label.grab().toImage()
+                    assert image.pixelColor(0, 0).alpha() == 0
+                assert pane.editor is editor
+                assert pane.editor_scroll.horizontalScrollBar().maximum() == 0
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
 @pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
 def test_workspace_outline_separates_gutters_without_changing_routes(
     workspace, qtbot, appearance
@@ -268,7 +329,7 @@ def test_workspace_outline_separates_gutters_without_changing_routes(
         ("Journal", 1200),
         ("Prediction Detail", 1200),
         ("Performance", 1280),
-        ("Settings", 1600),
+        ("Settings", 1200),
         ("New Prediction", 1600),
     ):
         if route == "Prediction Detail":

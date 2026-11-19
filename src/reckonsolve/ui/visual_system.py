@@ -57,6 +57,7 @@ class ContentWidth(IntEnum):
     JOURNAL = 1200
     DETAIL = 1200
     PERFORMANCE = 1280
+    SETTINGS = 1200
 
 
 class MotionDuration(IntEnum):
@@ -334,7 +335,6 @@ def build_stylesheet(palette: QPalette) -> str:
 
     color = semantic_colors(palette)
     control_radius = int(Radius.CONTROL)
-    panel_radius = int(Radius.PANEL)
     compact = int(Spacing.COMPACT)
     control = int(Spacing.CONTROL)
     ordinary = int(Spacing.ORDINARY)
@@ -363,7 +363,7 @@ QWidget#workspaceFrame {{
 QWidget#workspaceSurface {{
     background-color: {color.canvas};
     border: 1px solid {color.workspace_border};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
 }}
 QWidget#workspaceToolbar {{
     border: none;
@@ -377,7 +377,7 @@ QLabel[reckonsolveTagChip="true"] {{
     color: {color.secondary_text};
     background-color: transparent;
     border: 1px solid {color.workspace_border};
-    border-radius: {int(Radius.SMALL)}px;
+    border-radius: 0;
     padding: 2px 6px;
 }}
 
@@ -397,8 +397,8 @@ QScrollArea#predictionBrowserControlsScrollArea > QWidget > QWidget {{
     border: none;
 }}
 
-/* Keep a 14-pixel native hit lane while painting an inset 8-pixel thumb.
-   A canvas-colored border preserves rounded inner corners in Qt's box model. */
+/* A stable 14-pixel native hit lane avoids reflow. Its 4-pixel resting thumb
+   expands to 8 pixels on interaction; only the painted inset changes. */
 QScrollBar:vertical {{
     width: 14px;
     margin: 0;
@@ -414,14 +414,28 @@ QScrollBar:horizontal {{
 QScrollBar::handle:vertical {{
     min-height: 28px;
     border: 3px solid {color.canvas};
+    border-left-width: 5px;
+    border-right-width: 5px;
     border-radius: 7px;
     background: {color.scroll_thumb};
 }}
 QScrollBar::handle:horizontal {{
     min-width: 28px;
     border: 3px solid {color.canvas};
+    border-top-width: 5px;
+    border-bottom-width: 5px;
     border-radius: 7px;
     background: {color.scroll_thumb};
+}}
+QScrollBar::handle:vertical:hover, QScrollBar::handle:vertical:focus,
+QScrollBar::handle:vertical:pressed {{
+    border-left-width: 3px;
+    border-right-width: 3px;
+}}
+QScrollBar::handle:horizontal:hover, QScrollBar::handle:horizontal:focus,
+QScrollBar::handle:horizontal:pressed {{
+    border-top-width: 3px;
+    border-bottom-width: 3px;
 }}
 QScrollBar::handle:hover {{
     background-color: {color.secondary_text};
@@ -484,17 +498,19 @@ QFrame[reckonsolveSurfaceRole="canvas"] {{
 QWidget[reckonsolveSurfaceRole="base"],
 QFrame[reckonsolveSurfaceRole="base"],
 QGroupBox[reckonsolveSurfaceRole="base"] {{
-    background-color: {color.surface};
-    border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {color.border};
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="raised"],
 QFrame[reckonsolveSurfaceRole="raised"],
 QGroupBox[reckonsolveSurfaceRole="raised"],
 QLabel[reckonsolveSurfaceRole="raised"] {{
-    background-color: {color.raised};
-    border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {color.border};
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="selected"],
 QFrame[reckonsolveSurfaceRole="selected"],
@@ -502,21 +518,32 @@ QLabel[reckonsolveSurfaceRole="selected"] {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border: 1px solid {color.accent};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="warning"],
 QFrame[reckonsolveSurfaceRole="warning"] {{
     background-color: {color.warning_surface};
     color: {color.warning};
     border: 1px solid {color.warning};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="error"],
 QFrame[reckonsolveSurfaceRole="error"] {{
     background-color: {color.error_surface};
     color: {color.error};
     border: 1px solid {color.error};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
+}}
+
+/* Read-only forecast/reference text is not a selected field or a card. */
+QLabel[reckonsolveSurfaceRole="base"],
+QLabel[reckonsolveSurfaceRole="raised"],
+QLabel[reckonsolveSurfaceRole="selected"] {{
+    background-color: transparent;
+    color: {color.text};
+    border: none;
+    border-radius: 0;
+    padding: 0;
 }}
 
 QLineEdit,
@@ -768,7 +795,7 @@ QPushButton[reckonsolveTagChip="true"]:focus {{
 }}
 
 QLabel[reckonsolveBadgeTone] {{
-    border-radius: {int(Radius.SMALL)}px;
+    border-radius: 0;
     padding: 2px {compact}px;
     font-weight: 600;
 }}
@@ -811,7 +838,7 @@ QLabel[reckonsolveBadgeTone="destructive"] {{
 }}
 
 QLabel[reckonsolveMessageTone] {{
-    border-radius: {control_radius}px;
+    border-radius: 0;
     padding: {control}px {ordinary}px;
 }}
 QLabel[reckonsolveMessageTone="neutral"] {{
@@ -870,7 +897,7 @@ QLabel#currentCommittedRevisionMarker {{
 
 QGroupBox {{
     border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
     margin-top: {ordinary}px;
     padding-top: {compact}px;
 }}
@@ -911,7 +938,7 @@ QListWidget {{
     background-color: {color.surface};
     color: {color.text};
     border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
     outline: 0;
 }}
 QListWidget#primaryNavigation {{
@@ -925,7 +952,7 @@ QListWidget#predictionBrowserResults::item {{
     padding: 0px;
 }}
 QListWidget::item {{
-    border-radius: {int(Radius.SMALL)}px;
+    border-radius: 0;
     padding: {control}px;
 }}
 QListWidget::item:hover {{
@@ -960,7 +987,7 @@ QGroupBox:focus {{
 QWidget[searchMatchEmphasis="true"] {{
     background-color: {color.accent_soft};
     border: 2px solid {color.focus};
-    border-radius: {control_radius}px;
+    border-radius: 0;
 }}
 """.strip()
 

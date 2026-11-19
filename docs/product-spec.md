@@ -2460,3 +2460,25 @@ Apply the shared presentation consistently across supported Detail contracts,
 retaining guards, focus, draft/source/scroll state, disclosure defaults and scoring/
 storage boundaries. Verify rules, metadata/legend wrapping, pane motion, both
 palettes and narrow/scaled geometry; human visual review remains separate.
+
+**Flat surfaces, expanding scroll thumbs and focused Settings — authorized 2026-11-19:**
+The user requests removing rounded rectangles from noninteractive content throughout
+the desktop, especially clipped forecast context in Detail tasks. Use flat sections
+and rules for ordinary read-only panels and unboxed, selectable, naturally wrapping
+forecast context. The outer workspace outline, metadata/status labels and semantic
+messages keep their boundaries/colors where useful, with square corners. Inputs,
+buttons, dropdowns and native interactive controls retain their control treatment.
+This supersedes earlier rounded noninteractive surface directions; preserve exact
+facts, task guards, focus and historical targets.
+
+Shared scrollbars paint a thin resting thumb that expands on hover, keyboard focus
+or dragging within the existing stable native hit lane. Keep visible position,
+contrast, native dragging/track paging/wheel/keyboard behavior, scrollbar policies
+and independent Detail scroll areas; expansion must not resize or reflow content.
+Center Settings and its toolbar at a 1,200-logical-pixel maximum, using available
+width in narrower windows, preserving administration actions, results, navigation
+and geometry preferences. Journal/Detail remain 1,200 and Performance 1,280. Broader
+proposals about margins, criteria visibility, pane ratios or document scrolling are
+not adopted by this presentation refinement. Verify both palettes/orientations,
+native styles, narrow/scaled geometry, complete wrapped context and retained drafts;
+human review remains separate from automated/offscreen evidence.

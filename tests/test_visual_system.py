@@ -214,6 +214,9 @@ def test_quiet_scrollbars_retain_full_hit_lane_and_native_navigation(
         root.resize(260, 260)
         install_visual_system(root, palette=palette)
         root.show()
+        root.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        root.setFocus()
+        qtbot.mouseMove(root, QPoint(200, 200))
         qtbot.wait(30)
         option = QStyleOptionSlider()
         bar.initStyleOption(option)
@@ -238,6 +241,32 @@ def test_quiet_scrollbars_retain_full_hit_lane_and_native_navigation(
         canvas = QColor(semantic_colors(palette).canvas)
         assert image.pixelColor(point) == canvas
         assert image.pixelColor(slider.center()) != canvas
+
+        def painted_width():
+            image = bar.grab().toImage()
+            center = slider.center()
+            return sum(
+                image.pixelColor(
+                    QPoint(index, center.y())
+                    if orientation is Qt.Orientation.Vertical
+                    else QPoint(center.x(), index)
+                )
+                != canvas
+                for index in range(14)
+            )
+
+        geometry = bar.geometry()
+        assert painted_width() == 4
+        qtbot.mouseMove(bar, slider.center())
+        qtbot.wait(20)
+        assert painted_width() == 8
+        assert bar.geometry() == geometry
+        qtbot.mouseMove(root, QPoint(200, 200))
+        qtbot.wait(20)
+        assert painted_width() == 4
+        bar.setFocus()
+        qtbot.wait(20)
+        assert painted_width() == 8
         qtbot.mousePress(bar, Qt.MouseButton.LeftButton, pos=point)
         destination = point + (
             QPoint(0, 100) if orientation is Qt.Orientation.Vertical else QPoint(100, 0)
