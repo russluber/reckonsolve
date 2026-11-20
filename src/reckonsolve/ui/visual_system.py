@@ -58,6 +58,7 @@ class ContentWidth(IntEnum):
     DETAIL = 1320
     PERFORMANCE = 1440
     SETTINGS = 1320
+    CREATION = 1320
 
 
 class MotionDuration(IntEnum):
@@ -384,12 +385,14 @@ QLabel[reckonsolveTagChip="true"] {{
 QScrollArea#dashboardScrollArea,
 QScrollArea#settingsScrollArea,
 QScrollArea#newPredictionScrollArea,
+QScrollArea#oneShotScrollArea,
 QScrollArea#predictionDetailScrollArea,
 QScrollArea#numericPredictionDetailScrollArea,
 QScrollArea#predictionBrowserControlsScrollArea,
 QScrollArea#dashboardScrollArea > QWidget > QWidget,
 QScrollArea#settingsScrollArea > QWidget > QWidget,
 QScrollArea#newPredictionScrollArea > QWidget > QWidget,
+QScrollArea#oneShotScrollArea > QWidget > QWidget,
 QScrollArea#predictionDetailScrollArea > QWidget > QWidget,
 QScrollArea#numericPredictionDetailScrollArea > QWidget > QWidget,
 QScrollArea#predictionBrowserControlsScrollArea > QWidget > QWidget {{

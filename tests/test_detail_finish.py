@@ -129,6 +129,74 @@ def test_binary_journal_heading_does_not_absorb_timeline_height(workspace, qtbot
 
 @pytest.mark.parametrize("numeric", [False, True])
 @pytest.mark.parametrize("one_shot", [False, True])
+def test_focused_creation_surface_keeps_centered_forms_and_drafts(
+    workspace, qtbot, numeric, one_shot
+):
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QScrollArea
+
+    from reckonsolve.ui.creation_task import form_values
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    window, operations, _clock, _database = workspace
+    window.navigate_to("New Prediction")
+    if one_shot:
+        window._new_prediction_screen.one_shot_button.click()
+    form = window._creation_stack.currentWidget()
+    question = form.question if one_shot else form.question_input
+    question.setText("Retain this focused creation draft through layout changes")
+    if numeric:
+        picker = form.form.type_input if one_shot else form.prediction_type_input
+        picker.setCurrentIndex(picker.findData("numeric"))
+        unit = form.form.unit if one_shot else form.numeric_unit_input
+        unit.setText("items")
+        quantiles = form.form.quantiles if one_shot else form.quantile_input
+        for level, value in {5: 1, 25: 2, 50: 3, 75: 4, 95: 5}.items():
+            quantiles.inputs[level].setText(str(value))
+    before = form_values(form, ())
+    column = form.findChild(
+        QWidget, "oneShotFormColumn" if one_shot else "newPredictionFormColumn"
+    )
+    scroll = form.findChild(
+        QScrollArea, "oneShotScrollArea" if one_shot else "newPredictionScrollArea"
+    )
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width, height in ((1600, 1000), (760, 520)):
+            window.resize(width, height)
+            qtbot.wait(80)
+            surface = window._workspace_content
+            assert surface.width() == min(width, 1320)
+            assert column.width() <= 980
+            center = column.mapTo(scroll.viewport(), column.rect().center()).x()
+            assert abs(center - scroll.viewport().rect().center().x()) <= 1
+            assert scroll.horizontalScrollBar().maximum() == 0
+            assert window._creation_stack.currentWidget() is form
+            assert form_values(form, ()) == before
+            assert window._toolbar.appearance.isVisible()
+            assert not any(
+                button.isVisible()
+                for button in (
+                    window._toolbar.new,
+                    window._toolbar.settings,
+                    window._toolbar.performance,
+                )
+            )
+            if width > 1320:
+                image = window.centralWidget().grab().toImage()
+                scale = image.devicePixelRatio()
+                colors = semantic_colors(window.palette())
+                assert image.pixelColor(0, int(20 * scale)) == QColor(
+                    colors.outer_canvas
+                )
+                assert image.pixelColor(
+                    int((surface.x() + 20) * scale), int(100 * scale)
+                ) == QColor(colors.canvas)
+    assert operations.journal.query(JournalRequest()).total == 0
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
 def test_focused_widths_keep_native_window_geometry_and_detail_panes(
     workspace, qtbot, numeric, one_shot
 ):
@@ -347,7 +415,7 @@ def test_workspace_outline_separates_gutters_without_changing_routes(
         ("Prediction Detail", 1320),
         ("Performance", 1440),
         ("Settings", 1320),
-        ("New Prediction", 1600),
+        ("New Prediction", 1320),
     ):
         if route == "Prediction Detail":
             window._open_prediction(prediction.prediction_id)

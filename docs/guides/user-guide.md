@@ -1,14 +1,18 @@
 # User guide
 
-This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits, including wider workspaces and compact Settings; the latest rounded Journal/Detail metadata treatment awaits human visual review. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
+This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits, including wider workspaces and compact Settings. The latest focused New Prediction surface awaits human visual review; the preceding rounded Journal/Detail metadata checkpoint is saved without additional visual acceptance inferred. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
 
 Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
-Journal, Prediction Detail, Performance and Settings keep a centered working area when the
+Journal, New Prediction, Prediction Detail, Performance and Settings keep a centered working area when the
 window is wide. Journal and Detail share a reading width; Performance has a slightly
 wider area for paired sections and charts. Journal keeps questions, forecasts and
 controls together. Each fits smaller windows, and Reckonsolve remembers your chosen window
 size and maximized state.
+
+New Prediction keeps its familiar, narrower form centered inside that same working
+surface in both Adaptive and One-Shot modes. Longer forms and expanded optional
+sections retain ordinary scrolling.
 
 Settings pairs preferences and journal location with the administration tools in a
 compact two-column layout. Its ordinary options fit together without scrolling.

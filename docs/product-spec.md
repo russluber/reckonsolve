@@ -2521,3 +2521,17 @@ Numeric summaries, dates, result navigation, match excerpts and browsing/return
 state. Extend the scoped metadata exception shared with Detail; retain other flat
 surfaces, current widths and all retrieval/history/scoring/storage rules. Verify
 all four contracts, exact/long tag names, both palettes and narrow/wide geometry.
+
+**Focused New Prediction presentation — authorized 2026-11-19:** Align Adaptive
+and One-Shot creation with the shared centered workspace: cap the toolbar/page
+surface at 1,320 logical pixels and expose the existing deeper side canvas in
+wider windows. Keep the current 980-wide inner form columns, square outer outline,
+shared palette, flat reading surfaces and readable input/action hierarchy. Narrow
+windows use their available width; creation retains native scrolling when needed.
+Both creation modes share the same surface/viewport treatment. Preserve every field,
+default, disclosure, mode/type switch, validation/confirmation, save/cancel/source
+return, keyboard flow and draft guard. Toolbar creation restrictions remain. This
+is presentation only, with no data/history/scoring, preference, dependency or
+workflow change. Check all four contracts, both palettes, wide/minimum/scaled
+geometry, visible canvas separation, complete inputs and retained drafts; human
+visual review remains separate from focused source/native evidence.

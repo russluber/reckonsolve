@@ -1,7 +1,7 @@
 # Post-review workspace refinement verification — 2026-11-13
 
-The latest [rounded prediction metadata](#rounded-prediction-metadata--2026-11-19)
-are implemented with their own evidence and pending human review. Earlier acceptance
+The latest [focused New Prediction](#focused-new-prediction--2026-11-19)
+presentation is implemented with its own evidence and pending human review. Earlier acceptance
 below remains tied to the previously evaluated refinements.
 
 This is the unreleased [authorized feedback package](../../product-spec.md#3815-authorized-post-review-workspace-refinements),
@@ -920,3 +920,53 @@ Ruff check/format, public/private documentation (356/324 local links), both whit
 checks and preservation passed. Stable J/R identifiers/withdrawals, R1/R2 assets,
 95 public-reference mirrors and protected lower-layer/migration/dependency boundaries
 remain; private notes stay ignored. Current Journal/Detail chip review remains pending.
+
+## Focused New Prediction — 2026-11-19
+
+Public `541bd19` (`ux-redesign`) and the separate private repository were locally
+clean at this request. The preceding metadata checkpoint is saved; this does not
+infer additional human acceptance or remote publication. The user now requests
+New Prediction's foreground/background alignment with the other main screens,
+explicitly retaining functionality.
+
+Creation was the remaining unbounded toolbar/page route, so a wide window left
+no contrasting side margins. Its shared outer surface now caps at **1,320 logical
+pixels**, exposing the existing deeper canvas and square outline in both themes.
+Adaptive and One-Shot retain their centered **980-wide inner form columns**;
+One-Shot's scroll surface now explicitly shares the existing transparent treatment.
+The existing form composition, text/input scale, fields/defaults, optional sections,
+mode/type drafts, keyboard flow, validation, save/cancel/source returns and creation
+toolbar restrictions remain. Smaller windows use available width and native scrolling.
+Only the shell width selection and shared visual-system adapter change at runtime.
+
+All **111 focused final cases** passed in separate groups: six creation/frame cases
+in **7.12 seconds**, 84 creation/One-Shot/workspace cases in **35.87 seconds** and
+21 isolated visual-system cases in **1.36 seconds**. The four new contract cases
+check actual foreground/outer-canvas pixels, wide/minimum geometry, centered forms,
+no horizontal overflow, retained raw inputs and toolbar restrictions. Existing cases
+cover creation/validation, mode/type switching, drafts, guarded cancellation and
+source returns. No executable source changed after these checks.
+
+**96 native offscreen captures** cover all four contracts, ordinary/expanded optional
+sections, both themes and 1,600 × 1,000 / 760 × 520 logical geometry at Qt scales
+1/1.5/2, using real Windows Segoe UI. Geometry, raw draft retention, no horizontal
+overflow, reachable Save controls and zero canonical records passed in each run.
+Representative wide Light Adaptive, wide Dark One-Shot and scaled minimum Numeric
+captures were inspected. Evidence stays ignored under `build/ux-creation-surface/`.
+This is simulated native evidence, separate from physical Windows/accessibility
+and human visual acceptance. The earlier full suite belongs to the saved wider-
+workspace baseline; this cosmetic checkpoint does not claim a fresh full-suite run.
+
+For the short human review, run `uv run python tools/run_visual_review.py detail`
+and open New Prediction. Compare both appearances in a wide and smaller window;
+switch Adaptive/One-Shot and Binary/Numeric, expand optional sections and verify
+the familiar form, draft retention and cancellation. Use disposable data. No
+installed tool, personal database, dependency, migration or Git/release state was
+changed by the agent. Current human visual review remains pending.
+
+Locked offline sync, Ruff check/format (320 files), public/private documentation
+(356/326 local links), both whitespace checks and preservation passed. All 66 J
+identifiers, 42 R identifiers and both withdrawals, R1/R2 assets, 95 public-reference
+mirrors and protected application/data/domain/analytics, migration and dependency
+boundaries remain. Private notes stay ignored. These final edits close documentation
+and evidence only; human review and user-owned Git operations remain separate.
