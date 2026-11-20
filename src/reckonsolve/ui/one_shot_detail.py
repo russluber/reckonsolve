@@ -140,6 +140,7 @@ class OneShotDetailScreen(QWidget):
         header.setContentsMargins(0, 0, 0, 0)
         badges = QWidget(summary)
         badges.setObjectName("oneShotMetadataRow")
+        badges.setProperty("reckonsolvePredictionMetadata", "true")
         badge_row = FlowLayout(badges)
         badge_row.setContentsMargins(0, 0, 0, 0)
         badge_row.addWidget(

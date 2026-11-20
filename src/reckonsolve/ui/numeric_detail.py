@@ -522,6 +522,7 @@ class NumericPredictionDetailScreen(QWidget):
             self.detail_content,
         )
         identity_row = QWidget(summary_panel)
+        identity_row.setProperty("reckonsolvePredictionMetadata", "true")
         identity_layout = FlowLayout(identity_row)
         identity_layout.setContentsMargins(0, 0, 0, 0)
         identity_layout.setSpacing(int(Spacing.CONTROL))

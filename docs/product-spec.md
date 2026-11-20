@@ -2501,3 +2501,23 @@ relocation, data/history/scoring, preference, dependency or navigation-model cha
 is authorized. Check both palettes, narrow/wide/scaled geometry, keyboard order,
 expanded tool results and retained Detail/Performance state. Human visual acceptance
 of the new widths/composition remains separate.
+
+**Rounded Detail metadata exception — authorized 2026-11-19:** Restore restrained
+rounded corners to mode/type, lifecycle/status and tag chips below the Question in
+all four Prediction Detail contracts. Scope this exception to the header metadata
+row, preserving filled identity/status and quieter outlined literal tag names.
+Other flat/square surfaces, controls, text, spacing, pane behavior and widths retain
+their existing presentation. Detail remains capped at 1,320 logical pixels;
+discussion of 1,440 is not adoption or implementation authorization. Verify both
+palettes, narrow/wide geometry, complete selectable names and unchanged canonical
+facts; human review remains separate from focused source/native checks.
+
+**Journal preview metadata extension — authorized 2026-11-19:** Apply the same
+rounded mode/type, lifecycle/status and tag chip grammar to Journal preview rows.
+Use the current canonical-summary tag names as quiet outlined, selectable labels,
+without generated hashtags; keep mode/status distinct and retain status meanings.
+The metadata row wraps naturally, preserving Question/forecast hierarchy, complete
+Numeric summaries, dates, result navigation, match excerpts and browsing/return
+state. Extend the scoped metadata exception shared with Detail; retain other flat
+surfaces, current widths and all retrieval/history/scoring/storage rules. Verify
+all four contracts, exact/long tag names, both palettes and narrow/wide geometry.

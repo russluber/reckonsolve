@@ -1,6 +1,6 @@
 # Post-review workspace refinement verification — 2026-11-13
 
-The latest [wider workspaces and compact Settings](#wider-workspaces-and-compact-settings--2026-11-19)
+The latest [rounded prediction metadata](#rounded-prediction-metadata--2026-11-19)
 are implemented with their own evidence and pending human review. Earlier acceptance
 below remains tied to the previously evaluated refinements.
 
@@ -874,3 +874,49 @@ J/R IDs, withdrawals, R1/R2 assets and 95 public-reference mirrors remain; prote
 application/data/domain/analytics, migrations, assets and dependencies are unchanged.
 Private notes remain ignored. Final edits only close documentation/evidence; the
 short visual review and user-owned Git handoff remain pending.
+
+## Rounded prediction metadata — 2026-11-19
+
+The wider-workspace checkpoint was saved with scoped positive user feedback;
+public `bfee0ad` on `ux-redesign` and the separate private repository were locally
+clean. The user requests rounded mode/type, lifecycle/status and tag chips, then
+clarifies that this covers both Detail and Journal previews. This combined check
+owns both still-uncommitted refinements; no later width choice is inferred.
+
+Detail header and Journal preview metadata containers share
+`reckonsolvePredictionMetadata`; their badge/tag labels receive the existing
+4-pixel small radius. Journal uses FlowLayout, a neutral mode/type StatusBadge,
+its existing semantic status tone and shared TagChips for exact current names
+already supplied by its canonical summary. Tags remain selectable context without
+generated hashtags or new filter actions. Metadata wraps naturally. Other flat
+surfaces, widths, Question/forecast/date hierarchy, exact Numeric summaries,
+counts, passages, navigation and return behavior remain unchanged. No stored fact,
+query, tag relationship, dependency, installed-tool or Git/release operation changes.
+
+All **76 relevant final cases** passed in separate groups: **51 Journal/workspace/
+retrieval/read-consistency/response-budget cases in 79.61 seconds**, **four extended
+Journal+Detail metadata cases in 8.58 seconds**, and the **21 visual-system cases in
+1.52 seconds**. The metadata cases cover all four contracts, correct mode/status,
+C#/long literal names, complete selectable wrapping, both palettes, wide/minimum
+geometry and unchanged canonical snapshots. The visual module is isolated from
+other Qt style/focus state and activates its own top-level test window. Earlier
+Detail-only checks preceded this Journal extension and remain scoped to that source.
+
+**68 current native offscreen captures** cover both palettes, 14 available Detail
+contract/state combinations, wide/minimum geometry, revision writing and Journal
+previews with the new chips. Wrapping, draft/pane retention, no horizontal overflow,
+notification containment and unchanged canonical facts passed. Representative
+Journal previews and Detail captures were inspected. Generated evidence stays
+ignored under `build/ux-metadata-chips/`; physical Windows/scaling and human visual
+acceptance remain separate. The previous 1,321-test full-suite evidence belongs to
+the saved wider-workspace source, not this later focused presentation checkpoint.
+
+The short human review compares rounded preview/header chips in all four contracts
+and both palettes. Detail remains 1,320; discussion of 1,440 is not adoption or a
+width-experiment instruction. Other accepted composition and user-owned operations
+remain. No product code changed after final focused verification.
+
+Ruff check/format, public/private documentation (356/324 local links), both whitespace
+checks and preservation passed. Stable J/R identifiers/withdrawals, R1/R2 assets,
+95 public-reference mirrors and protected lower-layer/migration/dependency boundaries
+remain; private notes stay ignored. Current Journal/Detail chip review remains pending.

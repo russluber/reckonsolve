@@ -215,6 +215,8 @@ def test_quiet_scrollbars_retain_full_hit_lane_and_native_navigation(
         install_visual_system(root, palette=palette)
         root.show()
         root.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # Earlier UI cases may leave another top-level window active.
+        root.activateWindow()
         root.setFocus()
         qtbot.mouseMove(root, QPoint(200, 200))
         qtbot.wait(30)

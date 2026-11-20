@@ -837,6 +837,12 @@ QLabel[reckonsolveBadgeTone="destructive"] {{
     border: 1px solid {color.error};
 }}
 
+/* Journal and Detail metadata share compact rounded context chips. */
+QWidget[reckonsolvePredictionMetadata="true"] QLabel[reckonsolveBadgeTone],
+QWidget[reckonsolvePredictionMetadata="true"] QLabel[reckonsolveTagChip="true"] {{
+    border-radius: {int(Radius.SMALL)}px;
+}}
+
 QLabel[reckonsolveMessageTone] {{
     border-radius: 0;
     padding: {control}px {ordinary}px;

@@ -5,7 +5,7 @@ All notable changes to Reckonsolve are documented here.
 ## Unreleased
 
 Earlier saved refinements were checked and accepted by the user; the latest
-wider-workspace and compact-Settings follow-up awaits visual review.
+rounded Journal/Detail metadata chip follow-up awaits visual review.
 Source-package readiness and a controlled ordinary-use update procedure are recorded
 separately; no installed-tool replacement or publication has occurred.
 
@@ -16,6 +16,7 @@ Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, reloc
 - Structural rules separate the toolbar, Journal controls/results and Detail header/panes. The shared toolbar omits its duplicate product label; Journal uses a bundled Lucide search symbol. Detail places mode/status and outlined literal tag names below Question, and Numeric intervals include real thin/thick/median legend marks, with scoped user acceptance.
 - Read-only panels use flat rules and square edges; task forecast context uses complete, selectable body text without a surrounding card. Scroll thumbs expand on hover, focus and dragging within a stable hit lane. This refinement has scoped user acceptance.
 - Wider centered workspaces give Journal/Detail/Settings up to 1,320 logical pixels and Performance 1,440. Compact two-column Settings shows all ordinary options without scrolling, including the folder chooser; long results and enlarged text retain safe overflow. Pending Numeric style/metric work is cancelled when its widget is destroyed.
+- Journal previews and Detail use small rounded mode/status/tag chips as a scoped exception to flat reading surfaces. Preview tags show exact current names and wrap naturally. Widths and other presentation remain unchanged.
 - Performance also uses a centered, wider report workspace, retaining paired/stacked sections, pinned Tag / Reset View controls and session scope/disclosures.
 - Quieter shared scrollbars retain a wider grab area and native scrolling controls. Prediction Detail has a slightly wider reading area while preserving side margins and pane proportions.
 - Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.

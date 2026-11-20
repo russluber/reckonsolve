@@ -379,11 +379,12 @@ def test_workspace_outline_separates_gutters_without_changing_routes(
 
 @pytest.mark.parametrize("numeric", [False, True])
 @pytest.mark.parametrize("one_shot", [False, True])
-def test_detail_metadata_chips_follow_question_with_visible_literal_tags(
+def test_journal_and_detail_metadata_chips_keep_visible_literal_tags(
     workspace, qtbot, numeric, one_shot
 ):
     from test_one_shot_persistence import request
 
+    from reckonsolve.ui.components import StatusBadge
     from reckonsolve.ui.numeric_interval import IntervalLegend
 
     window, operations, clock, _database = workspace
@@ -457,6 +458,33 @@ def test_detail_metadata_chips_follow_question_with_visible_literal_tags(
                         == 1
                     )
             assert screen.workspace.horizontalScrollBar().maximum() == 0
+    window.navigate_to("Journal")
+    journal = window._journal_screen
+    qtbot.waitUntil(lambda: not journal.loading and bool(journal.cards))
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(70)
+            card = next(
+                card
+                for card in journal.cards
+                if card.prediction_id == prediction.prediction_id
+            )
+            assert set(card.tags.names) == set(tags)
+            metadata = card.findChild(
+                QWidget, f"journalMetadata{prediction.prediction_id}"
+            )
+            assert {badge.text() for badge in metadata.findChildren(StatusBadge)} == {
+                f"{'One-Shot' if one_shot else 'Adaptive'} · {'Numeric' if numeric else 'Binary'}",
+                "Answer Pending" if one_shot else "Open",
+            }
+            for chip in card.tags.chips:
+                assert chip.isVisible() and chip.width() > 0
+                assert chip.text() in tags
+                assert chip.textFormat() is Qt.TextFormat.PlainText
+                assert chip.height() >= chip.heightForWidth(chip.width())
+            assert journal.scroll.horizontalScrollBar().maximum() == 0
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
 
 

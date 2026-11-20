@@ -8,7 +8,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QFrame,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
@@ -24,7 +23,7 @@ from reckonsolve.domain.search import (
     build_search_snippet,
     search_source_label,
 )
-from reckonsolve.ui.components import StatusBadge
+from reckonsolve.ui.components import StatusBadge, TagChips
 from reckonsolve.ui.date_display import date_context, format_date, format_datetime
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
@@ -185,10 +184,13 @@ class JournalCard(QFrame):
             if one_shot and prediction.status is PredictionStatus.OPEN
             else prediction.status.value.title()
         )
-        meta = QHBoxLayout()
-        mode = QLabel(
+        metadata = QWidget(self)
+        metadata.setObjectName(f"journalMetadata{self.prediction_id}")
+        metadata.setProperty("reckonsolvePredictionMetadata", "true")
+        meta = FlowLayout(metadata)
+        mode = StatusBadge(
             f"{'One-Shot' if one_shot else 'Adaptive'} · {prediction.prediction_type.value.title()}",
-            self,
+            parent=metadata,
         )
         apply_text_role(mode, TextRole.ROW_BODY)
         meta.addWidget(mode)
@@ -201,11 +203,14 @@ class JournalCard(QFrame):
             if status == "Invalid"
             else StatusTone.NEUTRAL
         )
-        badge = StatusBadge(status, tone=tone, parent=self)
+        badge = StatusBadge(status, tone=tone, parent=metadata)
         apply_text_role(badge, TextRole.ROW_LABEL)
         meta.addWidget(badge)
-        meta.addStretch()
-        self.layout_body.addLayout(meta)
+        self.tags = TagChips(metadata)
+        self.tags.setObjectName(f"journalTags{self.prediction_id}")
+        self.tags.set_tags(prediction.tags)
+        meta.addWidget(self.tags)
+        self.layout_body.addWidget(metadata)
         dates = []
         if (
             not row.contextual_at
