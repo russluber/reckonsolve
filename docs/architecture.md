@@ -1,6 +1,6 @@
 # Reckonsolve architecture
 
-Unreleased working tree: Journal/workspace, New Prediction/Prediction Detail and the comprehensive Performance/ordinary Settings implementation, schema 21, search projection 3, CSV format 6. Journal/Detail walkthroughs are [accepted with recorded limits](archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12); the third slice is [accepted with recorded limits](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12). Journal relocation is [accepted with recorded limits](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12). Released v0.8.0 remains the schema-20/format-5 baseline.
+Unreleased 0.9.0 candidate: Journal/workspace, New Prediction/Prediction Detail and the comprehensive Performance/ordinary Settings implementation, schema 21, search projection 3, CSV format 6. Journal/Detail walkthroughs are [accepted with recorded limits](archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12); the third slice is [accepted with recorded limits](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12). Journal relocation is [accepted with recorded limits](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12). Released v0.8.0 remains the schema-20/format-5 baseline; prepared metadata is not publication.
 Last reviewed: 2026-11-13.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
@@ -171,6 +171,15 @@ The shared stylesheet keeps native QScrollBar behavior while giving each orienta
 The shared dialog-presentation owner in `ui/prediction_widgets.py` renders repeated forecast context as unboxed, selectable body text instead of another headline. Labels accept their wrapped minimum height and shrinkable width, preserving complete exact text in contextual task scroll areas and standalone dialogs. Mouse and keyboard text selection remain available. This changes presentation only; reviewed snapshots, form values and operation guards remain with their existing owners.
 
 Journal has row-specific Question, body/secondary/label and forecast typography in `ui/visual_system.py`. Questions use semibold emphasis above the shared Binary/Numeric forecast value size, while supporting labels/dates are larger than ordinary base text. Detail roles remain unchanged. Numeric rows use the existing FlowLayout for content-sized percentile/value groups with fixed gaps; extra viewport width stays after the groups, while long values reflow with their labels in the original order. FlowLayout advertises measured height-for-width without claiming surplus vertical expansion; a compact heading row cannot absorb a tall Timeline's empty height between its label and prose. No proportional interval or value rounding is introduced. TerminalSummary uses the shared compact chevron disclosure for its unchanged supporting forecast context, including scored and archival variants.
+
+`TimelineEntry.add_action` scopes compact inline padding and a stable focus border to
+Journal correction actions in all four Detail contracts. Edited header timestamps
+share the natural-width Timeline label treatment, avoiding artificial wrapped height.
+Adaptive Numeric Journal rows render their body directly below the header while
+keeping their immutable forecast anchor in the application snapshot; actual forecast
+revision/Review rows retain their complete interval context. Binary retains the short
+anchored percentage below its body. Rendering changes no history, search target or
+correction operation.
 
 Journal's middle percentile label is simply 50th; Detail interval labels retain Median. WIS interval charts use dedicated actual-fill/outline colors so the diamond remains gold across appearances without changing warning-text contrast. One-Shot provenance disclosures use flat original/Before/After snapshot groups with separated headings, dates and complete values. Width-flexible labels retain height-for-width wrapping. Object identities and historical navigation remain unchanged.
 

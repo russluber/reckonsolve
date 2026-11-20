@@ -277,6 +277,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1
 
 The script uses pinned PyInstaller in the separate `packaging` group and creates a private `onedir` GUI bundle. It verifies local styles/icons and runs disposable frozen smoke checks covering all four contracts, supported upgrades, unsupported refusal, search repair, mode-filtered retrieval, analytics, format-6 export, backup, and restart.
 
+During the build, Windows' system directory comes first in the process search path.
+This prevents unrelated development tools from supplying incompatible DLLs with
+Windows library names. The script restores the caller's search path on exit.
+
 Builds and smoke artifacts stay in ignored `build/` and `dist/`. Relocation checks run the copied bundle with its bundled runtime and explicit disposable data. Private artifacts are not public release assets, installers, or signed distributions.
 
 Follow the [release checklist](release-checklist.md) for source publication. Record checks with their actual code/version and limits; earlier acceptance is not evidence for later edits.

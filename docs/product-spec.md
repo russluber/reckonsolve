@@ -1,6 +1,6 @@
 # Reckonsolve product specification
 
-Current source checkout: unreleased Journal-centered desktop; schema 21; search projection 3; relational CSV format 6. Published v0.8.0 remains the schema-20/CSV-5 baseline.
+Current source checkout: unreleased 0.9.0 Journal-centered desktop candidate; schema 21; search projection 3; relational CSV format 6. Published v0.8.0 remains the schema-20/CSV-5 baseline. Prepared package metadata is separate from final visual acceptance, tagging and publication.
 
 This is the source of truth for product scope, terminology, invariants, and acceptance criteria. The current contract describes implemented behavior. Any explicitly labeled approved future requirements describe work at their stated status; they are not claims of implementation or permission to implement. Supporting guides explain the current product. Unpublished exploratory plans are maintained separately from this public contract. A conflict or unresolved product choice must be resolved explicitly before implementation.
 
@@ -1858,7 +1858,7 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements are accepted with recorded limits; the latest focused-width continuation under Section 38.15 is implemented with source checks and awaits human visual review. The readiness continuation under Section 38.14 verifies the earlier source-package/adoption handoff separately. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements retain scoped acceptance. The current 0.9.0 candidate has fresh technical and representative native-screen review under Section 38.14; final whole-app human visual approval remains pending. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
 **Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), final integration in [Section 38.14](#3814-authorized-final-integration-pass), and the feedback refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
@@ -2171,6 +2171,17 @@ supported upgrades/refusal and database-free help/version entry points. Prepare 
 reviewable everyday-use backup/update/recovery plan. This continuation authorizes
 isolated source-package checks, not an installed-tool replacement, personal-data
 operation, frozen executable release, version/tag change, merge, commit or push.
+
+**Final candidate readiness — authorized 2026-11-19:** After saving the requested
+presentation refinements, the user authorized a whole-app visual review, fresh full
+verification, packaging checks, correction of demonstrated defects within the
+selected behavior and release-handoff preparation. The user separately selected
+0.9.0 package metadata while keeping the changelog Unreleased. Verify disposable
+source/wheel/private-build delivery and retain evidence tied to the tested source
+and payload. Agent screen inspection does not grant final human visual acceptance.
+No normal installation, personal-data operation, commit, merge, tag or publication
+is authorized. The [current readiness record](archive/releases/2026-11-13-redesign-readiness.md#final-candidate-readiness--2026-11-19)
+owns results and limits.
 
 ### 38.15 Authorized post-review workspace refinements
 
@@ -2535,3 +2546,18 @@ is presentation only, with no data/history/scoring, preference, dependency or
 workflow change. Check all four contracts, both palettes, wide/minimum/scaled
 geometry, visible canvas separation, complete inputs and retained drafts; human
 visual review remains separate from focused source/native evidence.
+
+**Compact Journal reading — authorized 2026-11-19:** Keep Journal Entry, its original
+date/time and Correct Entry as a compact wrapping header, with a visible native
+keyboard-focus treatment. Header actions use inline spacing rather than form-button
+padding; edited-date labels use their natural reading height when space permits.
+Show the Journal body immediately below that header. Adaptive Numeric Journal rows
+omit the repeated 90% interval/Median/50% interval block, with no replacement forecast
+disclosure. The committed header and actual forecast revision rows retain full exact
+values. Adaptive Binary retains its brief Forecast at the time percentage below the
+body; One-Shot reading remains distinct. Preserve every stored Journal anchor,
+timestamp, original/corrected body, causal position, search/history target, correction
+action and eligibility rule. Numeric Forecast Reviews retain their existing context.
+This changes presentation only. Check corrected/uncorrected entries across all four
+contracts, both palettes, narrow/wide/scaled geometry, enlarged fonts, focus and
+unchanged canonical history; human visual acceptance remains separate.

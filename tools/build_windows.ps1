@@ -9,9 +9,14 @@ $specPath = Join-Path $projectRoot "packaging\Reckonsolve.spec"
 $workPath = Join-Path $projectRoot "build\pyinstaller"
 $distPath = Join-Path $projectRoot "dist"
 $uvCachePath = Join-Path $projectRoot ".uv-cache"
+$priorSearchPath = $env:PATH
 
 Push-Location $projectRoot
 try {
+    # PyInstaller's fallback DLL lookup follows PATH. Prefer Windows' own libraries
+    # over unrelated tools that supply incompatible DLLs with the same names.
+    $env:PATH = [Environment]::SystemDirectory + ";" + $priorSearchPath
+
     uv --cache-dir $uvCachePath sync --locked --group packaging
     if ($LASTEXITCODE -ne 0) {
         throw "uv sync failed with exit code $LASTEXITCODE."
@@ -81,5 +86,6 @@ try {
     Write-Host "Private onedir build ready: $executable"
 }
 finally {
+    $env:PATH = $priorSearchPath
     Pop-Location
 }

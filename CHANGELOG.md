@@ -4,56 +4,45 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-Earlier refinements retain their scoped user acceptance. The rounded Journal/Detail
-metadata checkpoint is saved; its visual acceptance is not inferred from Git state.
-The latest focused New Prediction presentation awaits visual review.
-Source-package readiness and a controlled ordinary-use update procedure are recorded
-separately; no installed-tool replacement or publication has occurred.
+The Journal-centered redesign is prepared as **0.9.0**. It remains unpublished;
+final whole-app visual approval, commits, merge, tag and publication are separate.
+[Candidate readiness](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-readiness--2026-11-19)
+records current checks and their limits. Published v0.8.0 remains unchanged.
 
-Journal/workspace, New Prediction/Prediction Detail, Performance/Settings, relocation and the requested later refinements are accepted with recorded limits. Source-package readiness is separate from any later everyday-use update and release. Not a published release.
+### Added
 
-- Centered Journal and Prediction Detail at the same comfortable reading width while retaining native resizing and remembered geometry; balanced Journal typography and corrected excess height in wrapping Timeline headings. Narrative reading and the wider Journal have scoped user acceptance.
-- A quiet outer workspace outline and slightly deeper side margins separate the centered working surface in both appearances, retaining the accepted interior palette and flat reading sections. This framing has scoped user acceptance.
-- Structural rules separate the toolbar, Journal controls/results and Detail header/panes. The shared toolbar omits its duplicate product label; Journal uses a bundled Lucide search symbol. Detail places mode/status and outlined literal tag names below Question, and Numeric intervals include real thin/thick/median legend marks, with scoped user acceptance.
-- Read-only panels use flat rules and square edges; task forecast context uses complete, selectable body text without a surrounding card. Scroll thumbs expand on hover, focus and dragging within a stable hit lane. This refinement has scoped user acceptance.
-- Wider centered workspaces give Journal/Detail/Settings up to 1,320 logical pixels and Performance 1,440. Compact two-column Settings shows all ordinary options without scrolling, including the folder chooser; long results and enlarged text retain safe overflow. Pending Numeric style/metric work is cancelled when its widget is destroyed.
-- New Prediction shares the 1,320-wide foreground surface, outline and contrasting side margins in both appearances. Adaptive and One-Shot retain their familiar centered 980-wide inner forms, scrolling, fields, drafts and save/cancel behavior.
-- Journal previews and Detail use small rounded mode/status/tag chips as a scoped exception to flat reading surfaces. Preview tags show exact current names and wrap naturally. Widths and other presentation remain unchanged.
-- Performance also uses a centered, wider report workspace, retaining paired/stacked sections, pinned Tag / Reset View controls and session scope/disclosures.
-- Quieter shared scrollbars retain a wider grab area and native scrolling controls. Prediction Detail has a slightly wider reading area while preserving side margins and pane proportions.
-- Same-view Journal checks retain readable results and reuse unchanged rows, avoiding repeated idle loading flashes and expensive return rebuilds. Fresh archive checks, changed membership and explicit failure states remain.
-- One-Shot Detail uses shared-style result/reflection/Journal and context/originals panes, with equal terminal reading widths. Adaptive Resolved/Invalid reading also uses 50/50 panes; contextual tabs omit duplicate Overview headings. Main pane headings and principal action labels have consistent hierarchy and capitalization.
-- Settings offers three remembered desktop date orders and read-only Windows time-zone information. Ordinary timestamps omit repeated offsets; exact entry/terminal confirmation retains offset and daylight-saving cues. Canonical facts, CLI and analytical formats are unchanged.
-- Refined One-Shot reading with a full-width scorecard below Checked Answer, distinct reflection/Journal sections and compact chevron disclosures. Confirmed Skip shows a dated completion state; later writing moves into More and preserves the original Skip history.
-- Journal forecast previews use a smaller shared Binary/Numeric value size; Numeric groups stay close together with consistent gaps and readable long-value reflow. Adaptive scored-forecast context uses the compact chevron disclosure.
-- Journal's middle percentile heading is 50th. WIS Actual diamonds retain a gold fill in both appearances. Detail reading uses flat sections and ruled Timeline entries with event/date headings, coherent type hierarchy and separated original/Before/After snapshots.
-- Adaptive Overview's Probability History, More Information and Latest Committed Distribution reveals use compact chevrons, preserving their content and lifecycle/default visibility. Binary More Information omits the redundant Prediction Details heading and distinguishes empty context from unavailable history.
-- Adaptive Numeric Unit and Decimal Places remain visible beneath Resolution Criteria in Overview/Archival Context, with long-unit wrapping and no duplicate inside More Information.
-- Desktop One-Shot status reads Answer Pending. Reset View retains full text on focus, Performance supporting detail uses compact chevrons, and Performance/Settings offer a direct Journal icon alongside their independent source-aware Back action.
-- Settings also offers Performance directly, retaining report scope/position and the underlying Journal/Prediction return destination without a Back cycle.
-- Aligned CLI export help and verification diagnostics with CSV format 6; clarified relocated active paths and the locked-dependency update/recovery procedure.
+- Journal home with explicit Enter/Search submission, quick views, modal Apply/Cancel filters, Reset View, complete result counts where appropriate and matched-version history navigation.
+- A shared toolbar with source-aware returns, focused New Prediction, persistent Follow Windows / Light / Dark appearance and context-appropriate navigation. Performance and Settings also offer a direct Journal destination.
+- A comprehensive Performance hub with four separate forecasting populations, paired sections, independent Numeric unit choices, uncertainty, compact supporting disclosures and a pinned Tag / Reset View strip. Report scope and reading position persist during the session.
+- Settings with three date orders, Windows time-zone context, local backup/export/tag/search tools, visit-local results and reviewed journal relocation. Moving a journal preserves complete verified recovery/destination copies and matching GUI/CLI identity resolution.
 
-- Returning to refreshed Journal results and background result replacement retain usable keyboard focus. Current nearby results/search/retry provide safe fallbacks without changing query membership, following reordered rows or stealing focus from another action.
-- Numeric interval labels reflow after font/style changes, retaining exact values and percentile labels when text is enlarged.
-- Settings folder chooser and move review with complete verified recovery/destination copies, shared identity-first GUI/CLI resolution, protected old paths and explicit interruption recovery. Fresh-runtime restart retains appearance/geometry. Configured missing, empty or unrelated files never become new journals.
-- Journal home with quiet views, explicit search submission, modal filter drafts, faithful four-contract rows, matched history, full result counts and bounded loading.
-- Shared toolbar, source-aware returns, whole-creation guards and persistent Follow Windows / Light / Dark appearance. Performance is a comprehensive four-section hub; Settings organizes local tools with separate visit-local results.
-- Performance retains independent tag/unit scope, supporting disclosures and reading position for the session, refreshes current results on return and restores defaults with Reset View. A compact Tag/Reset strip stays visible while reading. Read-only background requests admit the whole archive and publish only the current request; isolated and whole-report failures never masquerade as empty results.
-- Settings keeps selectable backup/export/tag/search results beside each tool, with separate canonical last-successful-backup metadata. Confirmed tag merges follow the known target in Performance; failed reads never infer deletion or silently broaden units. Database location includes reviewed relocation with verified recovery and restart.
-- Recovery-backed schema 21 retires Saved Views after review where configurations exist, blocks stale writers and records explicit One-Shot reflection provenance. CSV format 6 includes that provenance.
-- CLI-only `settings attention-days [--set N]`; retired Saved View commands fail before data access.
-- Corrected effective-reflection classification and affected save-response reads without rewriting forecasting history.
-- Aligned Journal Question headings with row content and made them more prominent than Binary forecasts; removed duplicate style rebuilds during appearance switching.
-- Shared 10–90 probability presets across both Binary creation modes and reserved focus-border space for presets and the shared New action.
-- Modular creation and Detail owners replace the former screen monolith. Adaptive Detail has committed headers, exact Numeric interval/tie labels, independently scrolling Timeline/Overview and contextual writing with guarded exits.
-- Lifecycle-specific reading, conditional Definition/transcription review inside focused dialogs, separate terminal confirmation, inline One-Shot reflection and direct nonblank reflection-only saves preserve immutable originals and stale-write checks.
-- Page titles lead Question headings; Current Revision sits with persistent Timeline controls. Hidden actions leave no gaps in wrapping control rows.
-- Fixed calibration graph/table backgrounds retaining the previous appearance while their text switched to light or dark mode.
-- Resolved Adaptive Detail now leads with factual results and scores; Invalid Detail leads with the recorded reason and Not scored. Scored or last-forecast context remains available on request. Added a disposable Detail review profile for cutoff, unscored and corrected-reason cases.
+### Changed
 
-- Finished terminal supporting content, reflection actions and chronological terminal events. Numeric Detail distinguishes the latest committed distribution from an earlier scoring forecast; complete corrected histories and long revision chains are available in disposable review examples. Small-window reading and revision controls wrap with larger text.
+- Adaptive and One-Shot creation retain their four forecasting contracts, familiar inputs and mode/type drafts in a focused page. Source-aware cancellation and whole-task discard/save guards protect entered work; ordinary creation returns to Journal and answered One-Shot creation opens Detail.
+- Prediction Detail uses lifecycle-specific headers, exact Numeric intervals with readable ties/connector labels, ruled Timeline entries, independent reading panes and contextual writing. Terminal reading is balanced; task transitions preserve inputs and honor reduced motion.
+- Journal Entry headings use compact inline correction actions and natural-height edited dates. Numeric entries lead with their text and omit repeated forecast summaries; full forecasts remain in the header/revision history, and immutable anchors remain stored. Binary retains its short anchored percentage below the entry.
+- One-Shot results lead with Checked Answer and a full-width scorecard, followed by distinct reflection and Journal sections. Original/corrected facts remain available through compact disclosures. Confirmed Skip completes reflection while permitting deliberate later writing through More.
+- Journal, Detail, New Prediction and Settings share centered workspaces up to 1,320 logical pixels; Performance uses 1,440. Quiet outlines, contrasting side margins, flat reading surfaces and rounded metadata chips create a consistent light/dark presentation. Creation retains narrower inner forms; compact ordinary Settings fits without scrolling, with safe exceptional overflow.
+- Journal rows prioritize Question, keep Numeric values close together and wrap complete mode/status/tag metadata. Thin scroll thumbs expand within stable grab areas, and text/charts adapt to palette and font changes.
+- Schema 21 retires Saved View configurations only after verified recovery and explicit review where needed, and records immutable One-Shot transcription/reflection provenance. Forecasting history remains intact; original recovery artifacts retain their configurations. CSV format 6 adds that provenance and remains analytical, not restorable.
+- The attention threshold remains configurable through CLI-only `settings attention-days [--set N]`. Retired Saved View commands fail before data access. Ordinary desktop timestamps omit repeated offsets; exact entry/confirmation retains ambiguity cues.
 
-- Reused unchanged Adaptive Timeline rows and replaced only changed entries after fresh reads. Order controls rearrange loaded history directly; bidirectional pane movement avoids rewrapping the full Timeline every frame and honors reduced motion.
+### Fixed
+
+- Unchanged Journal background checks and returns retain readable rows and useful focus, avoiding repeated loading flashes and full row rebuilds. New requests, changed membership and read failures remain explicit.
+- Long Adaptive histories reuse unchanged Timeline rows and switch order directly; smooth pane changes remain responsive without repeatedly rewrapping the full history.
+- Calibration surfaces, Actual markers, Numeric labels, action widths and expanded historical text retain readable palette/font/geometry treatment. Pending Numeric metric work is cancelled when its widget is destroyed.
+- Effective reflection classification and save-response reads preserve immutable history and scoring. Shared application operations keep lifecycle, validation, transactions and storage outside renderers and signal handlers.
+- Private Windows builds prefer system libraries during dependency discovery, preventing an unrelated tool's incompatible ICU DLL from breaking packaged startup. The caller's search path is restored on exit.
+
+### Compatibility
+
+Supported history, the four closed model/scoring contracts and exact immutable facts
+are preserved. Retired or mismatched records refuse the entire archive before
+migration, repair or partial loading. Use complete SQLite backups for recovery;
+CSV is analytical. Source adoption and rollback follow the
+[controlled update procedure](docs/guides/user-guide.md#adopt-the-redesigned-source).
+No installer, updater or public executable distribution is introduced.
 
 ## 0.8.0 - 2026-10-07
 

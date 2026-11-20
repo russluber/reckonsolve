@@ -1,6 +1,6 @@
 # Reckonsolve
 
-The checkout includes the unreleased Journal-centered redesign. The four requested implementation walkthroughs, combined journeys and latest presentation/navigation refinements are accepted with recorded limits. The [readiness record](docs/archive/releases/2026-11-13-redesign-readiness.md) distinguishes source/package checks from those human reviews. Use the [controlled update procedure](docs/guides/user-guide.md#adopt-the-redesigned-source) before replacing an everyday installation. The installed/published v0.8.0 release is unchanged.
+The checkout identifies the Journal-centered redesign candidate as **0.9.0**, still **Unreleased**. Earlier implementation walkthroughs and refinements retain their scoped acceptance; final whole-app visual sign-off remains separate from the fresh technical checks in the [readiness record](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-readiness--2026-11-19). Use the [controlled update procedure](docs/guides/user-guide.md#adopt-the-redesigned-source) before replacing an everyday installation. Published v0.8.0 and existing installed snapshots are unchanged by edits to this checkout.
 
 A personal forecasting journal for Windows. Record uncertain judgments, preserve your reasoning, resolve answers, and study calibration. Reckonsolve works offline and stores your data locally.
 

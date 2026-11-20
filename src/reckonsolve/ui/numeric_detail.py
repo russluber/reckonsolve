@@ -1230,16 +1230,19 @@ class NumericPredictionDetailScreen(QWidget):
         frame = TimelineEntry(kind, event.created_at, self.timeline_content)
         frame.setObjectName(f"numericTimeline{event.kind.title()}{event.record_id}")
         layout = frame.column
-        forecast = frame.text(
-            interval_transition_text(
-                previous, event.revision.quantiles, self._prediction.unit
+        if event.kind != "journal":
+            forecast = frame.text(
+                interval_transition_text(
+                    previous, event.revision.quantiles, self._prediction.unit
+                )
+                if previous is not None
+                else interval_text(event.revision.quantiles, self._prediction.unit),
+                TextRole.DETAIL_EVENT
+                if event.kind == "forecast"
+                else TextRole.DETAIL_TIME,
+                frame,
             )
-            if previous is not None
-            else interval_text(event.revision.quantiles, self._prediction.unit),
-            TextRole.DETAIL_EVENT if event.kind == "forecast" else TextRole.DETAIL_TIME,
-            frame,
-        )
-        layout.addWidget(forecast)
+            layout.addWidget(forecast)
         text = QLabel(
             event.text or "",
             frame,
@@ -1281,11 +1284,11 @@ class NumericPredictionDetailScreen(QWidget):
                 _make_selectable(edited)
                 layout.addWidget(edited)
                 layout.addWidget(_journal_edit_history_widget(event, frame))
-            button = QPushButton("Correct Entry", frame)
-            apply_action_role(button, ActionRole.QUIET)
+            button = QPushButton("Correct Entry", frame.header)
+            button.setObjectName(f"correctNumericJournalEntryButton{event.record_id}")
             apply_lucide_icon(button, LucideIcon.PENCIL)
             button.clicked.connect(lambda: self.open_correct_journal_entry(event))
-            frame.header_layout.addWidget(button)
+            frame.add_action(button)
         return frame
 
     def _load_definition_history(self, prediction_id: int) -> None:

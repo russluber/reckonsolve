@@ -18,7 +18,7 @@ These excerpts retain original section numbers and historical wording. Legacy-co
 
 ## Release evidence
 
-- [Redesign readiness](releases/2026-11-13-redesign-readiness.md) — accepted latest refinements, isolated locked wheel installation, recovery/rollback and current adoption procedure; unreleased, with source/environment limits retained.
+- [Redesign readiness](releases/2026-11-13-redesign-readiness.md) — original adoption/recovery evidence and the final 0.9.0 candidate continuation, with fresh source/delivery checks and separate pending human visual approval; unreleased.
 
 - [Post-review workspace refinement verification](releases/2026-11-13-workspace-refinement-verification.md) — Journal/Detail/Performance/toolbar refinements and later reported acceptance, with version/environment limits retained; unreleased.
 

@@ -266,8 +266,9 @@ def test_focused_widths_keep_native_window_geometry_and_detail_panes(
 
 @pytest.mark.parametrize("numeric", [False, True])
 @pytest.mark.parametrize("one_shot", [False, True])
+@pytest.mark.parametrize("corrected", [False, True])
 def test_narrative_entries_keep_inline_dates_wrapping_and_history(
-    workspace, qtbot, numeric, one_shot
+    workspace, qtbot, numeric, one_shot, corrected
 ):
     from test_one_shot_persistence import request
 
@@ -282,14 +283,36 @@ def test_narrative_entries_keep_inline_dates_wrapping_and_history(
     clock.advance()
     prose = "The published notice adds context without changing the forecast."
     if one_shot:
-        operations.one_shots.add_journal(prediction, prose)
+        journaled = operations.one_shots.add_journal(prediction, prose)
     else:
         add = (
             operations.add_numeric_journal_entry
             if numeric
             else operations.add_journal_entry
         )
-        add(prediction.prediction_id, prose, **context(prediction, numeric))
+        entry = add(prediction.prediction_id, prose, **context(prediction, numeric))
+    if corrected:
+        clock.advance()
+        prose = "The corrected notice still adds context without changing the forecast."
+        if one_shot:
+            operations.one_shots.correct_journal(
+                journaled,
+                journaled.journals[0].entry_id,
+                prose,
+                expected_correction_id=None,
+            )
+        else:
+            correct = (
+                operations.correct_numeric_journal_entry
+                if numeric
+                else operations.correct_journal_entry
+            )
+            correct(
+                prediction.prediction_id,
+                entry.entry_id,
+                prose,
+                expected_correction_id=None,
+            )
     before = operations.get_prediction_for_navigation(prediction.prediction_id)
     window._open_prediction(prediction.prediction_id)
     screen = (
@@ -338,8 +361,110 @@ def test_narrative_entries_keep_inline_dates_wrapping_and_history(
             )
             assert body.font().pointSizeF() == rows[0].title.font().pointSizeF()
             assert body.font().weight() < rows[0].title.font().weight()
+            journal_row = next(
+                row for row in rows if row.title.text() == "Journal Entry"
+            )
+            assert journal_row.column.itemAt(1).widget() is body
+            assert (
+                body.y() - journal_row.header.geometry().bottom() - 1
+                <= journal_row.column.spacing() + 2
+            )
+            button = next(
+                action
+                for action in journal_row.findChildren(QPushButton)
+                if action.text() == "Correct Entry"
+            )
+            assert (
+                button.height()
+                <= max(
+                    journal_row.title.sizeHint().height(),
+                    button.fontMetrics().height(),
+                    button.iconSize().height(),
+                )
+                + 4
+            )
+            assert button.focusPolicy() & Qt.FocusPolicy.TabFocus
+            before_focus = button.size()
+            button.setFocus()
+            qtbot.wait(20)
+            assert button.size() == before_focus
+            if width == 1600:
+                assert (
+                    journal_row.header.height()
+                    <= max(
+                        journal_row.title.height(),
+                        journal_row.timestamp.height(),
+                        button.height(),
+                    )
+                    + 4
+                )
             assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
+    qtbot.keyClick(button, Qt.Key.Key_Space)
+    assert screen.workspace.editor is not None
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+def test_numeric_journal_omits_repeated_forecast_but_preserves_anchor_and_history(
+    workspace, qtbot
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, True)
+    clock.advance()
+    entry = operations.add_numeric_journal_entry(
+        prediction.prediction_id,
+        "The preliminary count is still being checked.",
+        **context(prediction, True),
+    )
+    clock.advance()
+    corrected = operations.correct_numeric_journal_entry(
+        prediction.prediction_id,
+        entry.entry_id,
+        "The preliminary count needs a further independent check.",
+        expected_correction_id=None,
+    )
+    clock.advance()
+    latest = operations.revise_quantile_forecast(
+        prediction.prediction_id,
+        {5: 10, 25: 20, 50: 30, 75: 40, 95: 50},
+        **context(prediction, True),
+    )
+    before = operations.list_numeric_timeline(prediction.prediction_id)
+    journal = next(event for event in before if event.kind == "journal")
+    assert journal.revision == prediction.current_revision
+    assert journal.revision != latest.current_revision
+    window._open_prediction(prediction.prediction_id)
+    screen = window._numeric_prediction_detail_screen
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(80)
+            row = screen.findChild(QWidget, f"numericTimelineJournal{entry.entry_id}")
+            body = row.findChild(QLabel, f"numericTimelineBodyJournal{entry.entry_id}")
+            assert body.text() == corrected.body
+            assert row.column.itemAt(1).widget() is body
+            assert not any(
+                label.text().startswith(("90% interval:", "Median:", "50% interval:"))
+                for label in row.findChildren(QLabel)
+            )
+            assert not any(
+                action.text().startswith("Forecast at the time")
+                for action in row.findChildren(QToolButton)
+            )
+            history = row.findChild(
+                QGroupBox, f"journalEntryEditHistory{entry.entry_id}"
+            )
+            assert history is not None
+            assert not history.isChecked()
+            for forecast in (event for event in before if event.kind == "forecast"):
+                revision_row = screen.findChild(
+                    QWidget, f"numericTimelineForecast{forecast.record_id}"
+                )
+                assert any(
+                    label.text().startswith("90% interval:")
+                    for label in revision_row.findChildren(QLabel)
+                )
+    assert operations.list_numeric_timeline(prediction.prediction_id) == before
 
 
 @pytest.mark.parametrize("numeric", [False, True])

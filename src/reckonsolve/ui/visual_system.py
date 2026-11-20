@@ -712,6 +712,14 @@ QPushButton[reckonsolveActionRole="quiet"]:hover {{
     color: {color.on_accent_soft};
     border-color: {color.accent_soft};
 }}
+QPushButton[reckonsolveTimelineAction="true"] {{
+    padding: 1px 4px;
+    border-width: 1px;
+    border-radius: 0px;
+}}
+QPushButton[reckonsolveTimelineAction="true"]:focus {{
+    border-width: 1px;
+}}
 QToolButton[reckonsolveDisclosure="true"] {{
     background-color: transparent;
     color: {color.text};

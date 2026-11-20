@@ -1,7 +1,12 @@
 # Post-review workspace refinement verification — 2026-11-13
 
-The latest [focused New Prediction](#focused-new-prediction--2026-11-19)
-presentation is implemented with its own evidence and pending human review. Earlier acceptance
+The [compact Journal entry follow-up](#compact-journal-entries--2026-11-19) follows
+the earlier [whole-app candidate readiness](2026-11-13-redesign-readiness.md#final-candidate-readiness--2026-11-19).
+Its current source/native evidence and pending human review remain separate from
+that earlier full-suite/package snapshot. Version 0.9.0 remains Unreleased.
+
+The earlier [focused New Prediction](#focused-new-prediction--2026-11-19)
+presentation retains its own evidence and human-review scope. Earlier acceptance
 below remains tied to the previously evaluated refinements.
 
 This is the unreleased [authorized feedback package](../../product-spec.md#3815-authorized-post-review-workspace-refinements),
@@ -970,3 +975,75 @@ identifiers, 42 R identifiers and both withdrawals, R1/R2 assets, 95 public-refe
 mirrors and protected application/data/domain/analytics, migration and dependency
 boundaries remain. Private notes stay ignored. These final edits close documentation
 and evidence only; human review and user-owned Git operations remain separate.
+
+## Compact Journal entries — 2026-11-19
+
+During final human review the user identified excess space below Journal Entry
+headings and redundant Numeric forecast summaries. They explicitly selected compact
+heading/correction actions and complete omission of the Numeric Journal summary,
+retaining Binary's short Forecast at the time line below its body. The suggested
+replacement forecast chevron was rejected. Version 0.9.0 remains Unreleased.
+
+`TimelineEntry.add_action` scopes compact padding and a stable native focus border
+to Journal correction controls across Adaptive/One-Shot Binary/Numeric. Corrected
+Binary/One-Shot header dates now use the shared natural-width Timeline label;
+an expanded regression reproduced their unnecessary 32-pixel header even after
+button padding was reduced. Wide ordinary headers now use the compact action's
+natural 20-pixel height; narrower/larger-font headers wrap safely. The body follows
+the measured header with ordinary spacing. Labels, accessible action names,
+keyboard activation, correction panes and exact timestamps remain.
+
+Adaptive Numeric Journal rows render their body directly after the header. The
+repeated 90% interval/Median/50% interval block is omitted; the committed header,
+actual forecast/revision rows and Numeric Reviews retain complete exact context.
+Stored original anchors, causal position, body/correction versions and search
+targets are unchanged. Binary retains its one-line historical percentage below
+the body. No query, storage, scoring, lifecycle, dependency or geometry rule changes.
+
+All **203 relevant final cases passed** in separate groups: **182 Detail/workspace/
+responsiveness/Journal/One-Shot cases in 153.55 seconds** and **21 isolated visual-
+system cases in 1.39 seconds**. Expanded four-contract checks include original and
+corrected entries, compact actual geometry, keyboard correction activation, stable
+focus size, body-first order and unchanged snapshots. A Numeric regression creates
+a Journal, corrects its text, then commits a later forecast: its old anchor and
+collapsed text history remain intact, full revision rows remain visible and no
+replacement forecast disclosure is introduced. No runtime source changed after
+these final checks.
+
+**288 final native offscreen captures** cover all four contracts with original/
+corrected Journals, both palettes, 1,600 × 1,000 / 760 × 520 logical geometry,
+9/13-point Segoe UI and Qt scales 1/1.5/2. Each font/scale probe runs in a separate
+process. Complete text, natural wrapping/spacing, stable focus geometry, Binary's
+anchored percentage, Numeric body-first reading and unchanged canonical snapshots
+passed. Representative wide and minimum/enlarged entries/screens were inspected.
+This is simulated native evidence, separate from physical Windows/accessibility
+and human visual acceptance. Generated evidence remains ignored under
+`build/ux-journal-entry-tuning/`.
+
+A filesystem comparison with the preceding candidate wheel verifies that only
+the four intended UI modules differ among its 166 application files; protected
+application/data/domain/analytics, migrations and bundled resources match byte for
+byte. Tests extend the existing Detail finish module. The earlier 1,325-case full
+suite and source/wheel/private-build artifacts belong to the preceding readiness
+payload; they are not fresh whole-suite/package validation of this later tuning.
+Refresh final delivery evidence for the eventual accepted source. All Git commands
+remain reserved to the user and were not run for this pass.
+
+For the short human recheck, run `uv run python tools/run_visual_review.py detail`.
+Inspect Journal entries in Adaptive Numeric and Binary, including edited entries,
+then compare One-Shot correction headings. Check both palettes at wide/smaller
+sizes: the body should follow its compact heading, Numeric should not repeat its
+forecast block, Binary should retain its short context and Correct Entry should
+remain usable with the keyboard. Other accepted journeys carry forward; final
+whole-app human visual approval remains pending. No installed tool or personal
+database was opened or changed.
+
+**Documentation/preservation closure:** Locked offline sync and Ruff check/format
+(320 files) passed. The existing documentation engine with filesystem discovery
+checked **363 public links/58 Markdown files** and **328 private links/five files**,
+zero errors. Filesystem checks retained 66 J identifiers, 42 R identifiers and both
+withdrawals, verified 96 public-reference mirrors, lower-layer imports and affected-
+file whitespace/conflict markers. Reference packs were not edited. No Git command
+was run; Git-based status/diff/tracking checks remain with the user. No executable
+source changed after the final focused/native checks; later edits close documentation
+only. Human visual acceptance of this follow-up remains pending.

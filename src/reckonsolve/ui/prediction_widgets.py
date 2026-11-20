@@ -861,18 +861,16 @@ def _journal_entry_widget(
     kind.setObjectName(f"journalEntryKind{entry.entry_id}")
     if entry.current_correction_id is not None:
         latest_correction = entry.corrections[-1]
-        edited = QLabel(
+        edited = frame.text(
             f"Edited {_format_local_timestamp(latest_correction.corrected_at, widget=parent)}",
+            TextRole.SECONDARY,
             heading_row,
+            header=True,
         )
         edited.setObjectName(f"journalEntryEdited{entry.entry_id}")
-        edited.setTextFormat(Qt.TextFormat.PlainText)
-        edited.setWordWrap(True)
-        apply_text_role(edited, TextRole.SECONDARY)
         heading_layout.addWidget(edited)
     correct_button = QPushButton("Correct Entry", heading_row)
     correct_button.setObjectName(f"correctJournalEntryButton{entry.entry_id}")
-    apply_action_role(correct_button, ActionRole.QUIET)
     apply_lucide_icon(correct_button, LucideIcon.PENCIL, size=16)
     correct_button.setToolTip(
         "Save a correction while preserving the original and prior versions."
@@ -880,7 +878,7 @@ def _journal_entry_widget(
     correct_button.clicked.connect(
         lambda _checked=False, current=entry: correct_entry(current)
     )
-    heading_layout.addWidget(correct_button)
+    frame.add_action(correct_button)
 
     body = QLabel(entry.body, frame)
     body.setObjectName(f"journalEntryBody{entry.entry_id}")
@@ -940,15 +938,15 @@ def _one_shot_journal_timeline_widget(
     heading_row = frame.header
     heading_layout = frame.header_layout
     if entry.corrections:
-        edited = text_label(
+        edited = frame.text(
             f"Edited {_format_local_timestamp(entry.corrections[-1].corrected_at, widget=parent)}",
+            TextRole.SECONDARY,
             heading_row,
+            header=True,
         )
-        apply_text_role(edited, TextRole.SECONDARY)
         heading_layout.addWidget(edited)
     button = QPushButton("Correct Entry", heading_row)
     button.setObjectName(f"oneShotCorrectJournal{entry.entry_id}")
-    apply_action_role(button, ActionRole.QUIET)
     apply_lucide_icon(button, LucideIcon.PENCIL, size=16)
     button.setToolTip(
         "Save a correction while preserving the original and prior versions."
@@ -956,7 +954,7 @@ def _one_shot_journal_timeline_widget(
     button.clicked.connect(
         lambda _checked=False, entry_id=entry.entry_id: correct_entry(entry_id)
     )
-    heading_layout.addWidget(button)
+    frame.add_action(button)
 
     body = text_label(entry.body, frame)
     body.setObjectName(f"oneShotJournalBody{entry.entry_id}")

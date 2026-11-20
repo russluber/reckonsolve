@@ -79,6 +79,12 @@ class TimelineEntry(QFrame):
             self.header_layout.addWidget(label)
         self.column.addWidget(self.header)
 
+    def add_action(self, button: QPushButton) -> None:
+        """Keep inline history actions from imposing ordinary form-row padding."""
+        button.setProperty("reckonsolveTimelineAction", True)
+        apply_action_role(button, ActionRole.QUIET)
+        self.header_layout.addWidget(button)
+
     @staticmethod
     def text(
         text: str, role: TextRole, parent: QWidget, *, header: bool = False

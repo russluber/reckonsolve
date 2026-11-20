@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier slice walkthroughs, combined journeys and refinements are accepted with recorded limits, including wider workspaces and compact Settings. The latest focused New Prediction surface awaits human visual review; the preceding rounded Journal/Detail metadata checkpoint is saved without additional visual acceptance inferred. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
+This checkout includes the unreleased 0.9.0 Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier walkthroughs and refinements retain scoped acceptance. Fresh candidate checks and representative screen inspection are recorded separately from final whole-app human visual approval. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
 
 Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
@@ -28,6 +28,12 @@ the mouse wheel and ordinary keyboard scrolling remain available.
 Detail uses flat reading sections. Thin lines separate Timeline entries, with the
 event name and recorded date/time together. Narrow panes wrap these headings while
 keeping the full text and historical actions available.
+
+Journal Entry headings keep Correct Entry compact beside their date/time, with the
+entry text directly underneath. Numeric Journal entries omit repeated forecast
+summaries; the committed header and forecast revision entries retain the full values.
+Binary keeps its short Forecast at the time percentage below the entry. Stored
+historical anchors and transparent correction history remain intact.
 
 Other read-only sections also use flat edges and rules. Task forecast context is
 unboxed, selectable body text; editable fields and buttons remain visually distinct.
@@ -69,8 +75,8 @@ For development, use `uv sync --locked`, then `uv run reckonsolve-dev` or `uv ru
 
 ### Adopt the redesigned source
 
-An installed tool is a separate snapshot. Both the released app and this unreleased
-candidate currently report 0.8.0; identify the approved source checkpoint and retain
+An installed tool is a separate snapshot. The redesigned source candidate now reports
+0.9.0; the published release remains v0.8.0. Identify the approved source checkpoint and retain
 its dependency lock rather than relying on the version string alone. Updating the
 tool is a separate step from testing the checkout.
 
@@ -1085,4 +1091,4 @@ If interrupted, the updated desktop offers **Keep current location** while the s
 
 SQLite backups still preserve the complete journal, not host appearance/location configuration. Restoring a supported older backup at the active path follows the existing upgrade/review policy; an empty or unrelated existing file is refused. If bootstrap location information is lost or inconsistent, preserve it and the verified copies for recovery rather than initializing another journal.
 
-Any pre-v0.7 Binary-final or interval-v1 Numeric record prevents an archive from opening in v0.8.0. Mixed archives and missing, unknown, or mismatched identities are also refused before mutation. Nothing is converted or deleted; preserve the original for a compatible earlier version.
+Any pre-v0.7 Binary-final or interval-v1 Numeric record prevents an archive from opening in the current application, including the 0.9.0 candidate. Mixed archives and missing, unknown, or mismatched identities are also refused before mutation. Nothing is converted or deleted; preserve the original for a compatible earlier version.
