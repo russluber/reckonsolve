@@ -2574,3 +2574,50 @@ on long Binary/Numeric histories, corrections, order and external changes using
 disposable data. Record save-handler and deferred redraw timing separately; human
 responsiveness review remains separate from controlled measurements. This is a
 presentation optimisation, with no change to data, lifecycle, scoring or persistence.
+
+**One-Shot Reading layout — authorized 2026-11-20:** Implement the selected stacked
+reading composition for Binary/Numeric Detail within its existing sections and
+workflows. Keep the separate Checked Answer above a full-pane-width prominent
+Brier/WIS score; use ruled Postmortem and Journal Entries sections with consistent
+subsection/body/documentary text hierarchy. Overview leads with Resolution Criteria,
+then available Background/Rationale and other existing context, using the full prose
+width without a permanent label rail. Keep compact audit chevrons, exact original/
+effective and reported/recorded distinctions, inline optional reflection and the
+settled Skip/later Write through More behavior. Preserve the Question-first header,
+exact forecast/interval, metadata chips, pending/Invalid content and eligible actions,
+pane proportions, guards and historical targets. This changes presentation only;
+verify both types/palettes, pending/answered/Invalid and corrected records, long prose,
+narrow/scaled geometry, keyboard disclosures and unchanged canonical facts. Native
+human visual acceptance remains separate from the selected illustration.
+
+This presentation is implemented locally. The [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-reading-layout--2026-11-20)
+separates final source/native checks from pending human visual acceptance and
+earlier package artifacts.
+
+**One-Shot audit reading — authorized 2026-11-20:** Group Times & Recorded Facts
+into Reported by You, Recorded by Reckonsolve and the existing Numeric definition.
+Retain documentary approximation/offset cues and immutable recording times. Within
+Originals & Corrections, keep the complete original facts and lead each correction
+with its action/date, exactly changed fields and labeled Before/After values. Short
+facts compare beside one another; prose uses the pane width. Keep the correction
+note and complete Before/After snapshots available through a compact disclosure.
+Unchanged fields need not repeat in the initial comparison. Preserve source-action
+distinctions, all original/snapshot facts, historical targets, scores and workflows;
+this is presentation only. Verify Binary/Numeric, sparse/terminal/corrected records,
+long prose, both palettes, narrow/scaled/enlarged text and unchanged saved history.
+
+This audit refinement is implemented locally with [focused/native verification](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-audit-reading--2026-11-20);
+its narrow human visual recheck remains pending.
+
+**One-Shot Score Breakdown — authorized 2026-11-20:** Organize the existing Numeric
+supporting readouts into Contributions to WIS, Median Error, 50% Interval and
+90% Interval. Distinguish weighted contributions from raw interval scores and keep
+the main exact WIS score above the disclosure. Preserve all existing terms, signs,
+units, actual-location meaning and closed scoring/eligibility rules. Use the shared
+ruled section/text hierarchy, selectable values, native keyboard disclosure and
+safe narrow/enlarged wrapping. This is presentation only; no score is recalculated,
+rounded, pooled or written by the renderer. Verify exact below/inside/above readouts,
+both appearances, geometry and unchanged saved records/scores.
+
+The score presentation is implemented locally with [focused/native evidence](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-score-breakdown--2026-11-20);
+its narrow human visual review remains pending.

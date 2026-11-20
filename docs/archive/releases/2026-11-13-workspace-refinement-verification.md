@@ -1,5 +1,15 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [One-Shot Score Breakdown follow-up](#one-shot-score-breakdown--2026-11-20)
+records the latest supporting-score presentation and its separate verification.
+
+The [One-Shot audit reading refinement](#one-shot-audit-reading--2026-11-20)
+has fresh expanded-content checks and a pending narrow human visual review.
+
+The [One-Shot Reading layout follow-up](#one-shot-reading-layout--2026-11-20)
+records its explicitly authorized implementation and separate source/native evidence.
+Human visual acceptance and matching delivery artifacts remain pending.
+
 The [Detail save responsiveness follow-up](#detail-save-responsiveness--2026-11-20)
 follows the user-reported saved compact Journal checkpoint. Its focused checks and
 controlled measurements cover the current performance change; human responsiveness
@@ -1111,3 +1121,169 @@ markers. A direct pre-edit source comparison confirms the incremental layout cha
 the investigated reading/FlowLayout modules remain byte-identical. No executable
 source changed after the final 188-case run. Later edits close documentation only;
 human review and Git-based inspection remain user-owned.
+
+## One-Shot Reading layout — 2026-11-20
+
+The user explicitly authorized the selected stacked reading composition for both
+One-Shot types. `ui/one_shot_reading.py` owns a small presentation component with a
+wrapping heading, full-width body and ending rule. One-Shot Detail uses it for
+Checked Answer, the prominent full-width Brier/WIS score, optional factual/correction
+notes, Postmortem, Journal Entries and context. Overview starts with available
+Resolution Criteria, then Background/Rationale and other existing context. Saved
+One-Shot Forecast labels the unchanged exact header from above. Existing text roles
+distinguish pane headings, subsection names, prose and documentary labels.
+
+Compact audit controls retain native keyboard/disclosure behavior and body/search
+identities. Caption wrapping protects the narrow pending Overview at enlarged text;
+the complete accessible name remains unchanged. Section minimum heights follow
+wrapped content, with child-owned coalesced updates to avoid nested layout reentry.
+Inline reflection belongs inside the Postmortem body before its ending rule.
+Pending/Invalid eligibility, pure Brier/WIS, original/effective history, Skip/later
+Write, guards, source returns, pane proportions and the prior save optimization
+remain. No dependency, schema, domain, application operation or storage change occurs.
+
+Native reading coverage spans both types, pending/answered/Invalid/corrected/skipped/
+written states, Light/Dark, 1,600 × 1,000 / 760 × 520 logical geometry, 9/15-point real
+Segoe UI and Qt scales 1/1.5/2, with each font/scale in its own process. Checks include
+complete visible prose, zero horizontal overflow, pane/score eligibility and unchanged
+saved snapshots. Dedicated inline Write/Edit checks cover both types/palettes/sizes
+at both fonts, rule containment, cancellation and unchanged history. Representative
+ordinary and enlarged/minimum compositions are inspected. Final counts and source
+checks are recorded in the closure below.
+
+Early sampling during the existing 180 ms pane transition was corrected to wait
+for completion; it is not counted as a runtime repair. A mixed-font inline harness
+hit queued cleanup from its preceding window and was replaced with one-font-per-
+process probes, matching the reading matrix. These failed harness runs are not
+acceptance evidence. Generated reports/screenshots stay ignored under
+`build/ux-one-shot-reading-20261120/`. Offscreen Qt does not establish physical
+Windows/accessibility or human acceptance.
+
+For the focused human review, run `uv run python tools/run_visual_review.py detail`.
+Compare answered One-Shot Binary/Numeric: the answer and score should lead, while
+Postmortem, Journals and context read as deliberate separate blocks. Check both
+palettes, open audit chevrons and inline reflection, then compare pending/Invalid
+examples at a smaller size. Earlier accepted journeys carry forward. No installed
+tool or personal journal was changed, no package was rebuilt, and every Git/release
+step remains with the user. Earlier package hashes identify the older payload.
+
+**Final verification:** The broad regression run passed **1,313 cases in 711.32
+seconds**, with **six Git-dependent cases deliberately deselected**. The 21 isolated
+visual-system cases passed in 1.45 seconds, totaling **1,334 broad checks**. This run
+preceded the final coalesced-height and inline-editor containment adjustments. After
+those adjustments, **all 192 affected Detail/workspace/Journal/One-Shot cases passed
+in 208.12 seconds**. The native matrix was refreshed on the final source: **288
+reading checks plus 32 inline Write/Edit checks**, with zero history changes. The
+final focused cases include enlarged pending disclosures and inline reflection,
+long factual/correction prose after resize, exact score/answer hierarchy, canonical
+snapshots and existing correction/Skip/dirty-exit workflows. No executable source
+changed after these final checks. Earlier whole-suite/package evidence retains its
+own source scope; these results do not claim a fresh private-build/package artifact.
+
+Ruff check/format passed (321 files). Filesystem discovery with the existing offline
+documentation engine checked **368 public links/58 Markdown files** and **330 private
+links/five files**, with zero errors. Scoped whitespace/reference checks and the
+pre-edit comparison passed without Git. All 66 J IDs, 42 R IDs, both withdrawals
+and 96 public-reference mirrors remain. A filesystem comparison with the preceding
+candidate wheel found only the six intended accumulated UI changes and the new
+One-Shot reading component; protected lower layers, migrations and bundled resources
+match byte for byte. Reference packs were not edited. Human visual acceptance of
+this follow-up remains pending.
+
+## One-Shot audit reading — 2026-11-20
+
+The authorized refinement reorganizes Times & Recorded Facts into Reported by You,
+Recorded by Reckonsolve and Numeric Definition. Originals & Corrections keeps the
+complete original facts in named groups, then presents each recorded correction's
+action/sequence/date and exactly changed fields. Short Before/After facts align in
+columns; notes/reflection use full-width prose. The note and complete Before/After
+snapshots remain available through a compact disclosure. This reduces repeated
+unchanged fields without deleting facts or changing scores, provenance, historical
+targets, parent disclosure defaults or workflows.
+
+`ui/one_shot_audit.py` owns this presentation and uses existing exact forecast/date
+formatters, ruled sections and native disclosure controls. One-Shot Detail retains
+its body identities and Recorded History search targets. No application/data/domain,
+scoring, schema, dependency, export or installed-tool change occurs.
+
+All **91 final One-Shot/workspace/retrieval cases passed in 45.21 seconds**. Two new
+Binary/Numeric correction-chain cases verify changed-fields-first reading, hidden
+unchanged forecasts, complete snapshots, documentary offset/approximation cues,
+keyboard access, later Postmortem/clearing and unchanged canonical history/score.
+Existing enlarged-font, long-content and exact historical-navigation cases remain.
+
+All **288 native expanded-content checks** passed across Binary/Numeric,
+pending/answered/Invalid/corrected/skipped/written, Light/Dark, 1,600 × 1,000 /
+760 × 520 logical geometry, 9/15-point real Segoe UI and Qt scales 1/1.5/2. Each
+font/scale runs in a separate process. Both parent subsections and complete snapshots
+are expanded for label-fit, zero horizontal overflow and unchanged-record checks.
+Representative grouped-time and correction-comparison captures were inspected,
+including smaller/enlarged geometry. Evidence stays ignored under
+`build/ux-one-shot-audit-20261120/`. No executable source changed after final checks.
+Offscreen simulation does not establish physical Windows/accessibility acceptance.
+
+For the narrow human recheck, run `uv run python tools/run_visual_review.py detail`
+and expand these two subsections in corrected One-Shot Binary/Numeric examples.
+Inspect time groups, the changed Before/After facts, long prose and Complete Recorded
+Snapshots in both palettes at wide/smaller sizes. Other accepted journeys carry
+forward. Human visual acceptance of this refinement remains pending. Earlier
+whole-suite/package evidence retains its older source scope; no package was rebuilt,
+no personal database was opened and every Git/release step remains with the user.
+
+Ruff check/format passed for 322 files. Filesystem-discovered documentation checks
+passed 370 public links/58 files and 331 private links/five files with zero errors.
+Scoped whitespace/reference checks, all J/R IDs/withdrawals and 96 public-reference
+mirrors remain intact. Snapshot comparison retains protected lower layers,
+migrations/resources and reference packs. No Git command was run.
+
+## One-Shot Score Breakdown — 2026-11-20
+
+**Trailing separator follow-up:** After positive visual feedback, the user requested
+removal of stacked ending lines. The final interval group, nested complete-snapshot
+disclosures and last correction now defer their ending rule to the outer scorecard/
+audit boundary. Internal separators and other callers' default rules remain.
+Fresh final checks pass **97 focused cases in 50.66 seconds** and **48 integrated
+native type/state/palette/geometry cases**, with unchanged saved records. Expanded
+captures were inspected. Evidence stays ignored under `build/ux-one-shot-rules-20261120/`.
+The 288-case native evidence below retains its preceding-payload scope. This is
+presentation only; the final narrow human check and all Git actions remain separate.
+
+The authorized presentation replaces the existing Numeric supporting-score text
+block with Contributions to WIS, Median Error, 50% Interval and 90% Interval groups.
+Shared ruled sections, aligned quiet labels and exact value/unit readouts match the
+accepted audit reading. The main WIS stays above the native disclosure; weighted
+contributions remain distinct from raw interval scores. Every existing median and
+interval readout, sign, unit and actual-location meaning is retained.
+
+`ui/one_shot_score.py` reads supplied WISScore fields and the existing exact formatter.
+One-Shot Detail branches on returned score presence/type rather than the shared CLI
+formatter's line count. The CLI and application/scoring/data boundaries remain
+unchanged. No new metric, workflow, eligibility, preference, dependency or schema
+change occurs.
+
+All **97 final One-Shot/workspace/retrieval cases passed in 51.20 seconds**. Six new
+below/inside/above outcome and two-palette cases verify exact terms in the correct
+groups, signed values/units, main score, keyboard disclosure, narrow wrapping and
+unchanged canonical record/score. Existing correction, reflection/Skip and exact
+historical navigation cases remain. Native review expands the breakdown alongside
+the audit content across both types, six record states, Light/Dark, wide/minimum
+logical geometry, 9/15-point real Segoe UI and Qt scales 1/1.5/2; final counts are
+recorded below. Representative expanded groups were inspected. Evidence stays
+ignored under `build/ux-one-shot-score-20261120/`; simulated Qt evidence is separate
+from physical Windows/accessibility and human visual acceptance.
+
+For the short recheck, run `uv run python tools/run_visual_review.py detail` and
+expand Score Breakdown on an answered One-Shot Numeric example. Inspect the four
+groups in both palettes at a wide/smaller size. Other accepted journeys carry
+forward. No personal data or normal installed tool was opened/changed, no package
+was rebuilt and no Git command was run. Earlier full-suite/package evidence retains
+its earlier source scope; current human visual acceptance remains pending.
+
+**Final closure:** All 288 native checks passed on final source, with complete
+readouts, zero horizontal overflow and unchanged records. No executable source
+changed after the final focused/native checks. Ruff check/format passed for 323
+files. Filesystem documentation discovery checked 372 public links/58 files and
+333 private links/five files, with zero errors. Scoped whitespace/references, all
+66 J/42 R IDs and both withdrawals, 96 public-reference mirrors and protected
+lower-layer/migration/resource comparisons passed without Git. Reference packs
+were not edited. The narrow human visual recheck remains pending.

@@ -7,12 +7,10 @@ from fractions import Fraction
 
 from PySide6.QtWidgets import (
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QMenu,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -23,7 +21,6 @@ from reckonsolve.domain.one_shot import (
     OneShotDetail,
     OneShotJournal,
     OneShotSourceAction,
-    OneShotValues,
 )
 from reckonsolve.domain.predictions import (
     PredictionStatus,
@@ -31,13 +28,13 @@ from reckonsolve.domain.predictions import (
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
 from reckonsolve.one_shot_display import (
     forecast_text,
-    score_lines,
     status_text,
     values_lines,
 )
 from reckonsolve.quantile_display import exact_score_text
 from reckonsolve.ui.components import (
     ContentPanel,
+    SectionRule,
     StatusBadge,
     TagChips,
 )
@@ -54,6 +51,9 @@ from reckonsolve.ui.detail_workspace import DetailWorkspace, collapse_section
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.numeric_interval import IntervalLegend, NumericInterval
 from reckonsolve.ui.one_shot import OneShotEditDialog, text_label
+from reckonsolve.ui.one_shot_audit import correction_history, recorded_facts
+from reckonsolve.ui.one_shot_reading import OneShotReadingSection, finish_disclosure
+from reckonsolve.ui.one_shot_score import score_breakdown
 from reckonsolve.ui.prediction_dialogs import (
     CorrectInvalidationReasonDialog,
     EditPredictionDetailsDialog,
@@ -77,33 +77,6 @@ from reckonsolve.ui.visual_system import (
     apply_surface_role,
     apply_text_role,
 )
-
-
-def _snapshot_widget(
-    title: str, values: OneShotValues, unit: str, parent: QWidget
-) -> QWidget:
-    """Keep a complete immutable snapshot together with readable internal spacing."""
-    block = QWidget(parent)
-    column = QVBoxLayout(block)
-    column.setContentsMargins(0, 0, 0, 0)
-    column.setSpacing(int(Spacing.COMPACT))
-    heading = text_label(title, block)
-    apply_text_role(heading, TextRole.LABEL)
-    column.addWidget(heading)
-    facts = text_label(
-        "\n".join(
-            values_lines(
-                values,
-                unit,
-                reported_formatter=lambda reported: format_reported_time(
-                    reported, block
-                ),
-            )
-        ),
-        block,
-    )
-    column.addWidget(facts)
-    return block
 
 
 class OneShotDetailScreen(QWidget):
@@ -186,6 +159,9 @@ class OneShotDetailScreen(QWidget):
         forecast_summary = QWidget(summary)
         forecast_layout = QVBoxLayout(forecast_summary)
         forecast_layout.setContentsMargins(0, 0, 0, 0)
+        forecast_label = text_label("Saved One-Shot Forecast", forecast_summary)
+        apply_text_role(forecast_label, TextRole.SECONDARY)
+        forecast_layout.addWidget(forecast_label)
         self.forecast = text_label(
             forecast_text(record.effective, unit), forecast_summary
         )
@@ -205,12 +181,6 @@ class OneShotDetailScreen(QWidget):
             forecast_layout.addWidget(legend_row)
         else:
             forecast_layout.addWidget(self.forecast)
-        forecast_layout.addWidget(
-            text_label(
-                "Saved One-Shot Forecast",
-                forecast_summary,
-            )
-        )
         header.addWidget(forecast_summary)
         if detail.invalidation_history is not None:
             invalid = detail.invalidation_history
@@ -332,20 +302,15 @@ class OneShotDetailScreen(QWidget):
                 else TextRole.BODY,
             )
             self.results.body_layout.addWidget(self.answer_result)
-        self.scorecard = ContentPanel("Scorecard", parent=self.results)
+        self.scorecard = OneShotReadingSection("Scorecard", self.results)
         self.scorecard.setObjectName("oneShotScorecard")
         saved_score = self._operations.one_shots.score(detail)
-        lines = score_lines(saved_score, unit)
-        if lines:
+        if saved_score is not None:
             numeric_score = not isinstance(saved_score, Fraction)
             self.scorecard.title_label.setText(
                 "Weighted Interval Score (WIS)" if numeric_score else "Brier Score"
             )
             self.scorecard.title_label.setWordWrap(True)
-            self.scorecard.title_label.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-            )
-            self.scorecard.title_label.parentWidget().layout().setStretch(0, 1)
             self.score_value = text_label(
                 exact_score_text(saved_score.wis if numeric_score else saved_score)
                 + (f" {unit}" if numeric_score and unit else ""),
@@ -354,13 +319,13 @@ class OneShotDetailScreen(QWidget):
             self.score_value.setObjectName("oneShotScoreValue")
             apply_text_role(self.score_value, TextRole.PAGE_TITLE)
             self.scorecard.body_layout.addWidget(self.score_value)
-            self.scorecard.body_layout.addWidget(
-                text_label("Lower is better.", self.scorecard)
-            )
-            if len(lines) > 1:
+            interpretation = text_label("Lower is better.", self.scorecard)
+            apply_text_role(interpretation, TextRole.DETAIL_TIME)
+            self.scorecard.body_layout.addWidget(interpretation)
+            if numeric_score:
                 self.scorecard.body_layout.addWidget(
                     collapse_section(
-                        text_label("\n".join(lines[1:]), self),
+                        score_breakdown(saved_score, unit, self),
                         "Score Breakdown",
                         compact=True,
                     )
@@ -376,8 +341,7 @@ class OneShotDetailScreen(QWidget):
             self.scorecard.hide()
         if detail.status is PredictionStatus.RESOLVED:
             self.results.body_layout.removeWidget(self.answer_result)
-            self.answer_panel = ContentPanel("Checked Answer", parent=self.results)
-            apply_surface_role(self.answer_panel, SurfaceRole.CANVAS)
+            self.answer_panel = OneShotReadingSection("Checked Answer", self.results)
             self.answer_result.setAccessibleName(self.answer_result.text())
             self.answer_result.setText(
                 self.answer_result.text().removeprefix("Answer: ")
@@ -386,17 +350,17 @@ class OneShotDetailScreen(QWidget):
             self.results.body_layout.addWidget(self.answer_panel)
             self.results.body_layout.addWidget(self.scorecard)
             if record.effective.resolution_notes:
-                self.results.body_layout.addWidget(
-                    text_label(
-                        "Resolution notes: " + record.effective.resolution_notes, self
-                    )
+                notes = OneShotReadingSection("Resolution Notes", self.results)
+                notes.body_layout.addWidget(
+                    text_label(record.effective.resolution_notes, notes)
                 )
+                self.results.body_layout.addWidget(notes)
             if transcription and transcription[-1].note:
-                self.results.body_layout.addWidget(
-                    text_label("Correction note: " + transcription[-1].note, self)
-                )
+                note = OneShotReadingSection("Correction Note", self.results)
+                note.body_layout.addWidget(text_label(transcription[-1].note, note))
+                self.results.body_layout.addWidget(note)
 
-        self.reflection = ContentPanel("POSTMORTEM", parent=self)
+        self.reflection = OneShotReadingSection("Postmortem", self)
         self.reflection.setObjectName("oneShotPostmortem")
         self.reflection.setVisible(detail.status is PredictionStatus.RESOLVED)
         self.reflection_copy = QWidget(self.reflection)
@@ -440,7 +404,7 @@ class OneShotDetailScreen(QWidget):
             bool(record.effective.postmortem) or detail.postmortem_completion is None
         )
         reflection_actions = QWidget(self)
-        reflection_row = QHBoxLayout(reflection_actions)
+        reflection_row = FlowLayout(reflection_actions)
         reflection_row.setContentsMargins(0, 0, 0, 0)
         reflection_row.addWidget(self.add_postmortem_button)
         self.skip_postmortem_button = QPushButton("Skip", self)
@@ -450,64 +414,26 @@ class OneShotDetailScreen(QWidget):
         self.skip_postmortem_button.clicked.connect(self.skip_postmortem)
         apply_action_role(self.skip_postmortem_button, ActionRole.QUIET)
         reflection_row.addWidget(self.skip_postmortem_button)
-        reflection_row.addStretch()
         self.reflection.body_layout.addWidget(reflection_actions)
-        self.journals = ContentPanel("JOURNAL ENTRIES", parent=self)
+        self.journals = OneShotReadingSection(
+            "Journal Entries", self, end_rule=not detail.journals
+        )
         self.journals.setObjectName("oneShotJournalEntries")
         if not detail.journals:
             self.journals.body_layout.addWidget(text_label("No Journal entries.", self))
         self._show_timeline(detail)
         timeline = self.recorded_timeline
 
-        facts = ContentPanel("Recorded Facts", parent=self)
-        facts.setObjectName("oneShotRecordedFacts")
-        facts.body_layout.addWidget(
-            text_label(
-                "\n".join(
-                    line
-                    for line in values_lines(
-                        record.effective,
-                        unit,
-                        reported_formatter=lambda reported: format_reported_time(
-                            reported, self
-                        ),
-                    )[1:]
-                    if "(user-reported)" in line
-                ),
-                self,
-            )
-        )
-        facts.body_layout.addWidget(
-            text_label(
-                "Entered in Reckonsolve: "
-                + _format_local_timestamp(record.recorded_at, widget=self),
-                self,
-            )
-        )
-        if record.answer_recorded_at:
-            facts.body_layout.addWidget(
-                text_label(
-                    "Answer entered in Reckonsolve: "
-                    + _format_local_timestamp(record.answer_recorded_at, widget=self),
-                    self,
-                )
-            )
-        if record.definition:
-            facts.body_layout.addWidget(
-                text_label(
-                    f"Unit: {unit} · Decimal places: {record.definition.decimal_places} · {record.definition.value_constraint.value}",
-                    self,
-                )
-            )
+        facts = recorded_facts(detail, self)
         overview = [facts]
         for title, value in (
+            ("Resolution Criteria", detail.resolution_criteria),
             ("Background", detail.background),
             ("Rationale", detail.rationale),
-            ("Resolution Criteria", detail.resolution_criteria),
-            ("Expected resolution", detail.expected_resolution),
+            ("Expected Resolution", detail.expected_resolution),
         ):
             if value:
-                panel = ContentPanel(title, parent=self)
+                panel = OneShotReadingSection(title, self)
                 panel.setObjectName(
                     {
                         "Rationale": "oneShotRationale",
@@ -524,39 +450,7 @@ class OneShotDetailScreen(QWidget):
                     )
                 )
                 overview.append(panel)
-        history = ContentPanel("", parent=self)
-        history.title_label.hide()
-        history.setObjectName("oneShotCorrectionHistory")
-        body = history.body_layout
-        body.setSpacing(int(Spacing.SECTION))
-        body.addWidget(
-            _snapshot_widget("Original Saved Facts", record.original, unit, history)
-        )
-        for correction in record.corrections:
-            entry = QWidget(history)
-            entry_layout = QVBoxLayout(entry)
-            entry_layout.setContentsMargins(0, 0, 0, 0)
-            entry_layout.setSpacing(int(Spacing.ORDINARY))
-            heading = text_label(
-                f"{'Postmortem Update' if correction.source_action is OneShotSourceAction.POSTMORTEM else 'Transcription Correction'} {correction.sequence}",
-                entry,
-            )
-            apply_text_role(heading, TextRole.LABEL)
-            entry_layout.addWidget(heading)
-            entry_layout.addWidget(
-                text_label(
-                    _format_local_timestamp(correction.corrected_at, widget=self), entry
-                )
-            )
-            entry_layout.addWidget(
-                _snapshot_widget("Before", correction.before, unit, entry)
-            )
-            entry_layout.addWidget(
-                _snapshot_widget("After", correction.after, unit, entry)
-            )
-            if correction.note:
-                entry_layout.addWidget(text_label("Note: " + correction.note, entry))
-            body.addWidget(entry)
+        history = correction_history(detail, self)
         history_disclosure = collapse_section(
             history, "Originals & Corrections", compact=True
         )
@@ -569,32 +463,19 @@ class OneShotDetailScreen(QWidget):
             for change in detail.definition_changes:
                 body.addWidget(_definition_change_widget(change, self))
             overview.append(
-                collapse_section(definitions, "Definition History", compact=True)
+                finish_disclosure(
+                    collapse_section(definitions, "Definition History", compact=True)
+                )
             )
-        for panel in [
-            self.results,
-            self.scorecard,
-            self.reflection,
-            self.journals,
-            facts,
-            *overview[1:],
-        ]:
+        for panel in (self.results, facts, history):
             apply_surface_role(panel, SurfaceRole.CANVAS)
         if detail.status is PredictionStatus.RESOLVED:
-            self.results.title_label.hide()
-            apply_surface_role(self.scorecard, SurfaceRole.RAISED)
-            self.answer_panel.layout().setContentsMargins(0, 0, 0, 0)
-        for panel in (self.results, self.reflection, self.journals):
-            panel.layout().setContentsMargins(0, 0, 0, 0)
-        for panel in (facts, history):
-            apply_surface_role(panel, SurfaceRole.RAISED)
-            panel.title_label.parentWidget().hide()
-            for label in panel.findChildren(QLabel):
-                # Let prose grow vertically inside the panel's padded width.
-                policy = label.sizePolicy()
-                policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
-                label.setSizePolicy(policy)
-                label.setMinimumWidth(0)
+            self.results.title_label.parentWidget().hide()
+        else:
+            apply_text_role(self.results.title_label, TextRole.DETAIL_EVENT)
+        self.results.layout().setContentsMargins(0, 0, 0, 0)
+        self.results.layout().setSpacing(0)
+        self.results.body_layout.setSpacing(0)
         extras = [
             widget for widget in overview if widget not in (facts, history_disclosure)
         ]
@@ -614,11 +495,14 @@ class OneShotDetailScreen(QWidget):
             self,
         )
         apply_text_role(reading_heading, TextRole.DETAIL_HEADING)
+        for heading in (reading_heading, self.overview_heading):
+            heading.setContentsMargins(0, int(Spacing.COMPACT), 0, int(Spacing.COMPACT))
         self.workspace.compose(
             summary,
             action_panel,
             [
                 reading_heading,
+                SectionRule(self.workspace.timeline_body),
                 *(
                     [self.results]
                     if detail.status is not PredictionStatus.INVALID
@@ -626,13 +510,18 @@ class OneShotDetailScreen(QWidget):
                 ),
                 self.reflection,
                 self.journals,
-                collapse_section(timeline, "Recorded History", compact=True),
+                finish_disclosure(
+                    collapse_section(timeline, "Recorded History", compact=True)
+                ),
             ],
             [
                 self.overview_heading,
+                SectionRule(self.workspace.overview_body),
                 *extras,
-                collapse_section(facts, "Times & Recorded Facts", compact=True),
-                history_disclosure,
+                finish_disclosure(
+                    collapse_section(facts, "Times & Recorded Facts", compact=True)
+                ),
+                finish_disclosure(history_disclosure),
             ],
         )
         self.workspace.set_reading_context(
@@ -641,7 +530,13 @@ class OneShotDetailScreen(QWidget):
             in (PredictionStatus.RESOLVED, PredictionStatus.INVALID),
         )
         for pane in (self.workspace.timeline_body, self.workspace.overview_body):
+            pane.layout().setSpacing(0)
             reading_typography(pane)
+        if detail.status is PredictionStatus.OPEN:
+            self.results.layout().setContentsMargins(0, int(Spacing.SECTION), 0, 0)
+            self.results.layout().setSpacing(int(Spacing.CONTROL))
+            self.results.body_layout.addSpacing(int(Spacing.SECTION))
+            self.results.body_layout.addWidget(SectionRule(self.results))
         if self.workspace.inline and self.workspace.editor is not None:
             self.reflection.body_layout.addWidget(self.workspace.editor)
             self.workspace.editor.show()
@@ -967,7 +862,7 @@ class OneShotDetailScreen(QWidget):
             self,
         )
         editor.saved.connect(self.show_prediction)
-        self.workspace.begin_inline_editor(editor, self.reflection)
+        self.workspace.begin_inline_editor(editor, self.reflection.body)
         self.add_postmortem_button.hide()
         self.skip_postmortem_button.hide()
         self.later_postmortem_action.setVisible(False)

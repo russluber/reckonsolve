@@ -28,11 +28,16 @@ from reckonsolve.domain.predictions import (
 )
 from reckonsolve.domain.quantiles import FiveQuantiles
 from reckonsolve.one_shot_display import detail_lines
+from reckonsolve.quantile_display import exact_score_text
 from reckonsolve.ui.main_window import MainWindow
 from reckonsolve.ui.one_shot import (
     OneShotCreationScreen,
     OneShotEditDialog,
     ReportedTimeInput,
+)
+from reckonsolve.ui.presentation_settings import (
+    AppearanceMode,
+    MemoryPresentationSettings,
 )
 from reckonsolve.ui.screens import EditPredictionDetailsDialog
 
@@ -373,10 +378,23 @@ def test_main_window_one_shot_route_defaults_and_detail(app, qtbot):
 
 
 @pytest.mark.parametrize("numeric", [False, True])
-def test_one_shot_results_hierarchy_and_keyboard_disclosures(app, qtbot, numeric):
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_one_shot_results_hierarchy_and_keyboard_disclosures(
+    app, qtbot, numeric, appearance
+):
     _, _, operations = app
-    prediction = operations.one_shots.create(request(numeric))
-    window = MainWindow(operations)
+    prediction = operations.one_shots.create(
+        replace(
+            request(numeric),
+            background="A published source with a completed answer.",
+            rationale="My estimate before reading the answer. " * 12,
+        )
+    )
+    window = MainWindow(
+        operations,
+        presentation_settings=MemoryPresentationSettings(),
+    )
+    window.appearance.select(appearance)
     qtbot.addWidget(window)
     window.resize(1200, 850)
     window.show()
@@ -390,6 +408,27 @@ def test_one_shot_results_hierarchy_and_keyboard_disclosures(app, qtbot, numeric
         screen.score_value.font().pointSizeF()
         > screen.answer_result.font().pointSizeF()
     )
+    criteria = screen.findChild(QWidget, "oneShotResolutionCriteria")
+    background = screen.findChild(QWidget, "oneShotBackground")
+    rationale = screen.findChild(QWidget, "oneShotRationale")
+    assert criteria.y() < background.y() < rationale.y()
+    body = rationale.findChildren(QLabel)[-1]
+    assert (
+        screen.overview_heading.font().pointSizeF()
+        > rationale.title_label.font().pointSizeF()
+    )
+    assert rationale.title_label.font().weight() > body.font().weight()
+    assert screen.answer_result.font().pointSizeF() > body.font().pointSizeF()
+    for width in (1200, 760):
+        window.resize(width, 850)
+        qtbot.wait(60)
+        assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        assert screen.scorecard.width() >= screen.results.body.width() - 2
+        assert rationale.width() >= screen.workspace.overview_body.width() - 2
+        assert body.height() >= body.heightForWidth(body.width())
+    window.resize(1200, 850)
+    qtbot.wait(60)
     assert operations.one_shots.get(prediction.prediction_id) == prediction
     for name in (
         "oneShotTimelineDisclosure",
@@ -459,6 +498,16 @@ def test_expanded_one_shot_facts_keep_flat_alignment_and_complete_wrapped_text(
                         assert label.height() >= label.heightForWidth(label.width())
             assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
             assert screen.workspace.horizontalScrollBar().maximum() == 0
+            for pane in (
+                screen.workspace.timeline_body,
+                screen.workspace.overview_body,
+            ):
+                for label in pane.findChildren(QLabel):
+                    if label.isVisible():
+                        assert label.height() >= label.heightForWidth(label.width()), (
+                            label.text()[:60],
+                            label.size(),
+                        )
         text = "\n".join(label.text() for label in panels[1].findChildren(QLabel))
         assert all(
             heading in text for heading in ("Original Saved Facts", "Before", "After")
@@ -468,6 +517,180 @@ def test_expanded_one_shot_facts_keep_flat_alignment_and_complete_wrapped_text(
         assert operations.one_shots.get(corrected.prediction_id) == corrected
     finally:
         qapp.setFont(original_font)
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_one_shot_reading_and_writing_fit_enlarged_text(app, qtbot, qapp, numeric):
+    _, _, operations = app
+    prediction = operations.one_shots.create(request(numeric, answered=False))
+    original_font = QFont(qapp.font())
+    window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
+    qtbot.addWidget(window)
+    window.show()
+    try:
+        qapp.setFont(QFont("Segoe UI", 15))
+        window._open_prediction(prediction.prediction_id)
+        screen = window._prediction_detail_host._one_shot_detail
+        for width in (760, 1200, 760):
+            window.resize(width, 850)
+            qtbot.wait(250)
+            section = screen.findChild(QWidget, "oneShotRecordedFactsDisclosure")
+            button = section.disclosure_button
+            assert button.accessibleName() == "Times & Recorded Facts"
+            assert button.width() <= screen.workspace.overview.viewport().width()
+            assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+            screen.workspace.ensureWidgetVisible(button)
+            button.setFocus()
+            qtbot.keyClick(button, Qt.Key.Key_Space)
+            assert section.disclosure_body.isVisible()
+            qtbot.keyClick(button, Qt.Key.Key_Space)
+            assert section.disclosure_body.isHidden()
+        assert operations.one_shots.get(prediction.prediction_id) == prediction
+        answered = operations.one_shots.create(request(numeric))
+        window._open_prediction(answered.prediction_id)
+        qtbot.wait(250)
+        screen.add_postmortem()
+        qtbot.wait(150)
+        editor = screen.workspace.editor
+        assert editor.parentWidget() is screen.reflection.body
+        assert editor.height() >= editor.minimumSizeHint().height()
+        assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
+        editor.reject()
+        assert operations.one_shots.get(answered.prediction_id) == answered
+    finally:
+        qapp.setFont(original_font)
+
+
+@pytest.mark.parametrize("actual", [-300, 0, 300])
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_one_shot_score_breakdown_retains_exact_terms_and_history(
+    app, qtbot, actual, appearance
+):
+    from reckonsolve.ui.one_shot_reading import OneShotReadingSection
+
+    _, _, operations = app
+    seed = request(numeric=True)
+    prediction = operations.one_shots.create(
+        replace(
+            seed, values=replace(seed.values, answer=FixedPrecisionValue(actual, 2))
+        )
+    )
+    score = operations.one_shots.score(prediction)
+    window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
+    qtbot.addWidget(window)
+    window.appearance.select(appearance)
+    window.resize(1200, 850)
+    window.show()
+    window._open_prediction(prediction.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    section = screen.findChild(QWidget, "oneShotScoreBreakdownDisclosure")
+    assert not section.disclosure_button.isChecked()
+    screen.workspace.ensureWidgetVisible(section.disclosure_button)
+    section.disclosure_button.setFocus()
+    qtbot.keyClick(section.disclosure_button, Qt.Key.Key_Space)
+    qtbot.wait(100)
+    assert section.disclosure_body.isVisible()
+    groups = {
+        group.title_label.text(): group
+        for group in section.findChildren(OneShotReadingSection)
+    }
+
+    def quantities(group):
+        return {label.text() for label in groups[group].findChildren(QLabel)}
+
+    def value(term):
+        return exact_score_text(term) + " m"
+
+    assert {
+        value(score.median_contribution),
+        value(score.interval_50_contribution),
+        value(score.interval_90_contribution),
+    } <= quantities("Contributions to WIS")
+    assert {
+        value(score.median_absolute_error),
+        value(score.signed_median_miss),
+    } <= quantities("Median Error")
+    for name, interval in (
+        ("50% Interval", score.interval_50),
+        ("90% Interval", score.interval_90),
+    ):
+        assert {
+            interval.outcome_location.capitalize() + " interval",
+            value(interval.width),
+            value(interval.miss_distance),
+            value(interval.score),
+        } <= quantities(name)
+    assert screen.score_value.text() == value(score.wis)
+    for width in (760, 1200):
+        window.resize(width, 850)
+        qtbot.wait(100)
+        assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
+        for label in section.disclosure_body.findChildren(QLabel):
+            assert label.height() >= label.heightForWidth(label.width())
+    qtbot.keyClick(section.disclosure_button, Qt.Key.Key_Space)
+    assert section.disclosure_body.isHidden()
+    assert operations.one_shots.get(prediction.prediction_id) == prediction
+    assert operations.one_shots.score(prediction) == score
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_one_shot_audit_leads_with_changes_and_preserves_full_snapshots(
+    app, qtbot, numeric
+):
+    _, clock, operations = app
+    original = operations.one_shots.create(request(numeric))
+    clock.instant += timedelta(minutes=1)
+    corrected = operations.one_shots.correct(
+        original,
+        replace(
+            original.record.effective,
+            answer=FixedPrecisionValue(100, 2) if numeric else BinaryOutcome.NO,
+        ),
+        note="Rechecked the copied answer against the source.",
+    )
+    clock.instant += timedelta(minutes=1)
+    reflected = operations.one_shots.save_postmortem(corrected, "A later reflection.")
+    clock.instant += timedelta(minutes=1)
+    cleared = operations.one_shots.save_postmortem(
+        reflected, None, confirm_clear=True, note="Deliberately cleared the reflection."
+    )
+    score = operations.one_shots.score(cleared)
+    window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
+    qtbot.addWidget(window)
+    window.resize(1200, 850)
+    window.show()
+    window._open_prediction(cleared.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    history = screen.findChild(QWidget, "oneShotCorrectionHistoryDisclosure")
+    history.disclosure_button.setChecked(True)
+    qtbot.wait(100)
+    for index, correction in enumerate(cleared.record.corrections):
+        event = screen.findChild(
+            QWidget, f"oneShotAuditCorrection{correction.correction_id}"
+        )
+        text = [
+            label.text() for label in event.findChildren(QLabel) if label.isVisible()
+        ]
+        assert "Before" in text and "After" in text
+        assert "Forecast" not in text
+        assert ("Answer" if index == 0 else "Postmortem") in text
+        if index == 2:
+            assert "A later reflection." in text and "Not recorded" in text
+        complete = event.findChild(
+            QWidget, f"oneShotCompleteSnapshot{correction.correction_id}Disclosure"
+        )
+        assert not complete.disclosure_button.isChecked()
+        screen.workspace.ensureWidgetVisible(complete.disclosure_button)
+        complete.disclosure_button.setFocus()
+        qtbot.keyClick(complete.disclosure_button, Qt.Key.Key_Space)
+        assert complete.disclosure_body.isVisible()
+        full = [label.text() for label in complete.disclosure_body.findChildren(QLabel)]
+        assert "Forecast" in full and "Answer" in full
+        assert "Measured" in full
+        assert any("approximate" in value and "UTC-07:00" in value for value in full)
+        qtbot.keyClick(complete.disclosure_button, Qt.Key.Key_Space)
+    assert operations.one_shots.get(cleared.prediction_id) == cleared
+    assert operations.one_shots.score(cleared) == score
 
 
 @pytest.mark.parametrize("numeric", [False, True])
@@ -508,6 +731,7 @@ def test_one_shot_skip_is_settled_and_later_reflection_preserves_completion(
     assert not operations.get_dashboard().needs_postmortem_predictions
     screen.later_postmortem_action.trigger()
     assert screen.workspace.inline
+    assert screen.workspace.editor.parentWidget() is screen.reflection.body
     screen.workspace.editor.reject()
     assert operations.one_shots.get(prediction.prediction_id) == skipped
     assert screen.add_postmortem_button.isHidden()

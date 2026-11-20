@@ -53,9 +53,10 @@ class TimelineEntry(QFrame):
         parent: QWidget,
         *,
         local_tooltip: bool = False,
+        end_rule: bool = True,
     ) -> None:
         super().__init__(parent)
-        self.setProperty("reckonsolveTimelineEntry", "true")
+        self.setProperty("reckonsolveTimelineEntry", "true" if end_rule else "false")
         self.setMinimumWidth(0)
         self.column = QVBoxLayout(self)
         self.column.setContentsMargins(0, 12, 0, 16)

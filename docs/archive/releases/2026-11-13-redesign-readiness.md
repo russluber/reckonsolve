@@ -12,6 +12,11 @@ delivery artifacts for the later tuning. The later
 [Detail save responsiveness repair](2026-11-13-workspace-refinement-verification.md#detail-save-responsiveness--2026-11-20)
 also has separate focused/timing evidence and awaits human responsiveness review.
 
+The [One-Shot Reading layout](2026-11-13-workspace-refinement-verification.md#one-shot-reading-layout--2026-11-20)
+also has separate source/native evidence and pending human review. Refresh final
+delivery artifacts for the eventual accepted source; the package identities below
+remain historical evidence of their own payload.
+
 This is an unreleased readiness record for public `e6690aa` plus the narrowly scoped
 readiness corrections below. The user authorized readiness implementation/checks and
 reported the latest saved refinements, including Settings → Performance, checked

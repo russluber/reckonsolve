@@ -1,7 +1,7 @@
 # Reckonsolve architecture
 
 Unreleased 0.9.0 candidate: Journal/workspace, New Prediction/Prediction Detail and the comprehensive Performance/ordinary Settings implementation, schema 21, search projection 3, CSV format 6. Journal/Detail walkthroughs are [accepted with recorded limits](archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12); the third slice is [accepted with recorded limits](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12). Journal relocation is [accepted with recorded limits](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12). Released v0.8.0 remains the schema-20/format-5 baseline; prepared metadata is not publication.
-Last reviewed: 2026-11-13.
+Last reviewed: 2026-11-20.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
 
@@ -221,7 +221,29 @@ Adaptive Detail keeps committed header/Deadline context above independent Timeli
 
 One-Shot Detail shares the independent two-pane workspace with content suited to one immutable forecast. The left pane contains results, inline later reflection, visible Journal Entries and disclosed Recorded History; the right contains context and disclosed originals/corrections/recorded facts. Waiting uses 60/40 and Resolved/Invalid reading uses 50/50. Shared surfaces, semantic status badges, headings and disclosure controls replace the former single-column reading composition. Contextual Journal/Invalid forms use the same task guard. Existing dialogs are embedded as nonmodal contextual forms where selected; saved signals continue invoking the canonical operations. Temporary Overview consultation retains entered revision values. Raw input fingerprints exclude presentation-only state; no persistent draft is written. No Adaptive updating, Deadline or trajectory workflow is added to One-Shot.
 
-One-Shot's checked answer and full-width scorecard are stacked, with a prominent exact score, secondary interpretation and disclosed Numeric breakdown. Postmortem and Journal Entries are distinct unframed reading sections. The shared `collapse_section` compact option uses a content-width, keyboard-focusable native chevron control with palette-relative hover/focus; other callers retain their existing default. Exact historical reveal still opens the same body identity. Skipped reflection displays its immutable completion date and moves later writing into More; written reflection restores Edit and retains any earlier Skip. These are presentation states derived from existing facts, not new storage or completion rules.
+`ui/one_shot_reading.py` supplies OneShotReadingSection: a wrapping subsection heading, full-width body and quiet ending rule. One-Shot's checked answer and prominent full-width scorecard are stacked above distinct Postmortem and Journal Entries sections. Overview starts with available Resolution Criteria, then Background/Rationale and other context, without a label rail. Pane headings, subsection titles, prose and documentary labels use the existing Detail text roles. Section minimum heights follow wrapped content at the current width, preventing nested long notes from being compressed after resize. The helper also separates existing audit disclosures with rules and wraps their native button captions at narrow/enlarged geometry, preserving complete accessible names and body identities. Its event handling remains presentation-only and bounded to these sections.
+
+The shared `collapse_section` compact option uses a content-width, keyboard-focusable native chevron control with palette-relative hover/focus; other callers retain their existing default. Exact historical reveal still opens the same body identity. Skipped reflection displays its immutable completion date and moves later writing into More; written reflection restores Edit and retains any earlier Skip. These are presentation states derived from existing facts, not new storage or completion rules.
+
+`ui/one_shot_audit.py` owns grouped reported/app-recorded times and Numeric definition
+facts, plus original snapshots and correction comparisons. It compares supplied exact
+before/after objects to choose changed display fields, retaining complete snapshots
+under a compact native disclosure. Short facts use labeled comparison columns;
+notes/reflection use full-width reading. Shared date/forecast formatters retain
+canonical precision and documentary cues. The existing disclosure identities and
+Recorded History search targets remain; this module performs no queries, scoring,
+validation or writes.
+
+`ui/one_shot_score.py` renders the supplied Numeric WIS result as four supporting
+reading groups, with quiet labels and exact unit-bearing values. Contributions,
+median error and the two interval diagnostics retain their existing fields and
+meaning. One-Shot Detail uses score presence/type to compose the existing scorecard
+and its native disclosure; the shared CLI text formatter remains unchanged. No
+calculation, domain validation or persistence is added to the presentation helper.
+
+Nested One-Shot reading groups can omit an ending rule when the outer scorecard or
+audit disclosure already owns that boundary. Intermediate group/event separators
+remain; the common reading helpers keep their existing default rules.
 
 Edit Details and Correct Transcription keep review and final consent inside one focused dialog, bound to the reviewed inputs and original concurrency token. Adaptive Resolution/Invalid preparation requires a separate explicit terminal confirmation. Nonblank reflection-only saves delegate unchanged effective terminal facts through shared operations; mixed factual corrections, clearing and Skip keep confirmation. One-Shot reflection uses the dedicated provenance operation. Failure retains inputs; Deadline rejection refreshes committed Locked context and provides a brief right-side notice plus a repeatable cue. User/history text remains selectable; charts remain committed-only.
 
