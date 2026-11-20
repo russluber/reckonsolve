@@ -245,6 +245,24 @@ Nested One-Shot reading groups can omit an ending rule when the outer scorecard 
 audit disclosure already owns that boundary. Intermediate group/event separators
 remain; the common reading helpers keep their existing default rules.
 
+`ui/detail_history.py` organizes supplied Adaptive chart context and existing optional
+metadata into reading groups. It reuses the presentation-only ruled section helper,
+retains screen-owned labels/search targets and performs no queries, scoring or
+writes. Binary history paints with the Window/canvas palette role, including hollow
+markers. Detail hides an inner chart heading only when the visible chevron already
+names it; Numeric's exact accessible CDF description remains unchanged. A history
+read error hides the previous chart and supplied exact distribution facts.
+
+`ui/quantile_scorecard.py` presents the existing analytical result in a framed Numeric
+Scorecard, with grouped accuracy/coverage and a compact WIS Breakdown disclosure.
+The semantic scorecard property preserves this deliberate frame and its insets
+inside otherwise flat Detail reading panes. Shared comparison components still
+receive exact supplied scores; native disclosure state participates in the existing
+fresh-visit/draft-consultation rules. No lower-layer dependency or score changes.
+The scorecard's local reading-group helper measures wrapped row heights after
+layout settles, preserving complete captions and exact values at enlarged/narrow
+geometry without changing the shared Binary comparison presentation.
+
 Edit Details and Correct Transcription keep review and final consent inside one focused dialog, bound to the reviewed inputs and original concurrency token. Adaptive Resolution/Invalid preparation requires a separate explicit terminal confirmation. Nonblank reflection-only saves delegate unchanged effective terminal facts through shared operations; mixed factual corrections, clearing and Skip keep confirmation. One-Shot reflection uses the dedicated provenance operation. Failure retains inputs; Deadline rejection refreshes committed Locked context and provides a brief right-side notice plus a repeatable cue. User/history text remains selectable; charts remain committed-only.
 
 Creation modes share canvas/card placement and reciprocal top-right One-Shot/Adaptive actions with draft retention. One-Shot shows Background/Rationale/Tags in the main card and optional separate date/segmented time input. ui/time_input.py adapts native QTimeEdit section entry, Tab/Shift+Tab, A/P, and Up/Down. UTC is a neutral Qt carrier for documentary wall time, not normalization of a reported event.

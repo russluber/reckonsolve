@@ -1070,7 +1070,7 @@ def test_resolved_body_reflection_actions_and_real_terminal_chronology(
 
 
 def test_current_numeric_distribution_is_distinct_from_earlier_scoring(
-    workspace, qtbot
+    workspace, qtbot, monkeypatch
 ):
     window, operations, clock, _database = workspace
     prediction = create(operations, clock, True)
@@ -1094,9 +1094,9 @@ def test_current_numeric_distribution_is_distinct_from_earlier_scoring(
     assert disclosure.disclosure_button.isVisible()
     assert not disclosure.disclosure_button.isChecked()
     disclosure.disclosure_button.click()
-    assert "Latest committed distribution" in screen.numeric_history_label.text()
+    assert screen.numeric_history_label.isHidden()
     assert "not the forecast used for scoring" in screen.quantile_cdf_summary.text()
-    assert "30" in screen.quantile_cdf_summary.text()
+    assert screen.distribution_information.values["Median"].text() == "30 items"
     assert "median: 0" in screen.terminal_summary.facts.text()
     assert screen.quantile_scorecard.findChild(
         QLabel, "individualMedianErrorSummary"
@@ -1108,6 +1108,156 @@ def test_current_numeric_distribution_is_distinct_from_earlier_scoring(
     screen.refresh()
     assert not disclosure.disclosure_button.isChecked()
     assert screen.terminal_summary.isVisible()
+    with monkeypatch.context() as patch:
+
+        def unavailable(_identifier):
+            raise ApplicationError("A temporary history read failure.")
+
+        patch.setattr(operations, "list_numeric_forecast_revisions", unavailable)
+        screen._load_history(prediction.prediction_id)
+        disclosure.disclosure_button.setChecked(True)
+        assert screen.history_error.isVisible()
+        assert screen.quantile_cdf.isHidden()
+        assert screen.distribution_information.isHidden()
+    screen._load_history(prediction.prediction_id)
+    assert screen.history_error.isHidden()
+    assert screen.distribution_information.values["Median"].text() == "30 items"
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("terminal", [False, True])
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_adaptive_chart_reading_blends_with_canvas_and_keeps_context(
+    workspace, qtbot, numeric, terminal, appearance
+):
+    from PySide6.QtGui import QColor
+
+    from reckonsolve.ui.one_shot_reading import OneShotReadingSection
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    if terminal:
+        action = (
+            operations.invalidate_numeric_prediction
+            if numeric
+            else operations.invalidate_prediction
+        )
+        action(
+            prediction.prediction_id,
+            reason="The source was withdrawn.",
+            **context(prediction, numeric),
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    disclosure = screen.distribution_disclosure if numeric else screen.chart_disclosure
+    heading = (
+        screen.numeric_history_label if numeric else screen.probability_history_heading
+    )
+    assert heading.isHidden() == terminal
+    assert (
+        heading.font().pointSizeF()
+        == window._prediction_detail_screen.probability_history_heading.font().pointSizeF()
+    )
+    if terminal:
+        assert not disclosure.disclosure_button.isChecked()
+        screen.workspace.ensureWidgetVisible(disclosure.disclosure_button)
+        disclosure.disclosure_button.setFocus()
+        qtbot.keyClick(disclosure.disclosure_button, Qt.Key.Key_Space)
+    chart = screen.quantile_cdf if numeric else screen.probability_history_chart
+    qtbot.wait(250)
+    canvas = QColor(semantic_colors(window.palette()).canvas)
+    if not numeric:
+        assert chart.grab().toImage().pixelColor(3, 3) == canvas
+    titles = {
+        section.title_label.text()
+        for section in disclosure.disclosure_body.findChildren(OneShotReadingSection)
+    }
+    assert "How to Read" in titles
+    assert ("Exact Forecast" if numeric else "Scoring Context") in titles
+    if numeric:
+        assert screen.distribution_information.values["Median"].text() == "0 items"
+        assert "outer tails are unspecified" in chart.accessibleDescription().lower()
+    for width in (1200, 760):
+        window.resize(width, 850)
+        qtbot.wait(100)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        for label in disclosure.disclosure_body.findChildren(QLabel):
+            if label.isVisible():
+                assert label.height() >= label.heightForWidth(label.width())
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("scored", [False, True])
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+@pytest.mark.parametrize("points", [9, 15])
+def test_numeric_scorecard_frame_and_keyboard_breakdown_preserve_facts(
+    workspace, qtbot, qapp, request, scored, appearance, points
+):
+    window, operations, clock, _database = workspace
+    original_font = QFont(qapp.font())
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    qapp.setFont(QFont("Segoe UI", points))
+    window.setFont(QFont("Segoe UI", points))
+    prediction = create(operations, clock, True)
+    start = clock.now()
+    clock.advance()
+    operations.resolve_numeric_prediction(
+        prediction.prediction_id,
+        4,
+        effective_resolution_at=clock.now() if scored else start,
+        **context(prediction, True),
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    score = operations.get_prediction_scorecard(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window._open_prediction(prediction.prediction_id)
+    screen = window._numeric_prediction_detail_screen
+    panel = screen.quantile_scorecard
+    assert panel.isVisible()
+    assert panel.title_label.text() == "Numeric Scorecard"
+    assert panel.property("reckonsolveScorecard") == "true"
+    assert panel.layout().contentsMargins().left() > 0
+    details = panel.findChild(QWidget, "numericWISDetails")
+    if scored:
+        assert panel.findChild(QLabel, "individualMedianErrorSummary").text() == (
+            "4 items"
+        )
+        assert panel.findChild(QLabel, "individualInterval90Summary").text() == (
+            "Actual above"
+        )
+        assert isinstance(details.disclosure_button, QToolButton)
+        assert not details.disclosure_button.isChecked()
+        screen.workspace.ensureWidgetVisible(details.disclosure_button)
+        details.disclosure_button.setFocus()
+        qtbot.keyClick(details.disclosure_button, Qt.Key.Key_Space)
+        assert details.disclosure_button.arrowType() is Qt.ArrowType.DownArrow
+        assert details.disclosure_body.isVisible()
+        assert panel.findChild(QLabel, "scoredActual").text() == "4 items"
+    else:
+        assert score.final is None
+        assert details is None
+    for width in (1200, 760):
+        window.resize(width, 850)
+        qtbot.wait(100)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        for label in panel.findChildren(QLabel):
+            if label.isVisible():
+                assert label.height() >= label.heightForWidth(label.width())
+    screen.refresh()
+    if scored:
+        assert not panel.findChild(
+            QWidget, "numericWISDetails"
+        ).disclosure_button.isChecked()
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+    assert operations.get_prediction_scorecard(prediction.prediction_id) == score
 
 
 @pytest.mark.parametrize("numeric", [False, True])

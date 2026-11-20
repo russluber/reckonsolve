@@ -1,5 +1,10 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The latest [Adaptive Overview refinement](#adaptive-overview-reading--2026-11-20)
+records chart surfaces/context, optional information grouping and Numeric scorecard
+presentation. Its current evidence and human review are separate from earlier
+source/package checkpoints.
+
 The [One-Shot Score Breakdown follow-up](#one-shot-score-breakdown--2026-11-20)
 records the latest supporting-score presentation and its separate verification.
 
@@ -1287,3 +1292,72 @@ files. Filesystem documentation discovery checked 372 public links/58 files and
 66 J/42 R IDs and both withdrawals, 96 public-reference mirrors and protected
 lower-layer/migration/resource comparisons passed without Git. Reference packs
 were not edited. The narrow human visual recheck remains pending.
+
+## Adaptive Overview reading — 2026-11-20
+
+The user authorized matching Binary Probability History's background to the
+surrounding canvas in both appearances, removing Numeric's duplicated distribution
+title, organizing information beneath these chart disclosures and More Information,
+and giving Numeric Scorecard a frame and WIS Breakdown a chevron.
+
+Binary's canvas and hollow historical markers now use the Window palette role.
+Inner chart headings hide when their visible native chevron already names them;
+nonterminal headings remain, with equal Binary/Numeric text roles. Existing chart
+samples and exact accessible descriptions remain. The reading groups separate chart
+guidance from scoring context. Numeric keeps its latest-versus-scored qualification
+before the exact current values, with interpolation, tails and ties explained.
+History read failure hides the old distribution/chart while showing the error.
+
+More Information groups the existing optional facts/prose with readable headings
+and rules, preserving label identities and history/navigation. Unit and Decimal
+Places remain below criteria. The framed Numeric Scorecard follows these definition
+facts and precedes notes/reflection. Median accuracy and interval coverage lead to
+an initially collapsed, keyboard-operable WIS Breakdown. Every existing comparison,
+median/interval diagnostic, exact unit/value and scoring rule remains. A local
+presentation helper reserves wrapped table-row heights at narrow/enlarged geometry;
+it introduces no data access, calculation or saved state.
+
+Verification uses disposable databases and fixed clocks. Focused Qt tests cover
+chart canvas/title behavior, current-versus-scored facts, failure/recovery, scored
+and unscored scorecards, keyboard disclosure/defaults, geometry and unchanged
+canonical histories/scores. Native probes cover Binary/Numeric, Open/Locked/
+Resolved/Invalid, Light/Dark, 1,600 × 1,000 and 760 × 520 logical geometry,
+9/15-point real Segoe UI and Qt scales 1/1.5/2. Chart and More Information content
+are expanded; scored Numeric probes also expand WIS Breakdown. Captures of both
+charts, grouped context and scorecards are inspected. Raw evidence stays ignored
+under `build/ux-adaptive-chart-reading-20261120/`.
+
+The known pre-existing narrow resolved Binary diagnostics panel has 9 logical
+pixels of horizontal overflow at 760-wide/15-point text in each palette. This
+unrelated panel is unchanged; the probes identify that exception rather than claim
+universal zero overflow. The new Numeric card/context are checked independently.
+Simulated Qt rendering does not establish physical Windows/accessibility acceptance.
+Earlier whole-suite/package evidence belongs to its earlier payload; no package or
+installed tool was rebuilt/updated and no personal database or Git command was used.
+
+For the narrow human recheck, run `uv run python tools/run_visual_review.py detail`.
+Compare Binary Probability History with Numeric Latest Committed Distribution,
+More Information and Numeric Scorecard/WIS Breakdown, in both palettes and at
+wide/smaller sizes. Other accepted journeys carry forward. Current human visual
+acceptance remains pending; the user owns every Git and later delivery/release step.
+Version 0.9.0 remains Unreleased.
+
+**Final Adaptive Overview checks:** All **155 focused Detail/history/workspace/
+correction cases passed in 192.02 seconds**, followed by **21 individual-scorecard
+cases in 2.68 seconds** on the same executable source. The new checks cover scored/
+unscored cards, native keyboard expansion, fresh-visit collapse, palette canvas
+pixels, exact current-versus-scored values, history failure/recovery and preserved
+canonical facts. All **192 native rendering cases** passed across the six separate
+font/scale processes, retaining the explicitly identified Binary diagnostics
+exception above. Expanded chart/context, optional metadata and scorecard captures
+were inspected, including narrow enlarged text. No executable source changed after
+these final runs.
+
+Ruff check and format check passed for 324 files. Filesystem documentation discovery
+checked 374 public links/58 files and 333 private links/five files with zero errors.
+Scoped whitespace/reference checks preserve all 66 J IDs, 42 R IDs, both withdrawals
+and 96 public-reference mirrors. Comparing 166 package files with the earlier local
+candidate wheel identified only nine accumulated UI changes and four new UI
+helpers; protected lower layers, migrations and resources match byte for byte.
+This comparison is a preservation check, not a current package/build claim. No Git
+command ran, and reference packs remain unchanged. Narrow human review is pending.

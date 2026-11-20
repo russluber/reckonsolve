@@ -905,6 +905,12 @@ QFrame[reckonsolveTimelineEntry="true"] {{
     border-bottom: 1px solid {color.border};
     border-radius: 0;
 }}
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveScorecard="true"] {{
+    background-color: {color.surface};
+    border: 1px solid {color.border};
+    border-top: 2px solid {color.accent};
+    border-radius: 0;
+}}
 QFrame[reckonsolveTimelineEntry="true"][reckonsolveCurrentRevision="true"] {{
     border-left: 2px solid {color.accent};
 }}

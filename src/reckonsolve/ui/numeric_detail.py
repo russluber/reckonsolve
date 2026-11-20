@@ -39,6 +39,7 @@ from reckonsolve.ui.components import (
     TagChips,
 )
 from reckonsolve.ui.date_display import format_date
+from reckonsolve.ui.detail_history import DistributionInformation, organize_metadata
 from reckonsolve.ui.detail_reading import (
     TerminalSummary,
     TimelineEntry,
@@ -241,7 +242,7 @@ class NumericPredictionDetailScreen(QWidget):
             stacked=True,
         )
         self.expected_resolution_row, self.expected_resolution = _detail_value_row(
-            "Expected resolution",
+            "Expected Resolution",
             "numericExpectedResolutionRow",
             "numericExpectedResolutionValue",
             self.detail_content,
@@ -587,11 +588,14 @@ class NumericPredictionDetailScreen(QWidget):
             "numericPredictionHistoryPanel",
             self.detail_content,
         )
-        apply_text_role(history_label, TextRole.SECTION_TITLE)
+        apply_text_role(history_label, TextRole.DETAIL_EVENT)
         history_panel_layout.addWidget(history_label)
         history_panel_layout.addWidget(self.history_error)
         history_panel_layout.addWidget(self.quantile_cdf)
-        history_panel_layout.addWidget(self.quantile_cdf_summary)
+        self.distribution_information = DistributionInformation(
+            self.quantile_cdf_summary, history_panel
+        )
+        history_panel_layout.addWidget(self.distribution_information)
         apply_surface_role(history_panel, SurfaceRole.CANVAS)
 
         self._page_header = header
@@ -692,13 +696,20 @@ class NumericPredictionDetailScreen(QWidget):
         self.metadata_disclosure = collapse_section(
             self.metadata_panel, "More Information", compact=True
         )
+        organize_metadata(
+            (
+                (self.expected_resolution_row, self.expected_resolution),
+                (self.background_section, self.background),
+                (self.rationale_section, self.rationale),
+            )
+        )
         apply_action_role(self.write_postmortem_button, ActionRole.SECONDARY)
         overview = [
             self.resolution_criteria_section,
             self.definition_summary,
+            self.quantile_scorecard,
             self.reading_sections.notes,
             self.reading_sections.reflection,
-            self.quantile_scorecard,
             self.resolution_history,
             self.invalidation_history,
             self.distribution_disclosure,
@@ -1119,32 +1130,36 @@ class NumericPredictionDetailScreen(QWidget):
             self.history_error.setText(
                 f"Numeric interval history is unavailable. {error}"
             )
+            self.quantile_cdf.hide()
+            self.distribution_information.hide()
             self.history_error.setHidden(False)
             return
         self.quantile_cdf.show()
         self.quantile_cdf_summary.show()
         self.numeric_history_label.setText(
-            "Latest committed distribution"
+            "Latest Committed Distribution"
             if self._prediction.status
             in (PredictionStatus.RESOLVED, PredictionStatus.INVALID)
-            else "Current committed distribution"
+            else "Current Committed Distribution"
         )
         self.quantile_cdf.set_forecast(revisions[-1].quantiles, self._prediction.unit)
-        self.quantile_cdf_summary.setText(
-            self.quantile_cdf.accessibleDescription()
-            + "\nEvery earlier forecast remains in the timeline below its original timestamp."
+        context = (
+            "Every earlier forecast remains in Timeline at its original timestamp."
         )
         card = self._quantile_score
         if card is not None and card.final_revision_id != revisions[-1].revision_id:
-            self.quantile_cdf_summary.setText(
+            context = (
                 (
                     "No forecast qualified for scoring. "
                     if card.final_revision_id is None
                     else "This is not the forecast used for scoring. "
                 )
                 + "It is the latest committed distribution.\n"
-                + self.quantile_cdf_summary.text()
+                + context
             )
+        self.distribution_information.set_forecast(
+            revisions[-1].quantiles, self._prediction.unit, context
+        )
         self.history_error.setHidden(True)
 
     def _load_timeline(self, prediction_id: int) -> None:

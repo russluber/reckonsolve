@@ -37,6 +37,7 @@ from reckonsolve.ui.components import (
     TagChips,
 )
 from reckonsolve.ui.date_display import format_date
+from reckonsolve.ui.detail_history import binary_history_information, organize_metadata
 from reckonsolve.ui.detail_reading import (
     TerminalSummary,
     criteria_reader,
@@ -273,7 +274,7 @@ class PredictionDetailScreen(QWidget):
             stacked=True,
         )
         self.expected_resolution_row, self.expected_resolution = _detail_value_row(
-            "Expected resolution",
+            "Expected Resolution",
             "predictionDetailExpectedResolutionRow",
             "predictionDetailExpectedResolution",
             self.detail_content,
@@ -499,6 +500,7 @@ class PredictionDetailScreen(QWidget):
         self.timeline_placeholder.setWordWrap(True)
 
         chart_label = QLabel("Probability History", self.detail_content)
+        self.probability_history_heading = chart_label
         chart_label.setObjectName("probabilityHistoryHeading")
         self.probability_history_chart = ProbabilityHistoryChart(self.detail_content)
         chart_policy = self.probability_history_chart.sizePolicy()
@@ -584,7 +586,7 @@ class PredictionDetailScreen(QWidget):
             "predictionDetailHistoryPanel",
             self.detail_content,
         )
-        apply_text_role(chart_label, TextRole.SECTION_TITLE)
+        apply_text_role(chart_label, TextRole.DETAIL_EVENT)
         chart_panel_layout.addWidget(chart_label)
         chart_panel_layout.addWidget(self.probability_history_chart)
         self.contract_context = QLabel(self.detail_content)
@@ -593,7 +595,9 @@ class PredictionDetailScreen(QWidget):
         self.contract_context.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        chart_panel_layout.addWidget(self.contract_context)
+        chart_panel_layout.addWidget(
+            binary_history_information(self.contract_context, chart_panel)
+        )
         chart_panel_layout.addWidget(self.chart_placeholder)
         apply_surface_role(chart_panel, SurfaceRole.CANVAS)
 
@@ -680,6 +684,12 @@ class PredictionDetailScreen(QWidget):
         )
         self.metadata_disclosure = collapse_section(
             self.metadata_panel, "More Information", compact=True
+        )
+        organize_metadata(
+            (
+                (self.expected_resolution_row, self.expected_resolution),
+                (self.background_section, self.background),
+            )
         )
         overview = [
             self.resolution_criteria_section,

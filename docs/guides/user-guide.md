@@ -196,9 +196,9 @@ Leaving entered Detail work offers Keep editing or explicit discard. Changing ap
 
 In One-Shot Numeric Results, **Score Breakdown** groups the contributions to WIS, median error and separate 50%/90% interval diagnostics. Weighted contributions are separate from raw interval scores; the main WIS stays above the disclosure. Existing exact values and units are retained.
 
-In One-Shot Numeric Results, **Score Breakdown** groups the existing contributions to WIS, median error and 50%/90% interval diagnostics. The main WIS stays above it; weighted contributions and raw interval scores have separate labels.
-
 Adaptive Overview also uses compact chevrons for **More Information**, **Probability History** on Invalid Binary records and **Latest Committed Distribution** on terminal Numeric records. Click or focus the control and press Space to reveal its existing content. Fresh ordinary visits use the established collapsed defaults; directly visible charts on nonterminal records stay visible.
+
+These chart sections separate reading guidance from history/scoring context. Numeric shows the exact latest forecast and clearly warns when a different revision was used for scoring. More Information separates optional facts and prose. The framed **Numeric Scorecard** groups median accuracy and interval coverage; expand **WIS Breakdown** for the chart, initial/final comparison and exact supporting diagnostics.
 
 On Adaptive Numeric records, **Unit** and **Decimal Places** stay visible directly below Resolution Criteria in Overview or Archival Context. These fixed definition facts are selectable; they are not repeated inside More Information. That disclosure holds remaining optional context and definition history, with an explicit message when nothing additional is recorded.
 

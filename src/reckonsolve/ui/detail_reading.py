@@ -111,11 +111,16 @@ def reading_typography(root: QWidget) -> None:
         TextRole.SECONDARY.value: TextRole.DETAIL_TIME,
     }
     for panel in root.findChildren(QFrame):
-        if panel.property("reckonsolveSurfaceRole") in (
-            "canvas",
-            "base",
-            "raised",
-        ) and not panel.property("reckonsolveReadingLayout"):
+        if (
+            panel.property("reckonsolveSurfaceRole")
+            in (
+                "canvas",
+                "base",
+                "raised",
+            )
+            and not panel.property("reckonsolveReadingLayout")
+            and not panel.property("reckonsolveScorecard")
+        ):
             panel.setProperty("reckonsolveReadingLayout", True)
             if panel.layout() is not None:
                 panel.layout().setContentsMargins(0, 0, 0, 0)
@@ -402,6 +407,9 @@ def reading_refresh(method):
 
             invalid = prediction.status is PredictionStatus.INVALID
             chart.disclosure_button.setVisible(invalid)
+            heading = getattr(screen, "probability_history_heading", None)
+            if heading is not None:
+                heading.setVisible(not invalid)
             if not invalid:
                 chart.disclosure_body.show()
         distribution = getattr(screen, "distribution_disclosure", None)
@@ -413,6 +421,7 @@ def reading_refresh(method):
                 PredictionStatus.INVALID,
             )
             distribution.disclosure_button.setVisible(terminal)
+            screen.numeric_history_label.setVisible(not terminal)
             if not terminal:
                 distribution.disclosure_body.show()
         if keep:

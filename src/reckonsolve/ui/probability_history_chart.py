@@ -212,7 +212,7 @@ class ProbabilityHistoryChart(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         palette = self.palette()
-        painter.fillRect(self.rect(), palette.color(QPalette.ColorRole.Base))
+        painter.fillRect(self.rect(), palette.color(QPalette.ColorRole.Window))
 
         plot_rect = self._plot_rect()
         self._paint_axes(painter, palette, plot_rect)
@@ -334,7 +334,7 @@ class ProbabilityHistoryChart(QWidget):
         geometry: ProbabilityChartGeometry,
     ) -> None:
         highlight = palette.color(QPalette.ColorRole.Highlight)
-        background = palette.color(QPalette.ColorRole.Base)
+        background = palette.color(QPalette.ColorRole.Window)
         text_color = palette.color(QPalette.ColorRole.Text)
         last_index = len(geometry.markers) - 1
         for index, marker in enumerate(geometry.markers):

@@ -2621,3 +2621,25 @@ both appearances, geometry and unchanged saved records/scores.
 
 The score presentation is implemented locally with [focused/native evidence](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-score-breakdown--2026-11-20);
 its narrow human visual review remains pending.
+
+**Adaptive Overview reading — authorized 2026-11-20:** Probability History uses the
+surrounding workspace canvas color in both appearances, including hollow historical
+markers. Latest Committed Distribution omits its repeated inner heading when the
+chevron already names it; directly visible charts retain a matching subsection
+heading. Organize supporting content into chart-reading guidance, exact Numeric
+forecast values and history/scoring context. Keep the latest-versus-scored warning
+prominent when those forecasts differ. Preserve exact values, chronology, supported
+interpolation/ties, unspecified tails and chart text alternatives. Failed history
+reads show their error without displaying stale distribution values.
+
+More Information uses clearly separated optional fact/prose groups, retaining its
+empty/unavailable states and exact historical targets. Numeric Overview keeps Unit
+and Decimal Places below criteria, followed by a framed **Numeric Scorecard** with
+grouped median accuracy and interval coverage. **WIS Breakdown** becomes a compact
+keyboard-operable chevron, initially collapsed, retaining all existing diagnostics,
+comparison terms, units and meanings. Keep ordinary reading flat elsewhere and
+preserve existing draft consultation, fresh-visit defaults and terminal eligibility.
+These changes affect presentation only, with no new score, persistence or workflow
+rule. Verify both types, lifecycle states, palettes, narrow/scaled/enlarged geometry,
+read failures and unchanged canonical facts/scores. Current source evidence and
+pending human review are recorded in the [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-overview-reading--2026-11-20).

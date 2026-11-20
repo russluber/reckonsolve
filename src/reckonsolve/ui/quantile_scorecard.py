@@ -2,20 +2,61 @@
 
 from fractions import Fraction
 
-from PySide6.QtWidgets import QGroupBox, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QTimer
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from reckonsolve.analytics.quantiles import QuantileScorecard
 from reckonsolve.quantile_display import exact_score_text, quantile_scorecard_lines
 from reckonsolve.ui.components import ContentPanel
+from reckonsolve.ui.detail_workspace import collapse_section
+from reckonsolve.ui.one_shot_reading import finish_disclosure
 from reckonsolve.ui.scorecard_chart import ScoredIntervalsChart
 from reckonsolve.ui.scorecard_components import ScoreGroup, ScoreGroups, score_label
 from reckonsolve.ui.visual_system import Spacing, TextRole
 
 
+class _ReadingScoreGroup(ScoreGroup):
+    """Reserve the actual wrapped row height inside a narrow scorecard."""
+
+    def __init__(self, title: str, parent: QWidget) -> None:
+        super().__init__(title, parent)
+        self._height_timer = QTimer(self)
+        self._height_timer.setSingleShot(True)
+        self._height_timer.timeout.connect(self._fit_height)
+
+    def event(self, event: QEvent) -> bool:
+        result = super().event(event)
+        if event.type() in (QEvent.Type.Resize, QEvent.Type.LayoutRequest):
+            timer = getattr(self, "_height_timer", None)
+            if timer is not None and not timer.isActive():
+                timer.start(0)
+        return result
+
+    def _fit_height(self) -> None:
+        # Let the enclosing responsive groups settle before measuring rows.
+        for row in range(self.rows.rowCount()):
+            height = max(
+                (
+                    item.widget().heightForWidth(item.widget().width())
+                    for column in (0, 1)
+                    if (item := self.rows.itemAtPosition(row, column)) is not None
+                ),
+                default=0,
+            )
+            if height != self.rows.rowMinimumHeight(row):
+                self.rows.setRowMinimumHeight(row, height)
+        height = self.layout().minimumHeightForWidth(self.width())
+        if height != self.minimumHeight():
+            self.setMinimumHeight(height)
+
+
 class QuantileScorecardPanel(ContentPanel):
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Numeric WIS scorecard", parent=parent)
+        super().__init__("Numeric Scorecard", parent=parent)
         self.setObjectName("numericQuantileScorecard")
+        self.setProperty("reckonsolveScorecard", "true")
+        self.title_label.setWordWrap(True)
+        self.title_label.setMinimumWidth(0)
 
     def set_scorecard(
         self, card: QuantileScorecard, *, primary_facts: bool = True
@@ -54,40 +95,38 @@ class QuantileScorecardPanel(ContentPanel):
         assert card.definition is not None and card.scoring_revision is not None
         if not primary_facts:
             unit = card.definition.unit
-            self.title_label.setText("Numeric scorecard")
-            for name, text in (
-                (
-                    "individualMedianErrorSummary",
-                    f"Median absolute error: {exact_score_text(card.final.median_absolute_error)} {unit}",
-                ),
-                (
-                    "individualMedianMissSummary",
-                    f"Signed median miss (actual minus median): {exact_score_text(card.final.signed_median_miss)} {unit}",
-                ),
-                (
-                    "individualInterval50Summary",
-                    f"Actual is {card.final.interval_50.outcome_location} the 50% interval.",
-                ),
-                (
-                    "individualInterval90Summary",
-                    f"Actual is {card.final.interval_90.outcome_location} the 90% interval.",
-                ),
+            accuracy = _ReadingScoreGroup("Median Accuracy", self)
+            accuracy.add_fact(
+                "Absolute error",
+                f"{exact_score_text(card.final.median_absolute_error)} {unit}",
+                name="individualMedianErrorSummary",
+            )
+            accuracy.add_fact(
+                "Signed miss",
+                f"{exact_score_text(card.final.signed_median_miss)} {unit}",
+                name="individualMedianMissSummary",
+                help_text="Actual minus median: positive means above the estimate; negative means below.",
+            )
+            coverage = _ReadingScoreGroup("Interval Coverage", self)
+            for level, interval in (
+                (50, card.final.interval_50),
+                (90, card.final.interval_90),
             ):
-                label = score_label(text, self)
-                label.setObjectName(name)
-                self.body_layout.addWidget(label)
-        details = QGroupBox("WIS Breakdown", self)
+                coverage.add_fact(
+                    f"{level}% interval",
+                    "Actual " + interval.outcome_location,
+                    name=f"individualInterval{level}Summary",
+                )
+            self.body_layout.addWidget(ScoreGroups((accuracy, coverage), self))
+        contents = QWidget(self)
+        contents.setObjectName("numericWISContents")
+        details = collapse_section(contents, "WIS Breakdown", compact=True)
         details.setAccessibleName("WIS breakdown and initial/final comparison")
         details.setObjectName("numericWISDetails")
-        details.setCheckable(True)
-        details.setChecked(False)
-        contents = QWidget(details)
         detail_layout = QVBoxLayout(contents)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
         detail_layout.setSpacing(int(Spacing.SECTION))
-        group_layout = QVBoxLayout(details)
-        group_layout.addWidget(contents)
-        details.toggled.connect(contents.setVisible)
-        contents.hide()
+        finish_disclosure(details, end_rule=False)
         detail_layout.addWidget(
             score_label(
                 "Final Forecast and Outcome", contents, role=TextRole.SECTION_TITLE
@@ -106,7 +145,7 @@ class QuantileScorecardPanel(ContentPanel):
         def quantity(value: Fraction) -> str:
             return f"{exact_score_text(value)} {unit}"
 
-        comparison = ScoreGroup("Initial vs Final", contents)
+        comparison = _ReadingScoreGroup("Initial vs Final", contents)
         comparison.add_fact(
             "Initial WIS", quantity(card.initial.wis), name="individualInitialWIS"
         )
@@ -126,7 +165,7 @@ class QuantileScorecardPanel(ContentPanel):
             name="individualDeltaWIS",
             help_text="Initial minus final: positive means the final forecast scored better. This is hindsight within one Prediction, not causal skill or a cross-question score.",
         )
-        median = ScoreGroup("Median", contents)
+        median = _ReadingScoreGroup("Median", contents)
         median.add_fact(
             "Estimate",
             f"{card.scoring_revision.quantiles.q50} {unit}",
@@ -170,7 +209,7 @@ class QuantileScorecardPanel(ContentPanel):
                 card.final.interval_90_contribution,
             ),
         ):
-            group = ScoreGroup(f"{level}% Interval", contents)
+            group = _ReadingScoreGroup(f"{level}% Interval", contents)
             group.add_fact(
                 "Range", f"{low} to {high} {unit}", name=f"scoredInterval{level}Range"
             )

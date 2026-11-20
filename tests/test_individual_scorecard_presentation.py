@@ -7,7 +7,7 @@ from fractions import Fraction
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPalette
-from PySide6.QtWidgets import QGroupBox, QLabel, QWidget
+from PySide6.QtWidgets import QLabel, QToolButton, QWidget
 
 from reckonsolve.analytics.quantiles import QuantileScorecard, weighted_interval_score
 from reckonsolve.domain.predictions import FixedPrecisionValue
@@ -104,7 +104,10 @@ def test_exact_chart_projection_and_text(qtbot, values, actual):
     panel.set_scorecard(card)
     panel.resize(700, 900)
     panel.show()
-    panel.findChild(QGroupBox).setChecked(True)
+    details = panel.findChild(QWidget, "numericWISDetails")
+    assert isinstance(details.disclosure_button, QToolButton)
+    assert not details.disclosure_button.isChecked()
+    details.disclosure_button.setChecked(True)
     qtbot.wait(10)
     chart = panel.findChild(ScoredIntervalsChart)
     points = chart.marker_positions()
@@ -154,7 +157,7 @@ def test_scorecard_resize_roundtrip_and_palette(qtbot, qapp, tmp_path, dark, fon
         qtbot.addWidget(panel)
         install_visual_system(panel)
         panel.set_scorecard(make_card(actual=12))
-        panel.findChild(QGroupBox).setChecked(True)
+        panel.findChild(QWidget, "numericWISDetails").disclosure_button.setChecked(True)
         panel.show()
         for width in (1300, 450, 1300):
             panel.resize(width, panel.sizeHint().height())
@@ -200,7 +203,7 @@ def test_corrected_and_unscored_refresh_remove_stale_graphics(qtbot):
         )
     )
     assert panel.findChild(ScoredIntervalsChart) is None
-    assert panel.findChild(QGroupBox) is None
+    assert panel.findChild(QWidget, "numericWISDetails") is None
     assert "Not scored" in "\n".join(
         label.text() for label in panel.findChildren(QLabel)
     )

@@ -29,6 +29,8 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Adaptive Overview charts blend into both workspace palettes and avoid repeated disclosure headings. Supporting context and optional information use clearer reading groups; Numeric Scorecard has a distinct frame and compact WIS Breakdown chevron.
+
 - One-Shot Numeric Score Breakdown uses grouped contributions, median error and interval diagnostics with clear labels, exact values and consistent ruled reading hierarchy. Nested score/audit sections share one ending boundary without stacked trailing lines.
 
 - One-Shot audit disclosures group reported times separately from app timestamps and Numeric definition facts. Corrections lead with changed fields, clear Before/After comparisons and full-width prose; complete immutable snapshots remain available without repeating every unchanged field up front.
