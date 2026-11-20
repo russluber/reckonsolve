@@ -30,7 +30,7 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 ### Fixed
 
 - Unchanged Journal background checks and returns retain readable rows and useful focus, avoiding repeated loading flashes and full row rebuilds. New requests, changed membership and read failures remain explicit.
-- Long Adaptive histories reuse unchanged Timeline rows and switch order directly; smooth pane changes remain responsive without repeatedly rewrapping the full history.
+- Long Adaptive histories reuse unchanged Timeline widgets and native layout items when saving entries, Reviews or revisions and switching order, avoiding a full-history redraw pause. Smooth pane changes retain their existing motion and reduced-motion behavior.
 - Calibration surfaces, Actual markers, Numeric labels, action widths and expanded historical text retain readable palette/font/geometry treatment. Pending Numeric metric work is cancelled when its widget is destroyed.
 - Effective reflection classification and save-response reads preserve immutable history and scoring. Shared application operations keep lifecycle, validation, transactions and storage outside renderers and signal handlers.
 - Private Windows builds prefer system libraries during dependency discovery, preventing an unrelated tool's incompatible ICU DLL from breaking packaged startup. The caller's search path is restored on exit.

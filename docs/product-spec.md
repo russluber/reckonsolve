@@ -2561,3 +2561,16 @@ action and eligibility rule. Numeric Forecast Reviews retain their existing cont
 This changes presentation only. Check corrected/uncorrected entries across all four
 contracts, both palettes, narrow/wide/scaled geometry, enlarged fonts, focus and
 unchanged canonical history; human visual acceptance remains separate.
+
+**Detail save responsiveness — authorized 2026-11-20:** Saving from an Adaptive
+Detail writing pane must reconcile newly read Timeline facts incrementally,
+retaining unchanged row widgets and native layout items instead of discarding
+their layout caches. Append or replace only affected rows, including changed
+current-revision/scoring annotations; sorting retains the loaded items in true
+chronological order. Preserve fresh canonical reads, shared validation/transactions,
+stale/error draft retention, exact history, independent pane state and existing
+bidirectional motion/reduced motion. Check real Journal, Review and revision saves
+on long Binary/Numeric histories, corrections, order and external changes using
+disposable data. Record save-handler and deferred redraw timing separately; human
+responsiveness review remains separate from controlled measurements. This is a
+presentation optimisation, with no change to data, lifecycle, scoring or persistence.

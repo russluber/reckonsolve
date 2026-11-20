@@ -78,9 +78,10 @@ class TimelineRows:
         descending: bool,
     ) -> None:
         retained = {id(row[2]) for row in rows}
-        while self.layout.count():
-            widget = self.layout.takeAt(0).widget()
+        for index in reversed(range(self.layout.count())):
+            widget = self.layout.itemAt(index).widget()
             if widget is not None and id(widget) not in retained:
+                self.layout.takeAt(index)
                 widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
@@ -97,14 +98,20 @@ class TimelineRows:
         if self._descending == descending:
             return
         self._descending = descending
-        # Moving layout items retains widget parents, selection and disclosures.
-        # Recreating these trees incurs a large deferred Qt style/layout pass.
-        while self.layout.count():
-            self.layout.takeAt(0)
-        for _, _, widget in sorted(
+        # Keep unchanged Qt layout items as well as their widgets. Removing every
+        # item on an append discards native size caches for the whole history.
+        ordered = sorted(
             self.rows, key=lambda row: (row[0], row[1]), reverse=descending
-        ):
-            self.layout.addWidget(widget)
+        )
+        for index, (_, _, widget) in enumerate(ordered):
+            item = self.layout.itemAt(index)
+            if item is not None and item.widget() is widget:
+                continue
+            previous = self.layout.indexOf(widget)
+            if previous >= 0:
+                self.layout.insertItem(index, self.layout.takeAt(previous))
+            else:
+                self.layout.insertWidget(index, widget)
 
 
 class AdaptiveReadingSections:

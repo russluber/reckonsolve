@@ -61,6 +61,66 @@ def widgets(screen):
     return {id(row[2]) for row in screen.timeline_rows.rows}
 
 
+def layout_items(screen):
+    layout = screen.timeline_rows.layout
+    return {
+        id(layout.itemAt(index).widget()): layout.itemAt(index)
+        for index in range(layout.count())
+    }
+
+
+@pytest.mark.parametrize("task", ["journal", "review", "revision"])
+def test_saves_preserve_native_layout_items_for_unchanged_history(
+    long_detail, qtbot, task
+):
+    _window, screen, operations, clock, _path, numeric = long_detail
+    before = layout_items(screen)
+    row_count = len(before)
+    assert row_count > 50
+    {
+        "journal": screen.open_add_journal_entry,
+        "review": screen.open_forecast_review,
+        "revision": screen.open_revise_forecast,
+    }[task]()
+    qtbot.wait(220)
+    editor = screen.workspace.editor
+    if task == "journal":
+        editor.body_input.setPlainText(
+            "The public notice adds evidence, not a new forecast."
+        )
+    elif task == "review":
+        editor.note_input.setPlainText(
+            "Reconsidered the notice; retained the forecast."
+        )
+    else:
+        editor.rationale_input.setPlainText(
+            "A revised estimate after the public notice."
+        )
+        if numeric:
+            for level, value in {5: 10, 25: 20, 50: 30, 75: 40, 95: 50}.items():
+                editor.quantile_input.inputs[level].setText(str(value))
+        else:
+            editor.probability_input.setValue(73)
+    clock.instant += timedelta(minutes=1)
+    editor.submit()
+    qtbot.wait(220)
+    assert screen.workspace.editor is None
+    after = layout_items(screen)
+    assert len(after) == row_count + 1
+    retained = before.keys() & after.keys()
+    assert len(retained) == row_count - (task == "revision")
+    assert all(after[identity] is before[identity] for identity in retained)
+    rows = screen.timeline_rows.rows
+    assert [
+        screen.timeline_rows.layout.itemAt(index).widget() for index in range(len(rows))
+    ] == [
+        row[2] for row in sorted(rows, key=lambda row: (row[0], row[1]), reverse=True)
+    ]
+    current = operations.get_prediction_for_navigation(screen.prediction_id)
+    assert current is not None
+    assert len(widgets(screen)) == len(rows)
+
+
 def test_order_and_task_open_reuse_rows_with_fresh_reads(
     long_detail, qtbot, monkeypatch
 ):
@@ -69,6 +129,7 @@ def test_order_and_task_open_reuse_rows_with_fresh_reads(
         "reckonsolve.ui.detail_workspace.animations_enabled", lambda _: False
     )
     rows = widgets(screen)
+    items = layout_items(screen)
     assert len(rows) > 50
     calls = []
     name = "list_numeric_timeline" if numeric else "list_timeline"
@@ -83,6 +144,9 @@ def test_order_and_task_open_reuse_rows_with_fresh_reads(
     qtbot.wait(20)
     assert not calls
     assert widgets(screen) == rows
+    assert all(
+        layout_items(screen)[identity] is item for identity, item in items.items()
+    )
     earliest = min(screen.timeline_rows.rows, key=lambda row: (row[0], row[1]))[2]
     assert screen.timeline_rows.layout.itemAt(0).widget() is earliest
     before = operations.get_prediction_for_navigation(screen.prediction_id)
@@ -139,6 +203,7 @@ def test_external_append_correction_and_review_only_replace_affected_rows(
         assert widgets(screen) > after_append
         assert len(widgets(screen)) == len(after_append) + 1
         before_correction = widgets(screen)
+        items_before_correction = layout_items(screen)
         clock.instant += timedelta(hours=1)
         correct = (
             external.correct_numeric_journal_entry
@@ -156,6 +221,10 @@ def test_external_append_correction_and_review_only_replace_affected_rows(
         assert len(after_correction) == len(before_correction)
         assert len(before_correction - after_correction) == 1
         assert len(after_correction - before_correction) == 1
+        assert all(
+            layout_items(screen)[identity] is items_before_correction[identity]
+            for identity in before_correction & after_correction
+        )
         assert any(
             "Corrected evidence" in label.text()
             for label in screen.findChildren(QLabel)

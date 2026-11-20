@@ -8,7 +8,9 @@ The subsequent [compact Journal entry refinement](2026-11-13-workspace-refinemen
 changes presentation after that candidate snapshot. Its focused/source/native checks
 and pending human review have separate evidence. The full-suite/package results and
 artifact hashes below apply to the earlier payload; they are not verification or
-delivery artifacts for the later tuning.
+delivery artifacts for the later tuning. The later
+[Detail save responsiveness repair](2026-11-13-workspace-refinement-verification.md#detail-save-responsiveness--2026-11-20)
+also has separate focused/timing evidence and awaits human responsiveness review.
 
 This is an unreleased readiness record for public `e6690aa` plus the narrowly scoped
 readiness corrections below. The user authorized readiness implementation/checks and

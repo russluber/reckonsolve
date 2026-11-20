@@ -1,5 +1,10 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [Detail save responsiveness follow-up](#detail-save-responsiveness--2026-11-20)
+follows the user-reported saved compact Journal checkpoint. Its focused checks and
+controlled measurements cover the current performance change; human responsiveness
+review remains pending. Earlier package/full-suite results retain their payload.
+
 The [compact Journal entry follow-up](#compact-journal-entries--2026-11-19) follows
 the earlier [whole-app candidate readiness](2026-11-13-redesign-readiness.md#final-candidate-readiness--2026-11-19).
 Its current source/native evidence and pending human review remain separate from
@@ -1047,3 +1052,62 @@ file whitespace/conflict markers. Reference packs were not edited. No Git comman
 was run; Git-based status/diff/tracking checks remain with the user. No executable
 source changed after the final focused/native checks; later edits close documentation
 only. Human visual acceptance of this follow-up remains pending.
+
+## Detail save responsiveness — 2026-11-20
+
+After reporting the preceding checkpoint saved, the user identified a pause when
+saving a Journal or other right-hand Detail writing task, especially with long
+histories, and authorized an efficiency repair. Version 0.9.0 remains Unreleased.
+
+`TimelineRows` already reused immutable row widgets, but removed/recreated every
+native layout item during reconciliation and ordering. This discarded Qt's size
+caches, causing a deferred full-history layout pause after the save handler had
+returned. It now removes only obsolete items, inserts new rows and moves existing
+items when needed. Unchanged widgets retain their native layout items and size
+caches. Fresh canonical reads, changed-row/annotation replacement, exact chronology,
+shared validation/transactions, draft/error handling and pane motion remain.
+
+The controlled offscreen probe uses real Windows Segoe UI, fixed time, separate
+disposable Binary/Numeric archives with more than 50 Timeline rows, a 1,320 × 1,000
+window and actual Journal/Review/revision submissions. A 16 ms heartbeat includes
+the deferred redraw and pane return. On each type's first unprofiled Journal save,
+the longest event gap fell from **1,699 to 101 ms** for Binary and **2,319 to 122 ms**
+for Numeric. The save handler itself was already about 99/129 ms before the fix;
+the improvement removes the subsequent redraw stall, rather than bypassing writes.
+All 18 final unprofiled saves across the two types and three tasks had maximum gaps
+of approximately **93–149 ms**. Profiling separately confirmed the reduced repeated
+layout work. These are local controlled observations, not universal latency bounds,
+physical Windows/accessibility acceptance or a search benchmark.
+
+All **188 relevant cases passed in 183.53 seconds** across Detail responsiveness,
+finish, workspace, Journal UI, Binary Detail UI and One-Shot workflows. Six new
+long-history Journal/Review/revision cases check retained native layout-item identity
+for unchanged rows, changed current-revision markers, appended row counts and exact
+display order. Existing correction/order checks now also verify untouched item
+identity. Existing stale/error, search-reveal, task and motion checks remain in the
+run. The 16-case responsiveness module's separate iterative run is included in the
+188 final cases, not an additional count.
+
+Generated logs, profiles, measurements and pre-edit source snapshots remain ignored
+under `build/ux-detail-save-20261120/`. Only `ui/detail_sections.py` changes runtime
+behavior; the existing responsiveness test module adds regression coverage. There
+are no domain/data/scoring, migration, dependency or installed-tool changes. The
+earlier whole-suite and package artifacts retain their historical payload; this
+follow-up does not claim fresh whole-suite/package validation.
+
+For the focused human check, run `uv run python tools/run_visual_review.py detail`.
+Use the long-history Adaptive Binary and Numeric examples: save a Journal, Keep
+Forecast note and changed revision, confirm each appears once, switch chronological
+order and check the smooth return to reading. Use disposable data. Human
+responsiveness acceptance remains pending; no personal database was opened. Every
+Git command, including status/diff, remains with the user and was not run.
+
+**Documentation/source closure:** Ruff check and format passed (320 files). The
+existing offline documentation engine with filesystem discovery checked 365 public
+links in 58 Markdown files and 329 private links in five files, with zero errors.
+Filesystem checks verified all 66 J/42 R identifiers, both withdrawals, 96 existing
+public-reference mirrors, lower-layer imports and affected-file whitespace/conflict
+markers. A direct pre-edit source comparison confirms the incremental layout change;
+the investigated reading/FlowLayout modules remain byte-identical. No executable
+source changed after the final 188-case run. Later edits close documentation only;
+human review and Git-based inspection remain user-owned.
