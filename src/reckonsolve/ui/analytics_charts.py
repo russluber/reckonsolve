@@ -124,7 +124,7 @@ class CalibrationChart(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         palette = self.palette()
-        painter.fillRect(self.rect(), palette.color(QPalette.ColorRole.Base))
+        painter.fillRect(self.rect(), palette.color(QPalette.ColorRole.Window))
         plot = _plot_rect(self)
         _paint_percent_axes(
             painter,

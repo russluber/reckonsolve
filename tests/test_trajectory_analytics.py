@@ -424,11 +424,15 @@ def test_calibration_paint_tracks_repeated_appearance_changes(
         for mode in (initial, opposite, initial, opposite):
             window.appearance.select(mode)
             qtbot.wait(30)
-            expected = QColor(
-                semantic_colors(appearance_palette(mode is AppearanceMode.DARK)).raised
+            colors = semantic_colors(appearance_palette(mode is AppearanceMode.DARK))
+            canvas, expected = QColor(colors.canvas), QColor(colors.raised)
+            assert chart.grab().toImage().pixelColor(5, 5) == canvas
+            assert chart.palette().color(QPalette.ColorRole.Window) == canvas
+            assert (
+                contrast_ratio(chart.palette().color(QPalette.ColorRole.Text), canvas)
+                >= 4.5
             )
-            assert chart.grab().toImage().pixelColor(5, 5) == expected
-            for widget in (chart, table, table.viewport()):
+            for widget in (table, table.viewport()):
                 palette = widget.palette()
                 assert palette.color(QPalette.ColorRole.Base) == expected
                 assert (

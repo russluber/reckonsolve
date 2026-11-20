@@ -28,6 +28,61 @@ from reckonsolve.ui.settings_screen import SettingsScreen
 from reckonsolve.ui.tag_manager import TagChange, TagManagerDialog
 
 
+@pytest.mark.parametrize("start", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_binary_calibration_plot_blends_into_report_after_theme_switches(
+    qtbot, performance_archive, start
+):
+    from PySide6.QtGui import QColor
+
+    from reckonsolve.ui.analytics_charts import _plot_rect
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    database, operations = performance_archive
+    window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
+    qtbot.addWidget(window)
+    window.resize(1600, 1000)
+    window.show()
+    window.appearance.select(start)
+    window.navigate_to("Performance")
+    screen = window._analytics_screen
+    report = loaded(screen, qtbot, refresh=False)
+    sections = [
+        screen.sections[key]
+        for key in (Section.ADAPTIVE_BINARY, Section.ONE_SHOT_BINARY)
+    ]
+    for section in sections:
+        section.comparison.table_toggle.setChecked(True)
+    bins = [section.chart.bins for section in sections]
+    descriptions = [section.chart.accessibleDescription() for section in sections]
+    changes = database._require_connection().total_changes
+    opposite = (
+        AppearanceMode.DARK if start is AppearanceMode.LIGHT else AppearanceMode.LIGHT
+    )
+    for appearance in (start, opposite, start):
+        window.appearance.select(appearance)
+        for width in (1600, 760):
+            window.resize(width, 1000)
+            qtbot.wait(80)
+            canvas = QColor(semantic_colors(window.palette()).canvas)
+            for section in sections:
+                chart = section.chart
+                image = chart.grab().toImage()
+                ratio = image.devicePixelRatio()
+                plot = _plot_rect(chart)
+                for x, y in ((3, 3), (plot.left() + 10, plot.top() + 13)):
+                    assert (
+                        image.pixelColor(round(x * ratio), round(y * ratio)) == canvas
+                    )
+                assert section.comparison.table_toggle.isChecked()
+            assert [section.chart.bins for section in sections] == bins
+            assert [
+                section.chart.accessibleDescription() for section in sections
+            ] == descriptions
+            assert screen.report == report
+    assert database._require_connection().total_changes == changes
+    window.close()
+
+
 @pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
 def test_focused_report_width_preserves_scope_expansions_and_pinned_controls(
     qtbot, performance_archive, appearance

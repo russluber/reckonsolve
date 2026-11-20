@@ -1,5 +1,9 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [Performance calibration canvas repair](#performance-calibration-canvas--2026-11-20)
+has fresh focused/native evidence for both Binary populations. Later Detail visual
+proposals are separate from this implemented repair.
+
 The latest [Adaptive Overview refinement](#adaptive-overview-reading--2026-11-20)
 records chart surfaces/context, optional information grouping and Numeric scorecard
 presentation. Its current evidence and human review are separate from earlier
@@ -1361,3 +1365,43 @@ candidate wheel identified only nine accumulated UI changes and four new UI
 helpers; protected lower layers, migrations and resources match byte for byte.
 This comparison is a preservation check, not a current package/build claim. No Git
 command ran, and reference packs remain unchanged. Narrow human review is pending.
+
+## Performance calibration canvas — 2026-11-20
+
+The user requested that Adaptive and One-Shot Binary calibration plots match their
+surrounding Performance background in Light/Dark. The shared CalibrationChart now
+paints the Window/canvas palette role. It previously painted Base, which the chart/
+table comparison container sets to a different surface. The existing table fill and
+deferred appearance synchronization remain. No bins, marker positions, Wilson
+intervals, axes, exact report values, request/session state or saved facts change.
+This is routine presentation tuning within the existing shared palette contract.
+
+All **43 chart/Performance/report/current-model UI cases passed in 94.90 seconds**,
+followed by **23 trajectory analytics/UI cases in 14.36 seconds**. The new integrated
+paint check exercises both Binary populations, both starting themes, repeated
+switching, wide/stacked geometry, canvas and inner-plot pixels, retained disclosures,
+unchanged report/bins/accessibility descriptions and no canonical writes. The older
+appearance regression now expects the chart's canvas while retaining its existing
+table surface/contrast and exact data checks.
+
+All **24 native canvas checks** passed across Qt scales 1/2, both populations,
+repeated Light/Dark/Light and 1,600/760-wide windows on disposable four-population
+data. Samples from actual surrounding workspace and the plot match. Light/Dark
+chart captures were inspected. Evidence stays ignored under
+`build/ux-binary-scorecard-proposal-20261120/`. No executable source changed after
+these final runs. Source checks are separate from physical Windows/accessibility
+and human visual acceptance; earlier package/full-suite results retain their own
+payload. No package or installed tool was changed, no personal database opened
+and no Git command run. Version 0.9.0 stays Unreleased.
+
+For a focused human recheck, run `uv run python tools/run_visual_review.py performance`.
+Compare both Binary calibration plots with the surrounding page, switch appearance
+in both directions, and repeat in a smaller window. Existing report journeys carry
+forward. The user owns staging/commits/pushes and later delivery/release actions.
+
+Ruff check/format passed for 324 files. Filesystem documentation checks passed
+375 public links/58 files and 334 private links/five files with zero errors.
+Scoped whitespace/reference checks, all 66 J/42 R IDs and both withdrawals,
+96 public-reference mirrors and the lower-layer/migration/resource comparison
+passed without Git. Detail scorecard/history-link mockups remain proposals;
+no Detail control implementation is part of this repair.

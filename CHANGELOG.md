@@ -29,6 +29,8 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Adaptive and One-Shot Binary calibration plots in Performance use the surrounding workspace canvas color in both appearances, including repeated theme changes. Calibration data and chart geometry are unchanged.
+
 - Adaptive Overview charts blend into both workspace palettes and avoid repeated disclosure headings. Supporting context and optional information use clearer reading groups; Numeric Scorecard has a distinct frame and compact WIS Breakdown chevron.
 
 - One-Shot Numeric Score Breakdown uses grouped contributions, median error and interval diagnostics with clear labels, exact values and consistent ruled reading hierarchy. Nested score/audit sections share one ending boundary without stacked trailing lines.

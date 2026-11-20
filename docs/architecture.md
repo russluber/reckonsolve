@@ -263,6 +263,12 @@ The scorecard's local reading-group helper measures wrapped row heights after
 layout settles, preserving complete captions and exact values at enlarged/narrow
 geometry without changing the shared Binary comparison presentation.
 
+`ui/analytics_charts.py` paints Binary calibration plots with the Window/canvas
+palette role in both Performance populations. This avoids inheriting the input/
+table Base fill supplied by the comparison container. The existing deferred table
+surface synchronization remains; bins, markers, uncertainty, axes, nonvisual
+summaries and report state are unchanged.
+
 Edit Details and Correct Transcription keep review and final consent inside one focused dialog, bound to the reviewed inputs and original concurrency token. Adaptive Resolution/Invalid preparation requires a separate explicit terminal confirmation. Nonblank reflection-only saves delegate unchanged effective terminal facts through shared operations; mixed factual corrections, clearing and Skip keep confirmation. One-Shot reflection uses the dedicated provenance operation. Failure retains inputs; Deadline rejection refreshes committed Locked context and provides a brief right-side notice plus a repeatable cue. User/history text remains selectable; charts remain committed-only.
 
 Creation modes share canvas/card placement and reciprocal top-right One-Shot/Adaptive actions with draft retention. One-Shot shows Background/Rationale/Tags in the main card and optional separate date/segmented time input. ui/time_input.py adapts native QTimeEdit section entry, Tab/Shift+Tab, A/P, and Up/Down. UTC is a neutral Qt carrier for documentary wall time, not normalization of a reported event.
