@@ -107,11 +107,6 @@ def test_resolve_now_and_scorecard_progressive_diagnostics(qtbot, active):
     assert "Neutral Weight" in texts
     assert "75.0%" in texts
     assert "25.0%" in texts
-    help_text = "\n".join(
-        label.toolTip() for label in screen.trajectory_diagnostics.findChildren(QLabel)
-    )
-    assert "Active Forecast Fraction" in help_text
-    assert "mechanical hindsight" in help_text
 
 
 @pytest.mark.parametrize("font_size", [9, 12])

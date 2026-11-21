@@ -400,8 +400,7 @@ class ReviseForecastDialog(_StyledDialog):
 
         rationale_label = QLabel("What changed? (optional)", self)
         rationale_helper_text = (
-            "This explanation stays attached to the new forecast. To record a "
-            "thought without changing probability, add a Journal entry."
+            "For notes without a forecast change, add a Journal Entry."
         )
         rationale_helper = QLabel(rationale_helper_text, self)
         rationale_helper.setObjectName("revisionRationaleHelper")
@@ -1464,7 +1463,7 @@ class CorrectNumericJournalEntryDialog(_StyledDialog):
         self._expected_correction_id = entry.current_correction_id
         title = QLabel("Edit / Correct Journal Entry", self)
         explanation = QLabel(
-            "Saving records a transparent correction. Earlier versions remain in history.",
+            "Earlier versions remain in Edit History.",
             self,
         )
         explanation.setTextFormat(Qt.TextFormat.PlainText)
@@ -1570,8 +1569,7 @@ class ForecastReviewDialog(_StyledDialog):
         title.setObjectName("forecastReviewTitle")
         apply_text_role(title, TextRole.SECTION_TITLE)
         explanation = QLabel(
-            "Record that you deliberately reconsidered this forecast and chose to "
-            "keep it unchanged.",
+            "Record a Review without changing the forecast.",
             self,
         )
         explanation.setObjectName("forecastReviewExplanation")
@@ -1709,10 +1707,7 @@ class AddJournalEntryDialog(_StyledDialog):
         self.body_input = QPlainTextEdit(self)
         self.body_input.setObjectName("journalEntryBodyInput")
         self.body_input.setAccessibleName("Journal entry")
-        self.body_input.setPlaceholderText(
-            "Record new evidence, reasoning, or a thought that does not change "
-            "the forecast."
-        )
+        self.body_input.setPlaceholderText("Evidence, reasoning, or other notes.")
         self.body_input.setTabChangesFocus(True)
         body_label.setBuddy(self.body_input)
 
@@ -1815,8 +1810,7 @@ class CorrectJournalEntryDialog(_StyledDialog):
         title.setObjectName("correctJournalEntryTitle")
 
         explanation = QLabel(
-            "Saving records a transparent correction. The original and every "
-            "earlier version remain in Edit history.",
+            "Earlier versions remain in Edit History.",
             self,
         )
         explanation.setObjectName("journalCorrectionExplanation")

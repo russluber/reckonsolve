@@ -220,6 +220,8 @@ Resolution is a one-way terminal decision. **Write Postmortem** adds reflection 
 
 On One-Shot Detail, confirming Skip shows **Postmortem Skipped** with its date, without a prominent Write button. To change your mind later, choose **More → Write Postmortem**. The original Skip remains in history; later reflection appears normally with **Edit Postmortem**, and the entry stays out of Needs Postmortem.
 
+Both modes retain the original Skip date and show **Previously Skipped** while a later Postmortem is present.
+
 ## Correct a mistake
 
 Adaptive belief changes use **Revise** before the deadline. Saved revisions are never overwritten. Terminal corrections can repair an outcome or effective time while preserving the original; score-affecting changes require an explanation.

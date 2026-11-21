@@ -1239,6 +1239,7 @@ def test_current_numeric_distribution_is_distinct_from_earlier_scoring(
     disclosure.disclosure_button.click()
     assert screen.numeric_history_label.isHidden()
     assert "not the forecast used for scoring" in screen.quantile_cdf_summary.text()
+    assert screen.distribution_information.context_section.isVisible()
     assert screen.distribution_information.values["Median"].text() == "30 items"
     assert "median: 0" in screen.terminal_summary.facts.text()
     assert screen.quantile_scorecard.findChild(
@@ -1324,8 +1325,9 @@ def test_adaptive_chart_reading_blends_with_canvas_and_keeps_context(
         for section in disclosure.disclosure_body.findChildren(OneShotReadingSection)
     }
     assert "How to Read" in titles
-    assert ("Exact Forecast" if numeric else "Scoring Context") in titles
     if numeric:
+        assert "Exact Forecast" in titles
+        assert screen.distribution_information.context_section.isHidden()
         assert screen.distribution_information.values["Median"].text() == "0 items"
         assert "outer tails are unspecified" in chart.accessibleDescription().lower()
     for width in (1200, 760):

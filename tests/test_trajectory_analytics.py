@@ -193,11 +193,30 @@ def test_trajectory_analytics_screen_keeps_score_and_calibration_distinct(
     section = adaptive_binary(screen)
     assert section.count.text() == "1" and section.score.text() == "0.090"
     assert "0 helped · 1 tied · 0 hurt" in section.diagnostics.text()
-    assert "hindsight, not causal evidence" in section.diagnostics.text()
+    assert "Mean Updating Gain: +0.000" in section.diagnostics.text()
     assert "no interpolation" in section.chart.accessibleDescription()
     assert "95% Wilson" in section.chart.accessibleDescription()
     assert section.diagnostics_section.disclosure_button.isChecked() is False
     assert not section.comparison.isHidden()
+    assert section.guidance.isHidden()
+
+    unscored = operations.create_prediction(
+        "Was the answer already fixed?",
+        50,
+        forecast_deadline=clock.instant + timedelta(hours=1),
+    )
+    created_at = clock.instant
+    clock.instant += timedelta(minutes=1)
+    operations.resolve_prediction(
+        unscored.prediction_id,
+        BinaryOutcome.NO,
+        effective_resolution_at=created_at,
+        **_context(unscored),
+    )
+    loaded(screen, qtbot)
+    assert section.count.text() == "1" and section.score.text() == "0.090"
+    assert section.guidance.text() == "1 unscored"
+    assert not section.guidance.isHidden()
 
 
 def test_analytics_guide_trajectory_worked_example(active, qtbot):
@@ -259,7 +278,6 @@ def test_analytics_card_titles_and_on_demand_help(active, qtbot):
     assert numeric.summary.text() == "0 eligible · 0 resolved · 0 unscored"
     assert not numeric.supporting.disclosure_button.isChecked()
     assert not numeric.update_section.disclosure_button.isChecked()
-    assert "raw WIS/Delta is never pooled" in numeric.caveat.text()
     assert "No eligible results" in screen.message.text()
 
 

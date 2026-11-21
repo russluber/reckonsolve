@@ -78,10 +78,3 @@ class BinaryScorecardPanel(ContentPanel):
             score_label(context, self, role=TextRole.SECONDARY)
         )
         self.details_layout.addWidget(TrajectoryScoreDetails(card, self))
-        self.details_layout.addWidget(
-            score_label(
-                "Updating Gain is mechanical hindsight, not proof of skill. Forecast and Neutral Weights describe the original forecasting window, not shares of the score. The neutral remainder uses loss 0.25; it adds no forecast.",
-                self,
-                role=TextRole.SECONDARY,
-            )
-        )

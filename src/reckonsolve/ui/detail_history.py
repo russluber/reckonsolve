@@ -74,7 +74,7 @@ def _facts(
     return values
 
 
-def binary_history_information(context: QLabel, parent: QWidget) -> QWidget:
+def binary_history_information(parent: QWidget) -> QWidget:
     body = QWidget(parent)
     body.setObjectName("probabilityHistoryInformation")
     column = QVBoxLayout(body)
@@ -89,14 +89,7 @@ def binary_history_information(context: QLabel, parent: QWidget) -> QWidget:
             ("Filled circle", "Latest committed forecast"),
         ),
     )
-    reading.body_layout.addWidget(
-        _text("Exact revisions and their rationale remain in Timeline.", reading)
-    )
     column.addWidget(reading)
-    scoring = ReadingSection("Scoring Context", body)
-    apply_text_role(context, TextRole.DETAIL_TEXT)
-    scoring.body_layout.addWidget(context)
-    column.addWidget(scoring)
     return body
 
 
@@ -122,13 +115,13 @@ class DistributionInformation(QWidget):
             )
         )
         column.addWidget(reading)
-        history = ReadingSection("History & Scoring", self)
+        self.context_section = ReadingSection("History & Scoring", self)
         self.context = context
         apply_text_role(context, TextRole.DETAIL_TEXT)
-        history.body_layout.addWidget(context)
+        self.context_section.body_layout.addWidget(context)
         context.show()
         # Read the latest-versus-scored qualification before the exact values.
-        column.insertWidget(0, history)
+        column.insertWidget(0, self.context_section)
         self.hide()
 
     def set_forecast(self, quantiles: FiveQuantiles, unit: str, context: str) -> None:
@@ -143,4 +136,5 @@ class DistributionInformation(QWidget):
         # The actual label is owned by the screen so existing context access
         # remains explicit; this component performs no forecast selection.
         self.context.setText(context)
+        self.context_section.setVisible(bool(context))
         self.show()

@@ -583,15 +583,7 @@ class PredictionDetailScreen(QWidget):
         apply_text_role(chart_label, TextRole.DETAIL_EVENT)
         chart_panel_layout.addWidget(chart_label)
         chart_panel_layout.addWidget(self.probability_history_chart)
-        self.contract_context = QLabel(self.detail_content)
-        self.contract_context.setObjectName("binaryContractContext")
-        self.contract_context.setWordWrap(True)
-        self.contract_context.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        chart_panel_layout.addWidget(
-            binary_history_information(self.contract_context, chart_panel)
-        )
+        chart_panel_layout.addWidget(binary_history_information(chart_panel))
         chart_panel_layout.addWidget(self.chart_placeholder)
         apply_surface_role(chart_panel, SurfaceRole.CANVAS)
 
@@ -1277,11 +1269,6 @@ class PredictionDetailScreen(QWidget):
         contract = getattr(prediction, "forecast_contract", None)
         assert contract is not None and contract.forecast_deadline is not None
         self.forecast_type.setText("Adaptive · Binary")
-        self.contract_context.setText(
-            "Trajectory Binary: each standing probability belongs to the initial-to-Deadline "
-            "commitment. Scoring uses when the outcome became knowable. "
-            "This is probability history, not a score plot."
-        )
         self.forecast_deadline.setText(
             exact_detail_time(contract.forecast_deadline.instant, widget=self)
         )
@@ -1365,9 +1352,14 @@ class PredictionDetailScreen(QWidget):
             self.postmortem_completion.setText(
                 ""
                 if completion is None
-                else "Postmortem completion: Skipped "
-                f"{_format_local_timestamp(completion.completed_at, widget=self)}. You may still "
-                "add a Postmortem later; this completion remains in history."
+                else (
+                    (
+                        "Previously Skipped · "
+                        if effective.postmortem
+                        else "Postmortem Skipped · "
+                    )
+                    + _format_local_timestamp(completion.completed_at, widget=self)
+                )
             )
             self.postmortem_completion.setHidden(completion is None)
             self._show_scorecard(prediction.prediction_id)

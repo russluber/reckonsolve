@@ -130,10 +130,7 @@ class AdaptiveReadingSections:
         self.notes.body_layout.addWidget(notes)
         self.reflection = ContentPanel("Postmortem", parent=parent)
         self.reflection.setObjectName("detailPostmortemPanel")
-        self.empty = QLabel(
-            "Postmortem not written. You can write it whenever you are ready.",
-            self.reflection,
-        )
+        self.empty = QLabel("Not written.", self.reflection)
         self.empty.setWordWrap(True)
         apply_text_role(self.empty, TextRole.SECONDARY)
         self.reflection.body_layout.addWidget(postmortem)
@@ -184,8 +181,7 @@ def terminal_timeline_rows(
             10,
             "terminalResolutionRecorded",
             "Resolution recorded",
-            outcome
-            + "\nThe original decision remains in history. Current effective results are above.",
+            outcome,
         )
         for correction in resolution.corrections:
             reflection_only = correction.changed_fields == ("postmortem",)
@@ -196,16 +192,15 @@ def terminal_timeline_rows(
                 if reflection_only
                 else f"terminalResolutionCorrection{correction.correction_id}",
                 "Postmortem updated" if reflection_only else "Resolution corrected",
-                correction.correction_reason
-                or "The complete before/after facts are available in correction history.",
+                correction.correction_reason or "",
             )
         if resolution.postmortem_completion is not None:
             add(
                 resolution.postmortem_completion.completed_at,
                 30,
                 "terminalPostmortemSkipped",
-                "Postmortem deliberately skipped",
-                "You may still write a Postmortem later. This completion remains in history.",
+                "Postmortem Skipped",
+                "",
             )
     if invalidation is not None:
         original = invalidation.original
@@ -214,7 +209,7 @@ def terminal_timeline_rows(
             10,
             "terminalInvalidationRecorded",
             "Marked Invalid · Not scored",
-            "Original Invalid decision. This prediction is preserved outside scoring.",
+            "",
         )
         for correction in invalidation.corrections:
             add(
@@ -222,6 +217,6 @@ def terminal_timeline_rows(
                 20,
                 f"terminalInvalidationCorrection{correction.correction_id}",
                 "Invalid reason corrected",
-                "The reason wording was corrected. The original decision date is unchanged; before/after wording is available in reason history.",
+                "",
             )
     return rows

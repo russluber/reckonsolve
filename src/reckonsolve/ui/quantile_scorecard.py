@@ -131,7 +131,7 @@ class QuantileScorecardPanel(ContentPanel):
             "Delta WIS",
             f"{quantity(card.delta_wis)} · {direction}",
             name="individualDeltaWIS",
-            help_text="Initial minus final: positive means the final forecast scored better. This is hindsight within one Prediction, not causal skill or a cross-question score.",
+            help_text="Initial WIS minus Final WIS; positive means the final forecast scored better.",
         )
         median = ReadingScoreGroup("Median", contents)
         median.add_fact(

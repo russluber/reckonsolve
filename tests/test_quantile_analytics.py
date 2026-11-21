@@ -481,7 +481,7 @@ def test_desktop_groups_responsive_tables_filters_and_rendering(
         assert panel.grab().save(str(tmp_path / f"{key}-{width}.png"))
         assert axis_ticks and all(ticks == (5, 25, 50, 75, 95) for ticks in axis_ticks)
         assert "95% Wilson" in panel.chart.accessibleDescription()
-    assert "hindsight" in view.updates.text()
+    assert "8 unrevised (not counted as ties)." in view.updates.text()
     view.unit_filter.setCurrentIndex(view.unit_filter.findData("items"))
     report = loaded(screen, qtbot, refresh=False)
     assert report.sections[1].data.whole_number.sample_size == 4

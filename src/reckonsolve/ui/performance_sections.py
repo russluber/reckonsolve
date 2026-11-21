@@ -187,7 +187,7 @@ class BinarySection(ReportSection):
         )
         self.results_layout.addWidget(self.comparison)
         self.caveat = _label(
-            "Bars show pointwise 95% Wilson intervals for observed Yes. Small bin counts mean wide uncertainty; this does not prove forecasting skill. Lower Brier is better.",
+            "Bars: 95% Wilson intervals for observed Yes.",
             self.results,
         )
         self.results_layout.addWidget(self.caveat)
@@ -206,9 +206,9 @@ class BinarySection(ReportSection):
             mean = data.mean_trajectory_brier
             bins = data.final_calibration_bins
             self.guidance.setText(
-                f"{data.unscored_prediction_count} unscored · final probabilities are a separate diagnostic, not the trajectory score."
+                f"{data.unscored_prediction_count} unscored"
                 if data.unscored_prediction_count
-                else "One equal vote per eligible prediction. Calibration uses final probabilities; neutral truncation adds no observation."
+                else ""
             )
             weight = data.mean_active_forecast_fraction
             self.diagnostics.setText(
@@ -219,8 +219,7 @@ class BinarySection(ReportSection):
                     else ""
                 )
                 + f"Mean initial Brier: {score_text(data.mean_initial_brier)}\nMean final Brier: {score_text(data.mean_final_brier)}\nMean hold-initial trajectory: {score_text(data.mean_hold_initial_brier)}\nMean Updating Gain: {score_text(data.mean_updating_gain, signed=True)}\n"
-                + f"Updating: {data.positive_updating_gain_count} helped · {data.equal_updating_gain_count} tied · {data.negative_updating_gain_count} hurt mechanically.\n"
-                + "Forecast/neutral weights belong to each planned initial-to-deadline interval; neutral contribution is 0.25 after early resolution. These weights are not time spent in the app. Updating Gain is hindsight, not causal evidence."
+                + f"Updating: {data.positive_updating_gain_count} helped · {data.equal_updating_gain_count} tied · {data.negative_updating_gain_count} hurt mechanically."
             )
         else:
             count, mean, bins = (
@@ -228,9 +227,7 @@ class BinarySection(ReportSection):
                 data.mean_brier,
                 data.calibration_bins,
             )
-            self.guidance.setText(
-                "One observation per answered exercise. Selective entry can bias the record; include misses as well as hits."
-            )
+            self.guidance.clear()
         self.score.setText(score_text(mean))
         self.count.setText(str(count))
         self.score.setAccessibleName(
@@ -245,6 +242,7 @@ class BinarySection(ReportSection):
                 if self.adaptive
                 else "No answered One-Shot predictions match this scope."
             )
+        self.guidance.setVisible(bool(self.guidance.text()))
         self.chart.set_bins(
             bins, intervals=tuple(p.wilson_95 for p in result.observed_yes)
         )
@@ -418,11 +416,6 @@ class NumericSection(ReportSection):
         self.whole_summary = CalibrationSummary("Whole-number", self.results)
         self.results_layout.addWidget(self.continuous_summary)
         self.results_layout.addWidget(self.whole_summary)
-        self.caveat = _label(
-            "Read small samples cautiously. WIS remains an individual prediction score; raw WIS/Delta is never pooled. Whole-number ties are retained; interval coverage above nominal need not imply miscalibration.",
-            self.results,
-        )
-        self.results_layout.addWidget(self.caveat)
         supporting = QWidget(self.results)
         layout = QVBoxLayout(supporting)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -455,7 +448,6 @@ class NumericSection(ReportSection):
             )
             self.updates.setText(
                 f"Better: {proportion_text(data.better)} · Equal: {proportion_text(data.equal)} · Worse: {proportion_text(data.worse)}\n{data.unrevised_count} unrevised (not counted as ties).\n"
-                + "Direction only, without raw WIS/Delta averaging. Mechanical hindsight does not show that updating caused skill. Counts lose magnitude.\n"
                 + "95% Wilson: better "
                 + uncertainty_text(data.better)
                 + "; equal "

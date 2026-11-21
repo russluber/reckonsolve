@@ -1058,9 +1058,14 @@ class NumericPredictionDetailScreen(QWidget):
             self.postmortem_completion.setText(
                 ""
                 if completion is None
-                else "Postmortem completion: Skipped "
-                f"{_format_local_timestamp(completion.completed_at, widget=self)}. You may still "
-                "add a Postmortem later; this completion remains in history."
+                else (
+                    (
+                        "Previously Skipped · "
+                        if effective.postmortem
+                        else "Postmortem Skipped · "
+                    )
+                    + _format_local_timestamp(completion.completed_at, widget=self)
+                )
             )
             self.postmortem_completion.setHidden(completion is None)
             self.resolution_section.setHidden(False)
@@ -1144,20 +1149,14 @@ class NumericPredictionDetailScreen(QWidget):
             else "Current Committed Distribution"
         )
         self.quantile_cdf.set_forecast(revisions[-1].quantiles, self._prediction.unit)
-        context = (
-            "Every earlier forecast remains in Timeline at its original timestamp."
-        )
+        context = ""
         card = self._quantile_score
         if card is not None and card.final_revision_id != revisions[-1].revision_id:
             context = (
-                (
-                    "No forecast qualified for scoring. "
-                    if card.final_revision_id is None
-                    else "This is not the forecast used for scoring. "
-                )
-                + "It is the latest committed distribution.\n"
-                + context
-            )
+                "No forecast qualified for scoring. "
+                if card.final_revision_id is None
+                else "This is not the forecast used for scoring. "
+            ) + "It is the latest committed distribution."
         self.distribution_information.set_forecast(
             revisions[-1].quantiles, self._prediction.unit, context
         )

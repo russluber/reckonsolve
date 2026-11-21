@@ -29,6 +29,8 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Streamline desktop helper text: remove repeated cautions and instructions, shorten metric definitions and editor prompts, and keep historical events focused on dated facts. Useful chart keys, action consequences, score direction and complete original/corrected records remain.
+
 - Empty or hidden history panels use their natural minimum height until Qt can measure wrapped content, avoiding negative-size warnings when Detail starts or an empty history expands.
 
 - Adaptive Binary has a framed scorecard with visible probability scores and eligible forecast context. Underlined Show/Hide controls reveal timing/updating details, corrected Journal versions and Adaptive Resolution history, retaining exact facts, keyboard access and readable expanded prose.

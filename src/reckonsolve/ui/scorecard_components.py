@@ -155,17 +155,17 @@ class TrajectoryScoreDetails(ScoreGroups):
             "Updating Gain",
             f"{float(card.updating_gain):+.4f} · {direction}",
             name="individualUpdatingGain",
-            help_text="Hold-initial minus actual Trajectory Brier. This is mechanical hindsight, not proof of forecasting skill.",
+            help_text="Hold-initial Trajectory Brier minus actual Trajectory Brier.",
         )
         timing.add_fact(
             "Forecast Weight",
             f"{float(card.active_forecast_fraction):.1%}",
             name="individualForecastWeight",
-            help_text="Active Forecast Fraction: the share of this Prediction's planned window using your standing forecasts. Not an average or a share of the resulting score.",
+            help_text="Share of the original forecasting window covered by your standing forecasts.",
         )
         timing.add_fact(
             "Neutral Weight",
             f"{float(1 - card.active_forecast_fraction):.1%}",
             name="individualNeutralWeight",
-            help_text="The remaining share after early effective resolution uses neutral loss 0.25. No forecast is added.",
+            help_text="Remaining share after early resolution, scored at neutral loss 0.25.",
         )

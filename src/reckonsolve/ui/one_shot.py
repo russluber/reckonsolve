@@ -434,9 +434,7 @@ class OneShotCreationScreen(QWidget):
         self.background.setPlaceholderText(
             "What is the context, and how will you check the answer?"
         )
-        self.rationale.setPlaceholderText(
-            "What led you to this prediction? Note the clues, assumptions, or comparisons you used."
-        )
+        self.rationale.setPlaceholderText("Why did you make this forecast?")
         self.tags = QLineEdit(self)
         field(
             self.form.forecast_fields.layout(),

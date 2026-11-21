@@ -82,7 +82,7 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
     assert more_details_content.isHidden()
 
 
-def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
+def test_creation_form_uses_shared_hierarchy_for_both_types(
     window: MainWindow,
 ) -> None:
     window.navigate_to("New Prediction")
@@ -99,10 +99,9 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
 
     assert title.property(TEXT_ROLE_PROPERTY) == TextRole.PAGE_TITLE.value
     assert supporting.property(TEXT_ROLE_PROPERTY) == TextRole.SECONDARY.value
+    assert supporting.isHidden()
     assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
-    assert panel.supporting_label.text() == (
-        "Binary forecasts need a question, probability, and permanent exact deadline."
-    )
+    assert panel.supporting_label.isHidden()
     assert create.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
     assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
 
@@ -111,9 +110,7 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
         prediction_type.findData(PredictionType.NUMERIC.value)
     )
 
-    assert panel.supporting_label.text() == (
-        "Numeric forecasts need a question, unit, precision, value constraint, five percentiles, and permanent exact deadline."
-    )
+    assert panel.supporting_label.isHidden()
 
 
 def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detail(

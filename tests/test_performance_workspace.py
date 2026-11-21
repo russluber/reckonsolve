@@ -106,7 +106,8 @@ def test_focused_report_width_preserves_scope_expansions_and_pinned_controls(
     binary = adaptive_binary(screen)
     numeric = adaptive_numeric(screen)
     for width in (1600, 760, 1280, 1100):
-        window.resize(width, 900)
+        # Keep enough overflow to exercise pinning as explanatory copy shrinks.
+        window.resize(width, 700)
         qtbot.wait(80)
         content = window._workspace_content
         assert content.width() == min(width, 1440)

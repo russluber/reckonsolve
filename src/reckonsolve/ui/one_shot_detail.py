@@ -371,11 +371,7 @@ class OneShotDetailScreen(QWidget):
                 text_label(record.effective.postmortem, self)
             )
         elif detail.postmortem_completion is None:
-            reflection_copy_layout.addWidget(
-                text_label(
-                    "Optional reflection on what you learned from this result.", self
-                )
-            )
+            reflection_copy_layout.addWidget(text_label("Not written.", self))
         if detail.postmortem_completion:
             completion = text_label(
                 (
@@ -392,7 +388,7 @@ class OneShotDetailScreen(QWidget):
             reflection_copy_layout.addWidget(completion)
             if not record.effective.postmortem:
                 reflection_copy_layout.addWidget(
-                    text_label("Marked complete. You can write later from More.", self)
+                    text_label("Write Postmortem is in More.", self)
                 )
         self.add_postmortem_button = QPushButton(
             "Edit Postmortem" if record.effective.postmortem else "Write Postmortem",

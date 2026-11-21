@@ -339,7 +339,7 @@ def test_one_shot_ui_corrections_local_units_and_text_alternatives(qtbot, archiv
         == numeric.whole_number.chart.group.sample_size
         == 1
     )
-    assert "Selective entry" in binary.guidance.text()
+    assert binary.guidance.isHidden()
     assert binary.table.item(8, 4).text() != "Not available"
     assert binary.table.item(0, 4).text() == "Not available"
     assert "80-89%" in binary.chart.accessibleDescription()
@@ -357,8 +357,14 @@ def test_one_shot_ui_corrections_local_units_and_text_alternatives(qtbot, archiv
     screen.tag_filter.setCurrentIndex(screen.tag_filter.findData(outdoors))
     loaded(screen, qtbot, refresh=False)
     assert "0 answered" in numeric.summary.text()
+    count_tag = next(t.tag_id for t in report.tags if t.display_name == "Count")
+    screen.tag_filter.setCurrentIndex(screen.tag_filter.findData(count_tag))
+    loaded(screen, qtbot, refresh=False)
+    assert binary.count.text() == "0" and not binary.guidance.isHidden()
+    assert "No answered" in binary.guidance.text()
     screen.tag_filter.setCurrentIndex(0)
     loaded(screen, qtbot, refresh=False)
+    assert binary.count.text() == "1" and binary.guidance.isHidden()
     for width in (1200, 650):
         screen.resize(width, 800)
         qtbot.wait(20)
@@ -376,6 +382,7 @@ def test_empty_one_shot_groups_have_no_invented_score_or_updating_concepts(
     binary, numeric = one_shot_binary(screen), one_shot_numeric(screen)
     assert binary.count.text() == "0" and binary.score.text() == "Not available"
     assert "No answered" in binary.guidance.text() and binary.comparison.isHidden()
+    assert not binary.guidance.isHidden()
     assert numeric.continuous.chart.group.sample_size == 0
     assert numeric.update_section.isHidden() and binary.diagnostics_section.isHidden()
     assert "unscored" not in numeric.summary.text().lower()

@@ -69,7 +69,6 @@ class PerformanceScreen(QWidget):
         layout.setSpacing(int(Spacing.SECTION))
         self.header = PageHeader(
             "Performance",
-            "Your forecasting record. Adaptive and One-Shot results stay separate.",
             title_object_name="analyticsScreenTitle",
             parent=self.content,
         )
@@ -115,25 +114,19 @@ class PerformanceScreen(QWidget):
         layout.addWidget(self.retry_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.retry_button.hide()
         self.sections = {}
-        for mode, description, keys in (
+        for mode, keys in (
             (
                 "Adaptive",
-                "Forecasts you can revise over time.",
                 (Section.ADAPTIVE_BINARY, Section.ADAPTIVE_NUMERIC),
             ),
             (
                 "One-Shot",
-                "One forecast per prediction. Selective entry of transcribed exercises can bias these results.",
                 (Section.ONE_SHOT_BINARY, Section.ONE_SHOT_NUMERIC),
             ),
         ):
             heading = QLabel(mode, self.content)
             apply_text_role(heading, TextRole.SECTION_TITLE)
             layout.addWidget(heading)
-            explanation = QLabel(description, self.content)
-            explanation.setWordWrap(True)
-            apply_text_role(explanation, TextRole.SECONDARY)
-            layout.addWidget(explanation)
             binary = BinarySection(keys[0], self.content)
             numeric = NumericSection(keys[1], self.content)
             for key, widget in ((keys[0], binary), (keys[1], numeric)):

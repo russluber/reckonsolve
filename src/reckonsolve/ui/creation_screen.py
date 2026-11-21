@@ -66,7 +66,6 @@ class NewPredictionScreen(QWidget):
 
         header = PageHeader(
             "New Prediction",
-            "Capture the question first, then state the forecast you believe now.",
             title_object_name="newPredictionScreenTitle",
             supporting_object_name="newPredictionScreenSupportingText",
             parent=self,
@@ -323,11 +322,7 @@ class NewPredictionScreen(QWidget):
         apply_action_role(self.create_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.create_button, LucideIcon.CIRCLE_PLUS)
 
-        self.forecast_panel = ContentPanel(
-            "Forecast",
-            "Binary forecasts need a question, probability, and permanent exact deadline.",
-            parent=self,
-        )
+        self.forecast_panel = ContentPanel("Forecast", parent=self)
         self.forecast_panel.setObjectName("newPredictionForecastPanel")
         core_layout = self.forecast_panel.body_layout
         core_layout.addWidget(question_label)
@@ -515,12 +510,6 @@ class NewPredictionScreen(QWidget):
         is_numeric = self._is_numeric_type()
         self.binary_forecast_fields.setHidden(is_numeric)
         self.numeric_forecast_fields.setHidden(not is_numeric)
-        self.forecast_panel.supporting_label.setText(
-            "Numeric forecasts need a question, unit, precision, value constraint, "
-            "five percentiles, and permanent exact deadline."
-            if is_numeric
-            else "Binary forecasts need a question, probability, and permanent exact deadline."
-        )
         self._update_endpoint_note(self.probability_input.value())
 
     def _is_numeric_type(self) -> bool:

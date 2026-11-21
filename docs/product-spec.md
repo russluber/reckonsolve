@@ -2651,6 +2651,54 @@ revision. Put the existing Updating/Timing diagnostics behind an underlined
 **Show Timing & Updating Details** control. Keep unscored results explicit and
 without fabricated diagnostics; retain existing precision, meanings and caveats.
 
+**Desktop guide-text refinement — authorized and implemented locally 2026-11-20:**
+Use concise, factual helpers instead of repeated generic cautions and instructions.
+The following accepted presentation changes explicitly refine the preceding
+caveat-presentation requirement without changing mathematical interpretation,
+history, lifecycle, uncertainty calculations or any user-authored text:
+
+- Binary Scorecard omits the generic hindsight/forecast-weight paragraph without
+  replacement. Keep short score-direction cues, metric definitions and notices
+  identifying corrected facts or excluded revisions.
+- Performance omits generic page/mode introductions, Binary timing/weight and
+  selective-entry paragraphs, and Numeric calibration/updating cautions. Retain
+  headings and all four populations, metric/count/uncertainty results and empty
+  states. Binary calibration uses “Bars: 95% Wilson intervals for observed Yes.”;
+  applicable Adaptive Binary guidance retains only “N unscored”. Removed helpers
+  leave no empty layout rows.
+- Adaptive chart context omits Binary's generic Scoring Context paragraph and both
+  types' repeated Timeline pointers. Keep symbol keys, exact Numeric values and
+  latest-versus-scored/no-eligible notices. Hide empty context sections/headings.
+- Empty Postmortem sections say “Not written.” One-Shot's skipped hint says “Write
+  Postmortem is in More.” Adaptive completion uses “Postmortem Skipped · date”, or
+  “Previously Skipped · date” when later reflection is present, matching One-Shot.
+  Preserve the original completion date and later-writing behavior.
+- Adaptive creation omits its page subtitle and repeated field inventories; type
+  switching must not restore them. Retain actual fields, labels, validation,
+  deadline controls and the One-Shot purpose subtitle.
+- Hover help defines Updating Gain as hold-initial minus actual Trajectory Brier,
+  Delta WIS as Initial minus Final WIS with its positive direction, and weights as
+  shares of the original window, including neutral loss 0.25 after early resolution.
+  Numeric uncertainty help is “Pointwise 95% Wilson confidence intervals.” The
+  whole-number band explanation identifies ties between open/filled dots and their
+  possible effect on interval coverage. Keep specific chart keys, strict/inclusive
+  meaning, exact observations and complete nonvisual alternatives.
+- Binary revision help directs notes without a forecast change to a Journal Entry.
+  Journal body corrections say “Earlier versions remain in Edit History.” Keep
+  Forecast says “Record a Review without changing the forecast.” One-Shot rationale
+  asks “Why did you make this forecast?”; the existing New Journal Entry placeholder
+  says “Evidence, reasoning, or other notes.” Accessible descriptions remain aligned.
+- Historical events keep names, immutable dates, original outcome/value and actual
+  correction explanations. Omit generic fallback paragraphs about preserved history,
+  before/after access or later writing. Skip events use “Postmortem Skipped”; Invalid
+  events retain “Marked Invalid · Not scored”. Complete originals/corrections remain
+  available through their existing disclosures and exact search targets.
+
+Retain useful error/empty states, time ambiguity, recovery and consequential-action
+instructions. The user guide continues to explain mathematical interpretation;
+CLI wording is outside this desktop-copy refinement. The [copy verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#binary-scorecard-copy-refinement--2026-11-20)
+separates current checks from older source/package evidence and human visual review.
+
 Replace corrected Journal **Edit History** and Adaptive **Resolution History**
 checkboxes with underlined **Show…** / **Hide…** text controls and readable counts.
 Expand in place, preserving selectable originals/prior versions, complete terminal

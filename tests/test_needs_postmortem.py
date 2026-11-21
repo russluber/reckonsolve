@@ -196,9 +196,8 @@ def test_journal_to_detail_skip_confirmation_and_completion_display(
     qtbot.mouseClick(skip, Qt.MouseButton.LeftButton)
     assert not skip.isVisible()
     completion = _child(window, QLabel, "numericPostmortemCompletion")
-    assert (
-        not completion.isHidden()
-        and "Postmortem completion: Skipped" in completion.text()
+    assert not completion.isHidden() and completion.text().startswith(
+        "Postmortem Skipped · "
     )
     notification = _child(window, NotificationHost, "notificationHost")
     assert notification.current_message.startswith("Postmortem skipped.")

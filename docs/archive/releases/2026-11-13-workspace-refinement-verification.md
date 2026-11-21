@@ -1,5 +1,9 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [desktop guide-text refinement](#binary-scorecard-copy-refinement--2026-11-20)
+records the adopted wording changes and their current checks. Older source/native
+and delivery evidence below retains its evaluated scope.
+
 The latest [Binary Scorecard and inline history implementation](#binary-scorecard-and-inline-history--2026-11-20)
 follows explicit adoption of the reviewed proposals. Its current source/native
 evidence and human visual review remain separate from earlier checkpoints.
@@ -1514,3 +1518,179 @@ release operation occurs; commits/pushes and eventual delivery remain user-owned
 Ruff check/format passed for 327 files. Filesystem checks passed 377 public links
 and 335 private links, with preserved IDs/withdrawals, 96 reference mirrors and
 scoped whitespace/lower-layer/migration/resource checks. No Git command ran.
+
+## Binary Scorecard copy refinement — 2026-11-20
+
+The user explicitly requested removal of the generic paragraph beginning
+“Updating Gain is mechanical hindsight, not proof of skill.” The final paragraph
+inside Timing & Updating Details is removed without replacement. The supplied
+scores, weights, definitions/tooltips and record-specific corrected/excluded
+forecast notices remain unchanged. Section 38.15 records this deliberate
+presentation refinement; mathematical interpretation remains in the user guide.
+
+All **11 focused existing Qt cases passed in 10.37 seconds**, covering the saved
+scoring result, progressive disclosure, both appearances, 9/15-point text and
+small/wide geometry. No new test mirrors a deleted string. Earlier broad-suite
+and native-matrix results retain their earlier executable scope. The focused
+report and copy-discovery scratch output stay ignored under
+`build/ux-guide-copy-audit-20261120/`. Other application guidance is under review;
+this check does not establish acceptance of further copy changes. No personal
+database, installed tool, Git command or release operation was used.
+
+Ruff check/format passed for 327 files. Filesystem documentation checks passed
+377 public local links; scoped whitespace and dependency-direction checks passed.
+Documentation checks used explicit filesystem discovery without invoking Git.
+
+### Performance copy group follow-up
+
+The user then adopted removal of the three presented Performance paragraphs:
+Adaptive Binary's timing/weight/hindsight suffix, Adaptive Numeric's
+direction/hindsight fragment, and One-Shot Binary's selective-entry guidance.
+Only those passages are removed. Metrics, counts, uncertainty results and
+empty-result messages remain. The unused One-Shot guidance row is hidden for
+populated results and restored when a filter returns no answered predictions.
+
+All **52 targeted analytics and Performance workspace cases passed in 82.01
+seconds** on this source. Existing assertions retain exact scores/counts, chart
+alternatives, scope/disclosure state, both palettes and read-only behavior; the
+One-Shot UI case now also checks populated → empty → populated guidance visibility.
+The report is `build/ux-guide-copy-audit-20261120/performance-pytest.xml`.
+This small presentation group does not rerun or supersede earlier full-suite or
+package evidence. The other guidance passages remain unchanged pending review.
+
+The second adopted group shortens both Binary calibration footers to “Bars: 95%
+Wilson intervals for observed Yes.” and removes the Numeric caution paragraph and
+One-Shot mode subtitle. Those labels leave no blank rows; mode headings and all
+chart/data alternatives remain. Six relevant Qt cases are green across the initial
+four passes and the two geometry reruns, including repeated palettes, table data,
+filter/empty states and report scope/disclosure preservation. The pinning test now
+uses a shorter window with actual overflow: after the copy removal, a taller window
+could reach the page bottom before the strip needed to pin. The expected pinned
+position remains unchanged. Reports are `calibration-copy.xml` and
+`calibration-pin.xml` in the same ignored audit folder. The 52-case result above
+retains its preceding-source scope; no broad-suite/package claim is added.
+
+The third adopted group removes the Performance page/Adaptive mode subtitles and
+generic Adaptive Binary guidance, retaining only the applicable “N unscored” count.
+No empty layout row replaces those introductions; headings and empty-result states
+remain. All **seven focused Qt cases passed in 25.90 seconds** on this source,
+covering both-palette geometry/pinning, session returns, empty results and mixed
+scored/unscored display with an unchanged eligible score/count. The existing Binary
+UI test now covers adding an unscored result without changing that denominator.
+The report is `build/ux-guide-copy-audit-20261120/introductions.xml`; earlier results
+retain their source scope. Detail and later copy groups remain under review.
+
+The first adopted Detail group removes Binary's generic Scoring Context paragraph
+and both chart types' repeated Timeline pointers. The unused Binary context widget
+and section are removed. Numeric History & Scoring is hidden when no record-specific
+notice remains; latest-versus-scored/no-eligible notices retain their wording and
+exact forecast values. Chart keys and nonvisual alternatives remain. All **nine
+focused Qt cases passed in 10.55 seconds**, covering both types/palettes, Open/Invalid
+charts, earlier-scored Numeric context, geometry, error/recovery and unchanged
+canonical records. Report: `build/ux-guide-copy-audit-20261120/detail-history.xml`.
+Other Detail guidance remains pending review; earlier broad/package evidence does
+not claim verification of these later edits.
+
+The adopted Postmortem group replaces Adaptive and One-Shot empty helper text with
+“Not written.” and the One-Shot skipped hint with “Write Postmortem is in More.”
+Recorded completion/date and later-writing behavior remain; short score-direction
+cues are explicitly retained. All **four existing workflow cases passed in 4.90
+seconds**, covering both types/modes, later reflection, preserved Skip completion,
+terminal chronology and unchanged scores. No new string-only test was added.
+Report: `build/ux-guide-copy-audit-20261120/postmortem.xml`. This result is scoped
+to those copy edits; remaining audit groups and final integrated checks are pending.
+
+The creation group removes Adaptive New Prediction's subtitle and repeated
+Binary/Numeric field inventories. The empty shared supporting labels remain
+hidden across type changes; the One-Shot mode explanation is explicitly retained.
+All **seven focused Qt cases passed in 6.69 seconds**, covering probability bounds,
+focus, both form types, complete Numeric creation, palette/geometry, mode/type
+draft retention and unchanged save behavior. Existing hierarchy assertions now
+reflect the intentionally absent guidance. Report:
+`build/ux-guide-copy-audit-20261120/creation-copy.xml`. This remains one ongoing
+audit checkpoint, with final integrated verification and later copy groups pending.
+
+The adopted tooltip group replaces the generic skill/hindsight cautions in Updating
+Gain, Delta WIS and Numeric calibration uncertainty help with their concise direct
+definitions. Specific Numeric chart keys and complete text alternatives remain.
+Seven relevant Qt cases are green across five initial passes and two calibration
+reruns. An older calibration assertion requiring the already-removed hindsight
+warning now checks the actual eight unrevised observations instead. The cases
+retain exact score values, chart/table alternatives, palette/font/geometry and
+filter behavior. Reports: `tooltip.xml` and `tooltip-calibration.xml` in the same
+ignored audit folder. Earlier broad/package evidence retains its source scope.
+
+The next adopted hover-help group replaces Forecast/Neutral Weight definitions
+and the whole-number tie-band paragraph with their shorter window-share, neutral-
+loss and open/filled-dot explanations. The strict/inclusive key, actual tie data,
+confidence intervals, planned-window denominator and scoring rules remain. All
+**five focused Qt cases passed in 5.16 seconds**, retaining displayed weights and
+scores, chart/table alternatives, narrow/wide geometry, font/palette and filter
+checks. The obsolete tooltip assertion for the internal Active Forecast Fraction
+alias is removed; weight values remain asserted. Report:
+`build/ux-guide-copy-audit-20261120/weight-tooltip.xml`. Remaining editor/history
+copy and final integrated audit checks are pending.
+
+The adopted five-item editor group shortens Binary revision help, both Adaptive
+Journal correction introductions, Keep Forecast help, One-Shot rationale and the
+existing New Journal Entry placeholder. Optional input, error/cancel/stale handling,
+historical snapshots and consequential-action instructions remain. The revision
+field's accessible description still matches its visible helper. All **nine
+focused cases passed in 3.94 seconds**, covering revision saves/concurrency context,
+Journal save/cancel/error, Numeric review/history/restart and both One-Shot types'
+creation/correction workflows. Report:
+`build/ux-guide-copy-audit-20261120/editor-copy.xml`. Historical-event messages are
+the final pending review group before integrated audit checks.
+
+The final historical-event group is adopted and implemented. Resolution entries
+retain the original outcome/value; correction/reflection events retain actual
+supplied explanations; Skip/Invalid/corrected-reason events retain their names and
+immutable dates. Generic history pointers and future-writing fallbacks are omitted.
+Skip events say Postmortem Skipped. Adaptive completion uses Postmortem Skipped,
+or Previously Skipped after later reflection, with the original completion date.
+Complete facts/corrections and exact historical search targets remain available.
+All **13 focused cases passed in 22.76 seconds**, covering reflection/Skip, terminal
+chronology, original/corrected facts, default disclosures and exact-source search
+across both types. Report: `build/ux-guide-copy-audit-20261120/history-copy.xml`.
+
+All copy choices are settled. Integrated verification passed, with six
+Git-invoking cases excluded to honor the user's Git boundary. Filesystem comparison
+against the earlier local candidate wheel confirms all application/domain/data/
+analytics modules, migrations and bundled resources are byte-identical. This does
+not establish a matching current package or installed-tool update. No personal
+database, Git command, commit, push, tag or publication is involved.
+
+### Integrated guide-text verification
+
+On final executable source, **1,374 tests passed, six were deselected, and none
+failed or skipped**, in **1,013.88 seconds**. The exclusions are the two historical-
+source relocation parameters and four documentation discovery/CLI parameters that
+invoke Git; the user's restriction covers Git commands even in temporary checkouts.
+All other collected cases ran. Documentation links/anchors were checked directly
+from the filesystem using the existing checker helpers.
+
+All **64 fresh Qt record/palette/geometry cases passed**: eight representative
+Binary/Numeric Adaptive/One-Shot records, two appearances, narrow/wide windows and
+9/15-point Segoe UI, at Qt scale 1. Expanded histories remain complete/selectable;
+disclosures work with keyboard focus, collapse compactly and retain contrast;
+visible labels fit without horizontal overflow. Canonical navigation records and
+scorecards remain unchanged. Normal-light and enlarged-dark Binary Scorecard
+captures were inspected. This is agent/offscreen evidence, not a fresh human
+Windows scaling/accessibility matrix.
+
+Ruff check/format passed for all 327 files. Filesystem checks passed **379 public
+local links in 58 documents**, **342 private links in five documents**, all 66 J/42 R
+identifiers including both withdrawals, 99 mirrored public references, scoped
+whitespace and lower-layer import boundaries. The package-file comparison retains
+all 166 earlier files, with 18 changed UI modules and six earlier-added UI helpers;
+every lower-layer module, migration and bundled resource is byte-identical. This
+comparison includes preceding UI refinements and does not count them all as new
+copy-audit work. No new package or installed-tool result is claimed.
+
+Current evidence is ignored under `build/ux-guide-copy-audit-20261120/`: `full.xml`,
+the narrow reports, `native-font-9.log`, `native-font-15.log` and their separate
+capture folders. Earlier records keep their evaluated scope. One short human
+review can use `uv run python tools/run_visual_review.py detail`: inspect the
+trimmed scorecard, expanded original/correction history and Skipped/Previously
+Skipped state, then Performance and the creation forms. Data stays disposable.
+All Git, delivery and eventual release actions remain user-owned; 0.9.0 is Unreleased.

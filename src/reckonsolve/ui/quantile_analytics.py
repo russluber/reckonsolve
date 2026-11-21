@@ -254,15 +254,12 @@ class QuantileCalibrationPanel(AnalyticsPanel):
         )
         self.body_layout.addWidget(self.balance_row)
         guidance = (
-            "The nominal percentile can lie anywhere within the tie band, allowing for sampling variation; the band shows ties, not uncertainty. "
-            "Whole-number ties can put closed-interval coverage above 50% or 90% without implying miscalibration. Median ties are retained."
+            "The band shows ties between the open and filled dots, not uncertainty. "
+            "Whole-number ties can raise interval coverage above 50% or 90%."
             if whole
             else "Reference below / inside / above: 25% / 50% / 25% for the 50% interval; 5% / 90% / 5% for the 90% interval. Median below / above is approximately 50% / 50% when ties are negligible."
         )
-        uncertainty_help = (
-            "Small samples are uncertain. Wilson intervals are descriptive, "
-            "pointwise 95% intervals, not proof of skill."
-        )
+        uncertainty_help = "Pointwise 95% Wilson confidence intervals."
         self.set_help_text(
             f"{self.accessibleDescription()} {guidance} {uncertainty_help}"
         )
