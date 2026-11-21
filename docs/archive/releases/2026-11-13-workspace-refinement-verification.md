@@ -1,5 +1,9 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The latest [Binary Scorecard and inline history implementation](#binary-scorecard-and-inline-history--2026-11-20)
+follows explicit adoption of the reviewed proposals. Its current source/native
+evidence and human visual review remain separate from earlier checkpoints.
+
 The [Performance calibration canvas repair](#performance-calibration-canvas--2026-11-20)
 has fresh focused/native evidence for both Binary populations. Later Detail visual
 proposals are separate from this implemented repair.
@@ -1405,3 +1409,77 @@ Scoped whitespace/reference checks, all 66 J/42 R IDs and both withdrawals,
 96 public-reference mirrors and the lower-layer/migration/resource comparison
 passed without Git. Detail scorecard/history-link mockups remain proposals;
 no Detail control implementation is part of this repair.
+
+## Binary Scorecard and inline history — 2026-11-20
+
+The user explicitly adopted the recommended framed Binary Scorecard and underlined
+Show/Hide Edit History / Resolution History proposals and authorized implementation.
+The preceding Performance calibration repair is saved by user report; no Git
+verification or operation is performed. This is bounded presentation work under
+Section 38.15, with no protected scoring, lifecycle, correction or storage change.
+
+Adaptive Binary now uses the same deliberate scorecard frame as Numeric. Initial/
+Final Brier and Final Eligible Forecast are visible, with later excluded revisions
+qualified clearly. Existing Updating/Timing values and caveats remain behind an
+underlined Show/Hide Timing & Updating Details control; unscored records have an
+explicit explanation and no fabricated diagnostics. Both types share the existing
+wrapped score-row helper. The panel receives the analytical result and adds no
+queries or score computation.
+
+All four Journal contracts use underlined Show/Hide Edit History links and a visible
+prior-version count. Adaptive Resolution History uses the same inline treatment.
+Space and Enter activate the focused control without becoming a form default.
+Appearance/resize keeps the current Show/Hide caption and visible contrast. The
+same disclosure identities support fresh-visit collapse, draft consultation and
+exact matched-version search reveal. Current Journal text appears once; selectable
+originals/older versions and complete terminal corrections retain their dates and
+source targets. Ruled history rows fit the available width. Their explicit content/
+disclosure height propagation prevents clipped text, large internal gaps and empty
+space after collapse, while ordinary Timeline layout-item reuse remains unchanged.
+
+New integrated checks cover scored/unscored and earlier-eligible Binary, all four
+Journal contracts, explicit keyboard labels/activation, both palettes and readable
+narrow/enlarged content. Existing immutable correction/search/save/recovery cases
+remain. The final source suite excludes the Git-discovering documentation test file
+and the two Git-backed historical-checkout cases because every Git command remains
+user-owned. Current documentation uses filesystem discovery with the existing
+link/anchor checker instead. Final counts and results are recorded below.
+
+All **192 native record/palette/geometry cases** passed across eight fixture states:
+earlier-eligible/unscored Binary; both Adaptive types' long/reflection histories;
+and corrected Binary/Numeric One-Shot exercises. Both palettes, 1,600 × 1,000 /
+760 × 520 logical geometry, 9/15-point real Segoe UI and Qt scales 1/1.5/2 run in six
+separate processes. Checks exercise opening/closing links, full child containment,
+label fit, compact event/body spacing, zero horizontal overflow and unchanged
+canonical records/scores. Rendered expanded scorecard and history captures were
+inspected, including enlarged/minimum geometry. The prior 9-logical-pixel Binary
+diagnostics overflow is removed by this implementation. Evidence stays ignored
+under `build/ux-binary-scorecard-links-20261120/`.
+
+For the focused human recheck, use `uv run python tools/run_visual_review.py detail`.
+Open Earlier forecast scored Binary: verify the framed scorecard, eligible 65%
+forecast and linked Timing/Updating details. Use Reflection history examples for
+Adaptive Resolution History and edited Journals, and corrected One-Shot exercises
+for the shared Edit History treatment. Try both palettes, smaller geometry and
+Space/Enter activation. Other accepted journeys carry forward. Agent/native
+simulation does not establish physical Windows/accessibility or human acceptance.
+No package or installed tool is changed, no personal database is opened and no Git
+command is run. Version 0.9.0 remains Unreleased; delivery/release stays user-owned.
+
+**Final verification:** The complete permitted source run reported **1,360 passed**
+and six failures from old tests still selecting checkbox widgets (**1,068.33 seconds**).
+Those selectors were updated to the adopted controls without removing history,
+score, wrapping or search assertions. Re-running every failed case passed **all
+six in 6.62 seconds**; no executable source changed. Seven additional Git-free
+checker unit cases passed in 0.88 seconds. XML reconciliation verifies **1,373
+distinct permitted cases covered with no unresolved failures**. Five cases that
+invoke Git (three documentation discovery/CLI cases and two historical-checkout
+cases) remain deliberately excluded. The current failure cache is empty.
+
+Ruff check/format passed for 326 files. Filesystem documentation checks passed
+377 public links/58 files and 335 private links/five files with zero errors.
+Scoped whitespace/references, all 66 J/42 R IDs and both withdrawals, 96 public
+reference mirrors and lower-layer/migration/resource preservation checks passed
+without Git. All six final native font/scale processes retain their 192 passing
+cases. Current human visual acceptance remains pending; the user owns commits,
+pushes and later delivery/release steps.

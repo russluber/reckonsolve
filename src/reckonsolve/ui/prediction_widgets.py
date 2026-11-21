@@ -51,6 +51,9 @@ from reckonsolve.ui.date_display import (
     update_date_inputs,
 )
 from reckonsolve.ui.detail_reading import TimelineEntry, progressive_body
+from reckonsolve.ui.history_disclosure import (
+    history_disclosure as _collapsible_history_link,
+)
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.one_shot import text_label
 from reckonsolve.ui.prediction_contracts import (
@@ -315,15 +318,17 @@ def _collapsible_history_group(
     return group
 
 
-def _history_content(group: QGroupBox) -> tuple[QWidget, QVBoxLayout]:
-    content = group.findChild(QWidget, f"{group.objectName()}Content")
+def _history_content(group: QWidget) -> tuple[QWidget, QVBoxLayout]:
+    content = getattr(group, "disclosure_body", None)
+    if content is None:
+        content = group.findChild(QWidget, f"{group.objectName()}Content")
     if content is None or not isinstance(content.layout(), QVBoxLayout):
         raise RuntimeError("Terminal correction history content is unavailable.")
     return content, content.layout()
 
 
 def _show_binary_resolution_correction_history(
-    group: QGroupBox,
+    group: QWidget,
     history: BinaryResolutionHistory,
 ) -> None:
     content, layout = _history_content(group)
@@ -359,7 +364,7 @@ def _show_binary_resolution_correction_history(
 
 
 def _show_numeric_resolution_correction_history(
-    group: QGroupBox,
+    group: QWidget,
     history: NumericResolutionHistory,
     unit: str,
 ) -> None:
@@ -417,29 +422,38 @@ def _show_invalidation_correction_history(
     _finish_terminal_history_group(group, len(history.corrections))
 
 
-def _finish_terminal_history_group(group: QGroupBox, correction_count: int) -> None:
+def _finish_terminal_history_group(group: QWidget, correction_count: int) -> None:
     suffix = "correction" if correction_count == 1 else "corrections"
     base_title = (
         "Invalidation correction history"
         if "Invalidation" in group.objectName() or "invalidation" in group.objectName()
         else "Resolution correction history"
     )
-    group.setTitle(
-        "Reason history"
-        if base_title.startswith("Invalidation")
-        else "Resolution history"
-    )
+    if isinstance(group, QGroupBox):
+        group.setTitle(
+            "Reason history"
+            if base_title.startswith("Invalidation")
+            else "Resolution history"
+        )
     group.setAccessibleName(f"{base_title} ({correction_count} {suffix})")
     group.setToolTip(group.accessibleName())
-    group.setChecked(False)
+    if isinstance(group, QGroupBox):
+        group.setChecked(False)
+    else:
+        group.disclosure_button.setChecked(False)
+        group.disclosure_button.setAccessibleDescription(group.accessibleName())
     content, _layout = _history_content(group)
-    count = QLabel(
-        f"{correction_count} {suffix}. Original facts are shown first.", content
-    )
-    count.setObjectName("terminalCorrectionCount")
-    count.setWordWrap(True)
-    apply_text_role(count, TextRole.SECONDARY)
-    _layout.insertWidget(0, count)
+    if isinstance(group, QGroupBox):
+        count = QLabel(
+            f"{correction_count} {suffix}. Original facts are shown first.", content
+        )
+        count.setObjectName("terminalCorrectionCount")
+        count.setWordWrap(True)
+        apply_text_role(count, TextRole.SECONDARY)
+        _layout.insertWidget(0, count)
+    else:
+        group.disclosure_count.setText(f"{correction_count} {suffix}")
+        group.disclosure_count.setToolTip("Original facts are shown first.")
     content.setHidden(True)
     group.setHidden(correction_count == 0)
 
@@ -451,18 +465,9 @@ def _terminal_history_frame(
     object_name: str,
     parent: QWidget,
 ) -> QFrame:
-    frame = QFrame(parent)
+    frame = _HistoryEntry(heading_text, timestamp, parent, end_rule=True)
     frame.setObjectName(object_name)
-    frame.setFrameShape(QFrame.Shape.StyledPanel)
-    apply_surface_role(frame, SurfaceRole.BASE)
-    layout = QVBoxLayout(frame)
-    heading = QLabel(
-        f"{heading_text} · {_format_local_timestamp(timestamp, widget=parent)}",
-        frame,
-    )
-    heading.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(heading, TextRole.LABEL)
-    layout.addWidget(heading)
+    layout = frame.column
     for label, value in values:
         item = QLabel(f"{label}: {_terminal_history_value(value)}", frame)
         item.setTextFormat(Qt.TextFormat.PlainText)
@@ -569,18 +574,9 @@ def _terminal_correction_frame(
     object_name_prefix: str,
     parent: QWidget,
 ) -> QFrame:
-    frame = QFrame(parent)
+    frame = _HistoryEntry(f"Correction {sequence}", corrected_at, parent, end_rule=True)
     frame.setObjectName(f"{object_name_prefix}{correction_id}")
-    frame.setFrameShape(QFrame.Shape.StyledPanel)
-    apply_surface_role(frame, SurfaceRole.BASE)
-    layout = QVBoxLayout(frame)
-    heading = QLabel(
-        f"Correction {sequence} · {_format_local_timestamp(corrected_at, widget=parent)}",
-        frame,
-    )
-    heading.setTextFormat(Qt.TextFormat.PlainText)
-    apply_text_role(heading, TextRole.LABEL)
-    layout.addWidget(heading)
+    layout = frame.column
     for field_name in changed_fields:
         old_value, new_value = values[field_name]
         change = QLabel(
@@ -964,70 +960,98 @@ def _one_shot_journal_timeline_widget(
     return frame
 
 
+class _HistoryEntry(TimelineEntry):
+    """Fit expanded history independently of its collapsed outer reading row."""
+
+    def __init__(
+        self, title: str, instant: datetime, parent: QWidget, *, end_rule: bool
+    ) -> None:
+        super().__init__(title, instant, parent, end_rule=end_rule)
+        self.column.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Maximum)
+        self._height_timer = QTimer(self)
+        self._height_timer.setSingleShot(True)
+        self._height_timer.timeout.connect(self._fit_height)
+
+    def event(self, event: QEvent) -> bool:
+        result = super().event(event)
+        if event.type() in (QEvent.Type.Resize, QEvent.Type.LayoutRequest):
+            timer = getattr(self, "_height_timer", None)
+            if timer is not None and not timer.isActive():
+                timer.start(0)
+        return result
+
+    def _fit_height(self) -> None:
+        # Measure at this row's available width rather than stale child widths
+        # retained while the enclosing history was collapsed or resized.
+        margins = self.column.contentsMargins()
+        width = max(1, self.width() - margins.left() - margins.right())
+        height = margins.top() + margins.bottom()
+        for index in range(self.column.count()):
+            child = self.column.itemAt(index).widget()
+            if child is None:
+                continue
+            needed = (
+                self.header_layout.heightForWidth(width)
+                if child is self.header
+                else child.heightForWidth(width)
+            )
+            needed = max(0, needed)
+            if child.minimumHeight() != needed or child.maximumHeight() != needed:
+                child.setFixedHeight(needed)
+            height += needed
+        height += self.column.spacing() * max(0, self.column.count() - 1)
+        if height != self.minimumHeight():
+            self.setMinimumHeight(height)
+
+
 def _journal_edit_history_widget(
     entry: JournalTimelineSnapshot | QuantileTimelineEvent | OneShotJournal,
     parent: QWidget,
-) -> QGroupBox:
+) -> QWidget:
     prior_version_count = len(entry.corrections)
     suffix = "version" if prior_version_count == 1 else "versions"
-    history = QGroupBox(
-        "Edit history",
-        parent,
+    history = _collapsible_history_link(
+        "Edit History", f"journalEntryEditHistory{entry.entry_id}", parent
     )
-    history.setObjectName(f"journalEntryEditHistory{entry.entry_id}")
     history.setAccessibleName(f"Edit history ({prior_version_count} prior {suffix})")
-    apply_surface_role(history, SurfaceRole.BASE)
-    history.setCheckable(True)
-    history.setChecked(False)
-
-    content = QWidget(history)
+    history.disclosure_button.setAccessibleDescription(history.accessibleName())
+    history.disclosure_count.setText(f"{prior_version_count} prior {suffix}")
+    content, content_layout = _history_content(history)
     content.setObjectName(f"journalEntryEditHistoryContent{entry.entry_id}")
-    content_layout = QVBoxLayout(content)
-    content_layout.setContentsMargins(4, 4, 4, 4)
-    count = QLabel(f"{prior_version_count} prior {suffix}", content)
-    count.setWordWrap(True)
-    apply_text_role(count, TextRole.SECONDARY)
-    content_layout.addWidget(count)
 
-    original_heading = QLabel(
-        f"Original · {_format_local_timestamp(entry.created_at, widget=parent)}",
-        content,
+    prior = entry.corrections[:-1]
+    original = _HistoryEntry(
+        "Original", entry.created_at, content, end_rule=bool(prior)
     )
-    original_heading.setObjectName(f"journalEntryOriginalHeading{entry.entry_id}")
-    original_heading.setTextFormat(Qt.TextFormat.PlainText)
-    original_heading.setWordWrap(True)
-    original_body = QLabel(entry.original_body, content)
+    original.title.setObjectName(f"journalEntryOriginalHeading{entry.entry_id}")
+    original_body = original.text(entry.original_body, TextRole.DETAIL_TEXT, original)
     original_body.setObjectName(f"journalEntryOriginalBody{entry.entry_id}")
     original_body.setTextFormat(Qt.TextFormat.PlainText)
     original_body.setWordWrap(True)
     _make_selectable(original_body)
-    content_layout.addWidget(original_heading)
-    content_layout.addWidget(original_body)
+    original.column.addWidget(original_body)
+    content_layout.addWidget(original)
 
-    for index, correction in enumerate(entry.corrections[:-1], start=1):
-        correction_heading = QLabel(
-            f"Correction {index} · {_format_local_timestamp(correction.corrected_at, widget=parent)}",
+    for index, correction in enumerate(prior, start=1):
+        row = _HistoryEntry(
+            f"Correction {index}",
+            correction.corrected_at,
             content,
+            end_rule=index < len(prior),
         )
-        correction_heading.setObjectName(
-            f"journalCorrectionHeading{correction.correction_id}"
-        )
-        correction_heading.setTextFormat(Qt.TextFormat.PlainText)
-        correction_heading.setWordWrap(True)
-        correction_body = QLabel(correction.body, content)
+        row.title.setObjectName(f"journalCorrectionHeading{correction.correction_id}")
+        correction_body = row.text(correction.body, TextRole.DETAIL_TEXT, row)
         correction_body.setObjectName(
             f"journalCorrectionBody{correction.correction_id}"
         )
         correction_body.setTextFormat(Qt.TextFormat.PlainText)
         correction_body.setWordWrap(True)
         _make_selectable(correction_body)
-        content_layout.addWidget(correction_heading)
-        content_layout.addWidget(correction_body)
+        row.column.addWidget(correction_body)
+        content_layout.addWidget(row)
 
-    history_layout = QVBoxLayout(history)
-    history_layout.addWidget(content)
-    history.toggled.connect(content.setVisible)
-    content.setHidden(True)
+    history.show()
     return history
 
 

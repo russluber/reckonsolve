@@ -200,6 +200,8 @@ Adaptive Overview also uses compact chevrons for **More Information**, **Probabi
 
 These chart sections separate reading guidance from history/scoring context. Numeric shows the exact latest forecast and clearly warns when a different revision was used for scoring. More Information separates optional facts and prose. The framed **Numeric Scorecard** groups median accuracy and interval coverage; expand **WIS Breakdown** for the chart, initial/final comparison and exact supporting diagnostics.
 
+The framed **Binary Scorecard** shows Initial/Final Brier and the Final Eligible Forecast. **Show Timing & Updating Details** expands the existing diagnostics inside it. Corrected Journal entries use **Show Edit History**; Adaptive terminal corrections use **Show Resolution History**. Each underlined control reveals its records in place and changes to **Hide…**, with a count beside the history. Focus a link and press Space or Enter to activate it. Earlier versions retain their original dates and exact search navigation; unscored results remain explicit.
+
 On Adaptive Numeric records, **Unit** and **Decimal Places** stay visible directly below Resolution Criteria in Overview or Archival Context. These fixed definition facts are selectable; they are not repeated inside More Information. That disclosure holds remaining optional context and definition history, with an explicit message when nothing additional is recorded.
 
 ## Add an answer

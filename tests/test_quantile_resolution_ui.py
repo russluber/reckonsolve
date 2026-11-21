@@ -77,9 +77,9 @@ def test_resolution_dialog_and_scored_revision_exclusion(qtbot, active):
         label.toolTip() for label in screen.quantile_scorecard.findChildren(QLabel)
     )
     assert "Updating Gain" not in texts(screen.quantile_scorecard)
-    details = screen.quantile_scorecard.findChild(QGroupBox)
-    assert not details.isChecked()
-    details.setChecked(True)
+    details = screen.quantile_scorecard.findChild(QWidget, "numericWISDetails")
+    assert not details.disclosure_button.isChecked()
+    details.disclosure_button.setChecked(True)
     assert (
         screen.findChild(
             QLabel, f"numericForecastExcluded{p.current_revision.revision_id}"
@@ -260,7 +260,9 @@ def test_scorecard_wraps_at_narrow_and_wide_sizes(
     screen.resize(width, 900)
     screen.show_prediction(resolved)
     screen.show()
-    screen.quantile_scorecard.findChild(QGroupBox).setChecked(True)
+    screen.quantile_scorecard.findChild(
+        QWidget, "numericWISDetails"
+    ).disclosure_button.setChecked(True)
     qtbot.wait(30)
     screen.scroll_area.ensureWidgetVisible(screen.quantile_scorecard)
     qtbot.wait(20)

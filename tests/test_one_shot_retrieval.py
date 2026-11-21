@@ -7,7 +7,7 @@ from io import StringIO
 
 import pytest
 from PySide6.QtCore import QCoreApplication
-from PySide6.QtWidgets import QGroupBox, QLabel, QWidget
+from PySide6.QtWidgets import QLabel, QWidget
 from supported_fixtures import create_binary
 from test_one_shot_persistence import Clock, request
 
@@ -335,11 +335,11 @@ def test_one_shot_journal_timeline_shows_current_text_and_reveals_matched_histor
 
     timeline = screen.findChild(QWidget, "oneShotTimeline")
     card = screen.findChild(QWidget, f"oneShotJournalEntry{entry_id}")
-    history = screen.findChild(QGroupBox, f"journalEntryEditHistory{entry_id}")
+    history = screen.findChild(QWidget, f"journalEntryEditHistory{entry_id}")
     body = screen.findChild(QLabel, f"oneShotJournalBody{entry_id}")
     assert timeline is not None and card is not None and history is not None
     assert body is not None and body.text() == "Final field clue"
-    assert not history.isChecked()
+    assert not history.disclosure_button.isChecked()
     assert (
         len(screen.journals.findChildren(QWidget, f"oneShotJournalEntry{entry_id}"))
         == 1
@@ -352,7 +352,7 @@ def test_one_shot_journal_timeline_shows_current_text_and_reveals_matched_histor
     ).hits[0]
     screen.focus_search_match(old_hit.best_match.document)
     original = history.findChild(QLabel, f"journalEntryOriginalBody{entry_id}")
-    assert history.isChecked() and original is not None
+    assert history.disclosure_button.isChecked() and original is not None
     assert original.property("searchMatchEmphasis") is True
 
     intermediate_hit = operations.search_predictions(

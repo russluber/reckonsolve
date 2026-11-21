@@ -30,6 +30,7 @@ from reckonsolve.domain.search import SearchDocument, SearchSourceKind
 from reckonsolve.forecast_display import (
     format_local_deadline,
 )
+from reckonsolve.ui.binary_scorecard import BinaryScorecardPanel
 from reckonsolve.ui.components import (
     EmptyStateLabel,
     PageHeader,
@@ -80,6 +81,7 @@ from reckonsolve.ui.prediction_dialogs import (
 from reckonsolve.ui.prediction_widgets import (
     _clear_widget_layout,
     _collapsible_history_group,
+    _collapsible_history_link,
     _configure_detail_action_grid,
     _definition_change_widget,
     _detail_panel,
@@ -90,7 +92,6 @@ from reckonsolve.ui.prediction_widgets import (
     _forecast_timeline_widget,
     _format_date,
     _format_local_timestamp,
-    _history_content,
     _journal_entry_widget,
     _make_selectable,
     _show_binary_resolution_correction_history,
@@ -99,7 +100,6 @@ from reckonsolve.ui.prediction_widgets import (
 )
 from reckonsolve.ui.probability_history_chart import ProbabilityHistoryChart
 from reckonsolve.ui.reflection_editor import ReflectionEditor
-from reckonsolve.ui.scorecard_components import TrajectoryScoreDetails
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
@@ -309,10 +309,8 @@ class PredictionDetailScreen(QWidget):
             "predictionResolutionScoringForecast"
         )
         self.resolution_scoring_forecast.setTextFormat(Qt.TextFormat.PlainText)
-        self.scorecard_section = QGroupBox("Scorecard", self.resolution_section)
-        self.scorecard_section.setObjectName("predictionScorecard")
-        apply_surface_role(self.scorecard_section, SurfaceRole.BASE)
-        scorecard_layout = QVBoxLayout(self.scorecard_section)
+        self.scorecard_section = BinaryScorecardPanel(self.resolution_section)
+        scorecard_layout = self.scorecard_section.body_layout
         self.scorecard_forecast = QLabel("", self.scorecard_section)
         self.scorecard_forecast.setObjectName("predictionScorecardForecast")
         self.scorecard_forecast.setTextFormat(Qt.TextFormat.PlainText)
@@ -339,12 +337,8 @@ class PredictionDetailScreen(QWidget):
         scorecard_layout.addWidget(self.scorecard_brier)
         scorecard_layout.addWidget(self.scorecard_guidance)
         scorecard_layout.addWidget(self.scorecard_correction_notice)
-        self.trajectory_diagnostics = _collapsible_history_group(
-            "Score details", "trajectoryDiagnostics", self.scorecard_section
-        )
-        self.trajectory_diagnostics.setTitle("Score details")
-        self.trajectory_diagnostics.setHidden(True)
-        scorecard_layout.addWidget(self.trajectory_diagnostics)
+        self.trajectory_diagnostics = self.scorecard_section.details
+        self.scorecard_guidance.hide()
         self.resolution_notes_heading = QLabel(
             "Resolution Notes",
             self.resolution_section,
@@ -389,8 +383,8 @@ class PredictionDetailScreen(QWidget):
             "The original Resolution remains in history."
         )
         apply_lucide_icon(self.correct_resolution_button, LucideIcon.PENCIL)
-        self.resolution_history = _collapsible_history_group(
-            "Resolution correction history",
+        self.resolution_history = _collapsible_history_link(
+            "Resolution History",
             "resolutionCorrectionHistory",
             self.resolution_section,
         )
@@ -703,15 +697,12 @@ class PredictionDetailScreen(QWidget):
             self.postmortem_completion,
             self.detail_content,
         )
-        overview[1:1] = [
+        overview[2:2] = [
             self.reading_sections.notes,
             self.reading_sections.reflection,
             self.resolution_history,
             self.invalidation_history,
         ]
-        self.scorecard_section.setTitle("Binary score details")
-        apply_surface_role(self.scorecard_section, SurfaceRole.CANVAS)
-        self.trajectory_diagnostics.setTitle("Timing and updating diagnostics")
         apply_action_role(self.write_postmortem_button, ActionRole.SECONDARY)
         for label in (
             self.scorecard_forecast,
@@ -811,11 +802,11 @@ class PredictionDetailScreen(QWidget):
             )
             if document.is_superseded:
                 history = target.findChild(
-                    QGroupBox,
+                    QWidget,
                     f"journalEntryEditHistory{document.source_record_id}",
                 )
                 if history is not None:
-                    history.setChecked(True)
+                    history.disclosure_button.setChecked(True)
                     version_target_name = (
                         f"journalEntryOriginalBody{document.source_record_id}"
                         if document.source_version_id is None
@@ -838,7 +829,7 @@ class PredictionDetailScreen(QWidget):
                 document.is_superseded
                 or document.source_kind is SearchSourceKind.OUTCOME_CORRECTION_REASON
             ):
-                self.resolution_history.setChecked(True)
+                self.resolution_history.disclosure_button.setChecked(True)
                 target = self.resolution_history
             elif document.source_kind is SearchSourceKind.POSTMORTEM:
                 target = self.postmortem
@@ -1467,13 +1458,7 @@ class PredictionDetailScreen(QWidget):
                 )
             self.scorecard_correction_notice.setText("\n".join(notices))
             self.scorecard_correction_notice.setHidden(not notices)
-            if not scorecard.unscored_reason:
-                content, layout = _history_content(self.trajectory_diagnostics)
-                _clear_widget_layout(layout)
-                layout.addWidget(TrajectoryScoreDetails(scorecard, content))
-                self.trajectory_diagnostics.setChecked(False)
-                content.setHidden(True)
-                self.trajectory_diagnostics.setHidden(False)
+            self.scorecard_section.set_scorecard(scorecard)
             return
         self.scorecard_section.setHidden(True)
 

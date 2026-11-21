@@ -409,15 +409,52 @@ class HeaderTiming(QWidget):
         row.addWidget(deadline, 2)
 
 
+class _DisclosureLink(QPushButton):
+    """Activate a focused inline reveal with Enter without becoming a form default."""
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+        ) and event.modifiers() in (
+            Qt.KeyboardModifier.NoModifier,
+            Qt.KeyboardModifier.KeypadModifier,
+        ):
+            self.click()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 def collapse_section(
-    widget: QWidget, title: str, *, expanded: bool = False, compact: bool = False
+    widget: QWidget,
+    title: str,
+    *,
+    expanded: bool = False,
+    compact: bool = False,
+    text_link: bool = False,
 ) -> QWidget:
     """A disclosure retains selectable content and its original identity."""
     container = QWidget(widget.parentWidget())
     container.setObjectName(widget.objectName() + "Disclosure")
     layout = QVBoxLayout(container)
     layout.setContentsMargins(0, 0, 0, 0)
-    if compact:
+    if text_link:
+        toggle = _DisclosureLink(container)
+        toggle.setAutoDefault(False)
+        toggle.setProperty("reckonsolveInlineDisclosure", "true")
+        toggle.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        apply_text_role(toggle, TextRole.DETAIL_TEXT)
+
+        def update_caption(checked: bool) -> None:
+            caption = ("Hide " if checked else "Show ") + title
+            toggle.setProperty("reckonsolveDisclosureCaption", caption)
+            toggle.setAccessibleName(caption)
+            toggle.setText(caption.replace("&", "&&"))
+
+        toggle.toggled.connect(update_caption)
+        update_caption(expanded)
+    elif compact:
         toggle = QToolButton(container)
         toggle.setText(title.replace("&", "&&"))
         toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -437,10 +474,11 @@ def collapse_section(
         toggle = QPushButton(title, container)
     toggle.setCheckable(True)
     toggle.setChecked(expanded)
-    toggle.setAccessibleName(title)
+    if not text_link:
+        toggle.setAccessibleName(title)
     toggle.toggled.connect(widget.setVisible)
     widget.setVisible(expanded)
-    if compact:
+    if compact or text_link:
         layout.addWidget(toggle, 0, Qt.AlignmentFlag.AlignLeft)
     else:
         layout.addWidget(toggle)

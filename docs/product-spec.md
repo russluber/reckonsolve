@@ -2643,3 +2643,24 @@ These changes affect presentation only, with no new score, persistence or workfl
 rule. Verify both types, lifecycle states, palettes, narrow/scaled/enlarged geometry,
 read failures and unchanged canonical facts/scores. Current source evidence and
 pending human review are recorded in the [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-overview-reading--2026-11-20).
+
+**Binary Scorecard and inline history — adopted and authorized 2026-11-20:** Give
+Adaptive Binary the same deliberate scorecard frame as Numeric. Show Initial/Final
+Brier and the Final Eligible Forecast directly, distinguishing any later excluded
+revision. Put the existing Updating/Timing diagnostics behind an underlined
+**Show Timing & Updating Details** control. Keep unscored results explicit and
+without fabricated diagnostics; retain existing precision, meanings and caveats.
+
+Replace corrected Journal **Edit History** and Adaptive **Resolution History**
+checkboxes with underlined **Show…** / **Hide…** text controls and readable counts.
+Expand in place, preserving selectable originals/prior versions, complete terminal
+corrections, immutable dates and exact search targets. Keep the current Journal
+body once, dated prior versions below it, quiet internal rules and complete wrapped
+text at enlarged/narrow geometry. Preserve fresh-visit collapse, ongoing-task
+consultation state and automatic exact-version reveal. This presentation introduces
+no navigation, setting, score/history write, correction or lifecycle rule. Both
+palettes, keyboard operation, all four Journal contracts and scored/unscored Binary
+require source/native checks and a focused human visual recheck.
+
+The adopted presentation is implemented with [current verification evidence](archive/releases/2026-11-13-workspace-refinement-verification.md#binary-scorecard-and-inline-history--2026-11-20);
+human visual acceptance remains separate.

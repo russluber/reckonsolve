@@ -12,7 +12,6 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
     QDialogButtonBox,
-    QGroupBox,
     QLabel,
     QPushButton,
     QToolButton,
@@ -104,6 +103,152 @@ def context(prediction, numeric):
         else prediction.current_revision_id,
         "expected_metadata_version": prediction.metadata_version,
     }
+
+
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+@pytest.mark.parametrize("points", [9, 15])
+@pytest.mark.parametrize("scored", [False, True])
+def test_binary_scorecard_link_retains_eligible_facts_and_wraps(
+    workspace, qtbot, qapp, request, appearance, points, scored
+):
+    window, operations, clock, _database = workspace
+    original_font = QFont(qapp.font())
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    qapp.setFont(QFont("Segoe UI", points))
+    window.setFont(QFont("Segoe UI", points))
+    prediction = create(operations, clock, False)
+    start = clock.now()
+    clock.advance()
+    revised = operations.revise_forecast(
+        prediction.prediction_id, 90, **context(prediction, False)
+    )
+    clock.advance()
+    operations.resolve_prediction(
+        prediction.prediction_id,
+        BinaryOutcome.YES,
+        effective_resolution_at=start + timedelta(minutes=30) if scored else start,
+        **context(revised, False),
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    score = operations.get_prediction_scorecard(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window._open_prediction(prediction.prediction_id)
+    screen = window._prediction_detail_screen
+    card = screen.scorecard_section
+    assert card.title_label.text() == "Binary Scorecard"
+    assert card.property("reckonsolveScorecard") == "true"
+    link = screen.trajectory_diagnostics.disclosure_button
+    assert link.property("reckonsolveInlineDisclosure") == "true"
+    if scored:
+        assert card.findChild(QLabel, "binaryFinalEligibleForecast").text() == "65% Yes"
+        assert card.findChild(QLabel, "individualFinalBrier").text() == "0.1225"
+        assert not link.isChecked()
+        screen.workspace.ensureWidgetVisible(link)
+        link.setFocus()
+        qtbot.keyClick(link, Qt.Key.Key_Space)
+        assert link.isChecked() and link.accessibleName().startswith("Hide ")
+        assert (
+            card.findChild(QLabel, "individualUpdatingGain").text() == "+0.0000 · Tied"
+        )
+    else:
+        assert screen.trajectory_diagnostics.isHidden()
+        assert "at or before" in screen.scorecard_guidance.text()
+    for width in (1600, 760, 1600):
+        window.resize(width, 900)
+        qtbot.wait(80)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        for label in card.findChildren(QLabel):
+            if label.isVisible():
+                assert label.height() >= label.heightForWidth(label.width())
+        if scored:
+            assert link.accessibleName().startswith("Hide ")
+            assert link.text().replace("\n", " ").startswith("Hide ")
+            assert link.font().underline()
+    screen.refresh()
+    assert not link.isChecked()
+    assert link.accessibleName().startswith("Show ")
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+    assert operations.get_prediction_scorecard(prediction.prediction_id) == score
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_history_text_links_remain_visible_and_reveal_exact_versions(
+    workspace, qtbot, numeric, one_shot
+):
+    from PySide6.QtGui import QPalette
+
+    from reckonsolve.ui.visual_system import contrast_ratio, semantic_colors
+
+    window, operations, clock, _database = workspace
+    fixtures = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixtures["_seed_finish_cases"](_database, now=clock.now())
+    prefix = (
+        "Corrected exercise · One-Shot "
+        if one_shot
+        else "Reflection history · Adaptive "
+    ) + ("Numeric" if numeric else "Binary")
+    prediction = next(
+        row.prediction
+        for row in operations.journal.query(JournalRequest()).rows
+        if row.prediction.question.startswith(prefix)
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    groups = [
+        item
+        for item in screen.findChildren(QWidget)
+        if item.objectName().startswith("journalEntryEditHistory")
+        and hasattr(item, "disclosure_button")
+    ]
+    if not one_shot:
+        groups.append(screen.resolution_history)
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        qtbot.wait(30)
+        for group in groups:
+            link = group.disclosure_button
+            assert not link.isChecked()
+            assert link.accessibleName().startswith("Show ")
+            assert link.font().underline()
+            screen.workspace.ensureWidgetVisible(link)
+            link.setFocus()
+            qtbot.keyClick(link, Qt.Key.Key_Space)
+            assert group.disclosure_body.isVisible()
+            assert link.accessibleName().startswith("Hide ")
+            window.resize(760, 520)
+            qtbot.wait(80)
+            for label in group.disclosure_body.findChildren(QLabel):
+                if label.isVisible():
+                    assert label.height() >= label.heightForWidth(label.width())
+                    row = label.parentWidget()
+                    if (
+                        hasattr(row, "header")
+                        and row.column.itemAt(1).widget() is label
+                    ):
+                        assert label.y() - row.header.geometry().bottom() <= 9
+            assert (
+                contrast_ratio(
+                    link.palette().color(QPalette.ColorRole.ButtonText),
+                    semantic_colors(window.palette()).canvas,
+                )
+                >= 4.5
+            )
+            qtbot.keyClick(link, Qt.Key.Key_Return)
+            assert group.disclosure_body.isHidden()
+            qtbot.wait(40)
+            assert group.height() < 200
+    screen.refresh()
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
 
 
 def test_binary_journal_heading_does_not_absorb_timeline_height(workspace, qtbot):
@@ -451,11 +596,9 @@ def test_numeric_journal_omits_repeated_forecast_but_preserves_anchor_and_histor
                 action.text().startswith("Forecast at the time")
                 for action in row.findChildren(QToolButton)
             )
-            history = row.findChild(
-                QGroupBox, f"journalEntryEditHistory{entry.entry_id}"
-            )
+            history = row.findChild(QWidget, f"journalEntryEditHistory{entry.entry_id}")
             assert history is not None
-            assert not history.isChecked()
+            assert not history.disclosure_button.isChecked()
             for forecast in (event for event in before if event.kind == "forecast"):
                 revision_row = screen.findChild(
                     QWidget, f"numericTimelineForecast{forecast.record_id}"
@@ -1345,10 +1488,13 @@ def test_corrected_histories_reveal_exact_sources_and_reset_on_fresh_visit(
     screen.refresh()
     qtbot.wait(20)
     current_history = screen.findChild(
-        QGroupBox,
+        QWidget,
         f"journalEntryEditHistory{journal_hit.best_match.document.source_record_id}",
     )
-    assert current_history is not None and not current_history.isChecked()
+    assert (
+        current_history is not None
+        and not current_history.disclosure_button.isChecked()
+    )
     assert operations.get_prediction_for_navigation(identifier) == before
 
 
@@ -1432,10 +1578,11 @@ def test_long_history_small_window_keeps_reading_and_revision_controls_reachable
             assert pane.horizontalScrollBar().maximum() == 0
         history = next(
             group
-            for group in screen.findChildren(QGroupBox)
+            for group in screen.findChildren(QWidget)
             if group.objectName().startswith("journalEntryEditHistory")
+            and hasattr(group, "disclosure_button")
         )
-        history.setChecked(True)
+        history.disclosure_button.setChecked(True)
         qtbot.wait(20)
         assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
         screen.open_revise_forecast()

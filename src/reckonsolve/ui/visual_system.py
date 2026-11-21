@@ -854,6 +854,27 @@ QWidget[reckonsolvePredictionMetadata="true"] QLabel[reckonsolveTagChip="true"] 
     border-radius: {int(Radius.SMALL)}px;
 }}
 
+QPushButton[reckonsolveInlineDisclosure="true"] {{
+    background-color: transparent;
+    color: {color.accent};
+    border: 1px solid transparent;
+    border-radius: 0;
+    padding: {compact}px 0;
+    text-align: left;
+    text-decoration: underline;
+}}
+QPushButton[reckonsolveInlineDisclosure="true"]:hover {{
+    color: {color.focus};
+    background-color: transparent;
+}}
+QPushButton[reckonsolveInlineDisclosure="true"]:checked {{
+    color: {color.accent};
+    background-color: transparent;
+}}
+QPushButton[reckonsolveInlineDisclosure="true"]:focus {{
+    border: 1px dotted {color.focus};
+}}
+
 QLabel[reckonsolveMessageTone] {{
     border-radius: 0;
     padding: {control}px {ordinary}px;

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QAbstractAnimation, Qt
-from PySide6.QtWidgets import QGroupBox, QLabel, QWidget
+from PySide6.QtWidgets import QLabel, QWidget
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
@@ -317,12 +317,16 @@ def test_retained_rows_reset_ordinary_disclosures_and_repeat_exact_search(
         QWidget, f"journalEntryOriginalBody{document.source_record_id}"
     )
     history = screen.findChild(
-        QGroupBox, f"journalEntryEditHistory{document.source_record_id}"
+        QWidget, f"journalEntryEditHistory{document.source_record_id}"
     )
-    assert target.property("searchMatchEmphasis") and history.isChecked()
+    assert (
+        target.property("searchMatchEmphasis") and history.disclosure_button.isChecked()
+    )
     screen.refresh()
     assert widgets(screen) == rows
     assert not target.property("searchMatchEmphasis")
-    assert not history.isChecked()
+    assert not history.disclosure_button.isChecked()
     screen.focus_search_match(document)
-    assert target.property("searchMatchEmphasis") and history.isChecked()
+    assert (
+        target.property("searchMatchEmphasis") and history.disclosure_button.isChecked()
+    )

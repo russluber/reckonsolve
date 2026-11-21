@@ -1413,7 +1413,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     )
     edited = second_runtime.window.findChild(QLabel, "journalEntryEdited1")
     edit_history = second_runtime.window.findChild(
-        QGroupBox,
+        QWidget,
         "journalEntryEditHistory1",
     )
     timeline = second_runtime.window.findChild(QWidget, "forecastTimeline")
@@ -1432,7 +1432,7 @@ def test_journal_correction_timeline_and_forecast_context_survive_restart(
     assert reopened_original.text() == "The evidence teh supports 60%."
     assert reopened_context.text() == "Forecast at the time: 60%"
     assert edited.text().startswith("Edited ")
-    assert not edit_history.isChecked()
+    assert not edit_history.disclosure_button.isChecked()
     assert [
         timeline.layout().itemAt(index).widget().objectName()
         for index in range(timeline.layout().count())

@@ -7,7 +7,6 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
-    QGroupBox,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -155,7 +154,7 @@ def test_binary_correction_and_later_postmortem_survive_restart(
     assert _child(window, QLabel, "predictionScorecardBrier").text() == (
         f"Trajectory Brier: {float(scorecard.trajectory_brier):.4f}"
     )
-    assert not _child(window, QGroupBox, "predictionScorecard").isHidden()
+    assert not _child(window, QWidget, "predictionScorecard").isHidden()
     assert window._prediction_detail_screen.terminal_summary.note.isVisible()
     assert (
         "corrected facts"
@@ -195,12 +194,12 @@ def test_binary_correction_and_later_postmortem_survive_restart(
 
     history_group = _child(
         reflection_window,
-        QGroupBox,
+        QWidget,
         "resolutionCorrectionHistory",
     )
     assert not history_group.isHidden()
     assert "2 corrections" in history_group.accessibleName()
-    history_group.setChecked(True)
+    history_group.disclosure_button.setChecked(True)
     assert (
         _child(
             history_group,

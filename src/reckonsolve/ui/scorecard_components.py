@@ -1,6 +1,6 @@
 """Small, selectable presentation groups for individual resolved forecasts."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -62,6 +62,40 @@ class ScoreGroup(QWidget):
         self.rows.addWidget(fact, row, 1)
 
 
+class ReadingScoreGroup(ScoreGroup):
+    """Reserve wrapped row heights after responsive layout has settled."""
+
+    def __init__(self, title: str, parent: QWidget) -> None:
+        super().__init__(title, parent)
+        self._height_timer = QTimer(self)
+        self._height_timer.setSingleShot(True)
+        self._height_timer.timeout.connect(self._fit_height)
+
+    def event(self, event: QEvent) -> bool:
+        result = super().event(event)
+        if event.type() in (QEvent.Type.Resize, QEvent.Type.LayoutRequest):
+            timer = getattr(self, "_height_timer", None)
+            if timer is not None and not timer.isActive():
+                timer.start(0)
+        return result
+
+    def _fit_height(self) -> None:
+        for row in range(self.rows.rowCount()):
+            height = max(
+                (
+                    item.widget().heightForWidth(item.widget().width())
+                    for column in (0, 1)
+                    if (item := self.rows.itemAtPosition(row, column)) is not None
+                ),
+                default=0,
+            )
+            if height != self.rows.rowMinimumHeight(row):
+                self.rows.setRowMinimumHeight(row, height)
+        height = self.layout().minimumHeightForWidth(self.width())
+        if height != self.minimumHeight():
+            self.setMinimumHeight(height)
+
+
 class ScoreGroups(QWidget):
     """Equal-width groups when roomy, top-aligned vertical groups when narrow."""
 
@@ -95,21 +129,10 @@ class ScoreGroups(QWidget):
 
 class TrajectoryScoreDetails(ScoreGroups):
     def __init__(self, card: TrajectoryScorecard, parent: QWidget) -> None:
-        probability = ScoreGroup("Probability Scores", parent)
-        updating = ScoreGroup("Updating", parent)
-        timing = ScoreGroup("Timing", parent)
-        super().__init__((probability, updating, timing), parent)
+        updating = ReadingScoreGroup("Updating", parent)
+        timing = ReadingScoreGroup("Timing", parent)
+        super().__init__((updating, timing), parent)
         self.setObjectName("trajectoryScoreDetails")
-        for caption, name, value in (
-            ("Initial Brier", "individualInitialBrier", card.initial_brier),
-            ("Final Brier", "individualFinalBrier", card.final_brier),
-        ):
-            probability.add_fact(
-                caption,
-                f"{float(value):.4f}",
-                name=name,
-                help_text="One probability scored against the effective outcome. Lower is better.",
-            )
         updating.add_fact(
             "Hold-initial Trajectory Brier",
             f"{float(card.hold_initial_brier):.4f}",

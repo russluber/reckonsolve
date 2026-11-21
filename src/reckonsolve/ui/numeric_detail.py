@@ -86,6 +86,7 @@ from reckonsolve.ui.prediction_dialogs import (
 from reckonsolve.ui.prediction_widgets import (
     _clear_widget_layout,
     _collapsible_history_group,
+    _collapsible_history_link,
     _configure_detail_action_grid,
     _definition_change_widget,
     _detail_panel,
@@ -379,8 +380,8 @@ class NumericPredictionDetailScreen(QWidget):
             "The original Resolution remains in history."
         )
         apply_lucide_icon(self.correct_resolution_button, LucideIcon.PENCIL)
-        self.resolution_history = _collapsible_history_group(
-            "Resolution correction history",
+        self.resolution_history = _collapsible_history_link(
+            "Resolution History",
             "numericResolutionCorrectionHistory",
             self.resolution_section,
         )
@@ -819,11 +820,11 @@ class NumericPredictionDetailScreen(QWidget):
             )
             if document.is_superseded:
                 history = target.findChild(
-                    QGroupBox,
+                    QWidget,
                     f"journalEntryEditHistory{document.source_record_id}",
                 )
                 if history is not None:
-                    history.setChecked(True)
+                    history.disclosure_button.setChecked(True)
                     version_target_name = (
                         f"journalEntryOriginalBody{document.source_record_id}"
                         if document.source_version_id is None
@@ -847,7 +848,7 @@ class NumericPredictionDetailScreen(QWidget):
                 document.is_superseded
                 or document.source_kind is SearchSourceKind.OUTCOME_CORRECTION_REASON
             ):
-                self.resolution_history.setChecked(True)
+                self.resolution_history.disclosure_button.setChecked(True)
                 target = self.resolution_history
             elif document.source_kind is SearchSourceKind.POSTMORTEM:
                 target = self.postmortem

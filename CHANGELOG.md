@@ -29,6 +29,8 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Adaptive Binary has a framed scorecard with visible probability scores and eligible forecast context. Underlined Show/Hide controls reveal timing/updating details, corrected Journal versions and Adaptive Resolution history, retaining exact facts, keyboard access and readable expanded prose.
+
 - Adaptive and One-Shot Binary calibration plots in Performance use the surrounding workspace canvas color in both appearances, including repeated theme changes. Calibration data and chart geometry are unchanged.
 
 - Adaptive Overview charts blend into both workspace palettes and avoid repeated disclosure headings. Supporting context and optional information use clearer reading groups; Numeric Scorecard has a distinct frame and compact WIS Breakdown chevron.

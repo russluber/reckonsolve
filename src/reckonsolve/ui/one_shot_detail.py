@@ -6,7 +6,6 @@ from datetime import date, datetime
 from fractions import Fraction
 
 from PySide6.QtWidgets import (
-    QGroupBox,
     QLabel,
     QMenu,
     QMessageBox,
@@ -789,10 +788,10 @@ class OneShotDetailScreen(QWidget):
             target = self.findChild(QWidget, "oneShotTimeline") or self.question
         if kind is SearchSourceKind.JOURNAL and document.is_superseded:
             history = self.findChild(
-                QGroupBox, f"journalEntryEditHistory{document.source_record_id}"
+                QWidget, f"journalEntryEditHistory{document.source_record_id}"
             )
             if history is not None:
-                history.setChecked(True)
+                history.disclosure_button.setChecked(True)
         _focus_search_widget(self.scroll, target)
 
     def correct_journal(self, entry_id: int) -> None:

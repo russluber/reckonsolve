@@ -259,9 +259,25 @@ The semantic scorecard property preserves this deliberate frame and its insets
 inside otherwise flat Detail reading panes. Shared comparison components still
 receive exact supplied scores; native disclosure state participates in the existing
 fresh-visit/draft-consultation rules. No lower-layer dependency or score changes.
-The scorecard's local reading-group helper measures wrapped row heights after
+The shared `ReadingScoreGroup` helper in `ui/scorecard_components.py` measures wrapped row heights after
 layout settles, preserving complete captions and exact values at enlarged/narrow
-geometry without changing the shared Binary comparison presentation.
+geometry for both individual scorecard types.
+
+`ui/binary_scorecard.py` renders the supplied TrajectoryScorecard in the shared
+framed surface. Probability scores and the final eligible forecast remain visible;
+Updating and Timing use the existing analytical fields behind an inline text link.
+Unscored context replaces those diagnostics. The screen's existing terminal-header
+facts remain separate; no query, score selection or calculation moves into the panel.
+
+`collapse_section` also supports underlined Show/Hide text controls, retaining the
+same disclosure body/button contract used by refresh, draft consultation and exact
+search reveal. Caption wrapping follows the current Show/Hide label. Corrected
+Journal and Adaptive Resolution histories use this option with visible counts;
+other disclosure styles retain their defaults. Existing source-label identities
+stay intact. `ui/history_disclosure.py` propagates expanded content heights through
+the retained outer row and releases that space on collapse. Nested historical
+rows fit exact wrapped text and header heights at their available width, avoiding
+clipping or surplus vertical spacing. Ordinary Timeline layout-item reuse remains.
 
 `ui/analytics_charts.py` paints Binary calibration plots with the Window/canvas
 palette role in both Performance populations. This avoids inheriting the input/

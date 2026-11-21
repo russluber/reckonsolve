@@ -78,6 +78,7 @@ class _DisclosureCaption(QObject):
         section.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.button = section.disclosure_button
         self.caption = self.button.accessibleName()
+        self.button.toggled.connect(self._wrap_caption)
         section.installEventFilter(self)
         self.button.installEventFilter(self)
 
@@ -86,21 +87,25 @@ class _DisclosureCaption(QObject):
             watched is self.button
             and event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange)
         ):
-            metrics = self.button.fontMetrics()
-            current_width = max(
-                metrics.horizontalAdvance(line.replace("&&", "&"))
-                for line in self.button.text().split("\n")
-            )
-            chrome = self.button.sizeHint().width() - current_width
-            available = max(1, self.section.width() - chrome)
-            lines = [""]
-            for word in self.caption.split():
-                candidate = (lines[-1] + " " + word).strip()
-                if lines[-1] and metrics.horizontalAdvance(candidate) > available:
-                    lines.append(word)
-                else:
-                    lines[-1] = candidate
-            text = "\n".join(lines).replace("&", "&&")
-            if text != self.button.text():
-                self.button.setText(text)
+            self._wrap_caption()
         return super().eventFilter(watched, event)
+
+    def _wrap_caption(self, *_args) -> None:
+        caption = self.button.property("reckonsolveDisclosureCaption") or self.caption
+        metrics = self.button.fontMetrics()
+        current_width = max(
+            metrics.horizontalAdvance(line.replace("&&", "&"))
+            for line in self.button.text().split("\n")
+        )
+        chrome = self.button.sizeHint().width() - current_width
+        available = max(1, self.section.width() - chrome)
+        lines = [""]
+        for word in caption.split():
+            candidate = (lines[-1] + " " + word).strip()
+            if lines[-1] and metrics.horizontalAdvance(candidate) > available:
+                lines.append(word)
+            else:
+                lines[-1] = candidate
+        text = "\n".join(lines).replace("&", "&&")
+        if text != self.button.text():
+            self.button.setText(text)
