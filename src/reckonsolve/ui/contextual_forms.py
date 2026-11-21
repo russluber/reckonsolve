@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.ui.dialog_review import confirm_contextual_terminal
+from reckonsolve.ui.editor_submit import bind_editor_submit
 from reckonsolve.ui.visual_system import (
     StatusTone,
     TextRole,
@@ -65,6 +66,9 @@ class BodyEditor(QDialog):
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
+        bind_editor_submit(
+            self, self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        )
 
     def submit(self) -> None:
         body = self.body_input.toPlainText()

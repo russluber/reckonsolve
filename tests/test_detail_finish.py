@@ -173,14 +173,19 @@ def test_binary_scorecard_link_retains_eligible_facts_and_wraps(
 
 @pytest.mark.parametrize("numeric", [False, True])
 @pytest.mark.parametrize("one_shot", [False, True])
+@pytest.mark.parametrize("points", [9, 15])
 def test_history_text_links_remain_visible_and_reveal_exact_versions(
-    workspace, qtbot, numeric, one_shot
+    workspace, qtbot, qapp, request, numeric, one_shot, points
 ):
     from PySide6.QtGui import QPalette
 
     from reckonsolve.ui.visual_system import contrast_ratio, semantic_colors
 
     window, operations, clock, _database = workspace
+    original_font = QFont(qapp.font())
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    qapp.setFont(QFont("Segoe UI", points))
+    window.setFont(QFont("Segoe UI", points))
     fixtures = runpy.run_path(
         str(Path(__file__).parents[1] / "tools/run_visual_review.py")
     )
@@ -225,17 +230,19 @@ def test_history_text_links_remain_visible_and_reveal_exact_versions(
             qtbot.keyClick(link, Qt.Key.Key_Space)
             assert group.disclosure_body.isVisible()
             assert link.accessibleName().startswith("Hide ")
-            window.resize(760, 520)
-            qtbot.wait(80)
-            for label in group.disclosure_body.findChildren(QLabel):
-                if label.isVisible():
-                    assert label.height() >= label.heightForWidth(label.width())
-                    row = label.parentWidget()
-                    if (
-                        hasattr(row, "header")
-                        and row.column.itemAt(1).widget() is label
-                    ):
-                        assert label.y() - row.header.geometry().bottom() <= 9
+            for width, height in ((760, 520), (1600, 1000)):
+                window.resize(width, height)
+                qtbot.wait(80)
+                for label in group.disclosure_body.findChildren(QLabel):
+                    if label.isVisible():
+                        assert label.height() >= label.heightForWidth(label.width())
+                        row = label.parentWidget()
+                        if (
+                            hasattr(row, "header")
+                            and row.column.itemAt(1).widget() is label
+                        ):
+                            assert row.height() == row.minimumHeight()
+                            assert label.y() - row.header.geometry().bottom() <= 9
             assert (
                 contrast_ratio(
                     link.palette().color(QPalette.ColorRole.ButtonText),
@@ -1043,6 +1050,7 @@ def test_adaptive_overview_reveals_use_compact_chevrons_and_keep_defaults(
     history = screen.distribution_disclosure if numeric else screen.chart_disclosure
     has_history_toggle = status != "open" if numeric else status == "invalid"
     qtbot.wait(30)
+
     assert history.disclosure_button.isVisible() == has_history_toggle
     assert history.disclosure_body.isVisible() != has_history_toggle
     controls = [screen.metadata_disclosure]
@@ -1065,6 +1073,112 @@ def test_adaptive_overview_reveals_use_compact_chevrons_and_keep_defaults(
         qtbot.wait(30)
         assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_control_enter_creates_and_writes_journal_through_existing_actions(
+    workspace, qtbot, numeric, one_shot
+):
+    from PySide6.QtCore import QDate, QTime
+
+    window, operations, _clock, _database = workspace
+    window.navigate_to("New Prediction")
+    if one_shot:
+        window._new_prediction_screen.one_shot_button.click()
+    form = window._creation_stack.currentWidget()
+    question = form.question if one_shot else form.question_input
+    question.setText("A complete keyboard creation and Journal journey")
+    if one_shot:
+        form.form.has_answer.setChecked(False)
+    else:
+        deadline = form.exact_deadline
+        deadline.choose_custom()
+        deadline.use_offset.setChecked(True)
+        deadline.offset.setText("+00:00")
+        deadline.editor.setDate(QDate(2099, 1, 1))
+        deadline.editor.setTime(QTime(23, 59))
+    if numeric:
+        picker = form.form.type_input if one_shot else form.prediction_type_input
+        picker.setCurrentIndex(picker.findData("numeric"))
+        (form.form.unit if one_shot else form.numeric_unit_input).setText("items")
+        constraint = form.form.constraint if one_shot else form.numeric_constraint_input
+        constraint.setCurrentIndex(
+            constraint.findData(NumericValueConstraint.WHOLE_NUMBER)
+        )
+        quantiles = form.form.quantiles if one_shot else form.quantile_input
+        for level, value in {5: 1, 25: 2, 50: 3, 75: 4, 95: 5}.items():
+            quantiles.inputs[level].setText(str(value))
+    question.setFocus()
+    qtbot.keyClick(question, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+    rows = operations.journal.query(JournalRequest()).rows
+    assert len(rows) == 1
+    saved = rows[0].prediction
+    assert saved.question == "A complete keyboard creation and Journal journey"
+    assert saved.forecast_contract.is_one_shot == one_shot
+    window._open_prediction(saved.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    (screen.journal_button if one_shot else screen.add_journal_entry_button).click()
+    editor = screen.workspace.editor
+    editor.body_input.setPlainText("One keyboard-saved Journal entry.")
+    qtbot.keyClick(
+        editor.body_input, Qt.Key.Key_Enter, Qt.KeyboardModifier.ControlModifier
+    )
+    assert screen.workspace.editor is None
+    entries = (
+        operations.one_shots.get(saved.prediction_id).journals
+        if one_shot
+        else operations.list_numeric_timeline(saved.prediction_id)
+        if numeric
+        else operations.list_timeline(saved.prediction_id)
+    )
+    assert (
+        sum(
+            getattr(entry, "body", None) == "One keyboard-saved Journal entry."
+            for entry in entries
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_control_enter_commits_revision_from_its_rationale_field(
+    workspace, qtbot, numeric
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    screen.revise_forecast_button.click()
+    editor = screen.workspace.editor
+    if numeric:
+        editor.quantile_input.inputs[50].setText("1")
+    else:
+        editor.probability_input.setValue(75)
+    editor.rationale_input.setPlainText("An explicitly revised forecast.")
+    qtbot.keyClick(
+        editor.rationale_input, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier
+    )
+    assert screen.workspace.editor is None
+    revised = operations.get_prediction_for_navigation(prediction.prediction_id)
+    revision = (
+        revised.current_revision
+        if numeric
+        else operations.list_forecast_revisions(prediction.prediction_id)[-1]
+    )
+    assert revision.sequence == 2
+    assert revision.rationale == "An explicitly revised forecast."
 
 
 @pytest.mark.parametrize("one_shot", [False, True])
@@ -1448,6 +1562,21 @@ def test_corrected_histories_reveal_exact_sources_and_reset_on_fresh_visit(
         if numeric
         else window._prediction_detail_screen
     )
+    definition_name = (
+        "oneShotDefinitionHistoryDisclosure"
+        if one_shot
+        else "numericDefinitionHistoryGroup"
+        if numeric
+        else "definitionHistoryGroup"
+    )
+    definition = screen.findChild(QWidget, definition_name)
+    assert definition is not None
+    assert not definition.disclosure_button.isChecked()
+    assert definition.disclosure_button.font().underline()
+    definition.disclosure_button.click()
+    assert not definition.disclosure_body.isHidden()
+    definition.disclosure_button.click()
+    assert definition.disclosure_body.isHidden()
     screen.focus_search_match(journal_hit.best_match.document)
     original = screen.findChild(
         QLabel,
@@ -1466,6 +1595,9 @@ def test_corrected_histories_reveal_exact_sources_and_reset_on_fresh_visit(
     )
     screen.focus_search_match(definition_hit.best_match.document)
     qtbot.wait(20)
+    # One-Shot keeps its established exact Recorded Timeline target; Adaptive
+    # definitions are revealed within Definition History itself.
+    assert definition.disclosure_button.isChecked() == (not one_shot)
     assert any(
         widget.isVisible()
         and widget.property("searchMatchEmphasis")
@@ -1497,6 +1629,7 @@ def test_corrected_histories_reveal_exact_sources_and_reset_on_fresh_visit(
         current_history is not None
         and not current_history.disclosure_button.isChecked()
     )
+    assert not screen.findChild(QWidget, definition_name).disclosure_button.isChecked()
     assert operations.get_prediction_for_navigation(identifier) == before
 
 

@@ -200,7 +200,7 @@ Adaptive Overview also uses compact chevrons for **More Information**, **Probabi
 
 These chart sections separate reading guidance from history/scoring context. Numeric shows the exact latest forecast and clearly warns when a different revision was used for scoring. More Information separates optional facts and prose. The framed **Numeric Scorecard** groups median accuracy and interval coverage; expand **WIS Breakdown** for the chart, initial/final comparison and exact supporting diagnostics.
 
-The framed **Binary Scorecard** shows Initial/Final Brier and the Final Eligible Forecast. **Show Timing & Updating Details** expands the existing diagnostics inside it. Corrected Journal entries use **Show Edit History**; Adaptive terminal corrections use **Show Resolution History**. Each underlined control reveals its records in place and changes to **Hide…**, with a count beside the history. Focus a link and press Space or Enter to activate it. Earlier versions retain their original dates and exact search navigation; unscored results remain explicit.
+The framed **Binary Scorecard** shows Initial/Final Brier and the Final Eligible Forecast. **Show Timing & Updating Details** expands the existing diagnostics inside it. Corrected Journal entries use **Show Edit History**; Adaptive terminal corrections use **Show Resolution History**; Question/criteria changes use **Show Definition History** in either mode/type. Each underlined control reveals its records in place and changes to **Hide…**, with a count beside the history. Focus a link and press Space or Enter to activate it. Expanded text fits its content after resizing, retaining paragraph breaks and selectable originals. Earlier versions retain their original dates and exact search navigation; unscored results remain explicit.
 
 On Adaptive Numeric records, **Unit** and **Decimal Places** stay visible directly below Resolution Criteria in Overview or Archival Context. These fixed definition facts are selectable; they are not repeated inside More Information. That disclosure holds remaining optional context and definition history, with an explicit message when nothing additional is recorded.
 
@@ -251,6 +251,13 @@ The full matching-Prediction count accompanies text/advanced results; ordinary b
 **Manage Tags** is in Settings and confirms rename, merge and removal. Saved Views are retired. Upgrading an older supported journal preserves a verified complete recovery copy and requires confirmation where configurations exist; forecasting history remains intact. CLI opening directs review-dependent upgrades to the desktop.
 
 Use the quiet sun/moon control to select the opposite appearance without leaving the page or clearing work. Settings offers **Follow Windows / Light / Dark** for the same remembered preference. Only Ctrl+N, Journal-only Ctrl+F and eligible Ctrl+, remain as app navigation shortcuts; native modal dialogs keep control of their own keys.
+
+While typing in a Prediction form, press **Ctrl+Enter** to activate its current
+primary button, such as **Save Journal Entry**, **Commit Revision** or **Create Prediction**.
+This also works with keypad Enter, single-line fields and date/numeric text input.
+Required checks, review and confirmation steps still apply. Ordinary Enter starts
+a new line in multiline text; Escape keeps its existing cancellation behavior.
+The shortcut is listed in Settings and in the primary button's help.
 
 **Settings → Dates and Time** selects **DD-MM-YYYY**, **MM-DD-YYYY** or **YYYY-MM-DD** (initially YYYY-MM-DD) for desktop date readouts and pickers. This preference survives restart and moving the journal. Reckonsolve follows Windows’ time zone; Settings shows its name and current offset. Ordinary timestamps omit the repeated offset, while exact time entry and consequential confirmations retain offset/daylight-saving cues. Documentary One-Shot times retain any supplied offset. The setting changes presentation only: saved instants, date-only facts, typed prose, filenames, CLI output and CSV formats stay as recorded.
 

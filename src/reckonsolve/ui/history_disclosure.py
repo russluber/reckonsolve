@@ -1,7 +1,7 @@
 """Inline read-only history controls with bounded native height reconciliation."""
 
 from PySide6.QtCore import QEvent, QObject, QTimer
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from reckonsolve.ui.detail_workspace import collapse_section
 from reckonsolve.ui.one_shot_reading import finish_disclosure
@@ -22,10 +22,15 @@ def history_disclosure(title: str, object_name: str, parent: QWidget) -> QWidget
     content.setObjectName(f"{object_name}Content")
     column = QVBoxLayout(content)
     column.setContentsMargins(0, 0, 0, 0)
+    column.setSpacing(0)
     group = finish_disclosure(
         collapse_section(content, title, text_link=True), end_rule=False
     )
     group.setObjectName(object_name)
+    # Extra reading-pane height belongs below history, not inside its versions.
+    for widget in (group, content):
+        widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Maximum)
+    group.layout().setContentsMargins(0, 4, 0, 0)
     group.disclosure_count = QLabel(group)
     group.disclosure_count.setWordWrap(True)
     apply_text_role(group.disclosure_count, TextRole.DETAIL_TIME)

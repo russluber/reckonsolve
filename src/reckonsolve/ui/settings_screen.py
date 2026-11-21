@@ -27,7 +27,6 @@ from reckonsolve.ui.components import (
     ContentPanel,
     PageHeader,
     PersistentMessageLabel,
-    StatusBadge,
 )
 from reckonsolve.ui.date_display import (
     DateFormat,
@@ -205,12 +204,14 @@ class SettingsScreen(QWidget):
                 ("New Prediction · Journal, Detail or Performance", "Ctrl+N"),
                 ("Focus Journal search · Journal only", "Ctrl+F"),
                 ("Settings · outside creation", "Ctrl+,"),
+                ("Submit active Prediction editor", "Ctrl+Enter"),
             )
         ):
             grid.addWidget(_label(action, shortcuts.body), row, 0)
-            badge = StatusBadge(keys, StatusTone.NEUTRAL, parent=shortcuts.body)
-            badge.setAccessibleName(f"{action}: {keys}")
-            grid.addWidget(badge, row, 1, Qt.AlignmentFlag.AlignLeft)
+            key_label = _label(keys, shortcuts.body)
+            key_label.setWordWrap(False)
+            key_label.setAccessibleName(f"{action}: {keys}")
+            grid.addWidget(key_label, row, 1, Qt.AlignmentFlag.AlignLeft)
         grid.setColumnStretch(0, 1)
         shortcuts.body_layout.addLayout(grid)
         # Pair preferences/context with administration so all ordinary options

@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import date, datetime
 
-from PySide6.QtCore import QDate, QEvent, QObject, Qt, QTimer
-from PySide6.QtGui import QKeyEvent, QResizeEvent, QShowEvent
+from PySide6.QtCore import QDate, QEvent, Qt, QTimer
+from PySide6.QtGui import QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QDateEdit,
@@ -51,6 +51,7 @@ from reckonsolve.ui.date_display import (
     update_date_inputs,
 )
 from reckonsolve.ui.detail_reading import TimelineEntry, progressive_body
+from reckonsolve.ui.editor_submit import bind_editor_submit
 from reckonsolve.ui.history_disclosure import (
     history_disclosure as _collapsible_history_link,
 )
@@ -669,6 +670,7 @@ def _apply_dialog_presentation(dialog: QDialog) -> None:
     for buttons in dialog.findChildren(QDialogButtonBox):
         save = buttons.button(QDialogButtonBox.StandardButton.Save)
         if save is not None:
+            bind_editor_submit(dialog, save)
             apply_action_role(
                 save,
                 ActionRole.CAUTION
@@ -758,7 +760,9 @@ def _definition_change_widget(
     change: DefinitionChange,
     parent: QWidget,
 ) -> QWidget:
-    frame = TimelineEntry("Definition Clarified", change.changed_at, parent)
+    frame = _HistoryEntry(
+        "Definition Clarified", change.changed_at, parent, end_rule=True
+    )
     frame.setObjectName(f"definitionChange{change.change_id}")
     layout = frame.column
     frame.timestamp.setObjectName(f"definitionChangeTimestamp{change.change_id}")
@@ -967,8 +971,11 @@ class _HistoryEntry(TimelineEntry):
         self, title: str, instant: datetime, parent: QWidget, *, end_rule: bool
     ) -> None:
         super().__init__(title, instant, parent, end_rule=end_rule)
+        self.column.setContentsMargins(0, 4, 0, 8)
+        self.column.setSpacing(4)
         self.column.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Maximum)
+        self._body_heights: dict[QWidget, tuple[tuple, int]] = {}
         self._height_timer = QTimer(self)
         self._height_timer.setSingleShot(True)
         self._height_timer.timeout.connect(self._fit_height)
@@ -991,18 +998,43 @@ class _HistoryEntry(TimelineEntry):
             child = self.column.itemAt(index).widget()
             if child is None:
                 continue
-            needed = (
-                self.header_layout.heightForWidth(width)
-                if child is self.header
-                else child.heightForWidth(width)
-            )
+            if child is self.header:
+                needed = self.header_layout.heightForWidth(width)
+            else:
+                inset = child.contentsMargins()
+                key = (
+                    width,
+                    child.font().key(),
+                    child.fontMetrics().height(),
+                    child.text() if isinstance(child, QLabel) else "",
+                    child.styleSheet(),
+                    inset.left(),
+                    inset.top(),
+                    inset.right(),
+                    inset.bottom(),
+                )
+                cached = self._body_heights.get(child)
+                if cached is None or cached[0] != key:
+                    # QLabel heightForWidth includes its previous fixed minimum.
+                    # Release that bound only when inputs change; the cached next
+                    # pass settles without another resize/layout feedback loop.
+                    child.setMinimumHeight(0)
+                    child.setMaximumHeight(16777215)
+                    needed = child.heightForWidth(width)
+                    if needed < 0:
+                        needed = child.sizeHint().height()
+                    self._body_heights[child] = (key, needed)
+                else:
+                    needed = cached[1]
             needed = max(0, needed)
             if child.minimumHeight() != needed or child.maximumHeight() != needed:
                 child.setFixedHeight(needed)
             height += needed
         height += self.column.spacing() * max(0, self.column.count() - 1)
-        if height != self.minimumHeight():
-            self.setMinimumHeight(height)
+        # Qt may retain a larger preferred row height after wrapping changes.
+        # Its spare height must not become gaps between the historical fields.
+        if height != self.minimumHeight() or height != self.maximumHeight():
+            self.setFixedHeight(height)
 
 
 def _journal_edit_history_widget(
@@ -1053,29 +1085,6 @@ def _journal_edit_history_widget(
 
     history.show()
     return history
-
-
-class _MultilineSubmitKeyFilter(QObject):
-    """Make Ctrl+Enter submit while an ordinary Enter remains a newline."""
-
-    def __init__(
-        self,
-        submit: Callable[[], None],
-        parent: QObject,
-    ) -> None:
-        super().__init__(parent)
-        self._submit = submit
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
-            key = event.key()
-            modifiers = event.modifiers()
-            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and (
-                modifiers & Qt.KeyboardModifier.ControlModifier
-            ):
-                self._submit()
-                return True
-        return super().eventFilter(watched, event)
 
 
 def _clear_widget_layout(layout: QVBoxLayout) -> None:

@@ -1,5 +1,9 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [compact history and editor submission follow-up](#compact-histories-and-editor-submission--2026-11-20)
+owns the current source changes and their scoped verification. Earlier records
+below retain their evaluated source and human-review limits.
+
 The [desktop guide-text refinement](#binary-scorecard-copy-refinement--2026-11-20)
 records the adopted wording changes and their current checks. Older source/native
 and delivery evidence below retains its evaluated scope.
@@ -1694,3 +1698,72 @@ review can use `uv run python tools/run_visual_review.py detail`: inspect the
 trimmed scorecard, expanded original/correction history and Skipped/Previously
 Skipped state, then Performance and the creation forms. Data stays disposable.
 All Git, delivery and eventual release actions remain user-owned; 0.9.0 is Unreleased.
+
+## Compact histories and editor submission — 2026-11-20
+
+The user directly authorizes compact expanded original/correction text, linked
+Definition History and Ctrl+Enter through the active Prediction form's primary
+action. Public Section 38.15 records the keyboard addition before implementation.
+Earlier copy-audit results describe their earlier source, not this follow-up.
+
+History rows now release the obsolete fixed label minimum before remeasuring
+wrapped text. The regression reproduced 496 pixels remaining after widening where
+natural text needs 144. Cached measurements settle queued layout work; compact
+insets preserve real paragraph breaks, complete facts/dates and selectable text.
+History wrappers and bodies also stop expanding into surplus pane height: a
+focused regression reproduced 415 pixels allocated to 49 pixels of content. Spare
+space now stays outside the history, including after collapse.
+Rows also use their measured exact height, so enlarged-text preferred-height
+changes cannot redistribute spare space between Original's individual fields.
+All four Definition histories share underlined Show/Hide links and counts, retaining
+fresh-visit collapse, consultation and each contract's established historical search
+destination. One-Shot still reveals exact Question/criteria matches in its Recorded
+Timeline.
+
+The form-owned submission helper clicks the existing primary button after focusing
+it, so pending native numeric/date text commits first. It handles editable single-
+and multiline fields, Ctrl+Return/keypad Enter, idempotent binding, held-key repeats
+and hidden/read-only/unavailable guards. Review, validation, terminal confirmation
+and Escape remain with the existing forms. Settings and button help expose the
+shortcut; plain key labels retain the ordinary compact Settings fit.
+
+The filter's reverse references to form/button are weak. Cancel/close regression
+checks cover releasing deleted-on-close dialogs; retaining their Python wrappers
+would otherwise break subsequent native cleanup. The primary action remains
+form-owned and cannot outlive its form.
+
+**Verification completed 2026-11-21:** Focused Qt checks cover four-contract
+creation/Journal saves, both revision types,
+original-height shrinkage, exact historical search/reset, unavailable primary
+actions, confirmation cancellation and pending native numeric input. Settings fits
+ordinary supported dimensions in Light/Dark with Windows11/Fusion. All 96 fresh
+Qt record/palette/geometry cases pass across eight records, both appearances,
+9/15-point Segoe UI and wide → narrow → wide resizing. Unconstrained text-height
+comparisons verify actual shrinkage, with complete text, keyboard links, no horizontal
+overflow and unchanged canonical histories/scores. Representative normal-light and
+enlarged-dark original/definition/resolution captures were inspected. This is
+agent/offscreen evidence at Qt scale 1, not a physical Windows scaling/accessibility
+matrix.
+
+The broad run completed with **1,400 passing cases**, one new history-sizing
+assertion failure and six deliberately deselected Git-invoking parameters. The
+new test assumed queued layout had finished after 60 ms. It now waits for the same
+natural-height bounds, with a bounded timeout; all **five history-sizing cases
+pass** in follow-up. Application source is byte-identical between that broad run
+and follow-up. Together they provide passing coverage for all **1,401 selected
+cases**; this is combined evidence, not a claim that the original broad report is
+failure-free. The broad report retains its 1,171.51-second result. No new package,
+installed-tool or human acceptance result is claimed.
+
+Ruff check/format passed for all 329 files. Filesystem checks passed 381 public
+local links across 58 documents and 343 private links across five documents, stable
+66 J/42 R identifiers including both withdrawals, 99 mirrored public references,
+scoped whitespace and dependency direction. Existing checker helpers used explicit
+filesystem discovery; no Git command was invoked. Current source/native/follow-up
+evidence remains separate from earlier acceptance and delivery snapshots.
+
+Comparison against the task-start package snapshot retains all 172 files, with
+twelve changed UI modules and one new UI helper. Lower layers, CLI, migrations and
+resources are byte-identical. Current ignored artifacts live under
+`build/ux-history-editors-20261120/`. Git, personal-data changes, installed-tool
+updates and publication remain user-owned; 0.9.0 remains Unreleased.

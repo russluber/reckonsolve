@@ -47,6 +47,7 @@ from reckonsolve.ui.detail_reading import (
     reading_typography,
 )
 from reckonsolve.ui.detail_workspace import DetailWorkspace, collapse_section
+from reckonsolve.ui.history_disclosure import history_disclosure
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.numeric_interval import IntervalLegend, NumericInterval
 from reckonsolve.ui.one_shot import OneShotEditDialog, text_label
@@ -446,22 +447,25 @@ class OneShotDetailScreen(QWidget):
                 )
                 overview.append(panel)
         history = correction_history(detail, self)
-        history_disclosure = collapse_section(
+        audit_disclosure = collapse_section(
             history, "Originals & Corrections", compact=True
         )
-        overview.append(history_disclosure)
+        overview.append(audit_disclosure)
         if detail.definition_changes:
-            definitions = ContentPanel("", parent=self)
-            definitions.title_label.hide()
+            definition_link = history_disclosure(
+                "Definition History", "oneShotDefinitionHistoryDisclosure", self
+            )
+            definitions = definition_link.disclosure_body
             definitions.setObjectName("oneShotDefinitionHistory")
-            body = definitions.body_layout
+            body = definitions.layout()
             for change in detail.definition_changes:
                 body.addWidget(_definition_change_widget(change, self))
-            overview.append(
-                finish_disclosure(
-                    collapse_section(definitions, "Definition History", compact=True)
-                )
+            definition_link.disclosure_count.setText(
+                f"{len(detail.definition_changes)} definition "
+                + ("change" if len(detail.definition_changes) == 1 else "changes")
             )
+            definition_link.show()
+            overview.append(definition_link)
         for panel in (self.results, facts, history):
             apply_surface_role(panel, SurfaceRole.CANVAS)
         if detail.status is PredictionStatus.RESOLVED:
@@ -516,7 +520,7 @@ class OneShotDetailScreen(QWidget):
                 finish_disclosure(
                     collapse_section(facts, "Times & Recorded Facts", compact=True)
                 ),
-                finish_disclosure(history_disclosure),
+                finish_disclosure(audit_disclosure),
             ],
         )
         self.workspace.set_reading_context(

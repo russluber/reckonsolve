@@ -48,6 +48,7 @@ from reckonsolve.reported_time import parse_reported_offset
 from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
 from reckonsolve.ui.date_display import format_reported_time, input_date_format
 from reckonsolve.ui.dialog_review import DialogReview
+from reckonsolve.ui.editor_submit import bind_editor_submit
 from reckonsolve.ui.quantile_input import FiveQuantileInput
 from reckonsolve.ui.time_input import SegmentedTimeEdit
 from reckonsolve.ui.visual_system import (
@@ -471,6 +472,7 @@ class OneShotCreationScreen(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
         self.save_button.clicked.connect(self.submit)
+        bind_editor_submit(self, self.save_button)
 
     def cancel(self) -> None:
         self.reset()
@@ -605,6 +607,9 @@ class OneShotEditDialog(QDialog):
             self.buttons.button(QDialogButtonBox.StandardButton.Save).setText(
                 "Add answer"
             )
+        bind_editor_submit(
+            self, self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        )
 
     def submit(self) -> None:
         try:

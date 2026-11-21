@@ -11,6 +11,7 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Added
 
+- Ctrl+Enter submits the active Prediction form through its existing primary button, including creation, revisions, Journal entries, reflection and corrections. Validation, review, confirmation and Escape behavior remain; Settings and button help list the shortcut.
 - Journal home with explicit Enter/Search submission, quick views, modal Apply/Cancel filters, Reset View, complete result counts where appropriate and matched-version history navigation.
 - A shared toolbar with source-aware returns, focused New Prediction, persistent Follow Windows / Light / Dark appearance and context-appropriate navigation. Performance and Settings also offer a direct Journal destination.
 - A comprehensive Performance hub with four separate forecasting populations, paired sections, independent Numeric unit choices, uncertainty, compact supporting disclosures and a pinned Tag / Reset View strip. Report scope and reading position persist during the session.
@@ -29,6 +30,7 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Expanded original/corrected histories release stale heights after resizing, removing surplus blank space while retaining complete selectable text. Definition History joins the underlined Show/Hide controls in all four forecasting contracts.
 - Streamline desktop helper text: remove repeated cautions and instructions, shorten metric definitions and editor prompts, and keep historical events focused on dated facts. Useful chart keys, action consequences, score direction and complete original/corrected records remain.
 
 - Empty or hidden history panels use their natural minimum height until Qt can measure wrapped content, avoiding negative-size warnings when Detail starts or an empty history expands.

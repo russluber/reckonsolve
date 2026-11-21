@@ -1,7 +1,7 @@
 # Reckonsolve architecture
 
 Unreleased 0.9.0 candidate: Journal/workspace, New Prediction/Prediction Detail and the comprehensive Performance/ordinary Settings implementation, schema 21, search projection 3, CSV format 6. Journal/Detail walkthroughs are [accepted with recorded limits](archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12); the third slice is [accepted with recorded limits](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12). Journal relocation is [accepted with recorded limits](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12). Released v0.8.0 remains the schema-20/format-5 baseline; prepared metadata is not publication.
-Last reviewed: 2026-11-20.
+Last reviewed: 2026-11-21.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
 
@@ -58,7 +58,7 @@ Paths below are relative to src/reckonsolve/.
 | Journal widgets | ui/journal/ | Separate applied state, filter drafts, one-worker request coordination, controls and rows/excerpts. |
 | Creation and Detail | ui/creation_screen.py, ui/binary_detail.py, ui/numeric_detail.py, ui/one_shot_detail.py, ui/prediction_detail.py | Mode-specific composition and reading; the small host dispatches the four contracts. ui/screens.py retains imports for existing callers. |
 | Detail components/tasks | ui/prediction_contracts.py, ui/prediction_widgets.py, ui/detail_workspace.py, ui/detail_reading.py, ui/numeric_interval.py | Narrow view/operation contracts, committed presentation, Timeline helpers, exact interval labels, independent panes and one guarded writing task. |
-| Focused forms | ui/prediction_dialogs.py, ui/dialog_review.py, ui/contextual_forms.py, ui/reflection_editor.py, ui/revision_fields.py, ui/editor_feedback.py | Existing operation-backed forms, internal review, contextual embedding, current/draft alignment and retained-input failure feedback. |
+| Focused forms | ui/prediction_dialogs.py, ui/dialog_review.py, ui/contextual_forms.py, ui/reflection_editor.py, ui/editor_submit.py, ui/revision_fields.py, ui/editor_feedback.py | Existing operation-backed forms, local primary-action submission, internal review, contextual embedding, current/draft alignment and retained-input failure feedback. |
 | Upgrade | data/upgrade.py, data/journal_migration.py, data/writer_contract.py | Protected recovery/review, ordered schema 21 and persistent stale-writer exclusion. |
 | Analytics | analytics/trajectory.py, analytics/quantiles.py, analytics/one_shot.py and aggregate modules | Exact selection/scoring and separate observation populations. |
 | Transfers | data/transfer.py | Verified online backup and snapshot-based CSV ZIP. |
@@ -272,12 +272,21 @@ facts remain separate; no query, score selection or calculation moves into the p
 `collapse_section` also supports underlined Show/Hide text controls, retaining the
 same disclosure body/button contract used by refresh, draft consultation and exact
 search reveal. Caption wrapping follows the current Show/Hide label. Corrected
-Journal and Adaptive Resolution histories use this option with visible counts;
+Journal, Adaptive Resolution and all four Definition histories use this option with visible counts;
 other disclosure styles retain their defaults. Existing source-label identities
 stay intact. `ui/history_disclosure.py` propagates expanded content heights through
 the retained outer row and releases that space on collapse. Nested historical
 rows fit exact wrapped text and header heights at their available width, avoiding
-clipping or surplus vertical spacing. Ordinary Timeline layout-item reuse remains.
+clipping or surplus vertical spacing. Before remeasuring body text, rows release
+the previous fixed height: Qt's height-for-width result can otherwise inherit that
+minimum and retain blank space after widening. A per-child measurement cache keys
+width, font, text, local style and margins, allowing queued layout work to settle
+without repeatedly clearing/reapplying bounds. Each row uses that measured exact
+height, preventing an obsolete preferred height from turning into gaps between
+fields. Compact insets preserve actual paragraph breaks. History wrappers and
+bodies use maximum vertical size policies,
+keeping surplus reading-pane height below their records rather than stretching
+the expanded text area. Ordinary Timeline layout-item reuse remains.
 When Qt returns `-1` for an unavailable height-for-width measurement, the history
 disclosure uses the layout's natural nonnegative minimum instead. Empty/hidden
 startup panels and temporarily empty expanded bodies follow the same sizing path.
@@ -301,6 +310,21 @@ The shared toolbar places an icon-only Journal action beside the right-hand util
 Settings also exposes the existing Performance chart icon. `ui/workspace_state.py` derives its return origin from Settings' underlying Journal/Prediction source; returning from a Performance detour retains that report's independent origin. This avoids a Settings/Performance Back cycle within the existing one-source model. The ordinary report owner refreshes current results while retaining session scope, disclosures and useful position; leaving Settings still clears visit-local tool results.
 
 Identity-scoped presentation.ini stores safe geometry/maximized state and Follow Windows / Light / Dark outside SQLite; obsolete sidebar preferences have no visible effect. Never restore a minimized/off-screen window. Notifications carry only already-verifiable routine success; errors/decisions remain persistent. Ctrl+N, Journal-only Ctrl+F and eligible Ctrl+, respect native modal decisions; creation hides unrelated destinations. Retired global navigation shortcuts are absent. Appearance updates the existing widget tree without rebuilding tasks or losing focus/selection; failed preference persistence is explicit. Icons and charts retain accessible names and text alternatives.
+
+`ui/editor_submit.py` installs form-owned key filters on existing editable text
+fields, including native date/spin line editors. Ctrl+Enter and Ctrl+keypad Enter
+focus and click the active form's enabled primary button, committing pending native
+input before the existing handler reads it. The shared dialog presentation binds
+its Save action on show; creation, BodyEditor, ReflectionEditor and One-Shot forms
+bind their own button. Rebinding is idempotent. The filter holds weak references
+back to its owning form and primary button, so a deleted-on-close dialog wrapper
+is released with its native widget. Read-only/hidden fields, background
+forms, unavailable actions and auto-repeat cannot submit or fall through to a
+dialog default button. Ordinary multiline Enter and Escape are unchanged. This
+replaces the earlier multiline-only direct-callback filter without introducing a
+global shortcut or bypassing validation, review or terminal confirmation. Button
+help and the compact Settings reference expose the convention; Settings uses plain
+key labels to retain its ordinary minimum-size fit.
 
 ## 10. Backup, export, and private packaging
 

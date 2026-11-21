@@ -455,20 +455,12 @@ class NumericPredictionDetailScreen(QWidget):
         invalidation_layout.addWidget(self.invalidation_history)
         self.invalidation_section.setHidden(True)
 
-        self.definition_history = QGroupBox("Definition History", self.detail_content)
-        self.definition_history.setObjectName("numericDefinitionHistoryGroup")
-        apply_surface_role(self.definition_history, SurfaceRole.BASE)
-        self.definition_history.setCheckable(True)
-        self.definition_history.setChecked(False)
-        self.definition_history_content = QWidget(self.definition_history)
-        self.definition_history_content.setObjectName("numericDefinitionHistoryContent")
-        self.definition_history_layout = QVBoxLayout(self.definition_history_content)
-        definition_group_layout = QVBoxLayout(self.definition_history)
-        definition_group_layout.addWidget(self.definition_history_content)
-        self.definition_history.toggled.connect(
-            self.definition_history_content.setVisible
+        self.definition_history = _collapsible_history_link(
+            "Definition History", "numericDefinitionHistoryGroup", self.detail_content
         )
-        self.definition_history_content.setHidden(True)
+        self.definition_history_content = self.definition_history.disclosure_body
+        self.definition_history_content.setObjectName("numericDefinitionHistoryContent")
+        self.definition_history_layout = self.definition_history_content.layout()
         self.definition_history.setHidden(True)
 
         history_label = QLabel("Interval History", self.detail_content)
@@ -778,7 +770,7 @@ class NumericPredictionDetailScreen(QWidget):
             SearchSourceKind.QUESTION,
             SearchSourceKind.RESOLUTION_CRITERIA,
         }:
-            self.definition_history.setChecked(True)
+            self.definition_history.disclosure_button.setChecked(True)
             target = (
                 self.findChild(QWidget, f"definitionChange{document.source_record_id}")
                 or self.definition_history
@@ -1321,8 +1313,11 @@ class NumericPredictionDetailScreen(QWidget):
             self.definition_history_layout.addWidget(
                 _definition_change_widget(change, self.definition_history_content)
             )
-        self.definition_history.setChecked(False)
-        self.definition_history_content.setHidden(True)
+        self.definition_history.disclosure_count.setText(
+            f"{len(changes)} definition "
+            + ("change" if len(changes) == 1 else "changes")
+        )
+        self.definition_history.disclosure_button.setChecked(False)
         self.definition_history.setHidden(not changes)
         if changes:
             self.metadata_panel.setHidden(False)

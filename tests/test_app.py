@@ -1001,7 +1001,7 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
         QLabel,
         "predictionDetailExpectedResolution",
     )
-    history = second_runtime.window.findChild(QGroupBox, "definitionHistoryGroup")
+    history = second_runtime.window.findChild(QWidget, "definitionHistoryGroup")
     assert question is not None
     assert reopened_background is not None
     assert reopened_criteria is not None
@@ -1029,7 +1029,7 @@ def test_edit_confirm_close_reopen_displays_metadata_and_history(
     )
     assert "2099" in reopened_expected.text()
     assert not history.isHidden()
-    assert not history.isChecked()
+    assert not history.disclosure_button.isChecked()
     second_runtime.close()
 
 

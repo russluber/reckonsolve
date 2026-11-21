@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDateEdit,
     QDialog,
-    QGroupBox,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -650,12 +649,12 @@ def test_definition_history_is_collapsed_and_shows_snapshot_in_local_time(
     window = MainWindow(operations)
     qtbot.addWidget(window)
 
-    history = _required_child(window, QGroupBox, "definitionHistoryGroup")
+    history = _required_child(window, QWidget, "definitionHistoryGroup")
     content = _required_child(window, QWidget, "definitionHistoryContent")
     assert not history.isHidden()
-    assert not history.isChecked()
+    assert not history.disclosure_button.isChecked()
     assert content.isHidden()
-    history.setChecked(True)
+    history.disclosure_button.setChecked(True)
     assert not content.isHidden()
     expected_timestamp = changed_at.astimezone().strftime("%Y-%m-%d, %I:%M %p").strip()
     assert (

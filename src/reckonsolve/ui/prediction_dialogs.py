@@ -60,7 +60,6 @@ from reckonsolve.ui.prediction_widgets import (
     _dialog_error_label,
     _EffectiveTimeDialog,
     _make_selectable,
-    _MultilineSubmitKeyFilter,
     _normalized_optional_text,
     _numeric_forecast_text,
     _optional_date,
@@ -656,8 +655,6 @@ class AddNumericJournalEntryDialog(_StyledDialog):
         layout.addWidget(buttons)
         buttons.accepted.connect(self.submit)
         buttons.rejected.connect(self.reject)
-        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
-        self.body_input.installEventFilter(self._submit_key_filter)
         self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
     def submit(self) -> None:
@@ -1494,8 +1491,6 @@ class CorrectNumericJournalEntryDialog(_StyledDialog):
         layout.addWidget(buttons)
         buttons.accepted.connect(self.submit)
         buttons.rejected.connect(self.reject)
-        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
-        self.body_input.installEventFilter(self._submit_key_filter)
         self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
         self.body_input.selectAll()
 
@@ -1635,8 +1630,6 @@ class ForecastReviewDialog(_StyledDialog):
 
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
-        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
-        self.note_input.installEventFilter(self._submit_key_filter)
 
     def submit(self) -> None:
         """Save one immutable Review while retaining expected failures inline."""
@@ -1745,8 +1738,6 @@ class AddJournalEntryDialog(_StyledDialog):
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
         self.setTabOrder(self.body_input, save_button)
-        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
-        self.body_input.installEventFilter(self._submit_key_filter)
         self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
     def showEvent(self, event: QShowEvent) -> None:
@@ -1866,8 +1857,6 @@ class CorrectJournalEntryDialog(_StyledDialog):
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
         self.setTabOrder(self.body_input, save_button)
-        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
-        self.body_input.installEventFilter(self._submit_key_filter)
         self.body_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
         self.body_input.selectAll()
 
@@ -2044,9 +2033,6 @@ class ResolvePredictionDialog(_EffectiveTimeDialog):
         )
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
-        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
-        self.notes_input.installEventFilter(self._submit_key_filter)
-        self.postmortem_input.installEventFilter(self._submit_key_filter)
         self.setTabOrder(self.outcome_yes, self.outcome_no)
         self.setTabOrder(self.outcome_no, self.notes_input)
         self.setTabOrder(self.notes_input, self.postmortem_input)
@@ -2186,8 +2172,6 @@ class MarkInvalidDialog(_StyledDialog):
 
         self.buttons.accepted.connect(self.submit)
         self.buttons.rejected.connect(self.reject)
-        self._submit_key_filter = _MultilineSubmitKeyFilter(self.submit, self)
-        self.reason_input.installEventFilter(self._submit_key_filter)
         self.setTabOrder(self.reason_input, save_button)
         self.reason_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
 

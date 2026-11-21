@@ -25,6 +25,7 @@ from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.predictions import PredictionType
 from reckonsolve.domain.quantiles import NumericValueConstraint
 from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
+from reckonsolve.ui.editor_submit import bind_editor_submit
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
 from reckonsolve.ui.prediction_contracts import PredictionOperations
@@ -417,6 +418,7 @@ class NewPredictionScreen(QWidget):
         )
         self.question_input.returnPressed.connect(self.submit)
         self.create_button.clicked.connect(self.submit)
+        bind_editor_submit(self, self.create_button)
         self._update_endpoint_note(self.probability_input.value())
         self._update_forecast_type(self.prediction_type_input.currentIndex())
 

@@ -2712,3 +2712,22 @@ require source/native checks and a focused human visual recheck.
 
 The adopted presentation is implemented with [current verification evidence](archive/releases/2026-11-13-workspace-refinement-verification.md#binary-scorecard-and-inline-history--2026-11-20);
 human visual acceptance remains separate.
+
+**History reading and editor submission — authorized 2026-11-20:** Expanded Edit,
+Resolution and Definition histories use compact natural text heights, retaining
+full original/corrected wording, meaningful line breaks, exact facts/dates and
+selectability. Resizing or changing font must release an obsolete larger height.
+Definition History uses the shared underlined Show/Hide link in all four contracts,
+with fresh-visit collapse, draft consultation and exact historical search reveal.
+
+Ctrl+Enter (including keypad Enter) activates the existing enabled primary action
+while typing in an active Prediction editor, including creation, revision, Journal,
+reflection, metadata and correction forms. Ordinary Enter remains a newline in
+multiline editors. Hidden/background/read-only editors and disabled actions cannot
+submit; held-key repeats must not create multiple saves. This is a local form
+convention, not global navigation. Existing validation, stale/lock handling,
+confirmation/review stages and Escape cancellation remain. Expose the shortcut in
+button help and the compact Settings reference without compromising safe geometry.
+
+These refinements are implemented. The [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#compact-histories-and-editor-submission--2026-11-20)
+separates source/layout evidence from the pending focused human review.
