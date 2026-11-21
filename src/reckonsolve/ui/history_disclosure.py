@@ -8,6 +8,15 @@ from reckonsolve.ui.one_shot_reading import finish_disclosure
 from reckonsolve.ui.visual_system import TextRole, apply_text_role
 
 
+def _minimum_height(widget: QWidget) -> int:
+    layout = widget.layout()
+    # Qt returns -1 when a height-for-width measurement is unavailable, as with
+    # empty/hidden startup content. Use the layout's natural minimum in that case.
+    return max(
+        0, layout.minimumSize().height(), layout.minimumHeightForWidth(widget.width())
+    )
+
+
 def history_disclosure(title: str, object_name: str, parent: QWidget) -> QWidget:
     content = QWidget(parent)
     content.setObjectName(f"{object_name}Content")
@@ -51,9 +60,9 @@ class _HistoryHeight(QObject):
     def _fit(self) -> None:
         body = self.group.disclosure_body
         if not body.isHidden():
-            height = body.layout().minimumHeightForWidth(body.width())
+            height = _minimum_height(body)
             if height != body.minimumHeight():
                 body.setMinimumHeight(height)
-        height = self.group.layout().minimumHeightForWidth(self.group.width())
+        height = _minimum_height(self.group)
         if height != self.group.minimumHeight():
             self.group.setMinimumHeight(height)

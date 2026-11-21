@@ -1483,3 +1483,34 @@ reference mirrors and lower-layer/migration/resource preservation checks passed
 without Git. All six final native font/scale processes retain their 192 passing
 cases. Current human visual acceptance remains pending; the user owns commits,
 pushes and later delivery/release steps.
+
+### Startup sizing follow-up — 2026-11-20
+
+The user reported `QWidget::setMinimumSize` negative-size warnings from both Binary
+and Numeric Resolution History when starting the disposable Detail profile. The
+new history sizing helper treated Qt's `-1` unavailable height-for-width estimate
+as an actual minimum height. Hidden/empty startup layouts and temporarily empty
+expanded bodies legitimately have no such estimate. The helper now uses the maximum
+of zero, natural layout minimum and available wrapping height for both the body
+and outer disclosure. No warnings are suppressed, and no data, score or workflow
+changes. The adopted presentation contract is unchanged.
+
+Two new real-Qt regressions reproduce the exact reported warning names before the
+fix, then pass with captured-message assertions after it. They cover hidden
+controls, empty expansion, later wrapped notes and compact collapse. All **14
+focused cases passed in 27.55 seconds** on final source. All **64 native cases**
+passed across both palettes, 9/15-point Segoe UI, wide/minimum windows, earlier/
+unscored Binary and corrected/long/reflection histories across the four contracts.
+Expanded containment, text fit, compact spacing/collapse, zero horizontal overflow
+and canonical history/score preservation remain. Native logs contain no negative-
+size warnings. Evidence stays ignored under `build/ux-history-negative-height-20261120/`.
+The preceding broad suite/scale matrix retains its preceding executable scope.
+
+Relaunch `uv run python tools/run_visual_review.py detail` to load the fix and check
+startup plus opening/closing the two Resolution History links. This remains the
+same pending human Detail checkpoint. No installed tool, personal database, Git or
+release operation occurs; commits/pushes and eventual delivery remain user-owned.
+
+Ruff check/format passed for 327 files. Filesystem checks passed 377 public links
+and 335 private links, with preserved IDs/withdrawals, 96 reference mirrors and
+scoped whitespace/lower-layer/migration/resource checks. No Git command ran.

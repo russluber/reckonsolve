@@ -278,6 +278,9 @@ stay intact. `ui/history_disclosure.py` propagates expanded content heights thro
 the retained outer row and releases that space on collapse. Nested historical
 rows fit exact wrapped text and header heights at their available width, avoiding
 clipping or surplus vertical spacing. Ordinary Timeline layout-item reuse remains.
+When Qt returns `-1` for an unavailable height-for-width measurement, the history
+disclosure uses the layout's natural nonnegative minimum instead. Empty/hidden
+startup panels and temporarily empty expanded bodies follow the same sizing path.
 
 `ui/analytics_charts.py` paints Binary calibration plots with the Window/canvas
 palette role in both Performance populations. This avoids inheriting the input/
