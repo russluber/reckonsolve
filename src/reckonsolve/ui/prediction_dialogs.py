@@ -741,6 +741,10 @@ class ResolveNumericPredictionDialog(_StyledDialog):
         postmortem_label = QLabel("Postmortem (optional)", self)
         self.postmortem_input = QPlainTextEdit(self)
         self.postmortem_input.setObjectName("numericResolutionPostmortemInput")
+        self.postmortem_input.setAccessibleName("Postmortem")
+        self.postmortem_input.setPlaceholderText(
+            "Reflect on what your reasoning or updates got right or wrong."
+        )
         self.postmortem_input.setMaximumHeight(100)
         self.postmortem_input.setTabChangesFocus(True)
         postmortem_label.setBuddy(self.postmortem_input)
@@ -774,7 +778,9 @@ class ResolveNumericPredictionDialog(_StyledDialog):
         layout.addWidget(self.resolution_notes_input)
         postmortem_label.hide()
         layout.addWidget(
-            collapse_section(self.postmortem_input, "Postmortem (optional)")
+            collapse_section(
+                self.postmortem_input, "Postmortem (optional)", compact=True
+            )
         )
         layout.addWidget(self.form_error)
         layout.addWidget(buttons)
@@ -2016,7 +2022,9 @@ class ResolvePredictionDialog(_EffectiveTimeDialog):
         layout.addWidget(self.notes_input, 1)
         postmortem_label.hide()
         layout.addWidget(
-            collapse_section(self.postmortem_input, "Postmortem (optional)")
+            collapse_section(
+                self.postmortem_input, "Postmortem (optional)", compact=True
+            )
         )
         layout.addWidget(self.form_error)
         layout.addWidget(self.buttons)

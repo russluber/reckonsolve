@@ -49,6 +49,7 @@ from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPrese
 from reckonsolve.ui.date_display import format_reported_time, input_date_format
 from reckonsolve.ui.dialog_review import DialogReview
 from reckonsolve.ui.editor_submit import bind_editor_submit
+from reckonsolve.ui.form_layout import compact_form_layout
 from reckonsolve.ui.quantile_input import FiveQuantileInput
 from reckonsolve.ui.time_input import SegmentedTimeEdit
 from reckonsolve.ui.visual_system import (
@@ -610,6 +611,7 @@ class OneShotEditDialog(QDialog):
         bind_editor_submit(
             self, self.buttons.button(QDialogButtonBox.StandardButton.Save)
         )
+        compact_form_layout(self)
 
     def submit(self) -> None:
         try:

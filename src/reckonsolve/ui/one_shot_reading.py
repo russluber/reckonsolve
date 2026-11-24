@@ -4,7 +4,42 @@ from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from reckonsolve.ui.components import SectionRule
-from reckonsolve.ui.visual_system import Spacing, TextRole, apply_text_role
+from reckonsolve.ui.visual_system import (
+    Spacing,
+    TextRole,
+    apply_text_role,
+    refresh_widget_style,
+)
+
+
+def omit_trailing_rule(widget: QWidget) -> None:
+    """Let an enclosing reading section own their shared ending boundary."""
+    if widget.property("reckonsolveTimelineEntry") == "true":
+        widget.setProperty("reckonsolveTimelineEntry", "false")
+        refresh_widget_style(widget)
+    column = widget.layout()
+    if column is None:
+        return
+    for index in range(column.count() - 1, -1, -1):
+        item = column.itemAt(index)
+        child = item.widget()
+        if child is None:
+            continue
+        if (
+            isinstance(child, SectionRule)
+            and child.property("reckonsolveRule") == "horizontal"
+        ):
+            child.hide()
+            if (
+                index
+                and (space := column.itemAt(index - 1).spacerItem()) is not None
+                and space.sizeHint().height()
+            ):
+                space.changeSize(0, 0)
+                column.invalidate()
+            continue
+        omit_trailing_rule(child)
+        break
 
 
 class OneShotReadingSection(QWidget):
@@ -12,6 +47,7 @@ class OneShotReadingSection(QWidget):
 
     def __init__(self, title: str, parent: QWidget, *, end_rule: bool = True) -> None:
         super().__init__(parent)
+        self._owns_end_rule = end_rule
         self._height_timer = QTimer(self)
         self._height_timer.setSingleShot(True)
         self._height_timer.timeout.connect(self._fit_height)
@@ -51,7 +87,9 @@ class OneShotReadingSection(QWidget):
         # Wait for nested editor/layout events to settle before changing the
         # minimum: synchronous resizing here can reenter the parent layout.
         # The child-owned timer also cancels pending work on destruction.
-        height = self.layout().minimumHeightForWidth(self.width())
+        if self._owns_end_rule:
+            omit_trailing_rule(self.body)
+        height = max(0, self.layout().minimumHeightForWidth(self.width()))
         if height != self.minimumHeight():
             self.setMinimumHeight(height)
 
@@ -60,10 +98,14 @@ def finish_disclosure(section: QWidget, *, end_rule: bool = True) -> QWidget:
     """Separate an existing native disclosure without changing its target or behavior."""
     column = section.layout()
     column.setContentsMargins(0, int(Spacing.ORDINARY), 0, 0)
-    if end_rule:
+    if end_rule and not getattr(section, "_ending_rule", None):
         column.addSpacing(int(Spacing.ORDINARY))
-        column.addWidget(SectionRule(section))
-    _DisclosureCaption(section)
+        section._ending_rule = SectionRule(section)
+        column.addWidget(section._ending_rule)
+    if end_rule:
+        omit_trailing_rule(section.disclosure_body)
+    if not hasattr(section, "_caption_controller"):
+        section._caption_controller = _DisclosureCaption(section)
     return section
 
 

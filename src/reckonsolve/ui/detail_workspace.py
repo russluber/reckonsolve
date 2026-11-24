@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from reckonsolve.ui.components import SectionRule
 from reckonsolve.ui.creation_task import form_values
 from reckonsolve.ui.date_display import format_datetime
+from reckonsolve.ui.form_layout import compact_form_layout
 from reckonsolve.ui.visual_system import (
     MotionDuration,
     Spacing,
@@ -262,6 +263,7 @@ class DetailWorkspace(QScrollArea):
         editor.finished.connect(lambda _result: self.clear_editor())
         self.tabs.setCurrentIndex(1)
         editor.show()
+        compact_form_layout(editor)
         for field in editor.findChildren(QWidget):
             if (
                 isinstance(
@@ -290,6 +292,7 @@ class DetailWorkspace(QScrollArea):
         self._baseline = form_values(editor, ())
         editor.finished.connect(lambda _result: self.clear_editor())
         editor.show()
+        compact_form_layout(editor)
         self.ensureWidgetVisible(editor)
 
     def clear_reading(self) -> None:

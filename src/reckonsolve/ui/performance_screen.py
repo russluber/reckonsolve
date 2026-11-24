@@ -124,9 +124,6 @@ class PerformanceScreen(QWidget):
                 (Section.ONE_SHOT_BINARY, Section.ONE_SHOT_NUMERIC),
             ),
         ):
-            heading = QLabel(mode, self.content)
-            apply_text_role(heading, TextRole.SECTION_TITLE)
-            layout.addWidget(heading)
             binary = BinarySection(keys[0], self.content)
             numeric = NumericSection(keys[1], self.content)
             for key, widget in ((keys[0], binary), (keys[1], numeric)):

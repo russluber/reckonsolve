@@ -80,7 +80,6 @@ from reckonsolve.ui.prediction_dialogs import (
 )
 from reckonsolve.ui.prediction_widgets import (
     _clear_widget_layout,
-    _collapsible_history_group,
     _collapsible_history_link,
     _configure_detail_action_grid,
     _definition_change_widget,
@@ -449,8 +448,8 @@ class PredictionDetailScreen(QWidget):
             "Append a correction while preserving the original Invalid reason."
         )
         apply_lucide_icon(self.correct_invalidation_button, LucideIcon.PENCIL)
-        self.invalidation_history = _collapsible_history_group(
-            "Invalidation correction history",
+        self.invalidation_history = _collapsible_history_link(
+            "Reason History",
             "invalidationCorrectionHistory",
             self.invalidation_section,
         )
@@ -821,7 +820,7 @@ class PredictionDetailScreen(QWidget):
                 target = self.resolution_notes
         else:
             if document.is_superseded:
-                self.invalidation_history.setChecked(True)
+                self.invalidation_history.disclosure_button.setChecked(True)
                 target = self.invalidation_history
             else:
                 target = self.terminal_summary.note

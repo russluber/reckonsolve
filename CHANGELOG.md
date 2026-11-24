@@ -30,6 +30,9 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Answered One-Shot headers show the effective Checked Answer alongside the Binary probability or on the Numeric interval with an exact caption and gold diamond. Outside answers and tied percentiles retain the saved forecast's meaning.
+- Terminal forecast disclosures align below the score beside recorded/effective times. Invalid status uses consistent orange chips in Journal and Detail; redundant Performance mode headings are removed.
+- Reason History uses a Show/Hide link; Adaptive creation More Details and resolution Postmortem use chevrons. Contextual form labels keep compact natural heights, and nested reading disclosures share one ending rule.
 - Expanded original/corrected histories release stale heights after resizing, removing surplus blank space while retaining complete selectable text. Definition History joins the underlined Show/Hide controls in all four forecasting contracts.
 - Streamline desktop helper text: remove repeated cautions and instructions, shorten metric definitions and editor prompts, and keep historical events focused on dated facts. Useful chart keys, action consequences, score direction and complete original/corrected records remain.
 

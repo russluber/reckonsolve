@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDateEdit,
-    QGroupBox,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -70,7 +69,7 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
 
     more_details = _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
     )
     more_details_content = _required_child(
@@ -78,7 +77,7 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
         QWidget,
         "newPredictionMoreDetailsContent",
     )
-    assert not more_details.isChecked()
+    assert not more_details.disclosure_button.isChecked()
     assert more_details_content.isHidden()
 
 
@@ -209,9 +208,9 @@ def test_more_details_date_controls_are_visually_unset_until_enabled(
     _required_child(window, QComboBox, "predictionTypeInput").setCurrentIndex(1)
     _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
-    ).setChecked(True)
+    ).disclosure_button.setChecked(True)
     deadline_toggle = _required_child(
         window,
         QCheckBox,
@@ -239,9 +238,9 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
     window.navigate_to("New Prediction")
     _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
-    ).setChecked(True)
+    ).disclosure_button.setChecked(True)
     _required_child(window, QLineEdit, "questionInput").setText(
         "Will all initial details persist?"
     )
@@ -305,9 +304,9 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
     assert _required_child(window, QLineEdit, "initialTagsInput").text() == ""
     assert not _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
-    ).isChecked()
+    ).disclosure_button.isChecked()
 
 
 def test_collapsing_more_details_preserves_entered_values_for_creation(
@@ -318,17 +317,17 @@ def test_collapsing_more_details_preserves_entered_values_for_creation(
     window.navigate_to("New Prediction")
     more_details = _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
     )
-    more_details.setChecked(True)
+    more_details.disclosure_button.setChecked(True)
     _required_child(window, QLineEdit, "questionInput").setText(
         "Will collapsed details remain part of the prediction?"
     )
     _required_child(window, QPlainTextEdit, "initialBackgroundInput").setPlainText(
         "Keep this context"
     )
-    more_details.setChecked(False)
+    more_details.disclosure_button.setChecked(False)
 
     _set_exact_deadline(window)
     qtbot.mouseClick(
@@ -350,10 +349,10 @@ def test_creation_failure_keeps_optional_details_for_correction(
     window.navigate_to("New Prediction")
     more_details = _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
     )
-    more_details.setChecked(True)
+    more_details.disclosure_button.setChecked(True)
     _required_child(window, QLineEdit, "questionInput").setText(
         "Will this invalid deadline remain editable?"
     )
@@ -368,7 +367,7 @@ def test_creation_failure_keeps_optional_details_for_correction(
     )
 
     assert window.current_screen_name == "New Prediction"
-    assert more_details.isChecked()
+    assert more_details.disclosure_button.isChecked()
     assert (
         _required_child(window, QPlainTextEdit, "initialRationaleInput").toPlainText()
         == "Keep me"

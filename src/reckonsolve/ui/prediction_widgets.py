@@ -52,6 +52,7 @@ from reckonsolve.ui.date_display import (
 )
 from reckonsolve.ui.detail_reading import TimelineEntry, progressive_body
 from reckonsolve.ui.editor_submit import bind_editor_submit
+from reckonsolve.ui.form_layout import compact_form_layout
 from reckonsolve.ui.history_disclosure import (
     history_disclosure as _collapsible_history_link,
 )
@@ -210,7 +211,7 @@ def _status_tone(status: PredictionStatus) -> StatusTone:
         return StatusTone.WARNING
     if status is PredictionStatus.RESOLVED:
         return StatusTone.SUCCESS
-    return StatusTone.ERROR
+    return StatusTone.CAUTION
 
 
 def _make_selectable(label: QLabel) -> None:
@@ -404,7 +405,7 @@ def _show_numeric_resolution_correction_history(
 
 
 def _show_invalidation_correction_history(
-    group: QGroupBox,
+    group: QWidget,
     history: InvalidationHistory,
 ) -> None:
     content, layout = _history_content(group)
@@ -667,6 +668,7 @@ def _apply_dialog_presentation(dialog: QDialog) -> None:
             )
             apply_surface_role(label, SurfaceRole.SELECTED)
 
+    compact_form_layout(dialog)
     for buttons in dialog.findChildren(QDialogButtonBox):
         save = buttons.button(QDialogButtonBox.StandardButton.Save)
         if save is not None:

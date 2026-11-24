@@ -1,5 +1,9 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [terminal-header and disclosure refinement](#terminal-headers-and-disclosure-consistency--2026-11-24)
+owns the latest source/layout checks and pending focused human review. Earlier
+records retain their evaluated source and acceptance limits.
+
 The [compact history and editor submission follow-up](#compact-histories-and-editor-submission--2026-11-20)
 owns the current source changes and their scoped verification. Earlier records
 below retain their evaluated source and human-review limits.
@@ -1767,3 +1771,74 @@ twelve changed UI modules and one new UI helper. Lower layers, CLI, migrations a
 resources are byte-identical. Current ignored artifacts live under
 `build/ux-history-editors-20261120/`. Git, personal-data changes, installed-tool
 updates and publication remain user-owned; 0.9.0 remains Unreleased.
+
+
+## Terminal headers and disclosure consistency — 2026-11-24
+
+The user explicitly requests this coherent presentation pass. Public Section
+38.15 records its scope; no history, lifecycle, scoring, schema or dependency
+change is authorized. Human acceptance of the preceding history/shortcut pass
+is not inferred from its technical evidence.
+
+Implemented changes:
+
+- Answered One-Shot headers retain the effective saved forecast and display the
+  effective Checked Answer. Binary labels Yes/No separately from its probability.
+  Numeric adds a gold diamond, exact caption and legend to the header interval.
+  Outside answers expand only the display scale; forecast bands stop at their
+  elicited percentiles and ties remain exact. Pending/Invalid do not gain an
+  answered header.
+- TerminalSummary places outcome/reason opposite score/Not scored, then effective
+  and recorded times opposite the existing forecast disclosure. Invalid uses the
+  same orange Caution tone in Journal and both Detail modes.
+- Reason History uses an underlined Show/Hide control with its exact historical
+  search target retained. Adaptive creation More Details and optional resolution
+  Postmortem use chevrons. Numeric's reflection placeholder matches Binary.
+  Value-setting time/answer checkboxes and all validation/confirmation remain.
+- Performance omits redundant mode umbrella headings, retaining the four named
+  sections and existing paired/stacked layout and report state.
+- Shared form layout keeps reading labels at natural wrapped height, with spare
+  room in text areas/scroll containers. An enclosing reading/disclosure owner
+  suppresses nested trailing rules/row borders while preserving separators
+  between records. Finishing a disclosure twice cannot add another ending rule.
+  One-Shot audit composition also stops placing the same wrapper twice.
+
+Twelve new cases pass for effective/pending headers,
+outside/tied interval geometry, linked reason history, balanced terminal context,
+compact contextual forms, symmetric resolution disclosure and single boundaries.
+All 200 disposable Qt layout cases pass: 12 reading cases across both palettes and
+1600 → 760 → 1600 widths, six Journal/Keep/Resolve forms at wide/narrow sizes, plus
+creation/Performance. The matrix runs at 9-point/100% and 15-point/125% text/scaling.
+It checks horizontal overflow, gold marker pixels, read-only canonical/score
+stability and compact label geometry. Representative light/dark captures were
+inspected; these are offscreen native-widget renders, not user acceptance or
+physical-display certification. Temporary artifacts stay ignored under
+`build/ux-terminal-disclosures-20261124/`.
+
+The broad run completed with 1,411 passing cases and two pane-return checks
+reporting a two-pixel difference before settled geometry. Their strict one-pixel
+assertion now waits for final native layout publication; no production change or
+relaxed tolerance was needed. The complete Detail follow-up passes all 117 cases
+in 161.15 seconds. All 1,413 selected cases therefore have passing coverage through
+these separate runs, not a single clean all-in-one report. The broad run itself
+took 1,015.33 seconds and retains its original two-failure result.
+
+Ruff lint and format checks pass across all 330 Python files. Filesystem discovery
+with the established documentation checker validates 383 public links in 58 files
+and 343 private links in five files. All 66 J/42 R identifiers, both withdrawals,
+100 public-reference mirrors, lower-layer imports and affected-file whitespace
+pass separate checks. Expanded One-Shot score/audit ending captures were also
+inspected in both palettes. A byte comparison against the 173-file source baseline
+finds 12 changed UI files and only the new
+UI form-layout helper; all other package files match. Six Git-invoking test
+parameters are deliberately excluded under the user's Git boundary. No Git command,
+personal-data action, build/install, tag or publication is performed. Version 0.9.0
+remains Unreleased; older delivery evidence does not
+verify these edits.
+
+Focused human recheck: use disposable `detail` review data in both appearances to
+inspect answered One-Shot Binary/Numeric, Pending, resolved Adaptive, corrected
+Invalid reasons, Journal/Keep/Resolve forms and expanded score/audit/chart/history
+sections. Also check Adaptive creation More Details and the four-section Performance
+composition. Confirm useful separators remain and repeated ending lines are gone.
+User review, saving and any matching delivery artifacts remain separate gates.

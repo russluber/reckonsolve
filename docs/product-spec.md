@@ -2731,3 +2731,33 @@ button help and the compact Settings reference without compromising safe geometr
 
 These refinements are implemented. The [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#compact-histories-and-editor-submission--2026-11-20)
 separates source/layout evidence from the pending focused human review.
+
+**Terminal headers and disclosure consistency — authorized 2026-11-24:** Answered
+One-Shot headers retain their effective saved forecast and also show the effective
+Checked Answer. Numeric overlays a gold diamond and exact answer on the same
+proportional interval; extend the display scale when necessary to include an
+outside answer, without extending forecast bands or inventing tails. Binary keeps
+its recorded Yes probability and labels the checked Yes/No answer separately.
+Pending/Invalid headers must not imply a scored or checked outcome.
+
+Terminal forecast-context disclosure belongs to the right of the effective/
+recorded times, below the score or Not scored, with readable narrow reflow.
+Use orange Caution for Invalid status consistently in Journal and Detail; case
+does not create a separate lifecycle. Retire checkbox-style content disclosures
+in Detail, including Reason History, and use a chevron for Adaptive creation's
+More Details and Resolution's optional Postmortem. Both resolution types use the
+same reflection placeholder. Retain existing value-setting date/time, offset,
+Expected Resolution and included-answer options and all validation/confirmation.
+
+Performance retains its four named sections and paired layout, omitting redundant
+Adaptive/One-Shot umbrella headings. Shared Prediction form layouts keep headings,
+forecast context and field labels at natural height instead of distributing spare
+space between them. Nested reading/disclosure boundaries draw one ending rule,
+retaining meaningful internal separators, keyboard/search access and content.
+These are presentation refinements only: no canonical facts, precision, score,
+eligibility, default draft, persistence, schema or dependency changes. Verify all
+contracts, corrected/terminal states, outside/tied Numeric answers, both palettes,
+narrow/enlarged geometry, disclosures, retained inputs and unchanged histories.
+
+The presentation refinement is implemented. Its [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#terminal-headers-and-disclosure-consistency--2026-11-24)
+separates current automated/layout evidence from pending focused human review.

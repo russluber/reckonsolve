@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFrame,
+    QGridLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -150,22 +150,27 @@ class TerminalSummary(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(int(Spacing.CONTROL))
-        metrics = QHBoxLayout()
+        facts = QGridLayout()
+        facts.setContentsMargins(0, 0, 0, 0)
+        facts.setColumnStretch(0, 1)
+        facts.setColumnStretch(1, 1)
+        facts.setHorizontalSpacing(int(Spacing.SECTION))
+        facts.setVerticalSpacing(int(Spacing.CONTROL))
         self.outcome = self._label("terminalOutcome", TextRole.FORECAST)
         self.score = self._label("terminalScore", TextRole.FORECAST)
-        metrics.addWidget(self.outcome, 1, Qt.AlignmentFlag.AlignTop)
-        metrics.addWidget(self.score, 1, Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(metrics)
+        facts.addWidget(self.outcome, 0, 0, Qt.AlignmentFlag.AlignTop)
+        facts.addWidget(self.score, 0, 1, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(facts)
         self.timing = self._label("terminalTiming", TextRole.SECONDARY)
         self.note = self._label("terminalExplanation", TextRole.BODY)
-        layout.addWidget(self.timing)
+        facts.addWidget(self.timing, 1, 0, Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self.note)
         self.facts = self._label("terminalForecastFacts", TextRole.BODY)
         self.context = collapse_section(
             self.facts, "Forecast used for scoring", compact=True
         )
         self.context.setObjectName("terminalForecastContext")
-        layout.addWidget(self.context)
+        facts.addWidget(self.context, 1, 1, Qt.AlignmentFlag.AlignTop)
         self.hide()
 
     def _label(self, name: str, role: TextRole) -> QLabel:

@@ -22,6 +22,7 @@ from reckonsolve.domain.one_shot import (
     OneShotSourceAction,
 )
 from reckonsolve.domain.predictions import (
+    BinaryOutcome,
     PredictionStatus,
 )
 from reckonsolve.domain.search import SearchDocument, SearchSourceKind
@@ -169,18 +170,39 @@ class OneShotDetailScreen(QWidget):
         apply_text_role(self.forecast, TextRole.FORECAST)
         if record.effective.quantiles is not None:
             self.interval = NumericInterval(forecast_summary)
-            self.interval.set_forecast(record.effective.quantiles, unit)
+            self.interval.set_forecast(
+                record.effective.quantiles,
+                unit,
+                actual=record.effective.answer
+                if detail.status is PredictionStatus.RESOLVED
+                else None,
+            )
             forecast_layout.addWidget(self.interval)
             self.forecast.hide()
             legend_row = QWidget(forecast_summary)
             legend_layout = FlowLayout(legend_row)
-            legend_layout.addWidget(IntervalLegend(legend_row))
+            legend_layout.addWidget(
+                IntervalLegend(
+                    legend_row,
+                    checked_answer=detail.status is PredictionStatus.RESOLVED,
+                )
+            )
             unit_label = text_label(unit, legend_row)
             apply_text_role(unit_label, TextRole.SECONDARY)
             legend_layout.addWidget(unit_label)
             forecast_layout.addWidget(legend_row)
         else:
             forecast_layout.addWidget(self.forecast)
+            if detail.status is PredictionStatus.RESOLVED and isinstance(
+                record.effective.answer, BinaryOutcome
+            ):
+                checked = text_label(
+                    "Checked Answer: " + record.effective.answer.value.capitalize(),
+                    forecast_summary,
+                )
+                checked.setObjectName("binaryHeaderCheckedAnswer")
+                apply_text_role(checked, TextRole.LABEL)
+                forecast_layout.addWidget(checked)
         header.addWidget(forecast_summary)
         if detail.invalidation_history is not None:
             invalid = detail.invalidation_history
@@ -476,7 +498,7 @@ class OneShotDetailScreen(QWidget):
         self.results.layout().setSpacing(0)
         self.results.body_layout.setSpacing(0)
         extras = [
-            widget for widget in overview if widget not in (facts, history_disclosure)
+            widget for widget in overview if widget not in (facts, audit_disclosure)
         ]
         self.overview_heading = text_label(
             "ARCHIVAL CONTEXT"

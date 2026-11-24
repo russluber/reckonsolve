@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QGroupBox,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -1046,7 +1045,7 @@ def test_complete_creation_and_forecast_revision_survive_restart(
     question = first_runtime.window.findChild(QLineEdit, "questionInput")
     probability = first_runtime.window.findChild(QSpinBox, "probabilityInput")
     more_details = first_runtime.window.findChild(
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
     )
     rationale = first_runtime.window.findChild(
@@ -1092,7 +1091,7 @@ def test_complete_creation_and_forecast_revision_survive_restart(
 
     question.setText("Will the complete M4 forecast survive restart?")
     probability.setValue(60)
-    more_details.setChecked(True)
+    more_details.disclosure_button.setChecked(True)
     rationale.setPlainText("This is the initial evidence.")
     background.setPlainText("A complete creation workflow.")
     criteria.setPlainText("Yes if all values and revisions reopen from SQLite.")

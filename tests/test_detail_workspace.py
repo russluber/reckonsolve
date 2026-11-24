@@ -632,6 +632,52 @@ def test_interval_retains_exact_groups_and_true_marks(qtbot, values, groups):
         )
 
 
+@pytest.mark.parametrize(
+    "values,actual",
+    [
+        ([-2, -1, 0, 1, 2], -6),
+        ([-2, -1, 0, 1, 2], 0),
+        ([-2, -1, 0, 1, 2], 8),
+        ([3, 3, 3, 3, 3], 3),
+        ([3, 3, 3, 3, 3], -4),
+    ],
+)
+def test_checked_answer_interval_keeps_exact_forecast_and_includes_outside_answers(
+    qtbot, values, actual
+):
+    from fractions import Fraction
+
+    from reckonsolve.domain.predictions import FixedPrecisionValue
+
+    forecast = FiveQuantiles.from_values(
+        dict(zip((5, 25, 50, 75, 95), values, strict=True)), 2
+    )
+    answer = FixedPrecisionValue.from_value(actual, 2)
+    interval = NumericInterval()
+    qtbot.addWidget(interval)
+    interval.set_forecast(forecast, "m", actual=answer)
+    interval.show()
+    for width in (900, 330, 900):
+        interval.resize(width, interval.sizeHint().height())
+        qtbot.waitUntil(lambda: not interval._metrics_timer.isActive())
+        low, high = min(*values, actual), max(*values, actual)
+        marks = [*interval.positions, interval.actual_position]
+        assert all(24 <= mark <= width - 24 for mark in marks)
+        if high > low:
+            for value, mark in zip([*values, actual], marks, strict=True):
+                assert mark == pytest.approx(
+                    24 + (width - 48) * float(Fraction(value - low, high - low))
+                )
+        else:
+            assert len(set(marks)) == 1
+        assert interval.rect().contains(interval.actual_label.geometry())
+        assert f"{answer} m" in interval.actual_label.text()
+        assert interval.quantiles == forecast
+    interval.set_forecast(forecast, "m")
+    assert interval.actual is None and interval.actual_position is None
+    assert interval.actual_label.isHidden()
+
+
 def test_expired_numeric_revision_retains_draft_and_repeats_compact_notice(detail):
     window, operations, clock, _prediction = detail
     numeric = operations.create_numeric_prediction(

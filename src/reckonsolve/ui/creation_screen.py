@@ -8,7 +8,6 @@ from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -25,6 +24,7 @@ from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.predictions import PredictionType
 from reckonsolve.domain.quantiles import NumericValueConstraint
 from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
+from reckonsolve.ui.detail_workspace import collapse_section
 from reckonsolve.ui.editor_submit import bind_editor_submit
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
@@ -209,13 +209,12 @@ class NewPredictionScreen(QWidget):
             update_quantile_preview
         )
 
-        self.more_details = QGroupBox("More details", self)
+        self.more_details_content = QWidget(self)
+        self.more_details = collapse_section(
+            self.more_details_content, "More Details", compact=True
+        )
         self.more_details.setObjectName("newPredictionMoreDetailsGroup")
-        self.more_details.setCheckable(True)
-        self.more_details.setChecked(False)
-        apply_surface_role(self.more_details, SurfaceRole.RAISED)
-
-        self.more_details_content = QWidget(self.more_details)
+        self.more_details.setFocusProxy(self.more_details.disclosure_button)
         self.more_details_content.setObjectName("newPredictionMoreDetailsContent")
         more_details_layout = QVBoxLayout(self.more_details_content)
         more_details_layout.setContentsMargins(
@@ -299,11 +298,6 @@ class NewPredictionScreen(QWidget):
         )
         more_details_layout.addWidget(tags_label)
         more_details_layout.addWidget(self.tags_input)
-
-        more_details_group_layout = QVBoxLayout(self.more_details)
-        more_details_group_layout.addWidget(self.more_details_content)
-        self.more_details.toggled.connect(self.more_details_content.setVisible)
-        self.more_details_content.setHidden(True)
 
         self.form_error = QLabel("", self)
         self.form_error.setObjectName("predictionFormError")
@@ -394,11 +388,11 @@ class NewPredictionScreen(QWidget):
             self.exact_deadline.occurrence,
             self.exact_deadline.use_offset,
             self.exact_deadline.offset,
-            self.more_details,
+            self.more_details.disclosure_button,
         ]
         for previous, following in pairwise(deadline_controls):
             self.setTabOrder(previous, following)
-        self.setTabOrder(self.more_details, self.rationale_input)
+        self.setTabOrder(self.more_details.disclosure_button, self.rationale_input)
         self.setTabOrder(self.rationale_input, self.background_input)
         self.setTabOrder(self.background_input, self.resolution_criteria_input)
         self.setTabOrder(
@@ -496,7 +490,7 @@ class NewPredictionScreen(QWidget):
         self.expected_resolution_toggle.setChecked(False)
         self.expected_resolution_input.setDate(QDate.currentDate())
         self.tags_input.clear()
-        self.more_details.setChecked(False)
+        self.more_details.disclosure_button.setChecked(False)
         self._hide_error()
 
     @staticmethod

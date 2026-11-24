@@ -3,9 +3,10 @@
 from fractions import Fraction
 
 from PySide6.QtCore import QEvent, QPointF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 
+from reckonsolve.domain.predictions import FixedPrecisionValue
 from reckonsolve.domain.quantiles import FiveQuantiles, quantile_summary
 from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import TextRole, apply_text_role, semantic_colors
@@ -14,18 +15,23 @@ from reckonsolve.ui.visual_system import TextRole, apply_text_role, semantic_col
 class IntervalLegend(QWidget):
     """Text and matching stroke shapes explain the committed interval display."""
 
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, *, checked_answer: bool = False) -> None:
         super().__init__(parent)
         self.setObjectName("numericIntervalLegend")
         self.setAccessibleName(
             "Numeric interval legend: thin line for 90% interval, thick line for 50% interval, vertical mark for median"
         )
         layout = FlowLayout(self)
-        for kind, title in (
+        entries = (
             ("outer", "90% interval"),
             ("inner", "50% interval"),
             ("median", "Median"),
-        ):
+        ) + ((("actual", "Checked Answer"),) if checked_answer else ())
+        if checked_answer:
+            self.setAccessibleName(
+                self.accessibleName() + ", gold diamond for checked answer"
+            )
+        for kind, title in entries:
             group = QWidget(self)
             row = QHBoxLayout(group)
             row.setContentsMargins(0, 0, 0, 0)
@@ -68,7 +74,21 @@ class _LegendSwatch(QWidget):
                 Qt.PenCapStyle.FlatCap,
             )
         )
-        if self.kind == "median":
+        if self.kind == "actual":
+            x, y = self.width() / 2, self.height() / 2
+            painter.setPen(QPen(QColor(colors.actual_outline), 1.25))
+            painter.setBrush(QColor(colors.actual_fill))
+            painter.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(x, y - 5),
+                        QPointF(x + 5, y),
+                        QPointF(x, y + 5),
+                        QPointF(x - 5, y),
+                    ]
+                )
+            )
+        elif self.kind == "median":
             x = self.width() / 2
             painter.drawLine(QPointF(x, 3), QPointF(x, self.height() - 3))
         else:
@@ -89,6 +109,17 @@ class NumericInterval(QWidget):
         self.setAccessibleName("Current committed five-percentile forecast")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.quantiles: FiveQuantiles | None = None
+        self.actual: FixedPrecisionValue | None = None
+        self.actual_position: float | None = None
+        self.actual_label = QLabel(self)
+        self.actual_label.setObjectName("numericHeaderCheckedAnswer")
+        self.actual_label.setWordWrap(True)
+        self.actual_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.actual_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        apply_text_role(self.actual_label, TextRole.LABEL)
+        self.actual_label.hide()
         self.unit = ""
         self.labels: list[QLabel] = []
         self.positions: list[float] = []
@@ -96,8 +127,19 @@ class NumericInterval(QWidget):
         self._line_y = 70
         self._needed_height = 120
 
-    def set_forecast(self, quantiles: FiveQuantiles, unit: str) -> None:
+    def set_forecast(
+        self,
+        quantiles: FiveQuantiles,
+        unit: str,
+        *,
+        actual: FixedPrecisionValue | None = None,
+    ) -> None:
         self.quantiles, self.unit = quantiles, unit
+        self.actual = actual
+        self.actual_label.setText(
+            f"Checked Answer: {actual} {unit}".rstrip() if actual is not None else ""
+        )
+        self.actual_label.setVisible(actual is not None)
         for label in self.labels:
             label.hide()
             label.deleteLater()
@@ -119,7 +161,14 @@ class NumericInterval(QWidget):
             self.labels.append(label)
             label.installEventFilter(self)
             label.show()
-        self.setAccessibleDescription(quantile_summary(quantiles, unit))
+        self.setAccessibleDescription(
+            quantile_summary(quantiles, unit)
+            + (
+                f". Gold diamond: checked answer {actual} {unit}."
+                if actual is not None
+                else ""
+            )
+        )
         self._arrange()
         self.updateGeometry()
         self.update()
@@ -163,10 +212,16 @@ class NumericInterval(QWidget):
         if self.quantiles is None:
             return
         values = [value.scaled_value for value in self.quantiles.values]
-        span = values[-1] - values[0]
+        # An outside answer extends only the display scale. The forecast bands
+        # still end at their elicited percentiles; no tail shape is drawn.
+        scale_values = values + (
+            [self.actual.scaled_value] if self.actual is not None else []
+        )
+        low, high = min(scale_values), max(scale_values)
+        span = high - low
         left, right = 24.0, max(25.0, self.width() - 24.0)
         self.positions = [
-            left + (right - left) * float(Fraction(value - values[0], span))
+            left + (right - left) * float(Fraction(value - low, span))
             if span
             else self.width() / 2
             for value in values
@@ -227,6 +282,18 @@ class NumericInterval(QWidget):
             for center, bottom, anchor in placements
         ]
         needed = self._line_y + 28
+        self.actual_position = None
+        if self.actual is not None:
+            self.actual_position = (
+                left
+                + (right - left) * float(Fraction(self.actual.scaled_value - low, span))
+                if span
+                else self.width() / 2
+            )
+            label_width = max(1, self.width() - 8)
+            label_height = self.actual_label.heightForWidth(label_width)
+            self.actual_label.setGeometry(4, needed, label_width, label_height)
+            needed += label_height + 4
         if needed != self._needed_height:
             self._needed_height = needed
             self.setMinimumHeight(needed)
@@ -255,4 +322,20 @@ class NumericInterval(QWidget):
             )
             height = 15 if index == 2 else 9
             painter.drawLine(QPointF(x, y - height), QPointF(x, y + height))
+        if self.actual_position is not None:
+            x, center = self.actual_position, y + 19
+            painter.setPen(QPen(QColor(colors.actual_outline), 1.25))
+            painter.setBrush(QColor(colors.actual_fill))
+            # Below the band, the diamond cannot hide a tied median/percentile.
+            painter.drawLine(QPointF(x, y + 10), QPointF(x, center - 5))
+            painter.drawPolygon(
+                QPolygonF(
+                    [
+                        QPointF(x, center - 5),
+                        QPointF(x + 5, center),
+                        QPointF(x, center + 5),
+                        QPointF(x - 5, center),
+                    ]
+                )
+            )
         painter.end()

@@ -880,6 +880,9 @@ def test_structural_rules_track_pane_motion_and_keep_drafts(workspace, qtbot, nu
     pane.tabs.setCurrentIndex(0)
     qtbot.waitUntil(lambda: pane._proportion == 600 and pane.timeline.widgetResizable())
     qtbot.waitUntil(aligned)
+    # The animation finishes before the nested native layouts have necessarily
+    # published their final geometry. Keep the same strict position check.
+    qtbot.waitUntil(lambda: abs(pane.pane_divider.x() - reading_x) <= 1)
     assert abs(pane.pane_divider.x() - reading_x) <= 1
     window.appearance.toggle()
     assert pane.editor is editor
@@ -1909,3 +1912,190 @@ def test_terminal_panes_are_equal_and_task_tabs_own_the_context_heading(
         pane.clear_editor()
         assert not screen.overview_heading.isHidden()
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == current
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_one_shot_header_follows_effective_answer_and_hides_it_when_pending(
+    workspace, qtbot, numeric
+):
+    from dataclasses import replace
+
+    from test_one_shot_persistence import request
+
+    from reckonsolve.domain.predictions import FixedPrecisionValue
+
+    window, operations, _clock, _database = workspace
+    pending = operations.one_shots.create(request(numeric, answered=False))
+    window._open_prediction(pending.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    if numeric:
+        assert screen.interval.actual is None
+    else:
+        assert screen.findChild(QLabel, "binaryHeaderCheckedAnswer") is None
+    answered = operations.one_shots.add_answer(
+        pending,
+        replace(
+            pending.record.effective,
+            answer=FixedPrecisionValue(700, 2) if numeric else BinaryOutcome.NO,
+        ),
+    )
+    corrected = operations.one_shots.correct(
+        answered,
+        replace(
+            answered.record.effective,
+            answer=FixedPrecisionValue(-500, 2) if numeric else BinaryOutcome.YES,
+        ),
+    )
+    before = operations.get_prediction_for_navigation(corrected.prediction_id)
+    window._open_prediction(corrected.prediction_id)
+    if numeric:
+        assert screen.interval.actual == corrected.record.effective.answer
+        assert screen.interval.quantiles == corrected.record.effective.quantiles
+        assert (
+            screen.interval.findChild(QLabel, "numericHeaderCheckedAnswer").text()
+            == "Checked Answer: -5.00 m"
+        )
+    else:
+        assert screen.forecast.text() == "80% Yes"
+        assert (
+            screen.findChild(QLabel, "binaryHeaderCheckedAnswer").text()
+            == "Checked Answer: Yes"
+        )
+    assert operations.get_prediction_for_navigation(corrected.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_terminal_context_sits_under_score_and_reason_history_is_a_text_link(
+    workspace, qtbot, numeric
+):
+    from PySide6.QtWidgets import QGroupBox
+
+    from reckonsolve.ui.visual_system import BADGE_TONE_PROPERTY, StatusTone
+
+    window, operations, clock, database = workspace
+    fixtures = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixtures["_seed_detail_cases"](database, now=clock.now())
+    prediction = next(
+        row.prediction
+        for row in operations.journal.query(JournalRequest()).rows
+        if row.prediction.question.startswith(
+            "Corrected Invalid reason · Adaptive "
+            + ("Numeric" if numeric else "Binary")
+        )
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    summary = screen.terminal_summary
+    window.resize(1600, 1000)
+    qtbot.waitUntil(lambda: summary.context.x() > summary.timing.x())
+    assert summary.context.y() > summary.score.y()
+    assert screen.status.property(BADGE_TONE_PROPERTY) == StatusTone.CAUTION.value
+    assert not any(
+        group.isCheckable()
+        for group in screen.workspace.overview_body.findChildren(QGroupBox)
+    )
+    link = screen.invalidation_history.disclosure_button
+    assert link.font().underline() and link.text() == "Show Reason History"
+    link.click()
+    assert screen.invalidation_history.disclosure_body.isVisible()
+    assert "Original Invalidation" in " ".join(
+        label.text() for label in screen.invalidation_history.findChildren(QLabel)
+    )
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_contextual_forms_keep_reading_labels_compact_and_resolution_symmetric(
+    workspace, qtbot, numeric
+):
+    from PySide6.QtWidgets import QDialogButtonBox, QToolButton
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    window.resize(1600, 1000)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    for action in (
+        screen.add_journal_entry_button,
+        screen.review_forecast_button,
+        screen.resolve_button,
+    ):
+        action.click()
+        editor = screen.workspace.editor
+        assert editor is not None
+        labels = [
+            label
+            for label in editor.findChildren(QLabel)
+            if label.parentWidget() is editor and label.isVisible()
+        ]
+        qtbot.waitUntil(
+            lambda labels=labels: all(
+                label.height()
+                <= max(label.sizeHint().height(), label.heightForWidth(label.width()))
+                + 2
+                for label in labels
+            )
+        )
+        for label in labels:
+            assert (
+                label.sizePolicy().verticalPolicy() == label.sizePolicy().Policy.Maximum
+            )
+        if hasattr(editor, "postmortem_input"):
+            disclosure = editor.postmortem_input.parentWidget()
+            assert isinstance(disclosure.disclosure_button, QToolButton)
+            assert not disclosure.disclosure_button.isChecked()
+            assert (
+                editor.postmortem_input.placeholderText()
+                == "Reflect on what your reasoning or updates got right or wrong."
+            )
+        editor.findChild(QDialogButtonBox).button(
+            QDialogButtonBox.StandardButton.Cancel
+        ).click()
+        assert screen.workspace.editor is None
+    assert (
+        operations.get_prediction_for_navigation(prediction.prediction_id) == prediction
+    )
+
+
+def test_nested_disclosure_owns_one_ending_rule_without_losing_history_text(qtbot):
+    from datetime import UTC, datetime
+
+    from reckonsolve.ui.components import SectionRule
+    from reckonsolve.ui.detail_reading import TimelineEntry
+    from reckonsolve.ui.detail_workspace import collapse_section
+    from reckonsolve.ui.one_shot_reading import OneShotReadingSection, finish_disclosure
+
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    body = OneShotReadingSection("Recorded facts", parent)
+    entry = TimelineEntry("Original", datetime(2026, 11, 24, tzinfo=UTC), body)
+    entry.column.addWidget(QLabel("Exact original text remains selectable.", entry))
+    body.body_layout.addWidget(entry)
+    disclosure = finish_disclosure(collapse_section(body, "History", compact=True))
+    finish_disclosure(disclosure)
+    assert entry.property("reckonsolveTimelineEntry") == "false"
+    assert (
+        len(
+            disclosure.findChildren(
+                SectionRule, options=Qt.FindChildOption.FindDirectChildrenOnly
+            )
+        )
+        == 1
+    )
+    assert all(rule.isHidden() for rule in body.findChildren(SectionRule))
+    disclosure.disclosure_button.click()
+    assert not body.isHidden()
+    assert any(
+        "Exact original text" in label.text() for label in body.findChildren(QLabel)
+    )
