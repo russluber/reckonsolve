@@ -195,6 +195,18 @@ Adaptive Numeric Detail places the supplied immutable Unit and Decimal Places in
 
 ui/components.py supplies the shared Binary ProbabilityPresets. Adaptive and One-Shot creation use the same direct-entry row, with separate widget identities and no save action; contextual revision opts into wrapping. Compact presets and the shared New button reserve their focused border width so keyboard focus does not clip labels or change geometry.
 
+The same module's ProbabilityInput retains QSpinBox editing/keyboard behavior,
+replacing its native arrow chrome with real minus/plus child tool buttons. Measured
+text margins reserve their width, glyphs follow font changes, and native stepping
+commits pending text before adjustment. Bound, disabled and read-only states apply
+to both controls without adding tab stops or save actions. This shared field is
+used by Adaptive creation and One-Shot's value form. Native arrows on precision
+and other spin inputs retain their existing style/behavior. Creation headings use
+SectionRule before untitled ContentPanels; empty panel titles hide the entire
+heading region. Type labels, the omitted One-Shot subtitle and the accent-colored
+Deadline required marker are presentation only. Required descriptions/tooltips and
+the exact Deadline validator retain their existing responsibility.
+
 ui/visual_system.py owns palette-relative typography, semantic colors, spacing, surfaces, badges, focus/disabled states, action roles, and restrained motion. Palette propagation may request several refreshes; unchanged stylesheet text is retained so each appearance change repolishes the workspace once. Semantic fonts still refresh for native font changes. No widget-local theme framework or domain/data dependency is introduced. Local Lucide assets and dropdown chevrons follow the packaged resource path; palette changes refresh colors and icons.
 
 The chart/table comparison in ui/analytics_components.py coalesces surface synchronization until Qt finishes palette propagation and stylesheet repolishing. Its graph and table then use the same resolved panel surface; explicit child backgrounds cannot retain the previous appearance while text changes.

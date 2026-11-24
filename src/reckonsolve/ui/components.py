@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -96,6 +98,93 @@ class TagChips(QWidget):
 
     def minimumSizeHint(self) -> QSize:
         return QSize(0, self.flow.minimumSize().height())
+
+
+class ProbabilityInput(QSpinBox):
+    """Native percentage entry with quiet, separately clickable minus/plus steps."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setProperty("reckonsolveProbabilityInput", "true")
+        self.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.decrease_button = self._step_button("−", "Decrease", -1)
+        self.increase_button = self._step_button("+", "Increase", 1)
+        self.valueChanged.connect(self._sync_steps)
+        self._sync_steps()
+        self._place_steps()
+
+    def _step_button(self, symbol: str, name: str, step: int) -> QToolButton:
+        button = QToolButton(self)
+        button.setObjectName("probability" + name)
+        button.setText(symbol)
+        button.setAccessibleName(name + " probability")
+        button.setToolTip(name + " probability by 1 percentage point")
+        button.setProperty("reckonsolveProbabilityStep", "true")
+        button.setAutoRaise(True)
+        button.setAutoRepeat(True)
+        # Up/Down already provides the keyboard path on the native editor.
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda: self._step(step))
+        return button
+
+    def _step(self, amount: int) -> None:
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        self.stepBy(amount)
+
+    def _step_width(self) -> int:
+        return max(28, self.fontMetrics().height() + 8)
+
+    def _reserved_width(self) -> int:
+        return 2 * self._step_width() + 10
+
+    def _place_steps(self) -> None:
+        width = self._step_width()
+        x = self.width() - width - 4
+        height = max(1, self.height() - 8)
+        self.increase_button.setGeometry(x, 4, width, height)
+        self.decrease_button.setGeometry(x - width - 2, 4, width, height)
+        self.lineEdit().setTextMargins(0, 0, self._reserved_width(), 0)
+        glyph_font = QFont(self.font())
+        glyph_font.setPointSizeF(max(1, self.font().pointSizeF()) + 3)
+        glyph_font.setWeight(QFont.Weight.DemiBold)
+        for button in (self.decrease_button, self.increase_button):
+            if button.font() != glyph_font:
+                button.setFont(glyph_font)
+        self.decrease_button.raise_()
+        self.increase_button.raise_()
+
+    def _sync_steps(self) -> None:
+        enabled = self.isEnabled() and not self.isReadOnly()
+        self.decrease_button.setEnabled(enabled and self.value() > self.minimum())
+        self.increase_button.setEnabled(enabled and self.value() < self.maximum())
+
+    def setReadOnly(self, read_only: bool) -> None:
+        super().setReadOnly(read_only)
+        self._sync_steps()
+
+    def sizeHint(self) -> QSize:
+        return super().sizeHint() + QSize(self._reserved_width(), 0)
+
+    def minimumSizeHint(self) -> QSize:
+        return super().minimumSizeHint() + QSize(self._reserved_width(), 0)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "increase_button"):
+            self._place_steps()
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if hasattr(self, "increase_button") and event.type() in (
+            QEvent.Type.FontChange,
+            QEvent.Type.ApplicationFontChange,
+            QEvent.Type.StyleChange,
+            QEvent.Type.EnabledChange,
+        ):
+            self._place_steps()
+            self._sync_steps()
+            self.updateGeometry()
 
 
 class ProbabilityPresets(QWidget):
@@ -220,6 +309,7 @@ class ContentPanel(QFrame):
         self.count_badge = StatusBadge("0", StatusTone.NEUTRAL, parent=heading)
         self.count_badge.setHidden(True)
         heading_layout.addWidget(self.count_badge)
+        heading.setHidden(not bool(title))
         self._root_layout.addWidget(heading)
 
         self.supporting_label = QLabel(supporting_text or "", self)
@@ -305,6 +395,7 @@ __all__ = [
     "EmptyStateLabel",
     "PageHeader",
     "PersistentMessageLabel",
+    "ProbabilityInput",
     "ProbabilityPresets",
     "StatusBadge",
 ]

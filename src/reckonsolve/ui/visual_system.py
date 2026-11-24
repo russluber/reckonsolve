@@ -487,6 +487,9 @@ QLabel[reckonsolveTextRole="page-title"] {{
 QLabel[reckonsolveTextRole="metric"] {{
     color: {color.text};
 }}
+QLabel[reckonsolveRequiredField="true"] {{
+    color: {color.accent};
+}}
 QLabel[reckonsolveTextRole="forecast"],
 QLabel[reckonsolveTextRole="row-forecast"] {{
     color: {color.accent};
@@ -603,6 +606,29 @@ QComboBox:disabled {{
 QSpinBox,
 QDoubleSpinBox {{
     padding-right: {2 * int(Spacing.PAGE)}px;
+}}
+/* Probability entry owns actual, side-by-side step buttons. Its editor's text
+   margins reserve their measured width without changing native input behavior. */
+QSpinBox[reckonsolveProbabilityInput="true"] {{
+    padding-right: {control}px;
+}}
+QToolButton[reckonsolveProbabilityStep="true"] {{
+    background-color: transparent;
+    color: {color.secondary_text};
+    border: none;
+    border-radius: {int(Radius.SMALL)}px;
+    padding: 0;
+}}
+QToolButton[reckonsolveProbabilityStep="true"]:hover {{
+    background-color: {color.accent_soft};
+    color: {color.on_accent_soft};
+}}
+QToolButton[reckonsolveProbabilityStep="true"]:pressed {{
+    background-color: {color.accent};
+    color: {color.on_accent};
+}}
+QToolButton[reckonsolveProbabilityStep="true"]:disabled {{
+    color: {color.disabled_text};
 }}
 
 /* Keep native dropdown bevels inside the rounded input outline. */

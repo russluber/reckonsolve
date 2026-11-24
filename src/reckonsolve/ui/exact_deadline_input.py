@@ -55,7 +55,11 @@ class ExactDeadlineInput(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(int(Spacing.CONTROL))
-        title = QLabel("Forecast Deadline · Required", self)
+        title = QLabel("Deadline", self)
+        title.setObjectName("deadlineLabel")
+        title.setProperty("reckonsolveRequiredField", "true")
+        title.setToolTip("Required. Choose when forecasting closes.")
+        title.setAccessibleDescription("Required field")
         apply_text_role(title, TextRole.LABEL)
         layout.addWidget(title)
 
@@ -96,7 +100,9 @@ class ExactDeadlineInput(QWidget):
         # Resolve against the local zone explicitly, never silently normalize it.
         self.editor.setTimeZone(QTimeZone.utc())
         self.editor.setObjectName("exactDeadlineInput")
-        self.editor.setAccessibleName("Forecast Deadline date and time")
+        self.editor.setAccessibleName("Deadline date and time")
+        self.editor.setAccessibleDescription("Required field")
+        title.setBuddy(self.editor)
         self.editor.setDisplayFormat(input_date_format(self, " HH:mm"))
         self.editor.setCalendarPopup(True)
         self.editor.setKeyboardTracking(False)

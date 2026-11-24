@@ -765,7 +765,9 @@ attestation. Desktop New Prediction omits the "Choosing a forecasting commitment
 expander following the v0.8 closeout review. Admissibility and Deadline-selection
 advice remain in the forecasting guide; optional CLI guidance remains available.
 The [complete Rulebook](guides/forecasting-guide.md#forecasting-rulebook) remains the durable reference within that guide.
-Creation copy uses sentence case while retaining "Forecast Deadline · Required".
+Creation copy uses sentence case. The 2026-11-24 presentation refinement uses
+**Deadline** with an accent-colored required-field label, accessible required
+description and tooltip, retaining the existing validation.
 The unset shortcut prompt and explanatory Deadline footer are omitted; a chosen
 date/time summary and validation messages remain available.
 
@@ -1922,6 +1924,17 @@ If a previously current Journal passage changes after results load, verify the s
 
 Both Binary creation modes provide the same 10%, 20%, through 90% probability presets in ten-point steps. A preset populates the editable probability input without saving a record. Manual whole-percentage entry from 0% through 100% remains available; these are entry shortcuts, not recommended forecasts.
 
+**Creation presentation — refined 2026-11-24:** A quiet horizontal rule separates
+each creation page's heading/mode action from its form. Question begins the form
+without a redundant Forecast heading. Both forms label Binary/Numeric selection
+**Type**. Adaptive labels its required exact closing time **Deadline**, using the
+blue accent with required status in tooltip/accessibility text and unchanged
+validation. Omit the New One-Shot purpose subtitle; this supersedes its retention
+in the earlier desktop-copy audit. Probability entry uses quiet side-by-side
+minus/plus controls instead of native stacked/beveled arrows, retaining native
+percentage input, keyboard adjustment, bounds and presets. Do not change mode/type
+drafts, saving, confirmation or forecasting contracts.
+
 Preserve the existing Adaptive/Binary defaults and four mode/type form capabilities in one dedicated creation workspace. Mode/type switches retain their entered work. Adaptive keeps its required Question/forecast/immutable exact Deadline, current presets/validation/Numeric preview and optional More details. One-Shot keeps visible Background/Rationale/Tags, optional reported times and optional included answer; no Deadline/Expected Resolution/criteria input, updating machinery or score preview is added. All five Numeric values remain exact and editable; preview only valid supported central interpolation, without fabricated tails or silent sorting/rounding.
 
 Untouched cancellation returns to the originating workspace. Leaving entered creation work offers Keep editing or explicit discard; confirmed discard clears the whole creation task across retained forms/modes. Ordinary Adaptive and unanswered One-Shot saves return to the preserved Journal with quiet Prediction created, even outside its query, with no reveal link or All switch. An answered One-Shot save opens its answered Detail with the established Journal return. Successful atomic save clears the whole creation task; when the other mode contains entered work, use the selected pre-save explanation/confirmation. Cancel or failed save retains both forms and creates no partial history. Ctrl+N on New never creates another task. Creation close has the selected keep/discard protection; no persistent unfinished-task restoration is introduced.
@@ -2675,7 +2688,8 @@ history, lifecycle, uncertainty calculations or any user-authored text:
   Preserve the original completion date and later-writing behavior.
 - Adaptive creation omits its page subtitle and repeated field inventories; type
   switching must not restore them. Retain actual fields, labels, validation,
-  deadline controls and the One-Shot purpose subtitle.
+  deadline controls. The later creation presentation refinement in Section 38.5
+  removes the One-Shot purpose subtitle under the user's explicit request.
 - Hover help defines Updating Gain as hold-initial minus actual Trajectory Brier,
   Delta WIS as Initial minus Final WIS with its positive direction, and weights as
   shares of the original window, including neutral loss 0.25 after early resolution.

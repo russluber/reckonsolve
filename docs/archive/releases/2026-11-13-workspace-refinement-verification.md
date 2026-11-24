@@ -1,12 +1,17 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [creation presentation checkpoint](#creation-presentation-polish--2026-11-24)
+owns the latest scoped checks and pending visual review. The user reports saving
+and pushing the preceding terminal-header/disclosure checkpoint; earlier evidence
+retains its evaluated source and acceptance limits.
+
 The [terminal-header and disclosure refinement](#terminal-headers-and-disclosure-consistency--2026-11-24)
-owns the latest source/layout checks and pending focused human review. Earlier
-records retain their evaluated source and acceptance limits.
+records the preceding source/layout checks. The user reports saving/pushing that
+checkpoint; earlier evidence retains its evaluated source and acceptance limits.
 
 The [compact history and editor submission follow-up](#compact-histories-and-editor-submission--2026-11-20)
-owns the current source changes and their scoped verification. Earlier records
-below retain their evaluated source and human-review limits.
+records its earlier source changes and scoped verification. Its evidence retains
+its evaluated source and human-review limits.
 
 The [desktop guide-text refinement](#binary-scorecard-copy-refinement--2026-11-20)
 records the adopted wording changes and their current checks. Older source/native
@@ -1842,3 +1847,53 @@ Invalid reasons, Journal/Keep/Resolve forms and expanded score/audit/chart/histo
 sections. Also check Adaptive creation More Details and the four-section Performance
 composition. Confirm useful separators remain and repeated ending lines are gone.
 User review, saving and any matching delivery artifacts remain separate gates.
+
+
+## Creation presentation polish — 2026-11-24
+
+The user reports saving/pushing the preceding terminal-header checkpoint, then
+requests a presentation pass on both creation modes. Public Section 38.5 reconciles
+the earlier literal Required label/subtitle retention with this explicit request;
+no protected forecasting, history, validation or save behavior changes.
+
+Both page headings have a quiet horizontal rule before the form. Question starts
+without a Forecast section title; Binary/Numeric selection is Type. Adaptive's
+required exact closing time is labeled Deadline in the blue accent, with required
+status retained in tooltip/accessibility text and existing validation. The One-Shot
+purpose sentence is omitted. Untitled ContentPanels hide their heading region.
+
+ProbabilityInput is a QSpinBox with actual minus/plus child tool buttons, replacing
+native arrow bevels without replacing native entry/keyboard behavior. Its measured
+text margins protect complete values/suffixes from the controls. Glyphs follow
+font changes, and click stepping interprets pending text first. Read-only, disabled
+and bound states apply to both buttons; native keyboard input remains the tab stop.
+Shared One-Shot value forms retain consistent styling in creation/correction.
+Other spin controls retain their native arrows. These five UI-file changes leave
+all lower package layers, contracts, schema, dependencies and data untouched.
+
+Initial focused checks pass 96 creation/One-Shot/Deadline/shared-style cases;
+final step-control checks pass ten, including Windows11/Fusion, both palettes,
+9-/15-point fonts, actual pointer targets, typing, Up/Down, pending values,
+read-only/disabled state and 0/100 boundaries. All 32 final disposable Qt layout
+cases pass across both modes/types, palettes, 1600/760 requested widths and
+ordinary/enlarged text at 100%/125% rendering. They check header-rule placement,
+hidden redundant headings/subtitle, labels, required-marker contrast/accessibility,
+input hit targets, horizontal overflow and no saved Predictions. Representative
+captures were inspected. This is offscreen native-widget evidence, not human
+acceptance or physical-display certification. Artifacts stay ignored under
+`build/ux-creation-polish-20261124/`.
+
+The final full permitted run passes **1,421 tests** in 1,263.45 seconds, with six
+Git-invoking parameters excluded under the user's boundary. Ruff lint and format
+checks pass for all 330 Python files. Using filesystem discovery with the established
+documentation helper API, 384 public links in 58 files and 347 private links in five
+files pass. All 66 J IDs, 42 R IDs, both withdrawals, 101 public-reference mirrors,
+lower-layer imports and affected-file whitespace pass separate checks. A byte
+comparison against the 174-file source baseline confirms five changed UI files,
+no added package files and unchanged remaining package files. No Git command was
+used for status, discovery, tests or whitespace checks. Human review
+is pending: open disposable Detail review data, choose + New, compare both modes
+and types/themes, test probability entry/steps/presets and unset Deadline validation,
+and switch modes with entered text. No Git command, personal-data operation,
+build/install, tag or publication is performed. 0.9.0 remains Unreleased, and prior
+packages do not verify this source.

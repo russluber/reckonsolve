@@ -45,7 +45,13 @@ from reckonsolve.domain.quantiles import (
 )
 from reckonsolve.one_shot_display import forecast_text, values_lines
 from reckonsolve.reported_time import parse_reported_offset
-from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
+from reckonsolve.ui.components import (
+    ContentPanel,
+    PageHeader,
+    ProbabilityInput,
+    ProbabilityPresets,
+    SectionRule,
+)
 from reckonsolve.ui.date_display import format_reported_time, input_date_format
 from reckonsolve.ui.dialog_review import DialogReview
 from reckonsolve.ui.editor_submit import bind_editor_submit
@@ -210,8 +216,9 @@ class OneShotValueForm(QWidget):
         self.type_input = QComboBox(self)
         self.type_input.addItem("Binary (Yes/No)", PredictionType.BINARY)
         self.type_input.addItem("Numeric (five quantiles)", PredictionType.NUMERIC)
-        field(forecast_layout, "Forecast type", self.type_input)
-        self.probability = QSpinBox(self)
+        field(forecast_layout, "Type", self.type_input)
+        self.probability = ProbabilityInput(self)
+        self.probability.setObjectName("oneShotProbabilityInput")
         self.probability.setRange(0, 100)
         self.probability.setSuffix("% Yes")
         self.probability.setValue(50)
@@ -399,7 +406,6 @@ class OneShotCreationScreen(QWidget):
         layout.setSpacing(int(Spacing.SECTION))
         header = PageHeader(
             "New One-Shot",
-            "Record your final guess from before you checked an existing answer.",
             parent=self,
         )
         self.deadline_button = QPushButton("Adaptive", self)
@@ -411,7 +417,10 @@ class OneShotCreationScreen(QWidget):
         self.deadline_button.clicked.connect(self.cancelled)
         header.add_action(self.deadline_button)
         layout.addWidget(header)
-        panel = ContentPanel("Forecast", parent=self)
+        header_rule = SectionRule(column)
+        header_rule.setObjectName("oneShotHeaderRule")
+        layout.addWidget(header_rule)
+        panel = ContentPanel("", parent=self)
         panel.setObjectName("oneShotForecastPanel")
         self.question = QLineEdit(self)
         self.question.setPlaceholderText("What did you predict?")

@@ -23,7 +23,13 @@ from PySide6.QtWidgets import (
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.domain.predictions import PredictionType
 from reckonsolve.domain.quantiles import NumericValueConstraint
-from reckonsolve.ui.components import ContentPanel, PageHeader, ProbabilityPresets
+from reckonsolve.ui.components import (
+    ContentPanel,
+    PageHeader,
+    ProbabilityInput,
+    ProbabilityPresets,
+    SectionRule,
+)
 from reckonsolve.ui.detail_workspace import collapse_section
 from reckonsolve.ui.editor_submit import bind_editor_submit
 from reckonsolve.ui.exact_deadline_input import ExactDeadlineInput
@@ -94,13 +100,13 @@ class NewPredictionScreen(QWidget):
         self.question_input.setClearButtonEnabled(True)
         question_label.setBuddy(self.question_input)
 
-        prediction_type_label = QLabel("Forecast type", self)
+        prediction_type_label = QLabel("Type", self)
         prediction_type_label.setObjectName("predictionTypeLabel")
         self._make_primary_label(prediction_type_label)
 
         self.prediction_type_input = QComboBox(self)
         self.prediction_type_input.setObjectName("predictionTypeInput")
-        self.prediction_type_input.setAccessibleName("Forecast type")
+        self.prediction_type_input.setAccessibleName("Type")
         self.prediction_type_input.addItem("Binary (yes/no)", PredictionType.BINARY)
         self.prediction_type_input.addItem(
             "Numeric (five quantiles)", PredictionType.NUMERIC
@@ -116,7 +122,7 @@ class NewPredictionScreen(QWidget):
         probability_label.setObjectName("probabilityLabel")
         self._make_primary_label(probability_label)
 
-        self.probability_input = QSpinBox(self.binary_forecast_fields)
+        self.probability_input = ProbabilityInput(self.binary_forecast_fields)
         self.probability_input.setObjectName("probabilityInput")
         self.probability_input.setAccessibleName("Prediction probability")
         self.probability_input.setRange(0, 100)
@@ -317,7 +323,7 @@ class NewPredictionScreen(QWidget):
         apply_action_role(self.create_button, ActionRole.PRIMARY)
         apply_lucide_icon(self.create_button, LucideIcon.CIRCLE_PLUS)
 
-        self.forecast_panel = ContentPanel("Forecast", parent=self)
+        self.forecast_panel = ContentPanel("", parent=self)
         self.forecast_panel.setObjectName("newPredictionForecastPanel")
         core_layout = self.forecast_panel.body_layout
         core_layout.addWidget(question_label)
@@ -342,6 +348,9 @@ class NewPredictionScreen(QWidget):
         column_layout.setContentsMargins(0, 0, 0, 0)
         column_layout.setSpacing(int(Spacing.SECTION))
         column_layout.addWidget(header)
+        header_rule = SectionRule(form_column)
+        header_rule.setObjectName("newPredictionHeaderRule")
+        column_layout.addWidget(header_rule)
         column_layout.addWidget(self.forecast_panel)
         column_layout.addWidget(self.more_details)
         column_layout.addWidget(self.form_error)

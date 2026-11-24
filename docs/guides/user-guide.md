@@ -140,7 +140,7 @@ Choose **Binary** or **Numeric**:
 - **Binary:** write a Yes/No question and your probability of Yes, from 0% to 100% in whole percentages.
 - **Numeric:** write a question about one quantity; choose its unit, decimal precision, and continuous-style or whole-number constraint; then enter five percentiles.
 
-Both Adaptive and One-Shot Binary creation offer preset buttons from **10** through **90** in ten-point steps. Clicking one fills the probability input; you can adjust it before saving.
+Both Adaptive and One-Shot Binary creation offer preset buttons from **10** through **90** in ten-point steps. Clicking one fills the probability input; you can adjust it before saving. Type a value, use Up/Down, or click the quiet **− / +** controls to change it one percentage point at a time.
 
 | Value | Meaning |
 | --- | --- |
@@ -158,6 +158,9 @@ Unit, precision, and value constraint are permanent. Quantities are stored as ex
 
 ### Adaptive: choose a Forecast Deadline
 
+The **Deadline** label uses the blue accent. It remains required; hover for that
+reminder, and choose a future date/time before saving.
+
 Choose **End of today**, **End of tomorrow**, **7 days**, **30 days**, or **Custom…**. Shortcuts choose 11:59 PM on the corresponding local calendar date. Inspect the selected date/time before saving; shortcuts are conveniences, not recommended horizons.
 
 The deadline must be in the future when Save commits and becomes permanent afterward. The picker uses the local time zone's rules for the selected date, asks which occurrence you mean during a repeated daylight-saving hour, and rejects nonexistent times. **Use another UTC offset** permits an explicit override.
@@ -168,7 +171,7 @@ Expand the **More Details** chevron to optionally add Resolution Criteria and Ex
 
 Enter only the final probability or five percentiles settled on before checking. Earlier private drafts do not need to be entered.
 
-Background, Rationale, and Tags are visible in the main Forecast card. Background can describe context and how you checked the answer. Choose the source or measurement convention before looking when possible.
+Background, Rationale, and Tags are visible in the main form. Background can describe context and how you checked the answer. Choose the source or measurement convention before looking when possible.
 
 **Record date and time** is optional. It supplies a calendar date picker and segmented time field: type hours, Tab, minutes, Tab, then A or P. Shift+Tab moves backward; Up/Down adjusts the selected section. Dates start at today when enabled. Reported times may be approximate, missing, or equal to the same minute. They document the external record and do not affect scoring. Reckonsolve separately retains when you entered the record into the app.
 

@@ -141,6 +141,96 @@ def test_native_spin_buttons_receive_clicks_without_editor_overlap(
         qapp.setStyle(original_style)
 
 
+@pytest.mark.parametrize("style_name", ["windows11", "Fusion"])
+@pytest.mark.parametrize("points", [9, 15])
+@pytest.mark.parametrize("dark", [False, True])
+def test_probability_steps_keep_native_entry_and_real_click_targets(
+    qtbot, qapp, style_name, points, dark
+):
+    from PySide6.QtGui import QFont
+
+    from reckonsolve.ui.components import ProbabilityInput
+
+    available_styles = QStyleFactory.keys()
+    if style_name not in available_styles:
+        pytest.skip(f"{style_name} is unavailable on this platform")
+    original_style = qapp.style().objectName()
+    root = QWidget()
+    qtbot.addWidget(root)
+    try:
+        qapp.setStyle(style_name)
+        root.setFont(QFont("Segoe UI", points))
+        palette = _test_palette(
+            "#171a18" if dark else "#f4f5f4",
+            "#202421" if dark else "#ffffff",
+            "#edf3ef" if dark else "#1c211f",
+            "#505456" if dark else "#c7ceca",
+        )
+        root.setPalette(palette)
+        layout = QVBoxLayout(root)
+        spin = ProbabilityInput(root)
+        spin.setRange(0, 100)
+        spin.setSuffix("% Yes")
+        spin.setValue(50)
+        other = QLineEdit(root)
+        layout.addWidget(other)
+        layout.addWidget(spin)
+        install_visual_system(root)
+        root.resize(360, root.sizeHint().height())
+        root.show()
+        for width in (360, 240):
+            root.resize(width, root.height())
+            qtbot.wait(30)
+            assert not spin.decrease_button.geometry().intersects(
+                spin.increase_button.geometry()
+            )
+            for button, expected in (
+                (spin.decrease_button, 49),
+                (spin.increase_button, 50),
+            ):
+                assert spin.rect().contains(button.geometry())
+                point = button.geometry().center()
+                assert spin.childAt(point) is button
+                editor = spin.lineEdit()
+                text_right = (
+                    editor.x() + editor.width() - editor.textMargins().right() - 1
+                )
+                assert text_right < spin.decrease_button.x()
+                other.setFocus()
+                qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+                assert spin.value() == expected
+                assert spin.hasFocus()
+        spin.setFocus()
+        qtbot.keyClick(spin, Qt.Key.Key_Up)
+        assert spin.value() == 51
+        qtbot.keyClick(spin, Qt.Key.Key_Down)
+        assert spin.value() == 50
+        # A click must commit pending native input before applying its step.
+        spin.setKeyboardTracking(False)
+        spin.lineEdit().selectAll()
+        qtbot.keyClicks(spin.lineEdit(), "42")
+        qtbot.mouseClick(spin.increase_button, Qt.MouseButton.LeftButton)
+        assert spin.value() == 43
+        spin.setReadOnly(True)
+        assert not spin.decrease_button.isEnabled()
+        assert not spin.increase_button.isEnabled()
+        spin.setReadOnly(False)
+        spin.setEnabled(False)
+        assert not spin.increase_button.isEnabled()
+        spin.setEnabled(True)
+        spin.setValue(0)
+        assert not spin.decrease_button.isEnabled()
+        qtbot.mouseClick(spin.increase_button, Qt.MouseButton.LeftButton)
+        assert spin.value() == 1
+        spin.setValue(100)
+        assert not spin.increase_button.isEnabled()
+        qtbot.mouseClick(spin.decrease_button, Qt.MouseButton.LeftButton)
+        assert spin.value() == 99
+    finally:
+        root.close()
+        qapp.setStyle(original_style)
+
+
 @pytest.mark.parametrize(
     ("palette", "expected_dark"),
     [
