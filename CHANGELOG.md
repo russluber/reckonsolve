@@ -4,8 +4,9 @@ All notable changes to Reckonsolve are documented here.
 
 ## Unreleased
 
-The Journal-centered redesign is prepared as **0.9.0**. It remains unpublished;
-final whole-app visual approval, commits, merge, tag and publication are separate.
+The Journal-centered redesign is prepared as **0.9.0**. The user approved the
+final integrated visual review on 2026-11-27. It remains unpublished; commits,
+merge, tag and publication remain user-owned steps.
 [Candidate readiness](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26)
 records current checks and their limits. Published v0.8.0 remains unchanged.
 

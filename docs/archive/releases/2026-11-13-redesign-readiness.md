@@ -1,7 +1,7 @@
 # Redesign readiness — 2026-11-13
 
 The [November 26 candidate review](#final-candidate-review--2026-11-26) owns the
-current verification and final visual handoff. The November 13 and
+current verification and the November 27 final visual approval. The November 13 and
 [November 19 candidate](#final-candidate-readiness--2026-11-19) records below
 retain their evaluated source and artifact scope. Version 0.9.0 stays Unreleased.
 
@@ -259,7 +259,7 @@ combinations in both appearances. No label clipping, control-width failure or
 horizontal overflow was flagged. Before/after complete disposable SQL snapshots
 match after opening panels and editors. Representative wide, narrow, expanded,
 resolved and Invalid captures were inspected. This is simulated rendering evidence;
-the user's final whole-app visual approval remains pending.
+the user's subsequent final visual approval is recorded below.
 
 ### Current artifacts and verification
 
@@ -313,7 +313,8 @@ its relocated smoke under `build/private-smoke/`.
 
 ### Final visual handoff
 
-Run `uv run python tools/run_visual_review.py integrated` from the checkout.
+The final review handoff used
+`uv run python tools/run_visual_review.py integrated` from the checkout.
 
 1. Compare Adaptive and One-Shot Binary/Numeric Detail in both themes. Check the
    header, status chips, scorecards and expanded histories, including the corrected
@@ -324,7 +325,26 @@ Run `uv run python tools/run_visual_review.py integrated` from the checkout.
 3. Visit Journal, New Prediction, Performance and Settings for the final overall
    hierarchy/spacing judgment. Earlier accepted workflows retain their scope.
 
-Report concrete remaining defects or explicit final visual approval, including
-the Windows scaling percentage if known. Controlled installation refresh and
-merge/tag/source publication remain user-owned steps. The release summary remains
-Unreleased until publication is verified.
+The handoff requested concrete remaining defects or explicit final visual approval,
+including the Windows scaling percentage if known. The user completed that review
+and provided approval below.
+
+### Final visual approval — 2026-11-27
+
+The user reports completing the latest integrated visual review and explicitly
+approves the candidate for v0.9.0. Remaining UI issues are deferred to future
+patches, such as v0.9.1. No additional implementation scope or patch schedule is
+selected. The actual Windows scaling percentage was not supplied; this approval
+records the user's visual judgment without expanding the device/accessibility
+coverage of the technical checks above.
+
+The user reports the preceding public/private checkpoints committed and pushed.
+Filesystem HEAD references identify the public checkout as `ux-redesign` and the
+independent private notes checkout as `main`. This confirms local branch identity;
+repository status and remote synchronization remain user checks.
+
+This acceptance checkpoint changes documentation only. The November 26 test,
+rendering and delivery evidence retains its evaluated payload and limits.
+Controlled installation refresh and merge/tag/source publication remain
+user-owned steps. Keep private notes separate from the public merge and release.
+The release summary remains Unreleased until publication is verified.

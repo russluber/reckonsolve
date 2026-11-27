@@ -1860,7 +1860,7 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements retain scoped acceptance. The current 0.9.0 candidate has fresh technical and representative native-screen review under Section 38.14; final whole-app human visual approval remains pending. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Approved target, four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements retain scoped acceptance. The current 0.9.0 candidate has fresh technical and representative native-screen review under Section 38.14. The user completed the final integrated visual review and approved it for v0.9.0 on 2026-11-27. Version 0.9.0 remains Unreleased; merge, tag and publication remain user-owned steps. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
 **Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), final integration in [Section 38.14](#3814-authorized-final-integration-pass), and the feedback refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
@@ -2202,6 +2202,14 @@ and payload. Agent screen inspection does not grant final human visual acceptanc
 No normal installation, personal-data operation, commit, merge, tag or publication
 is authorized. The [current readiness record](archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26)
 owns results and limits.
+
+**Final human visual acceptance — 2026-11-27:** The user reports completing the
+latest integrated visual review and explicitly approves the candidate for v0.9.0.
+Remaining UI refinements may be handled in future patches. The
+[acceptance record](archive/releases/2026-11-13-redesign-readiness.md#final-visual-approval--2026-11-27)
+keeps this human judgment separate from the existing technical evidence and
+user-owned installation and release operations. No additional implementation is
+authorized by this acceptance.
 
 ### 38.15 Authorized post-review workspace refinements
 
