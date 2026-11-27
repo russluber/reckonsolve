@@ -710,13 +710,6 @@ class PredictionDetailScreen(QWidget):
             [timeline_panel],
             overview,
         )
-        self.locked_explanation = QLabel(
-            "Forecast Deadline passed. Revisions and Reviews are closed; the remaining actions are available.",
-            summary_panel,
-        )
-        self.locked_explanation.setWordWrap(True)
-        summary_layout.addWidget(self.locked_explanation)
-        self.locked_explanation.hide()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1677,7 +1670,6 @@ class PredictionDetailScreen(QWidget):
             button.setVisible(button.isEnabled())
         for action, button in self.more_actions:
             action.setVisible(button.isEnabled())
-        self.locked_explanation.setVisible(prediction.status is PredictionStatus.LOCKED)
         self.resolution_criteria_section.show()
         self.criteria_read_button.setVisible(
             len(prediction.resolution_criteria or "") > 450

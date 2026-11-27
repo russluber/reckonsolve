@@ -657,10 +657,6 @@ def _apply_dialog_presentation(dialog: QDialog) -> None:
             # Repeated task context supports the main committed-forecast header.
             apply_text_role(label, TextRole.BODY)
             label.setWordWrap(True)
-            label.setMinimumWidth(0)
-            label.setSizePolicy(
-                QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
-            )
             _make_selectable(label)
             label.setTextInteractionFlags(
                 label.textInteractionFlags()

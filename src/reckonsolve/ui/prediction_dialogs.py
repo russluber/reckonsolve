@@ -708,13 +708,6 @@ class ResolveNumericPredictionDialog(_StyledDialog):
         self.effective_time = EffectiveTimeInput(self)
 
         title = QLabel("Resolve Numeric Prediction", self)
-        explanation = QLabel(
-            "Resolution is a one-way terminal decision. WIS uses the last forecast strictly before the earlier of the effective outcome time and Deadline, not necessarily the latest displayed forecast. Earlier facts and later corrections remain in history.",
-            self,
-        )
-        explanation.setObjectName("resolveNumericPredictionExplanation")
-        explanation.setTextFormat(Qt.TextFormat.PlainText)
-        explanation.setWordWrap(True)
         reviewed = QLabel(
             f"Scoring forecast: {_numeric_forecast_text(prediction.current_revision, prediction.unit)} "
             f"(revision {prediction.current_revision.sequence})",
@@ -767,13 +760,20 @@ class ResolveNumericPredictionDialog(_StyledDialog):
         )
         layout = QVBoxLayout(self)
         layout.addWidget(title)
-        layout.addWidget(explanation)
         layout.addWidget(reviewed)
         layout.addSpacing(8)
         layout.addWidget(actual_label)
         layout.addWidget(self.actual_value_input)
         if self.effective_time is not None:
             layout.addWidget(self.effective_time)
+            scoring_hint = QLabel(
+                "WIS uses the last forecast before the earlier of this time and the Deadline.",
+                self,
+            )
+            scoring_hint.setObjectName("resolveNumericScoringHint")
+            scoring_hint.setWordWrap(True)
+            apply_text_role(scoring_hint, TextRole.SECONDARY)
+            layout.addWidget(scoring_hint)
         layout.addWidget(notes_label)
         layout.addWidget(self.resolution_notes_input)
         postmortem_label.hide()
@@ -1926,15 +1926,6 @@ class ResolvePredictionDialog(_EffectiveTimeDialog):
 
         title = QLabel("Resolve Prediction", self)
         title.setObjectName("resolvePredictionTitle")
-        explanation = QLabel(
-            "Resolution records a final Yes/No outcome and the current forecast "
-            "for scoring. The terminal decision cannot be reopened; an honest "
-            "mistake in its facts can later be corrected with visible history.",
-            self,
-        )
-        explanation.setObjectName("resolvePredictionExplanation")
-        explanation.setTextFormat(Qt.TextFormat.PlainText)
-        explanation.setWordWrap(True)
 
         reviewed = QLabel(
             f"Scoring forecast: {prediction.probability_percent}% "
@@ -1948,9 +1939,6 @@ class ResolvePredictionDialog(_EffectiveTimeDialog):
         self.effective_time = None
         if contract is not None:
             self.effective_time = EffectiveTimeInput(self)
-            explanation.setText(
-                "Record Yes/No and when the outcome became fixed and knowable. Scoring uses that effective time; recorded-at is automatic. Resolution is final, with audited factual corrections available later."
-            )
             reviewed.setText(
                 f"Current forecast: {prediction.probability_percent}% (revision {prediction.current_revision_sequence}). Trajectory scoring excludes revisions at or after the effective cutoff."
             )
@@ -2011,7 +1999,6 @@ class ResolvePredictionDialog(_EffectiveTimeDialog):
 
         layout = QVBoxLayout(self)
         layout.addWidget(title)
-        layout.addWidget(explanation)
         layout.addWidget(reviewed)
         if self.effective_time is not None:
             layout.addWidget(self.effective_time)

@@ -130,6 +130,13 @@ def reading_typography(root: QWidget) -> None:
         if role is not None and not label.property("reckonsolveBadgeTone"):
             apply_text_role(label, role)
             changed = True
+        if label.wordWrap() and label.maximumHeight() != label.minimumHeight():
+            policy = label.sizePolicy()
+            if policy.verticalPolicy() != QSizePolicy.Policy.Minimum:
+                # The reading panes scroll, so prose can take its full height.
+                policy.setVerticalPolicy(QSizePolicy.Policy.Minimum)
+                label.setSizePolicy(policy)
+                changed = True
     if changed:
         # Hidden reading panels can retain height-for-width caches measured
         # before their role fonts were assigned. Invalidate from the leaves.

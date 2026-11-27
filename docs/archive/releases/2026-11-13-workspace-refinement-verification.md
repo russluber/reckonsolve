@@ -1,5 +1,11 @@
 # Post-review workspace refinement verification — 2026-11-13
 
+The [approved Journal and audit refinements](#journal-reading-order-and-audit-refinements--2026-11-26)
+record the latest changes to Journal, Detail and Settings.
+
+The [2026-11-26 presentation cleanup](#presentation-cleanup--2026-11-26) records
+the latest corrections and scoped checks.
+
 The [creation presentation checkpoint](#creation-presentation-polish--2026-11-24)
 owns the latest scoped checks and pending visual review. The user reports saving
 and pushing the preceding terminal-header/disclosure checkpoint; earlier evidence
@@ -1897,3 +1903,63 @@ and types/themes, test probability entry/steps/presets and unset Deadline valida
 and switch modes with entered text. No Git command, personal-data operation,
 build/install, tag or publication is performed. 0.9.0 remains Unreleased, and prior
 packages do not verify this source.
+
+
+## Presentation cleanup — 2026-11-26
+
+The long-history Adaptive Binary fixture reproduced clipped Resolve text. At a
+760-pixel window width, the 340-pixel-wide paragraph received 16 pixels of height
+and needed 64. The reviewed forecast also received 16 pixels and needed 32.
+The requested paragraph is removed. The shared form layout gives wrapped labels
+a minimum height policy so the reviewed forecast and effective-time guidance can
+reflow. Resolution validation and the final confirmation remain intact.
+
+One-Shot Results owns the visible exact Checked Answer and uses theme-appropriate
+gold text. Numeric's header retains its plotted diamond, legend and accessible
+exact answer. Locked Detail uses its status/Deadline and eligible actions without
+the additional explanation. Both creation heading rules use the existing form
+border token. No retrieval, scoring or history changes are part of these edits.
+
+The disposable visual audit covers Journal, both creation modes/types, Detail and
+its common contextual editors, Performance and Settings. There are 200 rendered
+observations at 9-point/100% and 15-point/125% in light/dark at 760 and 1240 pixels.
+The audit compares wrapped text height and scrollbar range, and representative
+captures show the changed surfaces. Separate fit findings concern long Detail
+reading, Numeric revision captions and Settings at enlarged text. Those further
+layout fixes require the user's approval. User visual acceptance remains separate.
+
+The broad screen/workflow run passed 309 tests. Two new palette assertions
+sampled before Qt applied the style. The four-case targeted follow-up passes after
+waiting for the expected colors. Together the runs cover 311 distinct passing
+cases. Pixel samples verify matching creation rules for both modes and palettes.
+Ruff and filesystem-based public/private documentation checks pass.
+
+
+## Journal reading order and audit refinements — 2026-11-26
+
+The user approved the values-first Journal rows and all six audit proposals.
+Journal places the forecast directly below the Question, followed by any scoring
+or correction qualifier. The actual, lifecycle and dates sit together before
+mode/type and tags. Exact search excerpts and historically matched versions keep
+their existing destinations.
+
+Detail panes use trailing spacers so the scroll content can allocate the full
+measured height to wrapped text. Editor labels preserve the height-for-width
+flag when size policies change. Numeric Revision reflows the existing draft
+fields with their paired current values, preserving typed input and focus.
+Numeric Resolve places the short WIS cutoff note by the effective time. Pending
+One-Shot uses the Results heading and the existing pending chip and Add Answer
+button. Corrected One-Shot keeps its correction cue and full audit history.
+Settings stacks its two column groups and tool actions at narrower widths based
+on current text and button measurements. Long visit-local results can scroll and
+release their space when cleared.
+
+The main run passed 289 tests. Two new Settings assertions sampled the
+intermediate geometry while the enlarged layout was still reflowing. The same
+screen-order follow-up passed all ten tests after the assertions waited for the
+stacked layout to settle with zero horizontal overflow. Across the two runs, all
+291 selected cases have passing coverage. A separate 14-case Journal run also
+passed after keeping dates together on one line. The disposable visual audit
+covered 200 rendered states in both themes at normal and enlarged text sizes,
+with no clipping or horizontal overflow flagged. Ruff and public/private link
+checks pass.

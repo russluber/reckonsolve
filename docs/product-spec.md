@@ -1908,7 +1908,7 @@ Prefer practical continuous browsing with reliable anchors and bounded loading. 
 
 ### 38.4 Journal rows, recency and matched history
 
-Use one continuously sorted vertical list with full wrapped Questions, no fixed-height/ellipsis cards, and Question → forecast → actual when applicable → supporting facts/dates. Each Prediction opens its Detail. Numeric rows show five horizontal exact percentile/value groups, q05/q25/q50 median/q75/q95, with the unit once; preserve signs, precision, ties and readable reflow. Use no interval drawings or ordinary rationale/tag previews in Journal.
+Use one continuously sorted vertical list with full wrapped Questions and no fixed-height or ellipsis cards. Each row opens Prediction Detail. Place the forecast directly below the Question, with no routine committed/saved caption. Numeric rows show five exact percentile/value groups in order with the forecast unit beside them. Place scoring eligibility, exclusions, and transcription qualifiers under the forecast where applicable. Group the actual outcome, status and dates, then place mode/type and tags in a separate metadata row. Keep source-labeled search excerpts below that metadata and keep the Current wording cue attached to its Question when a superseded version matches. Preserve signs, precision, ties and readable reflow. Use no interval drawings or ordinary rationale previews in Journal.
 
 Open/Locked Adaptive shows its committed forecast. Resolved Adaptive summarizes the scoring-eligible forecast strictly before the effective cutoff, with a quiet excluded-later-revision cue when needed; Binary's summary does not replace its trajectory score. When no forecast qualifies, show the actual and explicit Unscored / No eligible forecast, not an ineligible ordinary summary. Invalid shows Last forecast / Not scored. One-Shot uses effective corrected forecast/answer with an appropriate transcription-corrected cue and access to originals; changing only documentary time must not imply a repaired forecast.
 
@@ -1947,7 +1947,7 @@ Keep the full Question and roomy persistent committed forecast/Deadline context 
 
 Open/Locked Overview uses about 60/40 Timeline/context; Resolved/Invalid reading uses 50/50 under Section 38.15. Change automatically to about 40/60 for revision and ordinary contextual writing. Mark Invalid preparation is the selected 60/40 exception. Keep independent pane scrolling and ongoing-task positions; no initial manual divider. Main headings are TIMELINE and OVERVIEW or ARCHIVAL CONTEXT, with Title Case subsections; contextual tabs suppress the duplicate inner Overview heading. Evaluate light bidirectional motion without delaying work and honor reduced motion. Keep true chronology, newest/oldest reading, full Revisions/rationale, expandable Journal previews/readable Reviews, a marker at the actual Current Committed Revision and its Current Revision jump action with the persistent Timeline reading controls. Fresh ordinary Detail visits reapply selected disclosure defaults, without per-Prediction expansion memory; exact historical reveal and ongoing-task state override that ordinary-entry presentation as required.
 
-Revision keeps existing Binary elicitation and all five aligned Numeric Current committed / Draft revision values, outside-in 90% interval → median → 50% interval guidance with free editing, and rationale below. The header/graph/history remain committed-only. Temporary Overview / Revision · unsaved tabs retain the populated draft. Successful save updates the complete saved state and returns Overview; invalid/no-op/stale/locked failure retains inspection and creates no partial history. Deadline rejection uses the selected brief right-side notification near Commit plus a compact repeatable failure cue, not a permanent error section. Locked hides Revise/Review and explicitly explains the closed window while retaining eligible Journal/terminal actions.
+Revision keeps existing Binary elicitation and all five aligned Numeric Current committed / Draft revision values, outside-in 90% interval → median → 50% interval guidance with free editing, and rationale below. The header/graph/history remain committed-only. Temporary Overview / Revision · unsaved tabs retain the populated draft. Successful save updates the complete saved state and returns Overview; invalid/no-op/stale/locked failure retains inspection and creates no partial history. Deadline rejection uses the selected brief right-side notification near Commit plus a compact repeatable failure cue, not a permanent error section. In Locked Detail, the status and Deadline communicate closure. Revise/Review are hidden and eligible Journal and terminal actions remain available.
 
 New Journal and Journal body correction use the shared right-hand form, preserving criteria/Timeline and original body anchor/position/history. New entries require a nonterminal Prediction; eligible transparent body corrections remain possible after terminal decisions. Replacing an unfinished revision with Journal writing is explicitly guarded. Edit Details uses one focused dialog; Question/criteria review and final confirmation stay inside that dialog, with ordinary metadata-only saves direct. Long criteria reading from Overview uses the selected wider read-only dialog. No editor may silently overwrite current-context changes or discard failed inputs.
 
@@ -2752,7 +2752,8 @@ Checked Answer. Numeric overlays a gold diamond and exact answer on the same
 proportional interval; extend the display scale when necessary to include an
 outside answer, without extending forecast bands or inventing tails. Binary keeps
 its recorded Yes probability and labels the checked Yes/No answer separately.
-Pending/Invalid headers must not imply a scored or checked outcome.
+Pending/Invalid headers must not imply a scored or checked outcome. The 2026-11-26
+refinement below supersedes the separate header answer caption.
 
 Terminal forecast-context disclosure belongs to the right of the effective/
 recorded times, below the score or Not scored, with readable narrow reflow.
@@ -2775,3 +2776,22 @@ narrow/enlarged geometry, disclosures, retained inputs and unchanged histories.
 
 The presentation refinement is implemented. Its [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#terminal-headers-and-disclosure-consistency--2026-11-24)
 separates current automated/layout evidence from pending focused human review.
+
+**Presentation cleanup — authorized 2026-11-26:** One-Shot Results owns the
+visible Checked Answer text and presents it in readable gold tones. The Numeric
+header retains the gold diamond, legend, exact accessible description and
+proportional mapping. Adaptive Locked headers use the Locked state, existing
+Deadline and eligible actions in place of the additional explanatory sentence.
+Binary Resolve omits the introductory paragraph. Its effective-time guidance,
+reviewed forecast and final confirmation remain. Wrapped form labels must fit
+their content at the current width. Match the creation heading divider to the
+existing forecast-form bottom rule in each appearance. Broader copy and Journal
+layout proposals were approved for implementation on 2026-11-26. Settings groups
+preferences and administrative tools into a single column when the paired layout
+cannot fit comfortably. Tool actions may move below their descriptions. Detail
+keeps full selectable criteria, Timeline text and exact numeric values readable
+after resizing. Numeric Revision keeps each current value beside its draft field
+when the pane fits, and stacks each pair when space is limited. Numeric Resolve
+puts one WIS cutoff sentence by the effective-time controls. One-Shot uses the
+standard Results heading when an answer is pending and keeps the correction cue
+in the header and the recorded history after transcription repair.

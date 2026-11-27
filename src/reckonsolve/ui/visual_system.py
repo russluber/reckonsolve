@@ -157,6 +157,7 @@ class SemanticColors:
     warning_surface: str
     actual_fill: str
     actual_outline: str
+    actual_text: str
     caution: str
     caution_surface: str
     error: str
@@ -286,6 +287,7 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
             warning_surface="#3a2f17",
             actual_fill="#f0c66d",
             actual_outline="#f0c66d",
+            actual_text="#f0c66d",
             caution="#ffb66e",
             caution_surface="#3e291a",
             error="#ff9a92",
@@ -322,6 +324,7 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         warning_surface="#fff2c2",
         actual_fill="#e5b943",
         actual_outline="#987000",
+        actual_text="#805b0e",
         caution="#a64b00",
         caution_surface="#fff1e6",
         error="#a82a23",
@@ -373,6 +376,9 @@ QWidget#workspaceToolbar {{
 QFrame[reckonsolveRule="horizontal"], QFrame[reckonsolveRule="vertical"] {{
     border: none;
     background-color: {color.workspace_border};
+}}
+QFrame#newPredictionHeaderRule, QFrame#oneShotHeaderRule {{
+    background-color: {color.border};
 }}
 QLabel[reckonsolveTagChip="true"] {{
     color: {color.secondary_text};
@@ -493,6 +499,9 @@ QLabel[reckonsolveRequiredField="true"] {{
 QLabel[reckonsolveTextRole="forecast"],
 QLabel[reckonsolveTextRole="row-forecast"] {{
     color: {color.accent};
+}}
+QLabel[reckonsolveCheckedAnswer="true"] {{
+    color: {color.actual_text};
 }}
 
 QWidget[reckonsolveSurfaceRole="canvas"],

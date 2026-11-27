@@ -193,16 +193,6 @@ class OneShotDetailScreen(QWidget):
             forecast_layout.addWidget(legend_row)
         else:
             forecast_layout.addWidget(self.forecast)
-            if detail.status is PredictionStatus.RESOLVED and isinstance(
-                record.effective.answer, BinaryOutcome
-            ):
-                checked = text_label(
-                    "Checked Answer: " + record.effective.answer.value.capitalize(),
-                    forecast_summary,
-                )
-                checked.setObjectName("binaryHeaderCheckedAnswer")
-                apply_text_role(checked, TextRole.LABEL)
-                forecast_layout.addWidget(checked)
         header.addWidget(forecast_summary)
         if detail.invalidation_history is not None:
             invalid = detail.invalidation_history
@@ -271,11 +261,9 @@ class OneShotDetailScreen(QWidget):
         actions.addWidget(self.error)
 
         self.results = ContentPanel(
-            "Results"
-            if detail.status is PredictionStatus.RESOLVED
-            else "Answer Pending"
-            if detail.status is PredictionStatus.OPEN
-            else "Invalid · Not scored",
+            "Invalid · Not scored"
+            if detail.status is PredictionStatus.INVALID
+            else "Results",
             parent=self,
         )
         self.results.setObjectName("oneShotResults")
@@ -301,29 +289,6 @@ class OneShotDetailScreen(QWidget):
             # The header owns current reason/timing; original and corrected
             # versions remain in recorded history, with repair under More.
             self.results.hide()
-        else:
-            answer_text = next(
-                (
-                    line
-                    for line in values_lines(
-                        record.effective,
-                        unit,
-                        reported_formatter=lambda reported: format_reported_time(
-                            reported, self
-                        ),
-                    )
-                    if line.startswith("Answer:")
-                ),
-                "Add the answer after you have checked it.",
-            )
-            self.answer_result = text_label(answer_text, self)
-            apply_text_role(
-                self.answer_result,
-                TextRole.FORECAST
-                if detail.status is PredictionStatus.RESOLVED
-                else TextRole.BODY,
-            )
-            self.results.body_layout.addWidget(self.answer_result)
         self.scorecard = OneShotReadingSection("Scorecard", self.results)
         self.scorecard.setObjectName("oneShotScorecard")
         saved_score = self._operations.one_shots.score(detail)
@@ -352,22 +317,21 @@ class OneShotDetailScreen(QWidget):
                         compact=True,
                     )
                 )
-            if transcription:
-                self.scorecard.body_layout.addWidget(
-                    text_label(
-                        "Uses effective corrected facts. Originals remain available below.",
-                        self,
-                    )
-                )
         else:
             self.scorecard.hide()
         if detail.status is PredictionStatus.RESOLVED:
-            self.results.body_layout.removeWidget(self.answer_result)
             self.answer_panel = OneShotReadingSection("Checked Answer", self.results)
-            self.answer_result.setAccessibleName(self.answer_result.text())
-            self.answer_result.setText(
-                self.answer_result.text().removeprefix("Answer: ")
+            answer = record.effective.answer
+            assert answer is not None
+            answer_text = (
+                answer.value.capitalize()
+                if isinstance(answer, BinaryOutcome)
+                else f"{answer} {unit}".rstrip()
             )
+            self.answer_result = text_label(answer_text, self.answer_panel)
+            apply_text_role(self.answer_result, TextRole.FORECAST)
+            for label in (self.answer_panel.title_label, self.answer_result):
+                label.setProperty("reckonsolveCheckedAnswer", "true")
             self.answer_panel.body_layout.addWidget(self.answer_result)
             self.results.body_layout.addWidget(self.answer_panel)
             self.results.body_layout.addWidget(self.scorecard)
@@ -490,10 +454,7 @@ class OneShotDetailScreen(QWidget):
             overview.append(definition_link)
         for panel in (self.results, facts, history):
             apply_surface_role(panel, SurfaceRole.CANVAS)
-        if detail.status is PredictionStatus.RESOLVED:
-            self.results.title_label.parentWidget().hide()
-        else:
-            apply_text_role(self.results.title_label, TextRole.DETAIL_EVENT)
+        self.results.title_label.parentWidget().hide()
         self.results.layout().setContentsMargins(0, 0, 0, 0)
         self.results.layout().setSpacing(0)
         self.results.body_layout.setSpacing(0)
@@ -510,9 +471,7 @@ class OneShotDetailScreen(QWidget):
         reading_heading = text_label(
             "ARCHIVAL RECORD"
             if detail.status is PredictionStatus.INVALID
-            else "RESULTS"
-            if detail.status is PredictionStatus.RESOLVED
-            else "JOURNAL & RECORD",
+            else "RESULTS",
             self,
         )
         apply_text_role(reading_heading, TextRole.DETAIL_HEADING)

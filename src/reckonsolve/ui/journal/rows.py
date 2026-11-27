@@ -134,11 +134,9 @@ class JournalCard(QFrame):
                     else ""
                 )
             )
-        self._label(row.forecast_label)
         if row.probability_percent is not None:
             self._label(f"{row.probability_percent}% Yes", TextRole.ROW_FORECAST)
         elif row.quantiles is not None:
-            self._label(f"Unit: {prediction.numeric_unit}")
             # Surplus viewport width belongs after the complete forecast,
             # rather than between neighboring percentile/value groups.
             preview = QWidget(self)
@@ -168,22 +166,70 @@ class JournalCard(QFrame):
                 column.addWidget(heading)
                 column.addWidget(number)
                 values.addWidget(group)
+            values.addWidget(self._text_label(prediction.numeric_unit or "", preview))
             self.layout_body.addWidget(preview)
-        if row.actual is not None:
-            self._label(
-                f"{'Outcome' if isinstance(row.actual, str) else 'Actual'}: {str(row.actual).title() if isinstance(row.actual, str) else str(row.actual)}"
-                + (f" {prediction.numeric_unit}" if prediction.numeric_unit else "")
-            )
-        if row.excluded_later_forecast:
-            self._label("Later revision excluded from scoring")
+        one_shot = prediction.forecast_contract.is_one_shot
+        if prediction.status is PredictionStatus.INVALID or (
+            prediction.status is PredictionStatus.RESOLVED and not one_shot
+        ):
+            qualifier = row.forecast_label
+            if row.excluded_later_forecast:
+                qualifier += " · Later revision excluded from scoring"
+            self._label(qualifier)
         if row.correction_label:
             self._label(row.correction_label)
-        one_shot = prediction.forecast_contract.is_one_shot
         status = (
             "Answer Pending"
             if one_shot and prediction.status is PredictionStatus.OPEN
             else prediction.status.value.title()
         )
+        facts = QWidget(self)
+        facts.setObjectName(f"journalOutcomeFacts{self.prediction_id}")
+        facts.setProperty("reckonsolvePredictionMetadata", "true")
+        fact_row = FlowLayout(facts)
+        if row.actual is not None:
+            fact_row.addWidget(
+                self._text_label(
+                    f"{'Outcome' if isinstance(row.actual, str) else 'Actual'}: {str(row.actual).title() if isinstance(row.actual, str) else str(row.actual)}"
+                    + (
+                        f" {prediction.numeric_unit}" if prediction.numeric_unit else ""
+                    ),
+                    facts,
+                    TextRole.ROW_LABEL,
+                )
+            )
+        tone = (
+            StatusTone.WARNING
+            if status in ("Locked", "Answer Pending")
+            else StatusTone.SUCCESS
+            if status == "Resolved"
+            else StatusTone.CAUTION
+            if status == "Invalid"
+            else StatusTone.NEUTRAL
+        )
+        badge = StatusBadge(status, tone=tone, parent=facts)
+        apply_text_role(badge, TextRole.ROW_LABEL)
+        fact_row.addWidget(badge)
+        if row.contextual_at:
+            date = local_date(
+                row.contextual_at,
+                clock=row.contextual_label == "Forecast Deadline",
+                widget=self,
+            )
+            fact_row.addWidget(
+                self._text_label(f"{row.contextual_label}: {date}", facts, wrap=False)
+            )
+        if (
+            not row.contextual_at
+            or row.last_active.astimezone().date()
+            != row.contextual_at.astimezone().date()
+        ):
+            date = local_date(row.last_active, widget=self)
+            fact_row.addWidget(
+                self._text_label(f"Last active: {date}", facts, wrap=False)
+            )
+        self.layout_body.addWidget(facts)
+
         metadata = QWidget(self)
         metadata.setObjectName(f"journalMetadata{self.prediction_id}")
         metadata.setProperty("reckonsolvePredictionMetadata", "true")
@@ -194,35 +240,11 @@ class JournalCard(QFrame):
         )
         apply_text_role(mode, TextRole.ROW_BODY)
         meta.addWidget(mode)
-        tone = (
-            StatusTone.WARNING
-            if status in ("Locked", "Answer Pending")
-            else StatusTone.SUCCESS
-            if status == "Resolved"
-            else StatusTone.CAUTION
-            if status == "Invalid"
-            else StatusTone.NEUTRAL
-        )
-        badge = StatusBadge(status, tone=tone, parent=metadata)
-        apply_text_role(badge, TextRole.ROW_LABEL)
-        meta.addWidget(badge)
         self.tags = TagChips(metadata)
         self.tags.setObjectName(f"journalTags{self.prediction_id}")
         self.tags.set_tags(prediction.tags)
         meta.addWidget(self.tags)
         self.layout_body.addWidget(metadata)
-        dates = []
-        if (
-            not row.contextual_at
-            or row.last_active.astimezone().date()
-            != row.contextual_at.astimezone().date()
-        ):
-            dates.append(f"Last active: {local_date(row.last_active, widget=self)}")
-        if row.contextual_at:
-            dates.append(
-                f"{row.contextual_label}: {local_date(row.contextual_at, clock=row.contextual_label == 'Forecast Deadline', widget=self)}"
-            )
-        self._label("    ".join(dates))
         passages = [
             match
             for match in row.matches
@@ -260,12 +282,23 @@ class JournalCard(QFrame):
         self.layout_body.addWidget(separator)
 
     def _label(self, text: str, role: TextRole = TextRole.ROW_SECONDARY) -> QLabel:
-        label = QLabel(text, self)
+        label = self._text_label(text, self, role)
+        self.layout_body.addWidget(label)
+        return label
+
+    @staticmethod
+    def _text_label(
+        text: str,
+        parent: QWidget,
+        role: TextRole = TextRole.ROW_SECONDARY,
+        *,
+        wrap: bool = True,
+    ) -> QLabel:
+        label = QLabel(text, parent)
         label.setTextFormat(Qt.TextFormat.PlainText)
-        label.setWordWrap(True)
+        label.setWordWrap(wrap)
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         apply_text_role(label, role)
-        self.layout_body.addWidget(label)
         return label
 
     def _passage(

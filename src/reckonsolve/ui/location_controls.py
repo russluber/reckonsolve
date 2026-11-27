@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
-    QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -26,6 +25,7 @@ from reckonsolve.data.journal_location import MoveRecoveryRequired
 from reckonsolve.data.location_native import LocationError
 from reckonsolve.data.migrations import MigrationError
 from reckonsolve.ui.components import PageHeader, PersistentMessageLabel
+from reckonsolve.ui.settings_tools import SettingsActionRow
 from reckonsolve.ui.visual_system import ActionRole, StatusTone, apply_action_role
 
 logger = logging.getLogger(__name__)
@@ -99,19 +99,16 @@ class LocationControls(QWidget):
         self.preview, self.move = preview, move
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
         guidance = QLabel(
             "Move this complete journal to a local folder that isn't synchronized by another app.",
             self,
         )
         guidance.setWordWrap(True)
-        row.addWidget(guidance, 1)
         self.choose = QPushButton("Choose folder…", self)
         self.choose.setObjectName("chooseJournalFolder")
         apply_action_role(self.choose, ActionRole.SECONDARY)
-        row.addWidget(self.choose, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(row)
+        self.action_row = SettingsActionRow(guidance, self.choose)
+        layout.addLayout(self.action_row)
         self.setFocusProxy(self.choose)
         self.result = PersistentMessageLabel(
             accessible_name="Journal location result", parent=self

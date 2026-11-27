@@ -205,7 +205,7 @@ These chart sections separate reading guidance from history/scoring context. Num
 
 The framed **Binary Scorecard** shows Initial/Final Brier and the Final Eligible Forecast. **Show Timing & Updating Details** expands the existing diagnostics inside it. Corrected Journal entries use **Show Edit History**; Adaptive terminal corrections use **Show Resolution History** and **Show Reason History**; Question/criteria changes use **Show Definition History** in either mode/type. Each underlined control reveals its records in place and changes to **Hide…**, with a count beside the history. Focus a link and press Space or Enter to activate it. Expanded text fits its content after resizing, retaining paragraph breaks and selectable originals. Earlier versions retain their original dates and exact search navigation; unscored results remain explicit.
 
-Answered One-Shot headers also show **Checked Answer** beside the saved Binary probability or as a gold diamond on the Numeric interval, with an exact value and legend. An answer outside the interval expands the display range; the blue forecast bands still stop at their saved percentiles. Transcription corrections update this display to the effective facts, retaining originals in history. Pending records show the forecast alone. Invalid uses the same orange status in Journal and Detail.
+Gold **Checked Answer** text in One-Shot Results gives the exact outcome or value. The Numeric header shows its position with a gold diamond and legend. An answer outside the interval expands the display range while the blue forecast bands stop at their saved percentiles. Transcription corrections display the effective facts, with originals available in history. Pending records show the forecast. Invalid uses the same orange status in Journal and Detail.
 
 On Adaptive Numeric records, **Unit** and **Decimal Places** stay visible directly below Resolution Criteria in Overview or Archival Context. These fixed definition facts are selectable; they are not repeated inside More Information. That disclosure holds remaining optional context and definition history, with an explicit message when nothing additional is recorded.
 
@@ -240,6 +240,13 @@ Journal corrections show the latest body at the original Timeline position. Open
 ## Find and organize your journal
 
 Journal is home. **All**, **Unresolved** and **Needs Postmortem** are quiet views without counters. Unresolved includes Open/Locked Adaptive and One-Shot Answer Pending. Needs Postmortem includes Resolved records with blank effective reflection and no explicit Skip.
+
+Read each Journal row from the question to the forecast values. A scoring or
+correction label appears beside the values when it affects their interpretation.
+The outcome, lifecycle and dates are grouped together, with mode, type and tags
+below. **Unscored · No eligible forecast** identifies a resolved Adaptive outcome
+with no forecast before the cutoff. **Last forecast · Not scored** identifies the
+historical forecast on an Invalid row.
 
 In Performance and Settings, the notebook icon in the right-hand toolbar has the tooltip **Journal**. It opens your current Journal view directly, retaining its search and filters. **Back to …** separately returns to the recorded source page, even when that destination is also Journal.
 

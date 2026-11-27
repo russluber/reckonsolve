@@ -111,15 +111,6 @@ class NumericInterval(QWidget):
         self.quantiles: FiveQuantiles | None = None
         self.actual: FixedPrecisionValue | None = None
         self.actual_position: float | None = None
-        self.actual_label = QLabel(self)
-        self.actual_label.setObjectName("numericHeaderCheckedAnswer")
-        self.actual_label.setWordWrap(True)
-        self.actual_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.actual_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        apply_text_role(self.actual_label, TextRole.LABEL)
-        self.actual_label.hide()
         self.unit = ""
         self.labels: list[QLabel] = []
         self.positions: list[float] = []
@@ -136,10 +127,6 @@ class NumericInterval(QWidget):
     ) -> None:
         self.quantiles, self.unit = quantiles, unit
         self.actual = actual
-        self.actual_label.setText(
-            f"Checked Answer: {actual} {unit}".rstrip() if actual is not None else ""
-        )
-        self.actual_label.setVisible(actual is not None)
         for label in self.labels:
             label.hide()
             label.deleteLater()
@@ -290,10 +277,6 @@ class NumericInterval(QWidget):
                 if span
                 else self.width() / 2
             )
-            label_width = max(1, self.width() - 8)
-            label_height = self.actual_label.heightForWidth(label_width)
-            self.actual_label.setGeometry(4, needed, label_width, label_height)
-            needed += label_height + 4
         if needed != self._needed_height:
             self._needed_height = needed
             self.setMinimumHeight(needed)

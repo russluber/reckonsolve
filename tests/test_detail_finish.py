@@ -820,8 +820,18 @@ def test_journal_and_detail_metadata_chips_keep_visible_literal_tags(
             )
             assert {badge.text() for badge in metadata.findChildren(StatusBadge)} == {
                 f"{'One-Shot' if one_shot else 'Adaptive'} · {'Numeric' if numeric else 'Binary'}",
+            }
+            outcome = card.findChild(
+                QWidget, f"journalOutcomeFacts{prediction.prediction_id}"
+            )
+            assert {badge.text() for badge in outcome.findChildren(StatusBadge)} == {
                 "Answer Pending" if one_shot else "Open",
             }
+            assert outcome.geometry().bottom() < metadata.y()
+            assert not any(
+                label.text() in ("Current committed forecast", "Saved forecast")
+                for label in card.findChildren(QLabel)
+            )
             for chip in card.tags.chips:
                 assert chip.isVisible() and chip.width() > 0
                 assert chip.text() in tags
@@ -1708,6 +1718,22 @@ def test_long_history_small_window_keeps_reading_and_revision_controls_reachable
             else window._prediction_detail_screen
         )
         qtbot.wait(30)
+        readable = (
+            screen.resolution_criteria,
+            *(
+                label
+                for label in screen.workspace.timeline_body.findChildren(QLabel)
+                if label.wordWrap() and label.isVisible() and len(label.text()) > 100
+            ),
+        )
+        for width in (760, 1240, 760):
+            window.resize(width, 520)
+            qtbot.waitUntil(
+                lambda: all(
+                    label.height() >= label.heightForWidth(label.width()) - 1
+                    for label in readable
+                )
+            )
         for pane in (
             screen.workspace,
             screen.workspace.timeline,
@@ -1744,6 +1770,18 @@ def test_long_history_small_window_keeps_reading_and_revision_controls_reachable
                 screen.workspace.timeline.widget().minimumSizeHint(),
             )
         if numeric:
+            draft = editor.quantile_input.inputs[50]
+            draft.setText("17")
+            draft.setFocus()
+            for width in (1600, 760):
+                window.resize(width, 600)
+                qtbot.wait(50)
+                assert editor.quantile_input.inputs[50] is draft
+                assert draft.text() == "17" and draft.hasFocus()
+                saved = editor.findChild(QLabel, "revisionCommitted50")
+                assert saved.text() != draft.text()
+                if width == 760 and points > 9:
+                    assert saved.y() < draft.y()
             for field in editor.quantile_input.inputs.values():
                 screen.workspace.ensureWidgetVisible(field)
                 qtbot.wait(10)
@@ -1779,6 +1817,30 @@ def test_long_history_small_window_keeps_reading_and_revision_controls_reachable
                 )
             )
         )
+        if not numeric:
+            screen.workspace.clear_editor()
+            screen.resolve_button.click()
+            editor = screen.workspace.editor
+            assert editor is not None
+            forecast = editor.findChild(QLabel, "resolveScoringForecast")
+            assert forecast.text().startswith("Current forecast: 84% (revision 25).")
+            qtbot.waitUntil(screen.workspace.timeline.widgetResizable)
+            heights = []
+            for width in (1240, 760, 1240):
+                previous_width = forecast.width()
+                window.resize(width, 620)
+                qtbot.waitUntil(
+                    lambda previous_width=previous_width: (
+                        forecast.isVisible()
+                        and forecast.width() != previous_width
+                        and forecast.height()
+                        == forecast.heightForWidth(forecast.width())
+                    )
+                )
+                heights.append(forecast.height())
+            assert heights[0] == heights[2]
+            if points == 9:
+                assert heights[1] > heights[0]
     finally:
         screen.workspace.clear_editor()
         qapp.setFont(original_font)
@@ -1915,14 +1977,16 @@ def test_terminal_panes_are_equal_and_task_tabs_own_the_context_heading(
 
 
 @pytest.mark.parametrize("numeric", [False, True])
-def test_one_shot_header_follows_effective_answer_and_hides_it_when_pending(
+def test_one_shot_shows_effective_answer_once_and_keeps_numeric_marker(
     workspace, qtbot, numeric
 ):
     from dataclasses import replace
 
+    from PySide6.QtGui import QPalette
     from test_one_shot_persistence import request
 
     from reckonsolve.domain.predictions import FixedPrecisionValue
+    from reckonsolve.ui.visual_system import contrast_ratio, semantic_colors
 
     window, operations, _clock, _database = workspace
     pending = operations.one_shots.create(request(numeric, answered=False))
@@ -1930,8 +1994,7 @@ def test_one_shot_header_follows_effective_answer_and_hides_it_when_pending(
     screen = window._prediction_detail_host._one_shot_detail
     if numeric:
         assert screen.interval.actual is None
-    else:
-        assert screen.findChild(QLabel, "binaryHeaderCheckedAnswer") is None
+    assert not hasattr(screen, "answer_panel")
     answered = operations.one_shots.add_answer(
         pending,
         replace(
@@ -1948,19 +2011,27 @@ def test_one_shot_header_follows_effective_answer_and_hides_it_when_pending(
     )
     before = operations.get_prediction_for_navigation(corrected.prediction_id)
     window._open_prediction(corrected.prediction_id)
+    for name in ("binaryHeaderCheckedAnswer", "numericHeaderCheckedAnswer"):
+        assert screen.findChild(QLabel, name) is None
     if numeric:
         assert screen.interval.actual == corrected.record.effective.answer
         assert screen.interval.quantiles == corrected.record.effective.quantiles
-        assert (
-            screen.interval.findChild(QLabel, "numericHeaderCheckedAnswer").text()
-            == "Checked Answer: -5.00 m"
-        )
+        assert "checked answer -5.00 m" in screen.interval.accessibleDescription()
+        assert screen.answer_result.text() == "-5.00 m"
     else:
         assert screen.forecast.text() == "80% Yes"
-        assert (
-            screen.findChild(QLabel, "binaryHeaderCheckedAnswer").text()
-            == "Checked Answer: Yes"
+        assert screen.answer_result.text() == "Yes"
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        colors = semantic_colors(window.palette())
+        qtbot.waitUntil(
+            lambda colors=colors: all(
+                label.palette().color(QPalette.ColorRole.WindowText).name()
+                == colors.actual_text
+                for label in (screen.answer_panel.title_label, screen.answer_result)
+            )
         )
+        assert contrast_ratio(colors.actual_text, colors.canvas) >= 4.5
     assert operations.get_prediction_for_navigation(corrected.prediction_id) == before
 
 
@@ -2047,10 +2118,6 @@ def test_contextual_forms_keep_reading_labels_compact_and_resolution_symmetric(
                 for label in labels
             )
         )
-        for label in labels:
-            assert (
-                label.sizePolicy().verticalPolicy() == label.sizePolicy().Policy.Maximum
-            )
         if hasattr(editor, "postmortem_input"):
             disclosure = editor.postmortem_input.parentWidget()
             assert isinstance(disclosure.disclosure_button, QToolButton)
@@ -2059,6 +2126,15 @@ def test_contextual_forms_keep_reading_labels_compact_and_resolution_symmetric(
                 editor.postmortem_input.placeholderText()
                 == "Reflect on what your reasoning or updates got right or wrong."
             )
+            for width in (760, 1600):
+                window.resize(width, 720)
+                qtbot.waitUntil(
+                    lambda editor=editor: all(
+                        label.height() >= label.heightForWidth(label.width())
+                        for label in editor.findChildren(QLabel)
+                        if label.wordWrap() and label.isVisible()
+                    )
+                )
         editor.findChild(QDialogButtonBox).button(
             QDialogButtonBox.StandardButton.Cancel
         ).click()

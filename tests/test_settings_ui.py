@@ -14,6 +14,7 @@ from main_window_helpers import (
     _required_child,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
@@ -51,6 +52,7 @@ def test_compact_settings_fits_all_ordinary_options_and_preserves_keyboard_order
     available_styles = QStyleFactory.keys()
     assert style_name in available_styles
     original_style = qapp.style().objectName()
+    original_font = qapp.font()
     qapp.setStyle(style_name)
     try:
         operations = FakePredictionOperations()
@@ -109,7 +111,22 @@ def test_compact_settings_fits_all_ordinary_options_and_preserves_keyboard_order
         assert operations.backup_calls == []
         assert operations.export_calls == []
         assert operations.search_repair_calls == 0
+
+        qapp.setFont(QFont("Segoe UI", 15))
+        qtbot.waitUntil(
+            lambda: (
+                screen.backup_button.mapTo(
+                    screen, screen.backup_button.rect().topLeft()
+                ).y()
+                > controls.choose.mapTo(screen, controls.choose.rect().bottomLeft()).y()
+                and screen.scroll_area.verticalScrollBar().maximum() > 0
+                and screen.scroll_area.horizontalScrollBar().maximum() == 0
+            )
+        )
+        assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+        assert operations.backup_calls == []
     finally:
+        qapp.setFont(original_font)
         qapp.setStyle(original_style)
         # Flush restyle work while registered widgets still own their timers.
         qapp.processEvents()

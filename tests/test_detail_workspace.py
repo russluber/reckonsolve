@@ -81,7 +81,7 @@ def choose(label):
     QTimer.singleShot(0, answer)
 
 
-def test_detail_review_profile_exposes_exact_terminal_cases(tmp_path):
+def test_detail_review_profile_exposes_exact_terminal_cases(tmp_path, qtbot):
     fixture = runpy.run_path(
         str(Path(__file__).parents[1] / "tools/run_visual_review.py")
     )
@@ -112,12 +112,29 @@ def test_detail_review_profile_exposes_exact_terminal_cases(tmp_path):
             )
             == 2
         )
+        window = MainWindow(
+            operations, presentation_settings=MemoryPresentationSettings()
+        )
+        qtbot.addWidget(window)
+        window.resize(1100, 850)
+        window.show()
+        journal = window._journal_screen
+        qtbot.waitUntil(lambda: not journal.loading and len(journal.cards) == 10)
+        cards = {card.prediction_id: card for card in journal.cards}
         for row in page.rows:
+            card = cards[row.prediction.prediction_id]
+            labels = card.findChildren(QLabel)
+            values = [label for label in labels if label.text().endswith("% Yes")]
+            quantiles = card.findChild(
+                QWidget, f"journalNumericForecast{card.prediction_id}"
+            )
             if row.prediction.question.startswith("No eligible forecast"):
                 assert operations.get_prediction_scorecard(
                     row.prediction.prediction_id
                 ).unscored_reason
                 assert row.probability_percent is None and row.quantiles is None
+                assert not values and quantiles is None
+                assert any("No eligible forecast" in label.text() for label in labels)
             elif row.prediction.question.startswith("Earlier forecast scored"):
                 assert row.excluded_later_forecast
                 assert (
@@ -125,6 +142,13 @@ def test_detail_review_profile_exposes_exact_terminal_cases(tmp_path):
                     if row.probability_percent is not None
                     else str(row.quantiles.q50) == "3"
                 )
+                qualifier = next(
+                    label
+                    for label in labels
+                    if "Later revision excluded" in label.text()
+                )
+                forecast = values[0] if values else quantiles
+                assert forecast.geometry().bottom() < qualifier.y()
             elif row.prediction.status is PredictionStatus.INVALID:
                 history = operations.get_invalidation_history(
                     row.prediction.prediction_id
@@ -135,6 +159,10 @@ def test_detail_review_profile_exposes_exact_terminal_cases(tmp_path):
                     history.original.invalidated_at
                     < history.corrections[0].corrected_at
                 )
+                assert any(
+                    label.text() == "Last forecast · Not scored" for label in labels
+                )
+        window.close()
     finally:
         database.close()
 
@@ -670,12 +698,12 @@ def test_checked_answer_interval_keeps_exact_forecast_and_includes_outside_answe
                 )
         else:
             assert len(set(marks)) == 1
-        assert interval.rect().contains(interval.actual_label.geometry())
-        assert f"{answer} m" in interval.actual_label.text()
+        assert interval.height() >= interval._line_y + 25
+        assert f"{answer} m" in interval.accessibleDescription()
         assert interval.quantiles == forecast
     interval.set_forecast(forecast, "m")
     assert interval.actual is None and interval.actual_position is None
-    assert interval.actual_label.isHidden()
+    assert "Gold diamond" not in interval.accessibleDescription()
 
 
 def test_expired_numeric_revision_retains_draft_and_repeats_compact_notice(detail):
@@ -700,7 +728,7 @@ def test_expired_numeric_revision_retains_draft_and_repeats_compact_notice(detai
     assert editor.quantile_input.inputs[50].text() == "0.25"
     assert screen.interval_display.quantiles == original
     assert len(operations.list_numeric_forecast_revisions(numeric.prediction_id)) == 1
-    assert screen.locked_explanation.isVisible(), editor.form_error.text()
+    assert screen.status.text().casefold() == "locked", editor.form_error.text()
     assert screen.revise_forecast_button.isHidden()
     cue = editor.findChild(QPushButton, "deadlineFailureRepeatButton")
     assert cue.isVisible()

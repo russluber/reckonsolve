@@ -5,8 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
-from PySide6.QtCore import QSignalBlocker, QStandardPaths, Qt, Signal
+from PySide6.QtCore import QEvent, QSignalBlocker, QStandardPaths, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QComboBox,
     QFileDialog,
     QGridLayout,
@@ -34,6 +35,7 @@ from reckonsolve.ui.date_display import (
     windows_zone_description,
 )
 from reckonsolve.ui.icons import LucideIcon, apply_lucide_icon
+from reckonsolve.ui.location_controls import LocationControls
 from reckonsolve.ui.presentation_settings import AppearanceMode
 from reckonsolve.ui.quantile_analytics import _label
 from reckonsolve.ui.settings_tools import SettingsTool
@@ -216,19 +218,17 @@ class SettingsScreen(QWidget):
         shortcuts.body_layout.addLayout(grid)
         # Pair preferences/context with administration so all ordinary options
         # fit together without reducing the shared text/control scale.
-        self.sections = QGridLayout()
-        self.sections.setHorizontalSpacing(int(Spacing.PAGE))
-        self.sections.setVerticalSpacing(4)
-        for row, (left, right) in enumerate(
-            zip((appearance, dates, location, shortcuts), self.tools, strict=True)
-        ):
-            for column, panel in enumerate((left, right)):
+        self.sections = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        for panels in ((appearance, dates, location, shortcuts), self.tools):
+            column = QVBoxLayout()
+            column.setSpacing(4)
+            for panel in panels:
                 panel.layout().setContentsMargins(0, 3, 0, 3)
                 panel.layout().setSpacing(4)
                 panel.body_layout.setSpacing(4)
-                self.sections.addWidget(panel, row, column, Qt.AlignmentFlag.AlignTop)
-        self.sections.setColumnStretch(0, 1)
-        self.sections.setColumnStretch(1, 1)
+                column.addWidget(panel)
+            column.addStretch()
+            self.sections.addLayout(column, 1)
         layout.addLayout(self.sections)
         layout.addStretch()
         self.scroll_area = QScrollArea(self)
@@ -240,6 +240,11 @@ class SettingsScreen(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self.scroll_area)
+        self._layout_refresh = QTimer(self)
+        self._layout_refresh.setSingleShot(True)
+        self._layout_refresh.timeout.connect(self._reflow_sections)
+        self.scroll_area.viewport().installEventFilter(self)
+        self._reflow_sections()
         self.setTabOrder(self.appearance_mode, self.date_format_input)
         self.setTabOrder(self.date_format_input, self.backup_button)
         self.setTabOrder(self.backup_button, self.export_button)
@@ -270,12 +275,50 @@ class SettingsScreen(QWidget):
         if self.location_controls is not None:
             self.location_controls.clear_result()
 
-    def add_location_controls(self, controls: QWidget) -> None:
+    def eventFilter(self, watched, event) -> bool:
+        if (
+            hasattr(self, "_layout_refresh")
+            and watched is self.scroll_area.viewport()
+            and event.type() == QEvent.Type.Resize
+        ):
+            self._layout_refresh.start(0)
+        return super().eventFilter(watched, event)
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if hasattr(self, "_layout_refresh") and event.type() in (
+            QEvent.Type.FontChange,
+            QEvent.Type.StyleChange,
+        ):
+            self._layout_refresh.start(0)
+
+    def _reflow_sections(self) -> None:
+        actions = [tool.action_row for tool in self.tools]
+        if self.location_controls is not None:
+            actions.append(self.location_controls.action_row)
+        # Reserve the scrollbar lane so the layout choice does not change
+        # because stacking introduced a vertical scrollbar.
+        column_width = max(row.inline_width() for row in actions)
+        reserve = int(Spacing.PAGE) + 32 + 16
+        stacked = self.scroll_area.width() < 2 * column_width + reserve
+        for row in actions:
+            row.set_stacked(stacked)
+        direction = (
+            QBoxLayout.Direction.TopToBottom
+            if stacked
+            else QBoxLayout.Direction.LeftToRight
+        )
+        if self.sections.direction() != direction or self.sections.spacing() < 0:
+            self.sections.setDirection(direction)
+            self.sections.setSpacing(int(Spacing.ORDINARY if stacked else Spacing.PAGE))
+
+    def add_location_controls(self, controls: LocationControls) -> None:
         self.location_controls = controls
         self.location_panel.body_layout.addWidget(controls)
         focus_target = controls.focusProxy() or controls
         self.setTabOrder(self.date_format_input, focus_target)
         self.setTabOrder(focus_target, self.backup_button)
+        self._layout_refresh.start(0)
 
     def set_appearance(self, mode: AppearanceMode) -> None:
         with QSignalBlocker(self.appearance_mode):

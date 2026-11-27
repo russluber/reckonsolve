@@ -51,10 +51,7 @@ def test_resolve_dialog_is_side_effect_free_until_an_outcome_is_saved(
     qtbot.addWidget(window)
     dialog = _open_resolution_dialog(qtbot, window)
 
-    explanation = _required_child(dialog, QLabel, "resolvePredictionExplanation")
     save = _required_child(dialog, QPushButton, "confirmResolvePredictionButton")
-    assert "Resolution is final" in explanation.text()
-    assert explanation.textFormat() is Qt.TextFormat.PlainText
     assert not save.isEnabled()
     assert operations.resolve_calls == []
 

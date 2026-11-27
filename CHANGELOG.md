@@ -30,8 +30,10 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Journal rows lead with forecast values and group outcome, status and dates. Preserve scoring and correction cues beside the forecast and place mode, type and tags below. Long Detail prose wraps within the reading panes, Numeric Revision stacks committed/draft pairs when needed, and Settings uses one column in tighter layouts.
+- Remove the extra Locked header sentence, simplify Binary Resolve, give wrapped editor labels room to reflow, and match the creation divider colors.
 - Creation forms separate their heading from Question with a quiet rule, omit the redundant Forecast heading, use Type, and show required Deadline in the blue accent. New One-Shot omits its introductory sentence. Probability entry uses quiet side-by-side minus/plus controls with native typing, keyboard stepping and bounds.
-- Answered One-Shot headers show the effective Checked Answer alongside the Binary probability or on the Numeric interval with an exact caption and gold diamond. Outside answers and tied percentiles retain the saved forecast's meaning.
+- One-Shot Results shows the effective Checked Answer in gold. Numeric headers mark its position with a gold diamond and legend. Outside answers and tied percentiles retain the saved forecast's meaning.
 - Terminal forecast disclosures align below the score beside recorded/effective times. Invalid status uses consistent orange chips in Journal and Detail; redundant Performance mode headings are removed.
 - Reason History uses a Show/Hide link; Adaptive creation More Details and resolution Postmortem use chevrons. Contextual form labels keep compact natural heights, and nested reading disclosures share one ending rule.
 - Expanded original/corrected histories release stale heights after resizing, removing surplus blank space while retaining complete selectable text. Definition History joins the underlined Show/Hide controls in all four forecasting contracts.

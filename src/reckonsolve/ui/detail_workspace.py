@@ -140,7 +140,6 @@ class DetailWorkspace(QScrollArea):
         layout = QVBoxLayout(body)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(int(Spacing.ORDINARY))
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll.setWidget(body)
         return scroll, body
 
@@ -164,6 +163,10 @@ class DetailWorkspace(QScrollArea):
             self.timeline_body.layout().addWidget(widget)
         for widget in overview:
             self.overview_body.layout().addWidget(widget)
+        # A stretch keeps short panes top-aligned while the scrollable body
+        # lays out long wrapped text at its actual width.
+        self.timeline_body.layout().addStretch()
+        self.overview_body.layout().addStretch()
 
     def ensureWidgetVisible(
         self, widget: QWidget, xmargin: int = 50, ymargin: int = 50
