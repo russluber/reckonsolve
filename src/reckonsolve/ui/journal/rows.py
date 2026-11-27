@@ -205,7 +205,7 @@ class JournalCard(QFrame):
             if status == "Resolved"
             else StatusTone.CAUTION
             if status == "Invalid"
-            else StatusTone.NEUTRAL
+            else StatusTone.ACCENT
         )
         badge = StatusBadge(status, tone=tone, parent=facts)
         apply_text_role(badge, TextRole.ROW_LABEL)

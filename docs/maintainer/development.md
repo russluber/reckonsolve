@@ -64,6 +64,11 @@ uv run python tools/run_visual_review.py detail
 
 These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. Representative and long-text profiles include all four forecasting contracts, a waiting One-Shot and already-Locked Adaptive examples. Use these injected profiles for Journal, creation and Detail review; no personal upgrade or installed-tool replacement is needed.
 
+The explicit-database profiles, including `detail` and `performance`, show the
+database path in Settings. Use `integrated` or `relocation` to review the managed
+**Choose folder… → Move and restart** controls with disposable data. Ordinary
+identity-managed launches provide those folder-move controls as well.
+
 The `detail` profile has 28 examples: the ten representative records, ten controlled cutoff/unscored/corrected-Invalid/waiting cases, and eight finishing cases. Search for **Earlier forecast scored**, **No eligible forecast**, **Corrected Invalid reason**, **Waiting for answer**, **Long history**, **Reflection history**, **Corrected exercise**, **All equal**, or **Nearby percentiles**. Long histories have 25 complete Adaptive forecasts plus Journals, Reviews and protected Definition/Journal corrections. Corrected exercises expose One-Shot transcription and later reflection provenance. All facts are seeded through ordinary application operations with controlled clocks.
 
 Review affected screens in Follow Windows, Light and Dark, relevant Windows scaling settings and normal/minimum supported widths. There is no sidebar in the first Journal/workspace slice. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
@@ -215,8 +220,9 @@ the remaining compact-reveal check above can be combined with this short visit.
 
 Reuse `uv run python tools/run_visual_review.py integrated` on disposable data:
 
-1. Pending One-Shot Binary and Numeric badges/headings should read Answer Pending,
-   retaining yellow status styling and Add Answer.
+1. Pending One-Shot Binary and Numeric badges should read Answer Pending,
+   retaining yellow status styling and Add Answer. Results leads directly into
+   Journal Entries; adding an answer reveals the Checked Answer and scorecard.
 2. Click Reset View on Journal; its final letter should remain complete. Check the
    corresponding Performance button and a smaller window as well.
 3. Expand Performance's Binary calibration tables, timing/updating diagnostics and

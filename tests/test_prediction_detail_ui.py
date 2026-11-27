@@ -198,7 +198,7 @@ def test_prediction_detail_loads_latest_prediction_at_construction(
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
         latest.question
     )
-    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "OPEN"
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "Open"
     assert _required_child(window, QLabel, "predictionDetailProbability").text() == (
         "60%"
     )
@@ -218,7 +218,7 @@ def test_prediction_detail_renders_locked_status(qtbot: QtBot) -> None:
     window = MainWindow(FakePredictionOperations(latest))
     qtbot.addWidget(window)
 
-    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "LOCKED"
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "Locked"
 
 
 def test_returning_to_prediction_detail_refreshes_external_changes(
@@ -258,7 +258,7 @@ def test_returning_to_prediction_detail_refreshes_external_changes(
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
         "Externally refreshed question"
     )
-    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "LOCKED"
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "Locked"
     assert _required_child(window, QLabel, "predictionDetailBackground").text() == (
         "Fresh context"
     )

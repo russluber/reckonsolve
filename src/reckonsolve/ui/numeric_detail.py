@@ -884,7 +884,7 @@ class NumericPredictionDetailScreen(QWidget):
         self.question.setText(prediction.question)
         self.tags.set_tags(prediction.tags)
         self.tags.setHidden(not prediction.tags)
-        self.status.setText(prediction.status.value.upper())
+        self.status.setText(prediction.status.value.title())
         apply_badge_role(self.status, _status_tone(prediction.status))
         q = revision.quantiles
         self.interval_display.set_forecast(q, prediction.unit)

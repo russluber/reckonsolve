@@ -42,8 +42,10 @@ from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
     StatusTone,
+    SurfaceRole,
     TextRole,
     apply_action_role,
+    apply_surface_role,
     apply_text_role,
     semantic_colors,
 )
@@ -426,6 +428,8 @@ class NumericSection(ReportSection):
         self.whole_number = QuantileCalibrationPanel(
             whole=True, parent=supporting, name_prefix=prefix
         )
+        # The report section owns the final boundary after its last calibration.
+        apply_surface_role(self.whole_number, SurfaceRole.CANVAS)
         layout.addWidget(self.continuous)
         layout.addWidget(self.whole_number)
         self.supporting = collapse_section(

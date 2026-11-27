@@ -853,7 +853,7 @@ class PredictionDetailScreen(QWidget):
             return
 
         self.question.setText(prediction.question)
-        self.status.setText(prediction.status.value.upper())
+        self.status.setText(prediction.status.value.title())
         apply_badge_role(self.status, _status_tone(prediction.status))
         self.probability.setText(f"{prediction.probability_percent}%")
         self.review_forecast_button.setText(

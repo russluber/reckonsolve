@@ -30,6 +30,7 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Fixed
 
+- Pending One-Shot Results flows directly into Journal Entries until an answer supplies its result and score. Numeric Performance calibration sections share ending rules. Journal and all Detail status chips use matching Title Case labels and lifecycle colors, including blue Open.
 - Journal rows lead with forecast values and group outcome, status and dates. Preserve scoring and correction cues beside the forecast and place mode, type and tags below. Long Detail prose wraps within the reading panes, Numeric Revision stacks committed/draft pairs when needed, and Settings uses one column in tighter layouts.
 - Remove the extra Locked header sentence, simplify Binary Resolve, give wrapped editor labels room to reflow, and match the creation divider colors.
 - Creation forms separate their heading from Question with a quiet rule, omit the redundant Forecast heading, use Type, and show required Deadline in the blue accent. New One-Shot omits its introductory sentence. Probability entry uses quiet side-by-side minus/plus controls with native typing, keyboard stepping and bounds.

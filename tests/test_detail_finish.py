@@ -729,6 +729,7 @@ def test_journal_and_detail_metadata_chips_keep_visible_literal_tags(
 
     from reckonsolve.ui.components import StatusBadge
     from reckonsolve.ui.numeric_interval import IntervalLegend
+    from reckonsolve.ui.visual_system import BADGE_TONE_PROPERTY, StatusTone
 
     window, operations, clock, _database = workspace
     tags = ("C#", "Visual review with a longer tag name")
@@ -767,6 +768,20 @@ def test_journal_and_detail_metadata_chips_keep_visible_literal_tags(
         for width in (1600, 760):
             window.resize(width, 850)
             qtbot.wait(70)
+            detail_status = (
+                next(
+                    badge
+                    for badge in screen.findChildren(StatusBadge)
+                    if badge.text() == "Answer Pending"
+                )
+                if one_shot
+                else screen.status
+            )
+            assert detail_status.text() == ("Answer Pending" if one_shot else "Open")
+            assert (
+                detail_status.property(BADGE_TONE_PROPERTY)
+                == (StatusTone.WARNING if one_shot else StatusTone.ACCENT).value
+            )
             assert screen.tags.isVisible()
             assert set(screen.tags.names) == set(tags)
             question_bottom = (
@@ -827,6 +842,9 @@ def test_journal_and_detail_metadata_chips_keep_visible_literal_tags(
             assert {badge.text() for badge in outcome.findChildren(StatusBadge)} == {
                 "Answer Pending" if one_shot else "Open",
             }
+            assert outcome.findChild(StatusBadge).property(
+                BADGE_TONE_PROPERTY
+            ) == detail_status.property(BADGE_TONE_PROPERTY)
             assert outcome.geometry().bottom() < metadata.y()
             assert not any(
                 label.text() in ("Current committed forecast", "Saved forecast")

@@ -1963,3 +1963,40 @@ passed after keeping dates together on one line. The disposable visual audit
 covered 200 rendered states in both themes at normal and enlarged text sizes,
 with no clipping or horizontal overflow flagged. Ruff and public/private link
 checks pass.
+
+## Pending Results, calibration rules and status chips — 2026-11-26
+
+The user requested removal of the pending One-Shot's blank result block,
+duplicate Numeric Performance rules and inconsistent lifecycle chip styling.
+Pending Results now starts with Journal Entries. The empty answer/score container
+is hidden and stays owned by the reading layout so refresh can dispose of it.
+Answer save reveals Checked Answer and the scorecard above Journal Entries.
+
+Numeric calibration balance tables use the enclosing calibration/report ending
+boundary. Continuous-style and whole-number groups each end with one rule when
+expanded. Journal and all Detail types use Title Case status chips with matching
+tones, including blue Open and orange Invalid. One-Shot retains yellow Answer
+Pending. No scoring, stored status, history or location policy changes.
+
+The managed Settings path already includes Choose folder, reviewed Move and restart
+and a complete recovery copy. Explicit-path visual profiles bypass managed location
+controls. The maintainer guide now identifies integrated/relocation profiles for
+reviewing those controls with disposable data.
+
+Scoped verification used temporary databases and offscreen Qt widgets. The
+82-case runtime/creation/lifecycle/Settings/relocation selection passed 80 cases
+initially; two Numeric assertions retained the old all-capital labels. Both pass
+after updating those expectations. The 210-case presentation selection passed
+209 cases; its new dark border probe initially inferred its expected color from
+a resolved palette. The corrected probe samples the report's painted rule.
+All 18 Performance tests pass with that probe, including both themes and wide/
+narrow layouts. A final 16-case One-Shot/metadata run passes after retaining
+ownership of hidden results. Across the scoped runs, all 292 selected cases have
+passing coverage. These counts cover this refinement rather than the full suite.
+
+Rendered captures covered both themes, expanded Adaptive/One-Shot Numeric groups
+at 1,600 and 760 logical pixels, and the named pending Binary example. The
+captures show one ending rule and compact pending reading. Ruff, formatting and
+public/private link checks pass. Human visual judgment remains pending. Recheck
+the pending example, expanded Numeric calibration and shared status chips in the
+disposable integrated profile, which also provides Settings folder controls.

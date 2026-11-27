@@ -24,7 +24,13 @@ from .analytics_components import (
     _ResponsiveChartTable,
     _ResponsiveMetricRow,
 )
-from .visual_system import TextRole, apply_text_role, semantic_colors
+from .visual_system import (
+    SurfaceRole,
+    TextRole,
+    apply_surface_role,
+    apply_text_role,
+    semantic_colors,
+)
 
 
 def proportion_text(value: Proportion) -> str:
@@ -237,6 +243,8 @@ class QuantileCalibrationPanel(AnalyticsPanel):
             ("Median Balance", "median"),
         ):
             panel = AnalyticsPanel(title, parent=self.body)
+            # The calibration section owns the ending rule for these tables.
+            apply_surface_role(panel, SurfaceRole.CANVAS)
             table = _table(
                 ("Outcome", "Count · %", "95% Wilson"),
                 3,

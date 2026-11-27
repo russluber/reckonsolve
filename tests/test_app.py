@@ -401,7 +401,7 @@ def test_resolve_through_ui_survives_restart_with_scoring_context(
     scoring = first.window.findChild(QLabel, "predictionResolutionScoringForecast")
     assert status is not None
     assert scoring is not None
-    assert status.text() == "RESOLVED"
+    assert status.text() == "Resolved"
     assert "42%" in scoring.text()
     first.close()
 
@@ -418,7 +418,7 @@ def test_resolve_through_ui_survives_restart_with_scoring_context(
     assert reopened_outcome is not None
     assert reopened_notes is not None
     assert reopened_postmortem is not None
-    assert reopened_status.text() == "RESOLVED"
+    assert reopened_status.text() == "Resolved"
     assert reopened_outcome.text() == "Outcome: No"
     assert reopened_notes.text() == "Verified from the official result."
     assert reopened_postmortem.text() == "I should have weighted the base rate more."
@@ -464,7 +464,7 @@ def test_mark_invalid_through_ui_survives_restart(qtbot, tmp_path) -> None:
     reopened_reason = second.window.findChild(QLabel, "predictionInvalidationReason")
     assert status is not None
     assert reopened_reason is not None
-    assert status.text() == "INVALID"
+    assert status.text() == "Invalid"
     assert reopened_reason.text() == "The underlying event was cancelled."
     second.close()
 
@@ -780,7 +780,7 @@ def test_numeric_resolution_ui_persists_exact_terminal_information(
     qtbot.waitUntil(lambda: dialog.isHidden())
 
     assert runtime.window.findChild(QLabel, "numericPredictionStatus").text() == (
-        "RESOLVED"
+        "Resolved"
     )
     assert (
         runtime.window.findChild(QLabel, "numericResolutionActualValue").text()
@@ -846,7 +846,7 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
     qtbot.mouseClick(save_invalid, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: invalid_dialog.isHidden())
     assert runtime.window.findChild(QLabel, "numericPredictionStatus").text() == (
-        "INVALID"
+        "Invalid"
     )
 
     disposable = create_numeric(
@@ -882,7 +882,7 @@ def test_numeric_invalidation_and_confirmed_delete_work_in_detail(
             == 0
         )
     assert runtime.window.findChild(QLabel, "numericPredictionStatus").text() == (
-        "INVALID"
+        "Invalid"
     )
     runtime.close()
 

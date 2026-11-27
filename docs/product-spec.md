@@ -2795,3 +2795,12 @@ when the pane fits, and stacks each pair when space is limited. Numeric Resolve
 puts one WIS cutoff sentence by the effective-time controls. One-Shot uses the
 standard Results heading when an answer is pending and keeps the correction cue
 in the header and the recorded history after transcription repair.
+
+**Pending Results and consistent status chips — authorized 2026-11-26:** A
+pending One-Shot leads from the Results heading directly into Journal Entries,
+without an empty answer/score block or reserved divider. Saving an answer reveals
+the Checked Answer and scorecard. Journal and all Detail headers use Title Case
+lifecycle chips with matching semantic tones. Open uses blue, Locked and Answer
+Pending yellow, Resolved green and Invalid orange. Answer Pending remains the One-Shot
+presentation of its Open lifecycle. Numeric Performance tables share the enclosing
+calibration/report ending rules rather than repeating nested panel borders.

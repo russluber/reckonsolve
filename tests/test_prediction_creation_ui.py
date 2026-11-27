@@ -483,7 +483,7 @@ def test_successful_creation_accepts_probability_bounds_and_opens_detail(
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
         "Will the UI preserve history?"
     )
-    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "OPEN"
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "Open"
     assert _required_child(window, QLabel, "predictionDetailProbability").text() == (
         f"{probability_percent}%"
     )

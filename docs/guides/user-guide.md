@@ -40,6 +40,8 @@ unboxed, selectable body text; editable fields and buttons remain visually disti
 
 Journal preview rows use rounded mode/status chips and quieter outlined tag chips,
 matching Detail. Tags show their current names and wrap when needed.
+Lifecycle labels use the same Title Case and colors on both screens. Open uses
+blue, Locked and Answer Pending yellow, Resolved green and Invalid orange.
 
 The toolbar is separated from the page by a thin rule. Journal's search field has
 a magnifying glass, with another rule separating its controls from results. Detail
@@ -198,6 +200,9 @@ Adaptive Detail keeps the committed forecast above independently scrolling TIMEL
 Leaving entered Detail work offers Keep editing or explicit discard. Changing appearance retains it. Edit Details and restricted terminal actions are under **More**. One-Shot shares the two-pane style: results, inline later reflection and visible Journal Entries are on the left; context and disclosed original facts/corrections are on the right. Answer Pending leads with the saved forecast. Answered reading gives Checked Answer its own line, followed by a prominent full-width Brier or WIS scorecard. Thin rules separate Postmortem, Journal Entries and the other reading blocks; Overview starts with any saved Resolution Criteria, followed by available Background/Rationale and other context. Compact chevrons expand recorded history, times/facts and originals/corrections. Reported dates and app-recorded dates are grouped separately. Corrections show what changed first; expand Complete Recorded Snapshots for every Before/After fact. Resolved and Invalid reading uses equal-width panes. One-Shot has no Adaptive updating controls.
 
 In One-Shot Numeric Results, **Score Breakdown** groups the contributions to WIS, median error and separate 50%/90% interval diagnostics. Weighted contributions are separate from raw interval scores; the main WIS stays above the disclosure. Existing exact values and units are retained.
+
+While a One-Shot answer is pending, Results starts with Journal Entries. Adding
+the answer makes the Checked Answer and scorecard appear above them.
 
 Adaptive Overview also uses compact chevrons for **More Information**, **Probability History** on Invalid Binary records and **Latest Committed Distribution** on terminal Numeric records. Click or focus the control and press Space to reveal its existing content. Fresh ordinary visits use the established collapsed defaults; directly visible charts on nonterminal records stay visible.
 

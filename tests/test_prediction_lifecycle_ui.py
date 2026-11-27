@@ -100,7 +100,7 @@ def test_resolve_yes_saves_reviewed_context_and_renders_terminal_facts(
         )
     ]
     assert (
-        _required_child(window, QLabel, "predictionDetailStatus").text() == "RESOLVED"
+        _required_child(window, QLabel, "predictionDetailStatus").text() == "Resolved"
     )
     section = _required_child(window, QGroupBox, "predictionResolutionSection")
     assert section.isHidden()
@@ -211,7 +211,7 @@ def test_mark_invalid_saves_optional_reason_and_renders_preserved_state(
             expected_metadata_version=2,
         )
     ]
-    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "INVALID"
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "Invalid"
     section = _required_child(window, QGroupBox, "predictionInvalidationSection")
     assert section.isHidden()
     reason = window._prediction_detail_screen.terminal_summary.note

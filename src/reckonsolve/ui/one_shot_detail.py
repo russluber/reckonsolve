@@ -267,6 +267,7 @@ class OneShotDetailScreen(QWidget):
             parent=self,
         )
         self.results.setObjectName("oneShotResults")
+        self.results.setVisible(detail.status is PredictionStatus.RESOLVED)
         if detail.invalidation_history:
             invalid = detail.invalidation_history
             self.results.body_layout.addWidget(
@@ -483,11 +484,7 @@ class OneShotDetailScreen(QWidget):
             [
                 reading_heading,
                 SectionRule(self.workspace.timeline_body),
-                *(
-                    [self.results]
-                    if detail.status is not PredictionStatus.INVALID
-                    else []
-                ),
+                self.results,
                 self.reflection,
                 self.journals,
                 finish_disclosure(
@@ -512,11 +509,6 @@ class OneShotDetailScreen(QWidget):
         for pane in (self.workspace.timeline_body, self.workspace.overview_body):
             pane.layout().setSpacing(0)
             reading_typography(pane)
-        if detail.status is PredictionStatus.OPEN:
-            self.results.layout().setContentsMargins(0, int(Spacing.SECTION), 0, 0)
-            self.results.layout().setSpacing(int(Spacing.CONTROL))
-            self.results.body_layout.addSpacing(int(Spacing.SECTION))
-            self.results.body_layout.addWidget(SectionRule(self.results))
         if self.workspace.inline and self.workspace.editor is not None:
             self.reflection.body_layout.addWidget(self.workspace.editor)
             self.workspace.editor.show()

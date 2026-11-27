@@ -766,6 +766,19 @@ def test_one_shot_contextual_journal_inline_reflection_and_internal_repair(
     window._open_prediction(pending.prediction_id)
     screen = window._prediction_detail_host._one_shot_detail
     assert not any(label.text() == "Overview" for label in screen.findChildren(QLabel))
+    assert screen.results.isHidden()
+    qtbot.waitUntil(lambda: screen.journals.isVisible())
+    heading = next(
+        label
+        for label in screen.workspace.timeline_body.findChildren(QLabel)
+        if label.text() == "RESULTS"
+    )
+    assert (
+        screen.journals.mapTo(screen.workspace.timeline_body, QPoint()).y()
+        - heading.mapTo(screen.workspace.timeline_body, QPoint()).y()
+        - heading.height()
+        < 24
+    )
     screen.open_journal()
     editor = screen.workspace.editor
     editor.body_input.setPlainText("An anchored journal entry")
@@ -787,6 +800,8 @@ def test_one_shot_contextual_journal_inline_reflection_and_internal_repair(
         operations.one_shots.get(pending.prediction_id).status
         is PredictionStatus.RESOLVED
     )
+    qtbot.waitUntil(lambda: screen.results.isVisible())
+    assert screen.answer_result.isVisible() and screen.scorecard.isVisible()
     screen.add_postmortem()
     screen.workspace.editor.body_input.setPlainText("Discard this temporary reflection")
     choose("Discard changes and continue")

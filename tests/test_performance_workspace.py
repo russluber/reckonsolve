@@ -1,6 +1,8 @@
 """Current report scope, worker publication, source return and visit-local tools."""
 
+import runpy
 from dataclasses import replace
+from pathlib import Path
 from threading import Event
 
 import pytest
@@ -11,7 +13,7 @@ from performance_helpers import (
     loaded,
     one_shot_numeric,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QToolButton
 
 from reckonsolve.application.errors import ApplicationError
@@ -26,6 +28,64 @@ from reckonsolve.ui.presentation_settings import (
 )
 from reckonsolve.ui.settings_screen import SettingsScreen
 from reckonsolve.ui.tag_manager import TagChange, TagManagerDialog
+
+
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_numeric_calibration_draws_one_ending_rule_per_group(
+    qtbot, performance_archive, appearance
+):
+    database, operations = performance_archive
+    fixtures = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixtures["_seed_performance_database"](database.path, per_cohort=4)
+    window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
+    qtbot.addWidget(window)
+    window.show()
+    window.appearance.select(appearance)
+    window.navigate_to("Performance")
+    report = loaded(window._analytics_screen, qtbot, refresh=False)
+    sections = (
+        adaptive_numeric(window._analytics_screen),
+        one_shot_numeric(window._analytics_screen),
+    )
+    changes = database._require_connection().total_changes
+    for width in (1600, 760):
+        window.resize(width, 1000)
+        for section in sections:
+            section.supporting.disclosure_button.setChecked(False)
+            section.supporting.disclosure_button.setChecked(True)
+        qtbot.wait(100)
+        for section in sections:
+            image = section.grab().toImage()
+            ratio = image.devicePixelRatio()
+            # The report's ending rule supplies the active stylesheet's color.
+            border = image.pixelColor(image.width() // 2, image.height() - 1)
+            assert border.alpha() == 255
+            for panel in (section.continuous, section.whole_number):
+                last_table = panel.balances[-1]
+                assert last_table.isVisible() and last_table.rowCount() == 3
+                first = last_table.mapTo(section, QPoint(0, last_table.height())).y()
+                last = (
+                    panel.mapTo(section, QPoint(0, panel.height())).y()
+                    if panel is section.continuous
+                    else section.height()
+                )
+                lines = [
+                    y
+                    for y in range(first, last)
+                    if all(
+                        image.pixelColor(
+                            round(section.width() * fraction * ratio), round(y * ratio)
+                        )
+                        == border
+                        for fraction in (0.3, 0.5, 0.7)
+                    )
+                ]
+                assert len(lines) == 1, (width, section.section, panel.whole, lines)
+    assert window._analytics_screen.report == report
+    assert database._require_connection().total_changes == changes
+    window.close()
 
 
 @pytest.mark.parametrize("start", [AppearanceMode.LIGHT, AppearanceMode.DARK])
