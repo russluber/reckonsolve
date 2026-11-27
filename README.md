@@ -1,6 +1,6 @@
 # Reckonsolve
 
-The checkout identifies the Journal-centered redesign candidate as **0.9.0**, still **Unreleased**. Earlier implementation walkthroughs and refinements retain their scoped acceptance; final whole-app visual sign-off remains separate from the fresh technical checks in the [readiness record](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26). Use the [controlled update procedure](docs/guides/user-guide.md#adopt-the-redesigned-source) before replacing an everyday installation. Published v0.8.0 and existing installed snapshots are unchanged by edits to this checkout.
+The Journal-centered desktop redesign is available in [v0.9.0](https://github.com/russluber/reckonsolve/releases/tag/v0.9.0). See the [changelog](CHANGELOG.md#090---2026-11-27) for release changes and use the [controlled update procedure](docs/guides/user-guide.md#adopt-the-redesigned-source) when updating an existing installation.
 
 A personal forecasting journal for Windows. Record uncertain judgments, preserve your reasoning, resolve answers, and study calibration. Reckonsolve works offline and stores your data locally.
 
@@ -22,7 +22,7 @@ uv tool update-shell
 
 Reopen your terminal, then use `reckonsolve` for the desktop or `rsc` for the CLI. After updating your checkout, refresh installed commands with `uv tool install --force .`.
 
-Reckonsolve uses Python 3.13, PySide6, and SQLite. [v0.8.0](https://github.com/russluber/reckonsolve/releases/tag/v0.8.0) is a source release; no installer or public executable is distributed.
+Reckonsolve uses Python 3.13, PySide6, and SQLite. [v0.9.0](https://github.com/russluber/reckonsolve/releases/tag/v0.9.0) is a source release; no installer or public executable is distributed.
 
 ## Two ways to forecast
 

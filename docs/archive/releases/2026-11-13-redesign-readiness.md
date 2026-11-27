@@ -1,9 +1,11 @@
 # Redesign readiness — 2026-11-13
 
-The [November 26 candidate review](#final-candidate-review--2026-11-26) owns the
-current verification and the November 27 final visual approval. The November 13 and
+The [November 27 source publication](#source-publication--2026-11-27) records the
+published v0.9.0 release. The [November 26 candidate review](#final-candidate-review--2026-11-26)
+owns its technical verification and the November 27 final visual approval. The November 13 and
 [November 19 candidate](#final-candidate-readiness--2026-11-19) records below
-retain their evaluated source and artifact scope. Version 0.9.0 stays Unreleased.
+retain their evaluated source and artifact scope. Earlier pending/Unreleased
+wording describes those dated stages.
 
 The subsequent [compact Journal entry refinement](2026-11-13-workspace-refinement-verification.md#compact-journal-entries--2026-11-19)
 changes presentation after that candidate snapshot. Its focused/source/native checks
@@ -348,3 +350,33 @@ rendering and delivery evidence retains its evaluated payload and limits.
 Controlled installation refresh and merge/tag/source publication remain
 user-owned steps. Keep private notes separate from the public merge and release.
 The release summary remains Unreleased until publication is verified.
+
+## Source publication — 2026-11-27
+
+The user published [Reckonsolve v0.9.0](https://github.com/russluber/reckonsolve/releases/tag/v0.9.0)
+at **2026-11-27 08:45:43 UTC** (00:45:43 Pacific Standard Time). GitHub's release
+metadata confirms that it is published, is not a prerelease and is the latest
+release at verification. Its source target is `main`.
+
+The `v0.9.0` tag resolves directly to
+[`8d1b66299a78cc1b814b0a30496258b53ffe0bb6`](https://github.com/russluber/reckonsolve/commit/8d1b66299a78cc1b814b0a30496258b53ffe0bb6),
+the approved Merge UX redesign for v0.9.0 commit. The complete tagged tree has
+384 entries and includes the root license and third-party notices. It contains
+no private notes, generated build/bundle/environment directories, database files
+or logs. There are no uploaded binary assets; GitHub provides the source archives
+for the tagged source.
+
+Publication verification used read-only GitHub release, latest-release, tag and
+tree metadata. The November 26 runtime, rendering and private packaging results
+retain their original source/artifact scope. Their recorded wheel/source hashes
+identify those evaluated candidate packages; the GitHub release source is
+identified by the tag and commit above.
+
+This follow-up records publication, dates the changelog and replaces candidate
+wording in current documentation. It changes documentation only, after the
+published tag. Application code, version metadata, dependencies, migrations and
+private visual references are unchanged. The user owns the follow-up commits and
+pushes; the published tag remains at the approved merge commit. Installed tools
+remain separate snapshots and are refreshed through the controlled update
+procedure when the user chooses. Remaining UI refinements may be handled in
+future patches; no patch scope or schedule is selected here.

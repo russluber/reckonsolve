@@ -2,13 +2,13 @@
 
 All notable changes to Reckonsolve are documented here.
 
-## Unreleased
+## 0.9.0 - 2026-11-27
 
-The Journal-centered redesign is prepared as **0.9.0**. The user approved the
-final integrated visual review on 2026-11-27. It remains unpublished; commits,
-merge, tag and publication remain user-owned steps.
-[Candidate readiness](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26)
-records current checks and their limits. Published v0.8.0 remains unchanged.
+[Published source release](https://github.com/russluber/reckonsolve/releases/tag/v0.9.0).
+Release dates use UTC. The Journal-centered desktop redesign preserves the four
+forecasting contracts and immutable history safeguards. The
+[release record](docs/archive/releases/2026-11-13-redesign-readiness.md#source-publication--2026-11-27)
+identifies the published source, final visual approval and technical evidence.
 
 ### Added
 

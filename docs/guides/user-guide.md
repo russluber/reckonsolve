@@ -1,6 +1,6 @@
 # User guide
 
-This checkout includes the unreleased 0.9.0 Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. Earlier walkthroughs and refinements retain scoped acceptance. Fresh candidate checks and representative screen inspection are recorded separately from final whole-app human visual approval. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
+Reckonsolve v0.9.0 provides the Journal-centered desktop: Journal, New Prediction, Prediction Detail, comprehensive Performance and Settings with reviewed journal relocation. The [release record](../archive/releases/2026-11-13-redesign-readiness.md#source-publication--2026-11-27) identifies technical checks, final integrated visual approval and source publication. An installed snapshot retains its earlier interface until deliberately replaced; use the controlled update procedure below when adopting newer source.
 
 Returning from a Prediction refreshes Journal membership and keeps the prior browsing vicinity. Keyboard focus returns to a current Question nearby, or search if no result remains. A newer action you take while results load keeps focus.
 
@@ -79,10 +79,11 @@ For development, use `uv sync --locked`, then `uv run reckonsolve-dev` or `uv ru
 
 ### Adopt the redesigned source
 
-An installed tool is a separate snapshot. The redesigned source candidate now reports
-0.9.0; the published release remains v0.8.0. Identify the approved source checkpoint and retain
-its dependency lock rather than relying on the version string alone. Updating the
-tool is a separate step from testing the checkout.
+An installed tool is a separate snapshot. The published redesigned source is
+[v0.9.0](https://github.com/russluber/reckonsolve/releases/tag/v0.9.0).
+Identify the source checkpoint being installed and retain its dependency lock
+rather than relying on the version string alone. Updating the tool is a separate
+step from testing the checkout.
 
 1. In the currently compatible app, record the active database path from Settings,
    including any previously selected location. Keep the fixed identity/bootstrap
@@ -1125,4 +1126,4 @@ If interrupted, the updated desktop offers **Keep current location** while the s
 
 SQLite backups still preserve the complete journal, not host appearance/location configuration. Restoring a supported older backup at the active path follows the existing upgrade/review policy; an empty or unrelated existing file is refused. If bootstrap location information is lost or inconsistent, preserve it and the verified copies for recovery rather than initializing another journal.
 
-Any pre-v0.7 Binary-final or interval-v1 Numeric record prevents an archive from opening in the current application, including the 0.9.0 candidate. Mixed archives and missing, unknown, or mismatched identities are also refused before mutation. Nothing is converted or deleted; preserve the original for a compatible earlier version.
+Any pre-v0.7 Binary-final or interval-v1 Numeric record prevents an archive from opening in the current application, including v0.9.0. Mixed archives and missing, unknown, or mismatched identities are also refused before mutation. Nothing is converted or deleted; preserve the original for a compatible earlier version.

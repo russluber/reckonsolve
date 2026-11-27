@@ -118,8 +118,10 @@ Automated native tests separately cover shared/exclusive access, older GUI/CLI h
 
 ### Final integrated review
 
-**Review-status note:** The requested combined journeys and latest refinements were
-subsequently checked and accepted with recorded limits. The dated recipes below
+**Review-status note:** The user completed the final integrated visual review and
+approved v0.9.0 on 2026-11-27; its source publication is
+[verified](../archive/releases/2026-11-13-redesign-readiness.md#source-publication--2026-11-27).
+The dated recipes below
 retain their original checkpoint context, including then-pending wording. Reuse only
 the cases affected by a later change; they are not a fresh review queue. The current
 [readiness record](../archive/releases/2026-11-13-redesign-readiness.md) owns acceptance,
@@ -176,8 +178,8 @@ records source/capture limits. No repeated full journey review or personal data 
 
 ### Expanded facts and marker recheck
 
-The earlier Journal spacing/font and scoring-chevron candidate remains uncommitted;
-the latest feedback extends that same checkpoint. Run
+At this historical checkpoint, the expanded-facts feedback extended the earlier
+Journal spacing/font and scoring-chevron changes. To inspect that presentation, run
 `uv run python tools/run_visual_review.py integrated` and check only the refinements:
 
 1. Journal shows 50th without Median, while Detail's interval retains its Median label. The earlier compact spacing and matching Binary/Numeric value size remain.
@@ -185,8 +187,8 @@ the latest feedback extends that same checkpoint. Run
 3. On corrected One-Shot Binary and Numeric examples, expand Times & Recorded Facts and Originals & Corrections. Both bodies should have matching rounded frames and inset text. Scroll through original/Before/After/notes at a large and smaller window; check wrapping and access to the final line. Keep compact chevrons and exact history navigation. Record actual Windows scale and any mismatch.
 
 The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#further-labels-marker-and-expanded-facts-refinement)
-separates source/native checks from pending human acceptance. Carry other accepted
-journeys forward; the suggested checkpoint message covers all uncommitted refinements.
+separates source/native checks from the human acceptance recorded at later
+checkpoints. Reuse the affected cases when making further presentation changes.
 
 ### Adaptive Overview reveal recheck
 
@@ -201,7 +203,7 @@ These should be compact chevrons with the same content/defaults. Try keyboard Sp
 both palettes and a smaller window; nonterminal charts should retain their ordinary
 direct visibility. Carry accepted journeys forward and record any actual mismatch.
 The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-overview-reveal-consistency)
-records source/capture limits. The save point still includes the earlier uncommitted
+records source/capture limits. The historical save point included the earlier
 presentation tuning; no personal or installed profile is needed.
 
 ### Adaptive Numeric definition visibility recheck

@@ -1,6 +1,6 @@
 # Source release checklist
 
-Use this repeatable process for a source release. Completed acceptance and dated test results belong in [the archive](../archive/README.md), not in the next release's checklist. Published v0.8.0 is the schema-20/CSV-5 baseline. The unreleased 0.9.0 redesign candidate uses schema 21/CSV 6 and the same four supported contracts. Identify a candidate by source checkpoint and artifact as well as version. The package version is prepared; the changelog stays Unreleased until publication is verified. Version metadata alone creates no release, tag or publication approval.
+Use this repeatable process for a source release. Completed acceptance and dated test results belong in [the archive](../archive/README.md), not in the next release's checklist. Published v0.9.0 uses schema 21/CSV 6 and the same four supported contracts; v0.8.0 remains the historical schema-20/CSV-5 baseline. The [v0.9.0 release record](../archive/releases/2026-11-13-redesign-readiness.md#source-publication--2026-11-27) identifies its publication and evidence. For a future candidate, identify the source checkpoint and artifact as well as version. Keep its changelog entry Unreleased until publication is verified. Version metadata alone creates no release, tag or publication approval.
 
 ## Verify the candidate
 

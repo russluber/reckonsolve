@@ -1,6 +1,6 @@
 # Reckonsolve product specification
 
-Current source checkout: unreleased 0.9.0 Journal-centered desktop candidate; schema 21; search projection 3; relational CSV format 6. Published v0.8.0 remains the schema-20/CSV-5 baseline. Prepared package metadata is separate from final visual acceptance, tagging and publication.
+Current published contract: v0.9.0 Journal-centered desktop; schema 21; search projection 3; relational CSV format 6. Source publication on 2026-11-27 and final integrated visual acceptance are recorded in the [release record](archive/releases/2026-11-13-redesign-readiness.md#source-publication--2026-11-27). Published v0.8.0 remains the historical schema-20/CSV-5 baseline.
 
 This is the source of truth for product scope, terminology, invariants, and acceptance criteria. The current contract describes implemented behavior. Any explicitly labeled approved future requirements describe work at their stated status; they are not claims of implementation or permission to implement. Supporting guides explain the current product. Unpublished exploratory plans are maintained separately from this public contract. A conflict or unresolved product choice must be resolved explicitly before implementation.
 
@@ -14,7 +14,7 @@ Completed milestone plans and earlier contracts are preserved in the [historical
 - [Adaptive forecasting](#35-adaptive-forecasting-contract): exact Deadlines, trajectory Binary, five-quantile Numeric, and compatibility.
 - [One-Shot forecasting](#36-one-shot-prediction-contract): existing answers, external notes, documentary time, transcription corrections, and separate scoring.
 
-**Current source applicability:** [Section 38](#38-journal-centered-redesign-approved-future-requirements) governs the implemented Journal-centered desktop, Saved View retirement, schema-21 provenance, CSV 6 and identity-scoped relocation under its explicit software authorizations. The four requested slice walkthroughs are accepted with recorded limits and combined journeys received positive functional feedback; the [post-review refinement recheck](#3815-authorized-post-review-workspace-refinements) remains open. Its established heading/anchor retains the origin as approved future requirements. Sections 33–36 retain the published v0.8.0 baseline and all protected shared/model/scoring rules; only the explicitly replaced interface, retirement and versioned storage/export provisions yield to Section 38. This distinction does not authorize additional software or publication.
+**Current source applicability:** [Section 38](#38-journal-centered-redesign-approved-future-requirements) governs the published Journal-centered desktop, Saved View retirement, schema-21 provenance, CSV 6 and identity-scoped relocation under its explicit software authorizations. The four requested slice walkthroughs and later refinements retain their scoped evidence; final integrated visual acceptance and v0.9.0 source publication are complete. Its established heading/anchor retains the origin as approved future requirements. Sections 33–36 retain the historical v0.8.0 baseline and all protected shared/model/scoring rules; only the explicitly replaced interface, retirement and versioned storage/export provisions yield to Section 38. Completed work does not authorize additional software or publication.
 
 ## Proposed changes and authorization
 
@@ -1860,7 +1860,7 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved target, four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements retain scoped acceptance. The current 0.9.0 candidate has fresh technical and representative native-screen review under Section 38.14. The user completed the final integrated visual review and approved it for v0.9.0 on 2026-11-27. Version 0.9.0 remains Unreleased; merge, tag and publication remain user-owned steps. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
+**Status:** Published in v0.9.0 on 2026-11-27, with four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements retain scoped acceptance. Technical and representative native-screen evidence is recorded under Section 38.14. The user completed the final integrated visual review and approved v0.9.0 on 2026-11-27, then merged, tagged and published the source release. The historical v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce further behavior; completed work grants no new software, schema, personal-data or release permission.
 
 **Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), final integration in [Section 38.14](#3814-authorized-final-integration-pass), and the feedback refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
 
@@ -2210,6 +2210,15 @@ Remaining UI refinements may be handled in future patches. The
 keeps this human judgment separate from the existing technical evidence and
 user-owned installation and release operations. No additional implementation is
 authorized by this acceptance.
+
+**Verified source publication — 2026-11-27:** The user published
+[Reckonsolve v0.9.0](https://github.com/russluber/reckonsolve/releases/tag/v0.9.0)
+at 08:45:43 UTC. Its tag points to the approved redesign merge commit
+`8d1b66299a78cc1b814b0a30496258b53ffe0bb6`. The
+[publication record](archive/releases/2026-11-13-redesign-readiness.md#source-publication--2026-11-27)
+identifies the verified release and tagged contents. Earlier candidate-only
+authorization limits describe their dated stages. Installation refresh and future
+changes remain separate user-authorized operations.
 
 ### 38.15 Authorized post-review workspace refinements
 

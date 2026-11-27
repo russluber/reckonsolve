@@ -1,6 +1,6 @@
 # CLI guide
 
-This checkout includes the unreleased Journal redesign. The requested native walkthroughs, combined journeys and latest refinements are accepted with recorded limits. Installed v0.8.0 snapshots retain their earlier interface until deliberately replaced using the [controlled update procedure](user-guide.md#adopt-the-redesigned-source).
+Reckonsolve v0.9.0 includes the Journal-centered desktop and its matching CLI. The [release record](../archive/releases/2026-11-13-redesign-readiness.md#source-publication--2026-11-27) records verification, final visual acceptance and source publication. Installed tools remain separate snapshots; use the [controlled update procedure](user-guide.md#adopt-the-redesigned-source) when replacing them.
 
 ## Choose the matching identity
 
