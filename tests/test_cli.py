@@ -904,7 +904,7 @@ def test_cli_created_binary_and_numeric_predictions_appear_in_desktop_browser(
     assert "Will the GUI display this CLI Binary?" in rendered_rows
     assert "70%" in rendered_rows
     assert "How many CLI items will the GUI display?" in rendered_rows
-    assert "Unit: items" in rendered_rows
+    assert "items" in rendered_rows.splitlines()
     for value in ("2", "3", "5", "7", "9"):
         assert value in rendered_rows
     runtime.close()

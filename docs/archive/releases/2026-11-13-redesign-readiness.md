@@ -1,8 +1,9 @@
 # Redesign readiness — 2026-11-13
 
-The [final candidate continuation](#final-candidate-readiness--2026-11-19) records
-fresh checks of the later source and the user-selected, still-unreleased 0.9.0
-metadata. The original November 13 evidence below retains its historical scope.
+The [November 26 candidate review](#final-candidate-review--2026-11-26) owns the
+current verification and final visual handoff. The November 13 and
+[November 19 candidate](#final-candidate-readiness--2026-11-19) records below
+retain their evaluated source and artifact scope. Version 0.9.0 stays Unreleased.
 
 The subsequent [compact Journal entry refinement](2026-11-13-workspace-refinement-verification.md#compact-journal-entries--2026-11-19)
 changes presentation after that candidate snapshot. Its focused/source/native checks
@@ -239,3 +240,91 @@ and whitespace/conflict markers in affected documents/configuration/build files.
 Reference assets were not edited. Git-based whitespace, status/index and tracking
 checks were deliberately not rerun after the user's instruction. Final edits close
 documentation/evidence only; application payloads and recorded artifact hashes remain.
+
+## Final candidate review — 2026-11-26
+
+The user authorized a bounded Detail consistency pass and fresh candidate
+verification after reporting the Aligned line Journal checkpoint saved and pushed.
+The review covers all fourteen contract/lifecycle combinations, both appearances,
+wide/minimum geometry, expanded histories and eligible contextual editors.
+
+Two small label inconsistencies were corrected. Adaptive Overview now uses
+Resolution Notes, matching One-Shot. One-Shot More uses Correct Reason, matching
+Adaptive; contextual task guards use the dialog's Correct Invalid Reason title.
+The approved reading layouts and forecasting contracts continue to govern.
+
+The offscreen audit covers 760 rendered observations at 1×/1.5×/2× Qt scaling and
+an enlarged 15-point base-font probe. Every run includes all fourteen Detail
+combinations in both appearances. No label clipping, control-width failure or
+horizontal overflow was flagged. Before/after complete disposable SQL snapshots
+match after opening panels and editors. Representative wide, narrow, expanded,
+resolved and Invalid captures were inspected. This is simulated rendering evidence;
+the user's final whole-app visual approval remains pending.
+
+### Current artifacts and verification
+
+The locked packaging environment uses Python 3.13.5, PySide6/Qt 6.11.1 and SQLite
+3.47.1. Source and wheel distributions match all 174 current application files,
+include their licenses/notices, expose six entry points and exclude private notes,
+caches and runtime databases. The source-payload manifest fingerprint is
+`6b02f245947b723f709cdc9ec6352db95f096eee090339602397bf3377f1618c`.
+
+The private Windows build passes its relocated frozen smoke checks. An isolated
+wheel environment passes the same four-contract, upgrade/refusal, correction,
+search-repair, backup/reopen, CSV-6 and restart smoke. Both CLI identities and their
+aliases report 0.9.0; export help identifies format six. These operations use
+explicit disposable paths. The normal installed tool is outside this verification.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| 0.9.0 wheel | `28bcdd0678dc05c6ec2bc0e142a8dd05d8ab1d28b0bfed06b8ceeef9a7abdec0` |
+| 0.9.0 source distribution | `8a1171a2f5a0b875b8f7a02ba50ddf0d2e937078c843bd14a199bdcaf2b3ba1b` |
+
+The final distributions were rebuilt after the README handoff link changed.
+All 174 application files, installed wheel metadata and the current README match
+the final archives, and the isolated smoke passed again. The Windows bundle uses
+the same application payload; the README-only packaging refresh changes metadata.
+
+The fresh search evaluation creates 2,000 Adaptive Predictions and 6,000 derived
+documents in 56.603 seconds. Warm medians over five measured repetitions are
+32.047 ms for one unique match, 153.966 ms for 2,000 broad matches, 37.002 ms for
+an 80-result tag cohort and 53.069 ms for zero results. Every expected count and
+rank passes. These are shared search measurements during the test-suite run,
+separate from mixed Journal paint latency and the earlier automatic-search budget.
+
+The complete source suite passes **1,431 tests**, with zero failures, errors or
+skips, across three disjoint completed groups: **701 in 437.41 seconds**, **701
+in 320.28 seconds**, and **29 isolated visual-system cases in 2.01 seconds**.
+The collection manifest and XML reports verify every collected case exactly once
+across those groups. An earlier combined process stalled near its final Qt style
+checks and was stopped. Its unfinished run remains diagnostic evidence. A stale
+Journal assertion expecting Unit: items was updated to verify the approved
+dedicated items label; the final completed groups include that test.
+
+Locked offline environment sync, Ruff check/format, public/private documentation
+links, whitespace and payload preservation checks pass. Application/configuration
+fingerprints remain unchanged after the label corrections; migrations, protected
+lower layers, dependencies and private reference assets retain their earlier scope.
+The user permits Git only inside six existing documentation/historical-entry-point
+tests for this pass. Those six tests pass. Git status, repository staging, commits,
+pushes and release operations remain with the user. Generated evidence stays under
+ignored `build/ux-candidate-20261126/`, with the private bundle under `dist/` and
+its relocated smoke under `build/private-smoke/`.
+
+### Final visual handoff
+
+Run `uv run python tools/run_visual_review.py integrated` from the checkout.
+
+1. Compare Adaptive and One-Shot Binary/Numeric Detail in both themes. Check the
+   header, status chips, scorecards and expanded histories, including the corrected
+   Invalid examples and pending One-Shots.
+2. On an Open Adaptive example, open a revision or Journal editor, switch to
+   Overview and back, then cancel. Check compact complete text, retained draft
+   values and the pane transition at your ordinary and a smaller window size.
+3. Visit Journal, New Prediction, Performance and Settings for the final overall
+   hierarchy/spacing judgment. Earlier accepted workflows retain their scope.
+
+Report concrete remaining defects or explicit final visual approval, including
+the Windows scaling percentage if known. Controlled installation refresh and
+merge/tag/source publication remain user-owned steps. The release summary remains
+Unreleased until publication is verified.

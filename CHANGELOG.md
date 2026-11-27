@@ -6,7 +6,7 @@ All notable changes to Reckonsolve are documented here.
 
 The Journal-centered redesign is prepared as **0.9.0**. It remains unpublished;
 final whole-app visual approval, commits, merge, tag and publication are separate.
-[Candidate readiness](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-readiness--2026-11-19)
+[Candidate readiness](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26)
 records current checks and their limits. Published v0.8.0 remains unchanged.
 
 ### Added
@@ -37,6 +37,7 @@ records current checks and their limits. Published v0.8.0 remains unchanged.
 - Creation forms separate their heading from Question with a quiet rule, omit the redundant Forecast heading, use Type, and show required Deadline in the blue accent. New One-Shot omits its introductory sentence. Probability entry uses quiet side-by-side minus/plus controls with native typing, keyboard stepping and bounds.
 - One-Shot Results shows the effective Checked Answer in gold. Numeric headers mark its position with a gold diamond and legend. Outside answers and tied percentiles retain the saved forecast's meaning.
 - Terminal forecast disclosures align below the score beside recorded/effective times. Invalid status uses consistent orange chips in Journal and Detail; redundant Performance mode headings are removed.
+- Detail uses consistent Resolution Notes headings and Correct Reason actions across forecasting types.
 - Reason History uses a Show/Hide link; Adaptive creation More Details and resolution Postmortem use chevrons. Contextual form labels keep compact natural heights, and nested reading disclosures share one ending rule.
 - Expanded original/corrected histories release stale heights after resizing, removing surplus blank space while retaining complete selectable text. Definition History joins the underlined Show/Hide controls in all four forecasting contracts.
 - Streamline desktop helper text: remove repeated cautions and instructions, shorten metric definitions and editor prompts, and keep historical events focused on dated facts. Useful chart keys, action consequences, score direction and complete original/corrected records remain.

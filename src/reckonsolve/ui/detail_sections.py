@@ -125,7 +125,7 @@ class AdaptiveReadingSections:
             postmortem,
             completion,
         )
-        self.notes = ContentPanel("Resolution notes", parent=parent)
+        self.notes = ContentPanel("Resolution Notes", parent=parent)
         self.notes.setObjectName("detailResolutionNotesPanel")
         self.notes.body_layout.addWidget(notes)
         self.reflection = ContentPanel("Postmortem", parent=parent)

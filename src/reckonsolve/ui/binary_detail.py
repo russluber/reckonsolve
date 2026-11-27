@@ -1123,7 +1123,7 @@ class PredictionDetailScreen(QWidget):
     def open_correct_invalidation_reason(self) -> None:
         """Refresh, then correct the effective Invalid reason append-only."""
 
-        if not self.workspace.prepare_task("Correct Invalid reason"):
+        if not self.workspace.prepare_task("Correct Invalid Reason"):
             return
         if self._prediction is None:
             return

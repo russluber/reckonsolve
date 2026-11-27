@@ -240,7 +240,7 @@ class OneShotDetailScreen(QWidget):
             and not record.effective.postmortem
         )
         self.invalid_reason_action = menu.addAction(
-            "Correct Invalid reason", self.correct_invalid_reason
+            "Correct Reason", self.correct_invalid_reason
         )
         self.invalid_reason_action.setVisible(detail.status is PredictionStatus.INVALID)
         self.invalid_button = menu.addAction("Mark Invalid", self.invalidate)

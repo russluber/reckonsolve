@@ -2200,7 +2200,7 @@ selected behavior and release-handoff preparation. The user separately selected
 source/wheel/private-build delivery and retain evidence tied to the tested source
 and payload. Agent screen inspection does not grant final human visual acceptance.
 No normal installation, personal-data operation, commit, merge, tag or publication
-is authorized. The [current readiness record](archive/releases/2026-11-13-redesign-readiness.md#final-candidate-readiness--2026-11-19)
+is authorized. The [current readiness record](archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26)
 owns results and limits.
 
 ### 38.15 Authorized post-review workspace refinements
