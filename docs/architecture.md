@@ -176,6 +176,13 @@ The shared dialog-presentation owner in `ui/prediction_widgets.py` renders repea
 
 Journal has row-specific Question, body/secondary/label and forecast typography in `ui/visual_system.py`. Questions use semibold emphasis above the shared Binary/Numeric forecast value size, while supporting labels/dates are larger than ordinary base text. Detail roles remain unchanged. Numeric rows use the existing FlowLayout for content-sized percentile/value groups with fixed gaps; extra viewport width stays after the groups, while long values reflow with their labels in the original order. FlowLayout advertises measured height-for-width without claiming surplus vertical expansion; a compact heading row cannot absorb a tall Timeline's empty height between its label and prose. No proportional interval or value rounding is introduced. TerminalSummary uses the shared compact chevron disclosure for its unchanged supporting forecast context, including scored and archival variants.
 
+FlowLayout can center children within each measured wrapped line. Journal outcome
+facts opt into this alignment, keeping padded chips level with plain text.
+Actual/Outcome captions and emphasized values share a native horizontal group;
+complete facts retain their accessible text. Journal's metadata scope uses base
+text size and subdued mode chips below the larger outcome row. Other FlowLayout
+callers keep their existing top alignment.
+
 `TimelineEntry.add_action` scopes compact inline padding and a stable focus border to
 Journal correction actions in all four Detail contracts. Edited header timestamps
 share the natural-width Timeline label treatment, avoiding artificial wrapped height.

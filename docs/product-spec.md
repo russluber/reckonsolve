@@ -1910,6 +1910,13 @@ Prefer practical continuous browsing with reliable anchors and bounded loading. 
 
 Use one continuously sorted vertical list with full wrapped Questions and no fixed-height or ellipsis cards. Each row opens Prediction Detail. Place the forecast directly below the Question, with no routine committed/saved caption. Numeric rows show five exact percentile/value groups in order with the forecast unit beside them. Place scoring eligibility, exclusions, and transcription qualifiers under the forecast where applicable. Group the actual outcome, status and dates, then place mode/type and tags in a separate metadata row. Keep source-labeled search excerpts below that metadata and keep the Current wording cue attached to its Question when a superseded version matches. Preserve signs, precision, ties and readable reflow. Use no interval drawings or ordinary rationale previews in Journal.
 
+**Aligned line — selected 2026-11-26:** Within the outcome row, use the same text
+size and vertically align padded status chips with adjacent facts on each wrapped
+line. Emphasize the actual outcome/value, with quieter Actual/Outcome captions and
+dates. Keep type/tag text smaller and subdued, retaining rounded chips and exact
+selectable names. Preserve the existing fact order, date meanings and suppression
+of redundant Last active dates.
+
 Open/Locked Adaptive shows its committed forecast. Resolved Adaptive summarizes the scoring-eligible forecast strictly before the effective cutoff, with a quiet excluded-later-revision cue when needed; Binary's summary does not replace its trajectory score. When no forecast qualifies, show the actual and explicit Unscored / No eligible forecast, not an ineligible ordinary summary. Invalid shows Last forecast / Not scored. One-Shot uses effective corrected forecast/answer with an appropriate transcription-corrected cue and access to originals; changing only documentary time must not imply a repaired forecast.
 
 Last active derives from committed substantive work: creation, changed Adaptive revision, deliberate Review, new Journal, first outcome/answer, initial Mark Invalid, and a Postmortem save filling a blank effective reflection, including after an audited clear. Exclude viewing/retrieval, automatic locking, metadata/Definition/Journal/terminal repairs, edits/clears of existing reflection, Skip and every Correct transcription repair. Documentary One-Shot times never backdate recency. Qualifying work and forecast freshness remain distinct. If one transaction contains several qualifying facts, it contributes its one real commit instant, without fabricated ordering; a correction timestamp alone is insufficient. The provenance/tie requirements below preserve these classifications.

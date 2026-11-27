@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
@@ -186,18 +187,32 @@ class JournalCard(QFrame):
         facts = QWidget(self)
         facts.setObjectName(f"journalOutcomeFacts{self.prediction_id}")
         facts.setProperty("reckonsolvePredictionMetadata", "true")
-        fact_row = FlowLayout(facts)
+        fact_row = FlowLayout(facts, center_items=True)
+        fact_row.setSpacing(int(Spacing.ORDINARY))
         if row.actual is not None:
-            fact_row.addWidget(
+            actual = QWidget(facts)
+            actual.setObjectName(f"journalActual{self.prediction_id}")
+            actual_layout = QHBoxLayout(actual)
+            actual_layout.setContentsMargins(0, 0, 0, 0)
+            actual_layout.setSpacing(int(Spacing.COMPACT))
+            caption = "Outcome" if isinstance(row.actual, str) else "Actual"
+            value = (
+                str(row.actual).title()
+                if isinstance(row.actual, str)
+                else str(row.actual)
+            )
+            if prediction.numeric_unit:
+                value += f" {prediction.numeric_unit}"
+            actual.setAccessibleName(f"{caption}: {value}")
+            actual_layout.addWidget(self._text_label(f"{caption}:", actual))
+            actual_layout.addWidget(
                 self._text_label(
-                    f"{'Outcome' if isinstance(row.actual, str) else 'Actual'}: {str(row.actual).title() if isinstance(row.actual, str) else str(row.actual)}"
-                    + (
-                        f" {prediction.numeric_unit}" if prediction.numeric_unit else ""
-                    ),
-                    facts,
+                    value,
+                    actual,
                     TextRole.ROW_LABEL,
                 )
             )
+            fact_row.addWidget(actual)
         tone = (
             StatusTone.WARNING
             if status in ("Locked", "Answer Pending")
@@ -233,12 +248,13 @@ class JournalCard(QFrame):
         metadata = QWidget(self)
         metadata.setObjectName(f"journalMetadata{self.prediction_id}")
         metadata.setProperty("reckonsolvePredictionMetadata", "true")
+        metadata.setProperty("reckonsolveJournalMetadata", "true")
         meta = FlowLayout(metadata)
         mode = StatusBadge(
             f"{'One-Shot' if one_shot else 'Adaptive'} · {prediction.prediction_type.value.title()}",
             parent=metadata,
         )
-        apply_text_role(mode, TextRole.ROW_BODY)
+        apply_text_role(mode, TextRole.SECONDARY)
         meta.addWidget(mode)
         self.tags = TagChips(metadata)
         self.tags.setObjectName(f"journalTags{self.prediction_id}")

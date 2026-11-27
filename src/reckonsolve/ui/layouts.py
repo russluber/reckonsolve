@@ -9,9 +9,10 @@ from .visual_system import Spacing
 class FlowLayout(QLayout):
     """Lay compact children left-to-right and wrap them onto new rows."""
 
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(self, parent: QWidget, *, center_items: bool = False) -> None:
         super().__init__(parent)
         self._items: list[QLayoutItem] = []
+        self._center_items = center_items
         self.setContentsMargins(0, 0, 0, 0)
         self.setSpacing(int(Spacing.CONTROL))
 
@@ -77,6 +78,8 @@ class FlowLayout(QLayout):
         y = rect.y()
         line_height = 0
         spacing = self.spacing()
+        positions: list[tuple[QLayoutItem, QRect]] = []
+        row_heights: dict[int, int] = {}
         for item in self._items:
             # Ineligible actions and removed chips must leave no spacing behind.
             if item.isEmpty():
@@ -92,7 +95,16 @@ class FlowLayout(QLayout):
                 next_x = x + hint.width() + spacing
                 line_height = 0
             if not test_only:
-                item.setGeometry(QRect(QPoint(x, y), hint))
+                positions.append((item, QRect(QPoint(x, y), hint)))
             x = next_x
             line_height = max(line_height, hint.height())
+            row_heights[y] = line_height
+        # A later chip can be taller than the text preceding it on the same
+        # line. Place children after measuring the complete wrapped line.
+        for item, geometry in positions:
+            if self._center_items:
+                geometry.translate(
+                    0, (row_heights[geometry.y()] - geometry.height()) // 2
+                )
+            item.setGeometry(geometry)
         return y + line_height - rect.y()

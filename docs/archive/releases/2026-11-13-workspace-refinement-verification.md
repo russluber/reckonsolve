@@ -2000,3 +2000,29 @@ captures show one ending rule and compact pending reading. Ruff, formatting and
 public/private link checks pass. Human visual judgment remains pending. Recheck
 the pending example, expanded Numeric calibration and shared status chips in the
 disposable integrated profile, which also provides Settings folder controls.
+
+## Aligned Journal outcome line — 2026-11-26
+
+The user selects Aligned line after comparing two Journal presentations. Outcome
+facts use matching text sizes, with padded status chips centered against adjacent
+text on each wrapped line. Actual/Outcome captions are subdued and their exact
+values remain emphasized and selectable. The complete fact retains an accessible
+name. Type/tag metadata uses smaller subdued text and keeps its rounded chips.
+
+The shared FlowLayout measures a whole line before placing its children, with
+centering enabled for Journal outcome facts. Other callers retain top alignment.
+No canonical fact, scoring, date applicability, row order or navigation change is
+part of this presentation refinement.
+
+The scoped regression selection passes all 199 cases. It covers Journal retrieval,
+creation, shared visual components and Detail refinements. The new geometry
+regression checks terminal/pending examples at 9- and 15-point base fonts in both
+themes and wide/narrow windows, including exact outcomes/units, relative type sizes,
+wrapped-line centering and unchanged database writes. Offscreen visual inspection
+and a 200-state audit cover both themes, ordinary/enlarged text and narrow/wide
+windows, with no clipping or horizontal overflow flagged. Ruff, formatting and
+public/private documentation links pass. Human visual acceptance remains pending.
+
+Use the disposable integrated profile to compare Resolved Numeric and Binary
+cards with Open/Answer Pending cards. Inspect the outcome line and smaller
+metadata in both themes, then narrow the window to check wrapping.

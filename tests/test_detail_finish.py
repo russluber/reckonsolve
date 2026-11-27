@@ -859,6 +859,81 @@ def test_journal_and_detail_metadata_chips_keep_visible_literal_tags(
     assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
 
 
+@pytest.mark.parametrize("points", [9, 15])
+def test_journal_outcome_line_centers_chips_and_preserves_exact_facts(
+    workspace, qtbot, qapp, points
+):
+    from reckonsolve.ui.components import StatusBadge
+
+    window, operations, clock, database = workspace
+    fixtures = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixtures["_seed_detail_cases"](database, now=clock.now())
+    fixtures["_seed_finish_cases"](database, now=clock.now())
+    rows = operations.journal.query(JournalRequest()).rows
+    original_font = qapp.font()
+    try:
+        qapp.setFont(QFont("Segoe UI", points))
+        window.setFont(QFont("Segoe UI", points))
+        window.navigate_to("Journal")
+        journal = window._journal_screen
+        journal.refresh()
+        qtbot.waitUntil(
+            lambda: not journal.loading and len(journal.cards) == len(rows),
+            timeout=10000,
+        )
+        changes = database._require_connection().total_changes
+        for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+            window.appearance.select(appearance)
+            for width in (1600, 760):
+                window.resize(width, 850)
+                qtbot.wait(80)
+                for row, card in zip(rows, journal.cards, strict=True):
+                    assert row.prediction.prediction_id == card.prediction_id
+                    facts = card.findChild(
+                        QWidget, f"journalOutcomeFacts{card.prediction_id}"
+                    )
+                    badge = facts.findChild(StatusBadge)
+                    items = [
+                        facts.layout().itemAt(index).widget()
+                        for index in range(facts.layout().count())
+                    ]
+                    for first, second in pairwise(items):
+                        left, right = first.geometry(), second.geometry()
+                        if max(left.top(), right.top()) <= min(
+                            left.bottom(), right.bottom()
+                        ):
+                            assert abs(left.center().y() - right.center().y()) <= 1
+                    for label in facts.findChildren(QLabel):
+                        assert label.font().pointSizeF() == badge.font().pointSizeF()
+                        assert label.height() >= label.heightForWidth(label.width())
+                    metadata = card.findChild(
+                        QWidget, f"journalMetadata{card.prediction_id}"
+                    )
+                    assert (
+                        metadata.findChild(StatusBadge).font().pointSizeF()
+                        < badge.font().pointSizeF()
+                    )
+                    if row.actual is not None:
+                        actual = facts.findChild(
+                            QWidget, f"journalActual{card.prediction_id}"
+                        )
+                        caption, value = actual.findChildren(QLabel)
+                        assert caption.font().weight() < value.font().weight()
+                        assert str(row.actual).casefold() in value.text().casefold()
+                        if row.prediction.numeric_unit:
+                            assert value.text().endswith(row.prediction.numeric_unit)
+                        assert actual.accessibleName() == (
+                            caption.text() + " " + value.text()
+                        )
+                assert journal.scroll.horizontalScrollBar().maximum() == 0
+        assert database._require_connection().total_changes == changes
+    finally:
+        window.setFont(original_font)
+        qapp.setFont(original_font)
+
+
 @pytest.mark.parametrize("numeric", [False, True])
 def test_structural_rules_track_pane_motion_and_keep_drafts(workspace, qtbot, numeric):
     from PySide6.QtGui import QAction

@@ -42,6 +42,8 @@ Journal preview rows use rounded mode/status chips and quieter outlined tag chip
 matching Detail. Tags show their current names and wrap when needed.
 Lifecycle labels use the same Title Case and colors on both screens. Open uses
 blue, Locked and Answer Pending yellow, Resolved green and Invalid orange.
+The outcome row aligns each chip with its neighboring text. Actual values have
+stronger emphasis than their labels and dates; smaller type/tag chips sit below.
 
 The toolbar is separated from the page by a thin rule. Journal's search field has
 a magnifying glass, with another rule separating its controls from results. Detail

@@ -888,6 +888,10 @@ QWidget[reckonsolvePredictionMetadata="true"] QLabel[reckonsolveBadgeTone],
 QWidget[reckonsolvePredictionMetadata="true"] QLabel[reckonsolveTagChip="true"] {{
     border-radius: {int(Radius.SMALL)}px;
 }}
+QWidget[reckonsolveJournalMetadata="true"] QLabel[reckonsolveBadgeTone] {{
+    color: {color.secondary_text};
+    font-weight: 400;
+}}
 
 QPushButton[reckonsolveInlineDisclosure="true"] {{
     background-color: transparent;
