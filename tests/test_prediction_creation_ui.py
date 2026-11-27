@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDateEdit,
-    QGroupBox,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -70,7 +69,7 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
 
     more_details = _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
     )
     more_details_content = _required_child(
@@ -78,11 +77,11 @@ def test_new_prediction_form_has_integer_probability_bounds_and_focus(
         QWidget,
         "newPredictionMoreDetailsContent",
     )
-    assert not more_details.isChecked()
+    assert not more_details.disclosure_button.isChecked()
     assert more_details_content.isHidden()
 
 
-def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
+def test_creation_form_uses_shared_hierarchy_for_both_types(
     window: MainWindow,
 ) -> None:
     window.navigate_to("New Prediction")
@@ -99,10 +98,9 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
 
     assert title.property(TEXT_ROLE_PROPERTY) == TextRole.PAGE_TITLE.value
     assert supporting.property(TEXT_ROLE_PROPERTY) == TextRole.SECONDARY.value
+    assert supporting.isHidden()
     assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
-    assert panel.supporting_label.text() == (
-        "Binary forecasts need a question, probability, and permanent exact deadline."
-    )
+    assert panel.supporting_label.isHidden()
     assert create.property(ACTION_ROLE_PROPERTY) == ActionRole.PRIMARY.value
     assert error.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
 
@@ -111,9 +109,7 @@ def test_m42_creation_form_uses_shared_hierarchy_and_type_aware_guidance(
         prediction_type.findData(PredictionType.NUMERIC.value)
     )
 
-    assert panel.supporting_label.text() == (
-        "Numeric forecasts need a question, unit, precision, value constraint, five percentiles, and permanent exact deadline."
-    )
+    assert panel.supporting_label.isHidden()
 
 
 def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detail(
@@ -151,7 +147,8 @@ def test_numeric_creation_switches_the_forecast_form_and_displays_complete_detai
     screen.numeric_exact_deadline.offset.setText("+00:00")
     screen.tags_input.setText("offer, timing")
     screen.submit()
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     assert (
         _required_child(window, QLabel, "numericCurrentInterval").text()
         == "90% interval: 3.0 to 21.0 days"
@@ -211,9 +208,9 @@ def test_more_details_date_controls_are_visually_unset_until_enabled(
     _required_child(window, QComboBox, "predictionTypeInput").setCurrentIndex(1)
     _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
-    ).setChecked(True)
+    ).disclosure_button.setChecked(True)
     deadline_toggle = _required_child(
         window,
         QCheckBox,
@@ -241,9 +238,9 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
     window.navigate_to("New Prediction")
     _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
-    ).setChecked(True)
+    ).disclosure_button.setChecked(True)
     _required_child(window, QLineEdit, "questionInput").setText(
         "Will all initial details persist?"
     )
@@ -288,7 +285,8 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
             tags=("release", "desktop"),
         )
     ]
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     assert (
         _required_child(window, QLabel, "forecastRevisionRationale1").text()
         == "Initial evidence"
@@ -306,9 +304,9 @@ def test_complete_creation_submits_all_optional_details_once_and_resets(
     assert _required_child(window, QLineEdit, "initialTagsInput").text() == ""
     assert not _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
-    ).isChecked()
+    ).disclosure_button.isChecked()
 
 
 def test_collapsing_more_details_preserves_entered_values_for_creation(
@@ -319,17 +317,17 @@ def test_collapsing_more_details_preserves_entered_values_for_creation(
     window.navigate_to("New Prediction")
     more_details = _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
     )
-    more_details.setChecked(True)
+    more_details.disclosure_button.setChecked(True)
     _required_child(window, QLineEdit, "questionInput").setText(
         "Will collapsed details remain part of the prediction?"
     )
     _required_child(window, QPlainTextEdit, "initialBackgroundInput").setPlainText(
         "Keep this context"
     )
-    more_details.setChecked(False)
+    more_details.disclosure_button.setChecked(False)
 
     _set_exact_deadline(window)
     qtbot.mouseClick(
@@ -351,10 +349,10 @@ def test_creation_failure_keeps_optional_details_for_correction(
     window.navigate_to("New Prediction")
     more_details = _required_child(
         window,
-        QGroupBox,
+        QWidget,
         "newPredictionMoreDetailsGroup",
     )
-    more_details.setChecked(True)
+    more_details.disclosure_button.setChecked(True)
     _required_child(window, QLineEdit, "questionInput").setText(
         "Will this invalid deadline remain editable?"
     )
@@ -369,7 +367,7 @@ def test_creation_failure_keeps_optional_details_for_correction(
     )
 
     assert window.current_screen_name == "New Prediction"
-    assert more_details.isChecked()
+    assert more_details.disclosure_button.isChecked()
     assert (
         _required_child(window, QPlainTextEdit, "initialRationaleInput").toPlainText()
         == "Keep me"
@@ -480,11 +478,12 @@ def test_successful_creation_accepts_probability_bounds_and_opens_detail(
             tags=(),
         )
     ]
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     assert _required_child(window, QLabel, "predictionDetailQuestion").text() == (
         "Will the UI preserve history?"
     )
-    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "OPEN"
+    assert _required_child(window, QLabel, "predictionDetailStatus").text() == "Open"
     assert _required_child(window, QLabel, "predictionDetailProbability").text() == (
         f"{probability_percent}%"
     )
@@ -518,4 +517,5 @@ def test_enter_submits_new_prediction(
             tags=(),
         )
     ]
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")

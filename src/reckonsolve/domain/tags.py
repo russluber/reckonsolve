@@ -11,7 +11,6 @@ class TagLibraryItem:
     display_name: str
     normalized_name: str
     prediction_count: int
-    saved_view_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +19,6 @@ class TagManagementContext:
 
     item: TagLibraryItem
     prediction_ids: tuple[int, ...]
-    saved_view_ids: tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +41,6 @@ class TagMergePreview:
     source_contexts: tuple[TagManagementContext, ...]
     target_context: TagManagementContext
     affected_prediction_ids: tuple[int, ...]
-    affected_saved_view_ids: tuple[int, ...]
 
     @property
     def source_tags(self) -> tuple[TagLibraryItem, ...]:
@@ -56,10 +53,6 @@ class TagMergePreview:
     @property
     def prediction_count(self) -> int:
         return len(self.affected_prediction_ids)
-
-    @property
-    def saved_view_count(self) -> int:
-        return len(self.affected_saved_view_ids)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +68,3 @@ class TagDeletePreview:
     @property
     def prediction_count(self) -> int:
         return len(self.context.prediction_ids)
-
-    @property
-    def saved_view_count(self) -> int:
-        return len(self.context.saved_view_ids)

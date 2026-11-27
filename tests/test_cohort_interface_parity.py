@@ -10,12 +10,10 @@ from reckonsolve import cli
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
 from reckonsolve.data.forecast_contracts import ForecastContractIntegrityError
-from reckonsolve.domain.browser import ArchiveDateMeaning, ArchiveQuery
+from reckonsolve.domain.browser import ArchiveDateMeaning
 from reckonsolve.domain.forecast_contracts import ForecastCohort
 from reckonsolve.domain.predictions import BinaryOutcome, NumericPrediction
 from reckonsolve.domain.quantiles import NumericValueConstraint
-from reckonsolve.domain.saved_views import SavedViewConfiguration
-from reckonsolve.domain.search import SearchMatchMode
 from reckonsolve.identity import DEVELOPMENT_APPLICATION
 
 START = datetime(2026, 9, 13, 4, 5, 6, 123456, tzinfo=UTC)
@@ -177,15 +175,10 @@ def test_cli_mutations_read_back_through_existing_desktop_connection(mixed, coho
 def test_mixed_retrieval_saved_tags_and_repair_remain_dynamic_and_read_only(mixed):
     db, clock, ops = mixed
     predictions = [create(ops, cohort) for cohort in COHORTS]
-    config = SavedViewConfiguration(
-        "Archive", SearchMatchMode.ALL, False, ArchiveQuery(tags=("parity",))
-    )
-    view = ops.create_saved_view("Mixed cohorts", config)
     before = canonical_dump(db)
     for args in (
         ("list",),
         ("search", "Archive"),
-        ("saved-view", "--id", str(view.saved_view_id)),
     ):
         code, output, errors = command(*args)
         assert code == 0, errors
@@ -194,11 +187,9 @@ def test_mixed_retrieval_saved_tags_and_repair_remain_dynamic_and_read_only(mixe
     assert canonical_dump(db) == before
     assert len(ops.get_dashboard().open_predictions) == 2
 
-    # A stable tag rename updates a saved configuration, not stored result membership.
+    # A stable tag rename updates current relationships and live retrieval.
     tag = ops.list_tags()[0]
     ops.rename_tag(ops.preview_tag_rename(tag.tag_id, "renamed"))
-    current_view = ops.list_saved_views()[0]
-    assert current_view.configuration.archive_query.tags == ("renamed",)
     clock.instant += timedelta(minutes=1)
     extra = ops.create_prediction(
         "Additional Archive subject?",
@@ -206,7 +197,7 @@ def test_mixed_retrieval_saved_tags_and_repair_remain_dynamic_and_read_only(mixe
         forecast_deadline=DEADLINE,
         tags=("renamed", "merge target"),
     )
-    code, output, errors = command("saved-view", "--id", str(view.saved_view_id))
+    code, output, errors = command("search", "Archive", "--tag", "renamed")
     assert code == 0, errors
     assert extra.question in output
     tags = {tag.display_name: tag for tag in ops.list_tags()}

@@ -38,6 +38,7 @@ class Spacing(IntEnum):
     COMPACT = 6
     CONTROL = 8
     ORDINARY = 12
+    GROUP = 16
     SECTION = 20
     PAGE = 24
 
@@ -48,6 +49,16 @@ class Radius(IntEnum):
     SMALL = 4
     CONTROL = 7
     PANEL = 10
+
+
+class ContentWidth(IntEnum):
+    """Comfortable workspace widths in Qt logical pixels, not window limits."""
+
+    JOURNAL = 1320
+    DETAIL = 1320
+    PERFORMANCE = 1440
+    SETTINGS = 1320
+    CREATION = 1320
 
 
 class MotionDuration(IntEnum):
@@ -64,9 +75,19 @@ class TextRole(StrEnum):
     SECONDARY = "secondary"
     LABEL = "label"
     SECTION_TITLE = "section-title"
+    QUESTION = "question"
     PAGE_TITLE = "page-title"
     METRIC = "metric"
     FORECAST = "forecast"
+    ROW_FORECAST = "row-forecast"
+    ROW_QUESTION = "row-question"
+    ROW_BODY = "row-body"
+    ROW_SECONDARY = "row-secondary"
+    ROW_LABEL = "row-label"
+    DETAIL_HEADING = "detail-heading"
+    DETAIL_EVENT = "detail-event"
+    DETAIL_TEXT = "detail-text"
+    DETAIL_TIME = "detail-time"
 
 
 class SurfaceRole(StrEnum):
@@ -100,6 +121,7 @@ class StatusTone(StrEnum):
     SUCCESS = "success"
     INFO = "info"
     WARNING = "warning"
+    CAUTION = "caution"
     ERROR = "error"
     DESTRUCTIVE = "destructive"
 
@@ -110,11 +132,14 @@ class SemanticColors:
 
     is_dark: bool
     canvas: str
+    outer_canvas: str
+    workspace_border: str
     surface: str
     raised: str
     input: str
     text: str
     secondary_text: str
+    scroll_thumb: str
     border: str
     disabled_text: str
     disabled_surface: str
@@ -122,11 +147,17 @@ class SemanticColors:
     on_accent: str
     accent_soft: str
     on_accent_soft: str
+    success: str
+    success_surface: str
+    on_success: str
     focus: str
     info: str
     info_surface: str
     warning: str
     warning_surface: str
+    actual_fill: str
+    actual_outline: str
+    actual_text: str
     caution: str
     caution_surface: str
     error: str
@@ -140,9 +171,19 @@ _TEXT_ROLE_DELTAS = {
     TextRole.SECONDARY: 0.0,
     TextRole.LABEL: 0.0,
     TextRole.SECTION_TITLE: 1.0,
-    TextRole.PAGE_TITLE: 4.0,
+    TextRole.QUESTION: 8.0,
+    TextRole.PAGE_TITLE: 11.0,
     TextRole.METRIC: 7.0,
     TextRole.FORECAST: 7.0,
+    TextRole.ROW_FORECAST: 3.0,
+    TextRole.ROW_QUESTION: 6.0,
+    TextRole.ROW_BODY: 1.0,
+    TextRole.ROW_SECONDARY: 1.0,
+    TextRole.ROW_LABEL: 1.0,
+    TextRole.DETAIL_HEADING: 3.0,
+    TextRole.DETAIL_EVENT: 1.0,
+    TextRole.DETAIL_TEXT: 1.0,
+    TextRole.DETAIL_TIME: 0.0,
 }
 
 _TEXT_ROLE_WEIGHTS = {
@@ -150,9 +191,19 @@ _TEXT_ROLE_WEIGHTS = {
     TextRole.SECONDARY: QFont.Weight.Normal,
     TextRole.LABEL: QFont.Weight.DemiBold,
     TextRole.SECTION_TITLE: QFont.Weight.DemiBold,
+    TextRole.QUESTION: QFont.Weight.Bold,
     TextRole.PAGE_TITLE: QFont.Weight.Bold,
     TextRole.METRIC: QFont.Weight.Bold,
     TextRole.FORECAST: QFont.Weight.Bold,
+    TextRole.ROW_FORECAST: QFont.Weight.Bold,
+    TextRole.ROW_QUESTION: QFont.Weight.DemiBold,
+    TextRole.ROW_BODY: QFont.Weight.Normal,
+    TextRole.ROW_SECONDARY: QFont.Weight.Normal,
+    TextRole.ROW_LABEL: QFont.Weight.DemiBold,
+    TextRole.DETAIL_HEADING: QFont.Weight.DemiBold,
+    TextRole.DETAIL_EVENT: QFont.Weight.DemiBold,
+    TextRole.DETAIL_TEXT: QFont.Weight.Normal,
+    TextRole.DETAIL_TIME: QFont.Weight.Normal,
 }
 
 
@@ -162,6 +213,8 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
     canvas = _opaque(palette.color(QPalette.ColorRole.Window))
     text = _opaque(palette.color(QPalette.ColorRole.WindowText))
     is_dark = QColor(canvas).lightnessF() < 0.5
+    outer_canvas = _mix_colors(canvas, "#000000", 0.24 if is_dark else 0.055)
+    workspace_border = _mix_colors(canvas, text, 0.20 if is_dark else 0.14)
     surface = _theme_surface_color(
         _opaque(palette.color(QPalette.ColorRole.Base)),
         canvas,
@@ -198,28 +251,43 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
         "#75808c" if is_dark else "#66717d",
         minimum=2.0,
     )
+    scroll_thumb = _mix_colors(canvas, text, 0.5)
+    if any(
+        contrast_ratio(scroll_thumb, background) < 3.0
+        for background in (canvas, surface, raised, input_color)
+    ):
+        scroll_thumb = text
 
     if is_dark:
         return SemanticColors(
             is_dark=True,
             canvas=canvas,
+            outer_canvas=outer_canvas,
+            workspace_border=workspace_border,
             surface=surface,
             raised=raised,
             input=input_color,
             text=text,
             secondary_text=secondary_text,
+            scroll_thumb=scroll_thumb,
             border=border,
             disabled_text="#89928d",
             disabled_surface="#2a302d",
-            accent="#55c995",
-            on_accent="#071a12",
-            accent_soft="#193d30",
-            on_accent_soft="#c7f4df",
-            focus="#74e2ae",
+            accent="#b2d3f3",
+            on_accent="#142535",
+            accent_soft="#253c53",
+            on_accent_soft="#c7e0f6",
+            success="#55c995",
+            success_surface="#193d30",
+            on_success="#c7f4df",
+            focus="#b2d3f3",
             info="#9fc8ff",
             info_surface="#20344e",
             warning="#f0c66d",
             warning_surface="#3a2f17",
+            actual_fill="#f0c66d",
+            actual_outline="#f0c66d",
+            actual_text="#f0c66d",
             caution="#ffb66e",
             caution_surface="#3e291a",
             error="#ff9a92",
@@ -231,23 +299,32 @@ def semantic_colors(palette: QPalette) -> SemanticColors:
     return SemanticColors(
         is_dark=False,
         canvas=canvas,
+        outer_canvas=outer_canvas,
+        workspace_border=workspace_border,
         surface=surface,
         raised=raised,
         input=input_color,
         text=text,
         secondary_text=secondary_text,
+        scroll_thumb=scroll_thumb,
         border=border,
         disabled_text="#747b78",
         disabled_surface="#e3e7e5",
-        accent="#176b4d",
+        accent="#325f8d",
         on_accent="#ffffff",
-        accent_soft="#e3f2eb",
-        on_accent_soft="#124f3a",
-        focus="#0f7651",
+        accent_soft="#e7eff7",
+        on_accent_soft="#294e73",
+        success="#176b4d",
+        success_surface="#e3f2eb",
+        on_success="#124f3a",
+        focus="#325f8d",
         info="#245c94",
         info_surface="#e9f2ff",
         warning="#765200",
         warning_surface="#fff2c2",
+        actual_fill="#e5b943",
+        actual_outline="#987000",
+        actual_text="#805b0e",
         caution="#a64b00",
         caution_surface="#fff1e6",
         error="#a82a23",
@@ -262,7 +339,6 @@ def build_stylesheet(palette: QPalette) -> str:
 
     color = semantic_colors(palette)
     control_radius = int(Radius.CONTROL)
-    panel_radius = int(Radius.PANEL)
     compact = int(Spacing.COMPACT)
     control = int(Spacing.CONTROL)
     ordinary = int(Spacing.ORDINARY)
@@ -283,15 +359,46 @@ QDialog {{
     color: {color.text};
 }}
 
+/* One bounded workspace stands above the quieter surrounding canvas. */
+QWidget#workspaceFrame {{
+    background-color: {color.outer_canvas};
+    border: none;
+}}
+QWidget#workspaceSurface {{
+    background-color: {color.canvas};
+    border: 1px solid {color.workspace_border};
+    border-radius: 0;
+}}
+QWidget#workspaceToolbar {{
+    border: none;
+    border-bottom: 1px solid {color.workspace_border};
+}}
+QFrame[reckonsolveRule="horizontal"], QFrame[reckonsolveRule="vertical"] {{
+    border: none;
+    background-color: {color.workspace_border};
+}}
+QFrame#newPredictionHeaderRule, QFrame#oneShotHeaderRule {{
+    background-color: {color.border};
+}}
+QLabel[reckonsolveTagChip="true"] {{
+    color: {color.secondary_text};
+    background-color: transparent;
+    border: 1px solid {color.workspace_border};
+    border-radius: 0;
+    padding: 2px 6px;
+}}
+
 QScrollArea#dashboardScrollArea,
 QScrollArea#settingsScrollArea,
 QScrollArea#newPredictionScrollArea,
+QScrollArea#oneShotScrollArea,
 QScrollArea#predictionDetailScrollArea,
 QScrollArea#numericPredictionDetailScrollArea,
 QScrollArea#predictionBrowserControlsScrollArea,
 QScrollArea#dashboardScrollArea > QWidget > QWidget,
 QScrollArea#settingsScrollArea > QWidget > QWidget,
 QScrollArea#newPredictionScrollArea > QWidget > QWidget,
+QScrollArea#oneShotScrollArea > QWidget > QWidget,
 QScrollArea#predictionDetailScrollArea > QWidget > QWidget,
 QScrollArea#numericPredictionDetailScrollArea > QWidget > QWidget,
 QScrollArea#predictionBrowserControlsScrollArea > QWidget > QWidget {{
@@ -299,7 +406,79 @@ QScrollArea#predictionBrowserControlsScrollArea > QWidget > QWidget {{
     border: none;
 }}
 
-QLabel[reckonsolveTextRole="secondary"] {{
+/* A stable 14-pixel native hit lane avoids reflow. Its 4-pixel resting thumb
+   expands to 8 pixels on interaction; only the painted inset changes. */
+QScrollBar:vertical {{
+    width: 14px;
+    margin: 0;
+    border: none;
+    background: transparent;
+}}
+QScrollBar:horizontal {{
+    height: 14px;
+    margin: 0;
+    border: none;
+    background: transparent;
+}}
+QScrollBar::handle:vertical {{
+    min-height: 28px;
+    border: 3px solid {color.canvas};
+    border-left-width: 5px;
+    border-right-width: 5px;
+    border-radius: 7px;
+    background: {color.scroll_thumb};
+}}
+QScrollBar::handle:horizontal {{
+    min-width: 28px;
+    border: 3px solid {color.canvas};
+    border-top-width: 5px;
+    border-bottom-width: 5px;
+    border-radius: 7px;
+    background: {color.scroll_thumb};
+}}
+QScrollBar::handle:vertical:hover, QScrollBar::handle:vertical:focus,
+QScrollBar::handle:vertical:pressed {{
+    border-left-width: 3px;
+    border-right-width: 3px;
+}}
+QScrollBar::handle:horizontal:hover, QScrollBar::handle:horizontal:focus,
+QScrollBar::handle:horizontal:pressed {{
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+}}
+QScrollBar::handle:hover {{
+    background-color: {color.secondary_text};
+}}
+QScrollBar::handle:focus {{
+    background-color: {color.accent};
+}}
+QScrollBar::handle:pressed {{
+    background-color: {color.text};
+}}
+QScrollBar::handle:disabled {{
+    background-color: {color.disabled_text};
+}}
+QScrollBar::add-line, QScrollBar::sub-line {{
+    width: 0;
+    height: 0;
+    border: none;
+    background: transparent;
+}}
+QScrollBar::add-page, QScrollBar::sub-page,
+QAbstractScrollArea::corner {{
+    border: none;
+    background: transparent;
+}}
+QScrollBar::up-arrow, QScrollBar::down-arrow,
+QScrollBar::left-arrow, QScrollBar::right-arrow {{
+    width: 0;
+    height: 0;
+    image: none;
+}}
+
+QLabel[reckonsolveTextRole="secondary"],
+QLabel[reckonsolveTextRole="detail-time"],
+QLabel[reckonsolveTextRole="row-secondary"] {{
     color: {color.secondary_text};
 }}
 QLabel[reckonsolveTextRole="label"] {{
@@ -314,8 +493,15 @@ QLabel[reckonsolveTextRole="page-title"] {{
 QLabel[reckonsolveTextRole="metric"] {{
     color: {color.text};
 }}
-QLabel[reckonsolveTextRole="forecast"] {{
+QLabel[reckonsolveRequiredField="true"] {{
     color: {color.accent};
+}}
+QLabel[reckonsolveTextRole="forecast"],
+QLabel[reckonsolveTextRole="row-forecast"] {{
+    color: {color.accent};
+}}
+QLabel[reckonsolveCheckedAnswer="true"] {{
+    color: {color.actual_text};
 }}
 
 QWidget[reckonsolveSurfaceRole="canvas"],
@@ -327,17 +513,19 @@ QFrame[reckonsolveSurfaceRole="canvas"] {{
 QWidget[reckonsolveSurfaceRole="base"],
 QFrame[reckonsolveSurfaceRole="base"],
 QGroupBox[reckonsolveSurfaceRole="base"] {{
-    background-color: {color.surface};
-    border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {color.border};
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="raised"],
 QFrame[reckonsolveSurfaceRole="raised"],
 QGroupBox[reckonsolveSurfaceRole="raised"],
 QLabel[reckonsolveSurfaceRole="raised"] {{
-    background-color: {color.raised};
-    border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {color.border};
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="selected"],
 QFrame[reckonsolveSurfaceRole="selected"],
@@ -345,21 +533,32 @@ QLabel[reckonsolveSurfaceRole="selected"] {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border: 1px solid {color.accent};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="warning"],
 QFrame[reckonsolveSurfaceRole="warning"] {{
     background-color: {color.warning_surface};
     color: {color.warning};
     border: 1px solid {color.warning};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
 }}
 QWidget[reckonsolveSurfaceRole="error"],
 QFrame[reckonsolveSurfaceRole="error"] {{
     background-color: {color.error_surface};
     color: {color.error};
     border: 1px solid {color.error};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
+}}
+
+/* Read-only forecast/reference text is not a selected field or a card. */
+QLabel[reckonsolveSurfaceRole="base"],
+QLabel[reckonsolveSurfaceRole="raised"],
+QLabel[reckonsolveSurfaceRole="selected"] {{
+    background-color: transparent;
+    color: {color.text};
+    border: none;
+    border-radius: 0;
+    padding: 0;
 }}
 
 QLineEdit,
@@ -417,6 +616,29 @@ QSpinBox,
 QDoubleSpinBox {{
     padding-right: {2 * int(Spacing.PAGE)}px;
 }}
+/* Probability entry owns actual, side-by-side step buttons. Its editor's text
+   margins reserve their measured width without changing native input behavior. */
+QSpinBox[reckonsolveProbabilityInput="true"] {{
+    padding-right: {control}px;
+}}
+QToolButton[reckonsolveProbabilityStep="true"] {{
+    background-color: transparent;
+    color: {color.secondary_text};
+    border: none;
+    border-radius: {int(Radius.SMALL)}px;
+    padding: 0;
+}}
+QToolButton[reckonsolveProbabilityStep="true"]:hover {{
+    background-color: {color.accent_soft};
+    color: {color.on_accent_soft};
+}}
+QToolButton[reckonsolveProbabilityStep="true"]:pressed {{
+    background-color: {color.accent};
+    color: {color.on_accent};
+}}
+QToolButton[reckonsolveProbabilityStep="true"]:disabled {{
+    color: {color.disabled_text};
+}}
 
 /* Keep native dropdown bevels inside the rounded input outline. */
 QComboBox,
@@ -472,6 +694,17 @@ QPushButton:disabled {{
     border-color: {color.border};
 }}
 
+/* Reserve focus borders so compact actions never lose label space on focus. */
+QPushButton[reckonsolveProbabilityPreset="true"],
+QPushButton#newPredictionNavigationButton,
+QPushButton#resetJournalViewButton,
+QPushButton#resetPerformanceView {{
+    border-width: 2px;
+}}
+QPushButton[reckonsolveProbabilityPreset="true"]:focus {{
+    border-color: {color.focus};
+}}
+
 QPushButton[reckonsolveDashboardRow="true"] {{
     text-align: left;
     padding: {ordinary}px;
@@ -513,6 +746,28 @@ QPushButton[reckonsolveActionRole="quiet"]:hover {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border-color: {color.accent_soft};
+}}
+QPushButton[reckonsolveTimelineAction="true"] {{
+    padding: 1px 4px;
+    border-width: 1px;
+    border-radius: 0px;
+}}
+QPushButton[reckonsolveTimelineAction="true"]:focus {{
+    border-width: 1px;
+}}
+QToolButton[reckonsolveDisclosure="true"] {{
+    background-color: transparent;
+    color: {color.text};
+    border: 1px solid transparent;
+    border-radius: 0px;
+    padding: 4px 2px;
+}}
+QToolButton[reckonsolveDisclosure="true"]:hover {{
+    background-color: {color.accent_soft};
+    color: {color.on_accent_soft};
+}}
+QToolButton[reckonsolveDisclosure="true"]:focus {{
+    border-color: {color.accent};
 }}
 QPushButton[reckonsolveNavigationActive="true"] {{
     background-color: {color.accent_soft};
@@ -586,7 +841,7 @@ QPushButton[reckonsolveTagChip="true"]:focus {{
 }}
 
 QLabel[reckonsolveBadgeTone] {{
-    border-radius: {int(Radius.SMALL)}px;
+    border-radius: 0;
     padding: 2px {compact}px;
     font-weight: 600;
 }}
@@ -595,11 +850,21 @@ QLabel[reckonsolveBadgeTone="neutral"] {{
     color: {color.text};
     border: 1px solid {color.border};
 }}
-QLabel[reckonsolveBadgeTone="accent"],
-QLabel[reckonsolveBadgeTone="success"] {{
+QLabel[reckonsolveBadgeTone="accent"] {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border: 1px solid {color.accent};
+}}
+QLabel[reckonsolveBadgeTone="success"] {{
+    background-color: {color.success_surface};
+    color: {color.on_success};
+    border: 1px solid {color.success};
+}}
+QLabel[reckonsolveBadgeTone="caution"],
+QLabel[reckonsolveMessageTone="caution"] {{
+    background-color: {color.caution_surface};
+    color: {color.caution};
+    border: 1px solid {color.caution};
 }}
 QLabel[reckonsolveBadgeTone="warning"] {{
     background-color: {color.warning_surface};
@@ -618,8 +883,39 @@ QLabel[reckonsolveBadgeTone="destructive"] {{
     border: 1px solid {color.error};
 }}
 
+/* Journal and Detail metadata share compact rounded context chips. */
+QWidget[reckonsolvePredictionMetadata="true"] QLabel[reckonsolveBadgeTone],
+QWidget[reckonsolvePredictionMetadata="true"] QLabel[reckonsolveTagChip="true"] {{
+    border-radius: {int(Radius.SMALL)}px;
+}}
+QWidget[reckonsolveJournalMetadata="true"] QLabel[reckonsolveBadgeTone] {{
+    color: {color.secondary_text};
+    font-weight: 400;
+}}
+
+QPushButton[reckonsolveInlineDisclosure="true"] {{
+    background-color: transparent;
+    color: {color.accent};
+    border: 1px solid transparent;
+    border-radius: 0;
+    padding: {compact}px 0;
+    text-align: left;
+    text-decoration: underline;
+}}
+QPushButton[reckonsolveInlineDisclosure="true"]:hover {{
+    color: {color.focus};
+    background-color: transparent;
+}}
+QPushButton[reckonsolveInlineDisclosure="true"]:checked {{
+    color: {color.accent};
+    background-color: transparent;
+}}
+QPushButton[reckonsolveInlineDisclosure="true"]:focus {{
+    border: 1px dotted {color.focus};
+}}
+
 QLabel[reckonsolveMessageTone] {{
-    border-radius: {control_radius}px;
+    border-radius: 0;
     padding: {control}px {ordinary}px;
 }}
 QLabel[reckonsolveMessageTone="neutral"] {{
@@ -627,11 +923,15 @@ QLabel[reckonsolveMessageTone="neutral"] {{
     color: {color.text};
     border: 1px solid {color.border};
 }}
-QLabel[reckonsolveMessageTone="accent"],
-QLabel[reckonsolveMessageTone="success"] {{
+QLabel[reckonsolveMessageTone="accent"] {{
     background-color: {color.accent_soft};
     color: {color.on_accent_soft};
     border: 1px solid {color.accent};
+}}
+QLabel[reckonsolveMessageTone="success"] {{
+    background-color: {color.success_surface};
+    color: {color.on_success};
+    border: 1px solid {color.success};
 }}
 QLabel[reckonsolveMessageTone="warning"] {{
     background-color: {color.warning_surface};
@@ -650,9 +950,37 @@ QLabel[reckonsolveMessageTone="destructive"] {{
     border: 1px solid {color.error};
 }}
 
+/* Detail reading follows a document rhythm; inputs and actions keep their chrome. */
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveSurfaceRole="base"],
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveSurfaceRole="raised"],
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveSurfaceRole="canvas"],
+QWidget[reckonsolveDetailReading="true"] QGroupBox {{
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+}}
+QFrame[reckonsolveTimelineEntry="true"] {{
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {color.border};
+    border-radius: 0;
+}}
+QWidget[reckonsolveDetailReading="true"] QFrame[reckonsolveScorecard="true"] {{
+    background-color: {color.surface};
+    border: 1px solid {color.border};
+    border-top: 2px solid {color.accent};
+    border-radius: 0;
+}}
+QFrame[reckonsolveTimelineEntry="true"][reckonsolveCurrentRevision="true"] {{
+    border-left: 2px solid {color.accent};
+}}
+QLabel#currentCommittedRevisionMarker {{
+    color: {color.accent};
+}}
+
 QGroupBox {{
     border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
     margin-top: {ordinary}px;
     padding-top: {compact}px;
 }}
@@ -664,11 +992,36 @@ QGroupBox::title {{
     color: {color.secondary_text};
 }}
 
+QLabel[reckonsolveQuestionLink="true"] {{
+    padding: 0;
+    border: none;
+    border-bottom: 2px solid transparent;
+}}
+QFrame#journalRowSeparator {{
+    background-color: {color.border};
+    border: none;
+}}
+QPushButton[journalQuickView="true"] {{
+    background-color: transparent;
+    border: 2px solid transparent;
+    color: {color.secondary_text};
+}}
+QPushButton[journalQuickView="true"][reckonsolveNavigationActive="true"] {{
+    border-bottom: 2px solid {color.accent};
+    color: {color.text};
+}}
+QPushButton[journalQuickView="true"]:focus {{
+    border: 2px solid {color.focus};
+}}
+QLabel[reckonsolveQuestionLink="true"]:focus {{
+    border-bottom-color: {color.focus};
+}}
+
 QListWidget {{
     background-color: {color.surface};
     color: {color.text};
     border: 1px solid {color.border};
-    border-radius: {panel_radius}px;
+    border-radius: 0;
     outline: 0;
 }}
 QListWidget#primaryNavigation {{
@@ -682,7 +1035,7 @@ QListWidget#predictionBrowserResults::item {{
     padding: 0px;
 }}
 QListWidget::item {{
-    border-radius: {int(Radius.SMALL)}px;
+    border-radius: 0;
     padding: {control}px;
 }}
 QListWidget::item:hover {{
@@ -717,23 +1070,27 @@ QGroupBox:focus {{
 QWidget[searchMatchEmphasis="true"] {{
     background-color: {color.accent_soft};
     border: 2px solid {color.focus};
-    border-radius: {control_radius}px;
+    border-radius: 0;
 }}
 """.strip()
 
 
-def install_visual_system(root: QWidget) -> None:
+def install_visual_system(root: QWidget, *, palette: QPalette | None = None) -> None:
     """Install or refresh the visual system on one top-level widget tree."""
 
     root.setProperty(VISUAL_SYSTEM_PROPERTY, True)
-    root.setStyleSheet(build_stylesheet(root.palette()))
+    stylesheet = build_stylesheet(root.palette() if palette is None else palette)
+    # Palette propagation can request this repeatedly during one appearance
+    # change. Qt repolishes the entire tree even for identical stylesheet text.
+    if root.styleSheet() != stylesheet:
+        root.setStyleSheet(stylesheet)
     refresh_semantic_fonts(root)
 
 
-def refresh_visual_system(root: QWidget) -> None:
+def refresh_visual_system(root: QWidget, *, palette: QPalette | None = None) -> None:
     """Re-resolve stylesheet colors and semantic fonts after a theme change."""
 
-    install_visual_system(root)
+    install_visual_system(root, palette=palette)
 
 
 def is_visual_system_change(event: QEvent) -> bool:
@@ -954,6 +1311,7 @@ __all__ = [
     "TEXT_ROLE_PROPERTY",
     "VISUAL_SYSTEM_PROPERTY",
     "ActionRole",
+    "ContentWidth",
     "MotionDuration",
     "Radius",
     "SemanticColors",

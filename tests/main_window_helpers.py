@@ -30,7 +30,12 @@ def window(
     operations: FakePredictionOperations,
 ) -> MainWindow:
     main_window = MainWindow(operations)
-    qtbot.addWidget(main_window)
+    qtbot.addWidget(
+        main_window,
+        before_close_func=lambda widget: setattr(
+            widget.creation_task, "confirm_exit", lambda: True
+        ),
+    )
     return main_window
 
 

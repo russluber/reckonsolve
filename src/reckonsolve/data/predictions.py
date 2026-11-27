@@ -1,6 +1,7 @@
 """Purpose-specific SQLite access for binary predictions."""
 
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 
@@ -63,6 +64,7 @@ from .forecast_contracts import (
 from .one_shot_archive import read_archive as read_one_shot_archive
 from .one_shot_facts import read_one_shot
 from .quantile_archive import read_archive as read_quantile_archive
+from .terminal_history import effective_postmortem_sql
 
 
 class PredictionChangedError(RuntimeError):
@@ -1057,114 +1059,9 @@ class PredictionRepository:
         )
 
     def list_browser_predictions(self) -> PredictionBrowserSnapshot:
-        """Load every prediction summary and every associated tag."""
-
+        """Read through the shared caller-snapshot implementation."""
         with self._database.transaction() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT
-                    prediction.id AS prediction_id,
-                    prediction.question,
-                    prediction.prediction_type,
-                    prediction.status,
-                    prediction.created_at,
-                    prediction.forecast_deadline,
-                    prediction.expected_resolution,
-                    current_revision.probability_percent,
-                    current_revision.created_at AS latest_revision_at,
-                    (SELECT MAX(review.created_at)
-                     FROM forecast_reviews AS review
-                     WHERE review.prediction_id = prediction.id) AS latest_review_at,
-                    COALESCE(
-                        (SELECT resolution.resolved_at
-                         FROM resolutions AS resolution
-                         WHERE resolution.prediction_id = prediction.id),
-                        (SELECT invalidation.invalidated_at
-                         FROM prediction_invalidations AS invalidation
-                         WHERE invalidation.prediction_id = prediction.id)
-                    ) AS terminal_decision_at,
-                    CASE
-                        WHEN prediction.status = 'resolved'
-                            AND NOT EXISTS (
-                                SELECT 1 FROM postmortem_completions AS completion
-                                WHERE completion.prediction_id = prediction.id
-                            )
-                            AND (
-                                SELECT COALESCE(
-                                    (
-                                        SELECT correction.new_postmortem
-                            FROM {binary_corrections_relation(connection)} AS correction
-                                        WHERE correction.resolution_id = resolution.id
-                                        ORDER BY correction.sequence DESC
-                                        LIMIT 1
-                                    ),
-                                    resolution.postmortem
-                                )
-                                FROM resolutions AS resolution
-                                WHERE resolution.prediction_id = prediction.id
-                            ) IS NULL
-                        THEN 1 ELSE 0
-                    END AS needs_postmortem
-                FROM predictions AS prediction
-                JOIN forecast_revisions AS current_revision
-                    ON current_revision.id = (
-                        SELECT candidate.id
-                        FROM forecast_revisions AS candidate
-                        WHERE candidate.prediction_id = prediction.id
-                        ORDER BY candidate.sequence DESC
-                        LIMIT 1
-                    )
-                WHERE prediction.prediction_type = 'binary'
-                ORDER BY 5 DESC, 1 DESC
-                """
-            ).fetchall()
-            tag_rows = connection.execute(
-                """
-                SELECT prediction_tag.prediction_id, tag.display_name
-                FROM tags AS tag
-                JOIN prediction_tags AS prediction_tag
-                    ON prediction_tag.tag_id = tag.id
-                ORDER BY tag.normalized_name, tag.id, prediction_tag.prediction_id
-                """
-            ).fetchall()
-
-            contracts = {
-                int(row["prediction_id"]): select_supported_contract(
-                    connection, int(row["prediction_id"])
-                )
-                for row in rows
-            }
-            quantile_items = read_quantile_archive(connection) + read_one_shot_archive(
-                connection
-            )
-
-        tags_by_prediction: dict[int, list[str]] = {}
-        available_tags: list[str] = []
-        seen_tag_names: set[str] = set()
-        for row in tag_rows:
-            prediction_id = int(row["prediction_id"])
-            display_name = str(row["display_name"])
-            tags_by_prediction.setdefault(prediction_id, []).append(display_name)
-            normalized_name = display_name.casefold()
-            if normalized_name not in seen_tag_names:
-                available_tags.append(display_name)
-                seen_tag_names.add(normalized_name)
-
-        return PredictionBrowserSnapshot(
-            predictions=tuple(
-                replace(
-                    _map_browser_prediction(
-                        row,
-                        tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
-                    ),
-                    forecast_contract=contracts[int(row["prediction_id"])],
-                )
-                for row in rows
-                if not contracts[int(row["prediction_id"])].is_one_shot
-            )
-            + quantile_items,
-            available_tags=tuple(available_tags),
-        )
+            return read_browser_snapshot(connection)
 
     def get_prediction(self, prediction_id: int) -> PredictionDetail | None:
         """Load one prediction and derive its current revision."""
@@ -1187,7 +1084,7 @@ class PredictionRepository:
 
         return detail
 
-    def update_metadata(
+    def update_metadata[TSnapshot](
         self,
         prediction_id: int,
         update: PredictionMetadataUpdate,
@@ -1195,8 +1092,9 @@ class PredictionRepository:
         expected: PredictionDetail | NumericPrediction | OneShotDetail,
         expected_metadata_version: int,
         changed_at: datetime,
-    ) -> bool | None:
-        """Replace shared metadata and append any definition record atomically."""
+        read_saved: Callable[[sqlite3.Connection], TSnapshot],
+    ) -> TSnapshot | None:
+        """Replace metadata and prepare its response before the same commit."""
 
         timestamp = format_utc(changed_at)
         with self._database.transaction() as connection:
@@ -1213,7 +1111,7 @@ class PredictionRepository:
             ):
                 raise PredictionChangedError
             if not metadata_would_change(current, update):
-                return False
+                return read_saved(connection)
 
             if update.forecast_deadline is not None:
                 raise ValueError("Forecast Deadline is immutable.")
@@ -1273,7 +1171,7 @@ class PredictionRepository:
                     ),
                 )
 
-        return True
+            return read_saved(connection)
 
     def list_definition_changes(
         self,
@@ -1827,3 +1725,103 @@ def _format_date(value: date | None) -> str | None:
 
 def _parse_date(value: object) -> date | None:
     return None if value is None else date.fromisoformat(str(value))
+
+
+def read_browser_snapshot(
+    connection: sqlite3.Connection, *, one_shots: dict | None = None
+) -> PredictionBrowserSnapshot:
+    """Load facts in the existing checked snapshot; open no nested transaction."""
+    rows = connection.execute(
+        f"""
+        SELECT
+            prediction.id AS prediction_id,
+            prediction.question,
+            prediction.prediction_type,
+            prediction.status,
+            prediction.created_at,
+            prediction.forecast_deadline,
+            prediction.expected_resolution,
+            current_revision.probability_percent,
+            current_revision.created_at AS latest_revision_at,
+            (SELECT MAX(review.created_at)
+             FROM forecast_reviews AS review
+             WHERE review.prediction_id = prediction.id) AS latest_review_at,
+            COALESCE(
+                (SELECT resolution.resolved_at
+                 FROM resolutions AS resolution
+                 WHERE resolution.prediction_id = prediction.id),
+                (SELECT invalidation.invalidated_at
+                 FROM prediction_invalidations AS invalidation
+                 WHERE invalidation.prediction_id = prediction.id)
+            ) AS terminal_decision_at,
+            CASE
+                WHEN prediction.status = 'resolved'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM postmortem_completions AS completion
+                        WHERE completion.prediction_id = prediction.id
+                    )
+                    AND (
+                        SELECT {effective_postmortem_sql(connection)}
+                        FROM resolutions AS resolution
+                        WHERE resolution.prediction_id = prediction.id
+                    ) IS NULL
+                THEN 1 ELSE 0
+            END AS needs_postmortem
+        FROM predictions AS prediction
+        JOIN forecast_revisions AS current_revision
+            ON current_revision.id = (
+                SELECT candidate.id
+                FROM forecast_revisions AS candidate
+                WHERE candidate.prediction_id = prediction.id
+                ORDER BY candidate.sequence DESC
+                LIMIT 1
+            )
+        WHERE prediction.prediction_type = 'binary'
+        ORDER BY 5 DESC, 1 DESC
+        """
+    ).fetchall()
+    tag_rows = connection.execute(
+        """
+        SELECT prediction_tag.prediction_id, tag.display_name
+        FROM tags AS tag
+        JOIN prediction_tags AS prediction_tag
+            ON prediction_tag.tag_id = tag.id
+        ORDER BY tag.normalized_name, tag.id, prediction_tag.prediction_id
+        """
+    ).fetchall()
+
+    contracts = {
+        int(row["prediction_id"]): select_supported_contract(
+            connection, int(row["prediction_id"])
+        )
+        for row in rows
+    }
+    quantile_items = read_quantile_archive(connection) + read_one_shot_archive(
+        connection, one_shots=one_shots
+    )
+    tags_by_prediction: dict[int, list[str]] = {}
+    available_tags: list[str] = []
+    seen_tag_names: set[str] = set()
+    for row in tag_rows:
+        prediction_id = int(row["prediction_id"])
+        display_name = str(row["display_name"])
+        tags_by_prediction.setdefault(prediction_id, []).append(display_name)
+        normalized_name = display_name.casefold()
+        if normalized_name not in seen_tag_names:
+            available_tags.append(display_name)
+            seen_tag_names.add(normalized_name)
+    return PredictionBrowserSnapshot(
+        predictions=tuple(
+            replace(
+                _map_browser_prediction(
+                    row,
+                    tuple(tags_by_prediction.get(int(row["prediction_id"]), ())),
+                ),
+                forecast_contract=contracts[int(row["prediction_id"])],
+            )
+            for row in rows
+            if not contracts[int(row["prediction_id"])].is_one_shot
+        )
+        + quantile_items,
+        available_tags=tuple(available_tags),
+    )

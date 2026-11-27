@@ -14,9 +14,6 @@ from reckonsolve.application.errors import (
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.cli import run as run_cli
 from reckonsolve.data.database import Database
-from reckonsolve.domain.browser import ArchiveQuery
-from reckonsolve.domain.saved_views import SavedViewConfiguration
-from reckonsolve.domain.search import SearchMatchMode
 
 NOW = datetime(2026, 8, 29, 18, 30, tzinfo=UTC)
 
@@ -27,15 +24,6 @@ class FixedClock:
 
     def now(self) -> datetime:
         return self.instant
-
-
-def _saved_view_configuration(tags: tuple[str, ...]) -> SavedViewConfiguration:
-    return SavedViewConfiguration(
-        search_text="",
-        match_mode=SearchMatchMode.ALL,
-        include_superseded=False,
-        archive_query=ArchiveQuery(tags=tags),
-    )
 
 
 def _tag_id(operations: PredictionOperations, name: str) -> int:
@@ -56,10 +44,6 @@ def test_global_tag_rename_retains_identity_relationships_and_history(tmp_path) 
         tags=("Work",),
     )
     create_binary(operations, "Will the personal task finish?", 45, tags=("Personal",))
-    saved = operations.create_saved_view(
-        "Work view",
-        _saved_view_configuration(("Work",)),
-    )
     work_id = _tag_id(operations, "Work")
     revision_count = len(operations.list_forecast_revisions(prediction.prediction_id))
 
@@ -81,10 +65,6 @@ def test_global_tag_rename_retains_identity_relationships_and_history(tmp_path) 
         == revision_count
     )
     assert operations.list_definition_changes(prediction.prediction_id) == ()
-    retained_view = operations.list_saved_views()[0]
-    assert retained_view.saved_view_id == saved.saved_view_id
-    assert retained_view.configuration.archive_query.tags == ("Career",)
-    assert retained_view.tags[0].tag_id == work_id
     assert [
         hit.prediction.prediction_id
         for hit in operations.search_predictions("Career").hits
@@ -102,7 +82,7 @@ def test_global_tag_rename_retains_identity_relationships_and_history(tmp_path) 
     database.close()
 
 
-def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
+def test_tag_merge_unions_and_deduplicates_predictions(
     tmp_path,
 ) -> None:
     path = tmp_path / "reckonsolve.sqlite3"
@@ -120,10 +100,6 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
         tags=("Source B",),
     )
     target_only = create_binary(operations, "Will gamma finish?", 50, tags=("Target",))
-    operations.create_saved_view(
-        "Merged work",
-        _saved_view_configuration(("Source A", "Source B", "Target")),
-    )
     source_ids = (_tag_id(operations, "Source A"), _tag_id(operations, "Source B"))
     target_id = _tag_id(operations, "Target")
 
@@ -132,7 +108,6 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
     observer_operations = PredictionOperations(observer_database, FixedClock(), UTC)
 
     assert preview.prediction_count == 2
-    assert preview.saved_view_count == 1
     operations.merge_tags(preview)
 
     assert {tag.normalized_name for tag in operations.list_tags()} == {"target"}
@@ -143,9 +118,6 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
     )
     assert operations.get_prediction(first.prediction_id).metadata_version == 2
     assert operations.get_numeric_prediction(second.prediction_id).metadata_version == 2
-    merged_view = operations.list_saved_views()[0]
-    assert merged_view.configuration.archive_query.tags == ("Target",)
-    assert merged_view.tags[0].tag_id == target_id
     assert operations.search_predictions('"Source A"').hits == ()
     assert operations.search_predictions('"Source B"').hits == ()
     assert {
@@ -177,13 +149,11 @@ def test_tag_merge_unions_and_deduplicates_predictions_and_saved_views(
     reopened = Database.open(path)
     reopened_operations = PredictionOperations(reopened, FixedClock(), UTC)
     assert [tag.display_name for tag in reopened_operations.list_tags()] == ["Target"]
-    assert reopened_operations.list_saved_views()[0].tags[0].tag_id == target_id
     reopened.close()
 
     backup = Database.open(backup_path)
     backup_operations = PredictionOperations(backup, FixedClock(), UTC)
     assert [tag.display_name for tag in backup_operations.list_tags()] == ["Target"]
-    assert backup_operations.list_saved_views()[0].tags[0].tag_id == target_id
     backup.close()
 
 
@@ -198,22 +168,16 @@ def test_tag_delete_removes_current_relationships_and_rejects_stale_metadata(
         60,
         tags=("Delete Me", "Keep"),
     )
-    operations.create_saved_view(
-        "Disposable condition",
-        _saved_view_configuration(("Delete Me",)),
-    )
     reviewed = operations.get_prediction(prediction.prediction_id)
     preview = operations.preview_tag_delete(_tag_id(operations, "Delete Me"))
 
     assert preview.prediction_count == 1
-    assert preview.saved_view_count == 1
     operations.delete_tag(preview)
 
     updated = operations.get_prediction(prediction.prediction_id)
     assert updated.tags == ("Keep",)
     assert updated.metadata_version == 2
     assert not updated.deletion_allowed
-    assert operations.list_saved_views()[0].configuration.archive_query.tags == ()
     assert operations.search_predictions('"Delete Me"').hits == ()
     assert operations.list_definition_changes(prediction.prediction_id) == ()
     with pytest.raises(ConcurrentPredictionUpdateError):
@@ -301,5 +265,4 @@ def test_tag_library_filter_includes_retained_unassociated_tags(tmp_path) -> Non
     assert len(filtered) == 1
     assert filtered[0].display_name == "Temporary"
     assert filtered[0].prediction_count == 0
-    assert filtered[0].saved_view_count == 0
     database.close()

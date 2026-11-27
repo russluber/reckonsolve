@@ -12,11 +12,11 @@
 
 Reckonsolve v0.8.0 is a single-user, local-first Windows forecasting journal. M1-M60 are completed history, preserved in docs/archive/. New work requires separate authorization. Optional private design work follows the notes policy below and does not authorize implementation. Adaptive is the default; One-Shot is an additional mode within Binary/Numeric types.
 
-- Preserve schema 20, the four closed model/scoring pairs, and canonical deadline/one_shot mode keys. Adaptive is the presentation name; CLI --mode deadline remains an alias for --mode adaptive.
+- Preserve applied migrations 1–20 unchanged. The separately authorized first UX slice uses schema 21 under docs/product-spec.md Section 38.10; preserve the four closed model/scoring pairs and canonical deadline/one_shot mode keys. Adaptive is the presentation name; CLI --mode deadline remains an alias for --mode adaptive.
 - Refuse any archive containing a retired Binary-final or interval-v1 Numeric record, including mixed archives, before migration/repair/write. Missing, unknown, and mismatched identities are also refused without conversion, deletion, or partial loading.
 - Preserve supported v0.7 history and staged supported schema-16/17 Binary upgrades. Historical SQL/shared storage are not permission to restore retired runtime workflows.
-- Schema 19 owns One-Shot originals, reported times, and transcription snapshots under ADR 0021. Schema 20 adds only nullable, constrained dynamic Saved View mode persistence; existing views retain All modes.
-- Search projection 3 is derived and repairable. CSV format 5 covers all four contracts; SQLite backup is complete recovery. CSV is analytical, not restorable.
+- Schema 19 owns One-Shot originals, reported times and transcription snapshots under ADR 0021. Schema 20 historically adds nullable Saved View mode persistence. Schema 21 retires Saved View configurations only through verified recovery/review and adds immutable transcription/postmortem source_action under ADR 0022. Native acceptance of the first slice remains separate.
+- Search projection 3 is derived and repairable. CSV format 6 covers all four contracts and explicit One-Shot correction provenance; SQLite backup is complete recovery. CSV is analytical, not restorable.
 - Live test-data purge, database reset, or bulk removal needs separate explicit approval and verified targets. No product plan or documentation cleanup grants that permission.
 
 ## Architecture and technology

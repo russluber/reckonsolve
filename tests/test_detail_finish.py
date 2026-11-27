@@ -1,0 +1,2270 @@
+"""Complete Detail reading, reflection and preserved-history journeys."""
+
+import runpy
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
+from itertools import pairwise
+from pathlib import Path
+
+import pytest
+from PySide6.QtCore import QPoint, QRect, Qt
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialogButtonBox,
+    QLabel,
+    QPushButton,
+    QToolButton,
+    QWidget,
+)
+
+from reckonsolve.application.errors import ApplicationError
+from reckonsolve.application.predictions import PredictionOperations
+from reckonsolve.data.database import Database
+from reckonsolve.domain.journal import JournalRequest
+from reckonsolve.domain.predictions import BinaryOutcome
+from reckonsolve.domain.quantiles import NumericValueConstraint
+from reckonsolve.ui.detail_workspace import DetailWorkspace
+from reckonsolve.ui.main_window import MainWindow
+from reckonsolve.ui.presentation_settings import (
+    AppearanceMode,
+    MemoryPresentationSettings,
+)
+
+
+@dataclass
+class Clock:
+    instant: datetime = datetime(2026, 11, 12, 12, tzinfo=UTC)
+
+    def now(self):
+        return self.instant
+
+    def advance(self):
+        self.instant += timedelta(hours=1)
+
+
+@pytest.fixture
+def workspace(qtbot, tmp_path):
+    database = Database.open(tmp_path / "finish.sqlite3")
+    clock = Clock()
+    operations = PredictionOperations(database, clock, UTC)
+    window = MainWindow(operations, presentation_settings=MemoryPresentationSettings())
+    qtbot.addWidget(window)
+    window.resize(1100, 850)
+    window.show()
+    yield window, operations, clock, database
+    for pane in window.findChildren(DetailWorkspace):
+        pane.clear_editor()
+    window.creation_task.reset()
+    window.close()
+    database.close()
+
+
+def create(operations, clock, numeric):
+    if numeric:
+        return operations.create_numeric_prediction(
+            "How many items will the finished Detail retain?",
+            "items",
+            0,
+            {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=clock.now() + timedelta(days=10),
+            resolution_criteria="Count the published items.",
+        )
+    return operations.create_prediction(
+        "Will the finished Detail retain the recorded context?",
+        65,
+        forecast_deadline=clock.now() + timedelta(days=10),
+        resolution_criteria="Use the published answer.",
+    )
+
+
+def test_numeric_interval_destroyed_before_style_refresh_has_no_late_callback(qtbot):
+    from PySide6.QtCore import QEvent
+    from shiboken6 import delete, isValid
+
+    from reckonsolve.ui.numeric_interval import NumericInterval
+
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    interval = NumericInterval(parent)
+    QApplication.sendEvent(interval, QEvent(QEvent.Type.FontChange))
+    timer = interval._metrics_timer
+    assert timer.isActive()
+    delete(interval)
+    assert not isValid(timer)
+    qtbot.wait(20)
+
+
+def context(prediction, numeric):
+    return {
+        "expected_revision_id": prediction.current_revision.revision_id
+        if numeric
+        else prediction.current_revision_id,
+        "expected_metadata_version": prediction.metadata_version,
+    }
+
+
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+@pytest.mark.parametrize("points", [9, 15])
+@pytest.mark.parametrize("scored", [False, True])
+def test_binary_scorecard_link_retains_eligible_facts_and_wraps(
+    workspace, qtbot, qapp, request, appearance, points, scored
+):
+    window, operations, clock, _database = workspace
+    original_font = QFont(qapp.font())
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    qapp.setFont(QFont("Segoe UI", points))
+    window.setFont(QFont("Segoe UI", points))
+    prediction = create(operations, clock, False)
+    start = clock.now()
+    clock.advance()
+    revised = operations.revise_forecast(
+        prediction.prediction_id, 90, **context(prediction, False)
+    )
+    clock.advance()
+    operations.resolve_prediction(
+        prediction.prediction_id,
+        BinaryOutcome.YES,
+        effective_resolution_at=start + timedelta(minutes=30) if scored else start,
+        **context(revised, False),
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    score = operations.get_prediction_scorecard(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window._open_prediction(prediction.prediction_id)
+    screen = window._prediction_detail_screen
+    card = screen.scorecard_section
+    assert card.title_label.text() == "Binary Scorecard"
+    assert card.property("reckonsolveScorecard") == "true"
+    link = screen.trajectory_diagnostics.disclosure_button
+    assert link.property("reckonsolveInlineDisclosure") == "true"
+    if scored:
+        assert card.findChild(QLabel, "binaryFinalEligibleForecast").text() == "65% Yes"
+        assert card.findChild(QLabel, "individualFinalBrier").text() == "0.1225"
+        assert not link.isChecked()
+        screen.workspace.ensureWidgetVisible(link)
+        link.setFocus()
+        qtbot.keyClick(link, Qt.Key.Key_Space)
+        assert link.isChecked() and link.accessibleName().startswith("Hide ")
+        assert (
+            card.findChild(QLabel, "individualUpdatingGain").text() == "+0.0000 · Tied"
+        )
+    else:
+        assert screen.trajectory_diagnostics.isHidden()
+        assert "at or before" in screen.scorecard_guidance.text()
+    for width in (1600, 760, 1600):
+        window.resize(width, 900)
+        qtbot.wait(80)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        for label in card.findChildren(QLabel):
+            if label.isVisible():
+                assert label.height() >= label.heightForWidth(label.width())
+        if scored:
+            assert link.accessibleName().startswith("Hide ")
+            assert link.text().replace("\n", " ").startswith("Hide ")
+            assert link.font().underline()
+    screen.refresh()
+    assert not link.isChecked()
+    assert link.accessibleName().startswith("Show ")
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+    assert operations.get_prediction_scorecard(prediction.prediction_id) == score
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+@pytest.mark.parametrize("points", [9, 15])
+def test_history_text_links_remain_visible_and_reveal_exact_versions(
+    workspace, qtbot, qapp, request, numeric, one_shot, points
+):
+    from PySide6.QtGui import QPalette
+
+    from reckonsolve.ui.visual_system import contrast_ratio, semantic_colors
+
+    window, operations, clock, _database = workspace
+    original_font = QFont(qapp.font())
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    qapp.setFont(QFont("Segoe UI", points))
+    window.setFont(QFont("Segoe UI", points))
+    fixtures = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixtures["_seed_finish_cases"](_database, now=clock.now())
+    prefix = (
+        "Corrected exercise · One-Shot "
+        if one_shot
+        else "Reflection history · Adaptive "
+    ) + ("Numeric" if numeric else "Binary")
+    prediction = next(
+        row.prediction
+        for row in operations.journal.query(JournalRequest()).rows
+        if row.prediction.question.startswith(prefix)
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    groups = [
+        item
+        for item in screen.findChildren(QWidget)
+        if item.objectName().startswith("journalEntryEditHistory")
+        and hasattr(item, "disclosure_button")
+    ]
+    if not one_shot:
+        groups.append(screen.resolution_history)
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        qtbot.wait(30)
+        for group in groups:
+            link = group.disclosure_button
+            assert not link.isChecked()
+            assert link.accessibleName().startswith("Show ")
+            assert link.font().underline()
+            screen.workspace.ensureWidgetVisible(link)
+            link.setFocus()
+            qtbot.keyClick(link, Qt.Key.Key_Space)
+            assert group.disclosure_body.isVisible()
+            assert link.accessibleName().startswith("Hide ")
+            for width, height in ((760, 520), (1600, 1000)):
+                window.resize(width, height)
+                qtbot.wait(80)
+                for label in group.disclosure_body.findChildren(QLabel):
+                    if label.isVisible():
+                        assert label.height() >= label.heightForWidth(label.width())
+                        row = label.parentWidget()
+                        if (
+                            hasattr(row, "header")
+                            and row.column.itemAt(1).widget() is label
+                        ):
+                            assert row.height() == row.minimumHeight()
+                            assert label.y() - row.header.geometry().bottom() <= 9
+            assert (
+                contrast_ratio(
+                    link.palette().color(QPalette.ColorRole.ButtonText),
+                    semantic_colors(window.palette()).canvas,
+                )
+                >= 4.5
+            )
+            qtbot.keyClick(link, Qt.Key.Key_Return)
+            assert group.disclosure_body.isHidden()
+            qtbot.wait(40)
+            assert group.height() < 200
+    screen.refresh()
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+def test_binary_journal_heading_does_not_absorb_timeline_height(workspace, qtbot):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, False)
+    clock.advance()
+    entry = operations.add_journal_entry(
+        prediction.prediction_id,
+        "The public notice gives a planned date, not a guaranteed opening.",
+        **context(prediction, False),
+    )
+    window._open_prediction(prediction.prediction_id)
+    screen = window._prediction_detail_screen
+    for width in (1600, 760, 1200):
+        window.resize(width, 1000)
+        qtbot.wait(80)
+        heading = screen.findChild(QLabel, f"journalEntryKind{entry.entry_id}")
+        row = heading.parentWidget()
+        assert row.height() <= row.layout().heightForWidth(row.width()) + 4
+        body = screen.findChild(QLabel, f"journalEntryBody{entry.entry_id}")
+        assert body.text() == entry.body
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_focused_creation_surface_keeps_centered_forms_and_drafts(
+    workspace, qtbot, numeric, one_shot
+):
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QScrollArea
+
+    from reckonsolve.ui.creation_task import form_values
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    window, operations, _clock, _database = workspace
+    window.navigate_to("New Prediction")
+    if one_shot:
+        window._new_prediction_screen.one_shot_button.click()
+    form = window._creation_stack.currentWidget()
+    question = form.question if one_shot else form.question_input
+    question.setText("Retain this focused creation draft through layout changes")
+    if numeric:
+        picker = form.form.type_input if one_shot else form.prediction_type_input
+        picker.setCurrentIndex(picker.findData("numeric"))
+        unit = form.form.unit if one_shot else form.numeric_unit_input
+        unit.setText("items")
+        quantiles = form.form.quantiles if one_shot else form.quantile_input
+        for level, value in {5: 1, 25: 2, 50: 3, 75: 4, 95: 5}.items():
+            quantiles.inputs[level].setText(str(value))
+    before = form_values(form, ())
+    column = form.findChild(
+        QWidget, "oneShotFormColumn" if one_shot else "newPredictionFormColumn"
+    )
+    scroll = form.findChild(
+        QScrollArea, "oneShotScrollArea" if one_shot else "newPredictionScrollArea"
+    )
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width, height in ((1600, 1000), (760, 520)):
+            window.resize(width, height)
+            qtbot.wait(80)
+            surface = window._workspace_content
+            assert surface.width() == min(width, 1320)
+            assert column.width() <= 980
+            center = column.mapTo(scroll.viewport(), column.rect().center()).x()
+            assert abs(center - scroll.viewport().rect().center().x()) <= 1
+            assert scroll.horizontalScrollBar().maximum() == 0
+            assert window._creation_stack.currentWidget() is form
+            assert form_values(form, ()) == before
+            assert window._toolbar.appearance.isVisible()
+            assert not any(
+                button.isVisible()
+                for button in (
+                    window._toolbar.new,
+                    window._toolbar.settings,
+                    window._toolbar.performance,
+                )
+            )
+            if width > 1320:
+                image = window.centralWidget().grab().toImage()
+                scale = image.devicePixelRatio()
+                colors = semantic_colors(window.palette())
+                assert image.pixelColor(0, int(20 * scale)) == QColor(
+                    colors.outer_canvas
+                )
+                assert image.pixelColor(
+                    int((surface.x() + 20) * scale), int(100 * scale)
+                ) == QColor(colors.canvas)
+    assert operations.journal.query(JournalRequest()).total == 0
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_focused_widths_keep_native_window_geometry_and_detail_panes(
+    workspace, qtbot, numeric, one_shot
+):
+    from test_one_shot_persistence import request
+
+    window, operations, clock, _database = workspace
+    prediction = (
+        operations.one_shots.create(request(numeric, answered=False))
+        if one_shot
+        else create(operations, clock, numeric)
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    for width in (1600, 900, 760):
+        window.resize(width, 850)
+        window.navigate_to("Journal")
+        qtbot.waitUntil(lambda: not window._journal_screen.loading)
+        qtbot.wait(40)
+        content = window._workspace_content
+        assert content.width() == min(window.width(), 1320)
+        assert (
+            abs(
+                content.geometry().center().x()
+                - window.centralWidget().rect().center().x()
+            )
+            <= 1
+        )
+        window._open_prediction(prediction.prediction_id)
+        qtbot.wait(60)
+        assert content.width() == min(window.width(), 1320)
+        assert (
+            abs(
+                content.geometry().center().x()
+                - window.centralWidget().rect().center().x()
+            )
+            <= 1
+        )
+        screen = (
+            window._prediction_detail_host._one_shot_detail
+            if one_shot
+            else window._numeric_prediction_detail_screen
+            if numeric
+            else window._prediction_detail_screen
+        )
+        assert screen.workspace._proportion == 600
+        for pane in (
+            screen.workspace,
+            screen.workspace.timeline,
+            screen.workspace.overview,
+        ):
+            assert pane.horizontalScrollBar().maximum() == 0
+    window.resize(1600, 850)
+    window.navigate_to("Settings")
+    qtbot.wait(50)
+    assert window._workspace_content.width() == 1320
+    for width in (900, 760):
+        window.resize(width, 520)
+        qtbot.wait(50)
+        assert window._workspace_content.width() == width
+        assert window._settings_screen.scroll_area.horizontalScrollBar().maximum() == 0
+    window.resize(1600, 850)
+    window.navigate_to("Journal")
+    qtbot.wait(50)
+    window._save_presentation_state()
+    assert window._presentation_settings.state.normal_geometry[2] == 1600
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+@pytest.mark.parametrize("corrected", [False, True])
+def test_narrative_entries_keep_inline_dates_wrapping_and_history(
+    workspace, qtbot, numeric, one_shot, corrected
+):
+    from test_one_shot_persistence import request
+
+    from reckonsolve.ui.detail_reading import TimelineEntry
+
+    window, operations, clock, _database = workspace
+    prediction = (
+        operations.one_shots.create(request(numeric, answered=False))
+        if one_shot
+        else create(operations, clock, numeric)
+    )
+    clock.advance()
+    prose = "The published notice adds context without changing the forecast."
+    if one_shot:
+        journaled = operations.one_shots.add_journal(prediction, prose)
+    else:
+        add = (
+            operations.add_numeric_journal_entry
+            if numeric
+            else operations.add_journal_entry
+        )
+        entry = add(prediction.prediction_id, prose, **context(prediction, numeric))
+    if corrected:
+        clock.advance()
+        prose = "The corrected notice still adds context without changing the forecast."
+        if one_shot:
+            operations.one_shots.correct_journal(
+                journaled,
+                journaled.journals[0].entry_id,
+                prose,
+                expected_correction_id=None,
+            )
+        else:
+            correct = (
+                operations.correct_numeric_journal_entry
+                if numeric
+                else operations.correct_journal_entry
+            )
+            correct(
+                prediction.prediction_id,
+                entry.entry_id,
+                prose,
+                expected_correction_id=None,
+            )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    for mode in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(mode)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(70)
+            rows = [
+                row
+                for row in screen.workspace.timeline_body.findChildren(TimelineEntry)
+                if row.isVisible()
+            ]
+            assert rows
+            for row in rows:
+                qtbot.waitUntil(
+                    lambda row=row: (
+                        row.header.height()
+                        >= row.header.heightForWidth(row.header.width())
+                    )
+                )
+                assert row.title.font().pointSizeF() > row.timestamp.font().pointSizeF()
+                assert (
+                    screen.overview_heading.font().pointSizeF()
+                    > row.title.font().pointSizeF()
+                )
+                assert (
+                    row.timestamp.textInteractionFlags()
+                    & Qt.TextInteractionFlag.TextSelectableByKeyboard
+                )
+                if width == 1600:
+                    assert row.timestamp.y() == row.title.y()
+                    assert row.timestamp.x() > row.title.geometry().right()
+                    assert (
+                        row.title.heightForWidth(row.title.width())
+                        <= row.title.height()
+                    )
+            body = next(
+                label for label in screen.findChildren(QLabel) if label.text() == prose
+            )
+            assert body.font().pointSizeF() == rows[0].title.font().pointSizeF()
+            assert body.font().weight() < rows[0].title.font().weight()
+            journal_row = next(
+                row for row in rows if row.title.text() == "Journal Entry"
+            )
+            assert journal_row.column.itemAt(1).widget() is body
+            assert (
+                body.y() - journal_row.header.geometry().bottom() - 1
+                <= journal_row.column.spacing() + 2
+            )
+            button = next(
+                action
+                for action in journal_row.findChildren(QPushButton)
+                if action.text() == "Correct Entry"
+            )
+            assert (
+                button.height()
+                <= max(
+                    journal_row.title.sizeHint().height(),
+                    button.fontMetrics().height(),
+                    button.iconSize().height(),
+                )
+                + 4
+            )
+            assert button.focusPolicy() & Qt.FocusPolicy.TabFocus
+            before_focus = button.size()
+            button.setFocus()
+            qtbot.wait(20)
+            assert button.size() == before_focus
+            if width == 1600:
+                assert (
+                    journal_row.header.height()
+                    <= max(
+                        journal_row.title.height(),
+                        journal_row.timestamp.height(),
+                        button.height(),
+                    )
+                    + 4
+                )
+            assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
+    qtbot.keyClick(button, Qt.Key.Key_Space)
+    assert screen.workspace.editor is not None
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+def test_numeric_journal_omits_repeated_forecast_but_preserves_anchor_and_history(
+    workspace, qtbot
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, True)
+    clock.advance()
+    entry = operations.add_numeric_journal_entry(
+        prediction.prediction_id,
+        "The preliminary count is still being checked.",
+        **context(prediction, True),
+    )
+    clock.advance()
+    corrected = operations.correct_numeric_journal_entry(
+        prediction.prediction_id,
+        entry.entry_id,
+        "The preliminary count needs a further independent check.",
+        expected_correction_id=None,
+    )
+    clock.advance()
+    latest = operations.revise_quantile_forecast(
+        prediction.prediction_id,
+        {5: 10, 25: 20, 50: 30, 75: 40, 95: 50},
+        **context(prediction, True),
+    )
+    before = operations.list_numeric_timeline(prediction.prediction_id)
+    journal = next(event for event in before if event.kind == "journal")
+    assert journal.revision == prediction.current_revision
+    assert journal.revision != latest.current_revision
+    window._open_prediction(prediction.prediction_id)
+    screen = window._numeric_prediction_detail_screen
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(80)
+            row = screen.findChild(QWidget, f"numericTimelineJournal{entry.entry_id}")
+            body = row.findChild(QLabel, f"numericTimelineBodyJournal{entry.entry_id}")
+            assert body.text() == corrected.body
+            assert row.column.itemAt(1).widget() is body
+            assert not any(
+                label.text().startswith(("90% interval:", "Median:", "50% interval:"))
+                for label in row.findChildren(QLabel)
+            )
+            assert not any(
+                action.text().startswith("Forecast at the time")
+                for action in row.findChildren(QToolButton)
+            )
+            history = row.findChild(QWidget, f"journalEntryEditHistory{entry.entry_id}")
+            assert history is not None
+            assert not history.disclosure_button.isChecked()
+            for forecast in (event for event in before if event.kind == "forecast"):
+                revision_row = screen.findChild(
+                    QWidget, f"numericTimelineForecast{forecast.record_id}"
+                )
+                assert any(
+                    label.text().startswith("90% interval:")
+                    for label in revision_row.findChildren(QLabel)
+                )
+    assert operations.list_numeric_timeline(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize(
+    "task", ["forecast_review", "resolve_prediction", "add_journal_entry"]
+)
+def test_task_forecast_context_is_unboxed_complete_and_selectable(
+    workspace, qtbot, qapp, request, numeric, task
+):
+    from reckonsolve.ui.visual_system import SurfaceRole
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    getattr(screen, "open_" + task)()
+    pane = screen.workspace
+    editor = pane.editor
+    original_font = qapp.font()
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    for points in (9, 15):
+        qapp.setFont(QFont("Segoe UI", points))
+        window.setFont(QFont("Segoe UI", points))
+        for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+            window.appearance.select(appearance)
+            # Large native form controls need a wide window; minimum geometry
+            # is covered at the ordinary font and separately at scaled DPI.
+            for width in (1600, 760) if points == 9 else (1600,):
+                window.resize(width, 520)
+                qtbot.wait(90)
+                labels = [
+                    label
+                    for label in editor.findChildren(QLabel)
+                    if label.property("reckonsolveSurfaceRole") == SurfaceRole.SELECTED
+                    and label.isVisible()
+                ]
+                assert labels
+                for label in labels:
+                    assert label.wordWrap()
+                    assert label.font().pointSizeF() == window.font().pointSizeF()
+                    assert label.height() >= label.heightForWidth(label.width())
+                    assert (
+                        label.textInteractionFlags()
+                        & Qt.TextInteractionFlag.TextSelectableByKeyboard
+                    )
+                    image = label.grab().toImage()
+                    assert image.pixelColor(0, 0).alpha() == 0
+                assert pane.editor is editor
+                assert pane.editor_scroll.horizontalScrollBar().maximum() == 0
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_workspace_outline_separates_gutters_without_changing_routes(
+    workspace, qtbot, appearance
+):
+    from PySide6.QtGui import QColor
+
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, False)
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window.resize(1600, 850)
+    for route, maximum in (
+        ("Journal", 1320),
+        ("Prediction Detail", 1320),
+        ("Performance", 1440),
+        ("Settings", 1320),
+        ("New Prediction", 1320),
+    ):
+        if route == "Prediction Detail":
+            window._open_prediction(prediction.prediction_id)
+        else:
+            if route == "New Prediction":
+                window.navigate_to("Journal")
+            window.navigate_to(route)
+        qtbot.wait(60)
+        content = window._workspace_content
+        assert content.width() == maximum
+        geometry = content.geometry()
+        colors = semantic_colors(window.palette())
+        image = window.centralWidget().grab().toImage()
+        ratio = image.devicePixelRatio()
+
+        def pixel(x, y, source=image, scale=ratio):
+            return source.pixelColor(int(x * scale), int(y * scale))
+
+        assert pixel(geometry.center().x(), 5) == QColor(colors.canvas)
+        assert pixel(geometry.left() + 0.5, geometry.center().y()) == QColor(
+            colors.workspace_border
+        )
+        if geometry.left() > 0:
+            assert pixel(0, 20) == QColor(colors.outer_canvas)
+            assert colors.outer_canvas != colors.canvas
+        assert window.current_screen_name == route
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_journal_and_detail_metadata_chips_keep_visible_literal_tags(
+    workspace, qtbot, numeric, one_shot
+):
+    from test_one_shot_persistence import request
+
+    from reckonsolve.ui.components import StatusBadge
+    from reckonsolve.ui.numeric_interval import IntervalLegend
+    from reckonsolve.ui.visual_system import BADGE_TONE_PROPERTY, StatusTone
+
+    window, operations, clock, _database = workspace
+    tags = ("C#", "Visual review with a longer tag name")
+    if one_shot:
+        prediction = operations.one_shots.create(
+            replace(request(numeric, answered=False), tags=tags)
+        )
+    elif numeric:
+        prediction = operations.create_numeric_prediction(
+            "Read the question before its metadata",
+            "items",
+            0,
+            {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+            value_constraint=NumericValueConstraint.WHOLE_NUMBER,
+            forecast_deadline=clock.now() + timedelta(days=10),
+            tags=tags,
+        )
+    else:
+        prediction = operations.create_prediction(
+            "Read the question before its metadata",
+            65,
+            forecast_deadline=clock.now() + timedelta(days=10),
+            tags=tags,
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(70)
+            detail_status = (
+                next(
+                    badge
+                    for badge in screen.findChildren(StatusBadge)
+                    if badge.text() == "Answer Pending"
+                )
+                if one_shot
+                else screen.status
+            )
+            assert detail_status.text() == ("Answer Pending" if one_shot else "Open")
+            assert (
+                detail_status.property(BADGE_TONE_PROPERTY)
+                == (StatusTone.WARNING if one_shot else StatusTone.ACCENT).value
+            )
+            assert screen.tags.isVisible()
+            assert set(screen.tags.names) == set(tags)
+            question_bottom = (
+                screen.question.mapTo(screen, QPoint()).y() + screen.question.height()
+            )
+            assert screen.tags.mapTo(screen, QPoint()).y() >= question_bottom
+            for chip in screen.tags.chips:
+                assert chip.isVisible() and chip.width() > 0
+                assert chip.text() in tags
+                assert chip.textFormat() is Qt.TextFormat.PlainText
+                assert chip.height() >= chip.heightForWidth(chip.width())
+            if numeric:
+                legend = screen.findChild(IntervalLegend)
+                assert legend is not None and legend.isVisible()
+                assert {label.text() for label in legend.findChildren(QLabel)} == {
+                    "90% interval",
+                    "50% interval",
+                    "Median",
+                }
+                assert all(
+                    legend.findChild(QWidget, "intervalLegend" + kind).isVisible()
+                    for kind in ("Outer", "Inner", "Median")
+                )
+                if width == 1600:
+                    assert (
+                        len(
+                            {
+                                label.mapTo(legend, QPoint()).y()
+                                for label in legend.findChildren(QLabel)
+                            }
+                        )
+                        == 1
+                    )
+            assert screen.workspace.horizontalScrollBar().maximum() == 0
+    window.navigate_to("Journal")
+    journal = window._journal_screen
+    qtbot.waitUntil(lambda: not journal.loading and bool(journal.cards))
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        for width in (1600, 760):
+            window.resize(width, 850)
+            qtbot.wait(70)
+            card = next(
+                card
+                for card in journal.cards
+                if card.prediction_id == prediction.prediction_id
+            )
+            assert set(card.tags.names) == set(tags)
+            metadata = card.findChild(
+                QWidget, f"journalMetadata{prediction.prediction_id}"
+            )
+            assert {badge.text() for badge in metadata.findChildren(StatusBadge)} == {
+                f"{'One-Shot' if one_shot else 'Adaptive'} · {'Numeric' if numeric else 'Binary'}",
+            }
+            outcome = card.findChild(
+                QWidget, f"journalOutcomeFacts{prediction.prediction_id}"
+            )
+            assert {badge.text() for badge in outcome.findChildren(StatusBadge)} == {
+                "Answer Pending" if one_shot else "Open",
+            }
+            assert outcome.findChild(StatusBadge).property(
+                BADGE_TONE_PROPERTY
+            ) == detail_status.property(BADGE_TONE_PROPERTY)
+            assert outcome.geometry().bottom() < metadata.y()
+            assert not any(
+                label.text() in ("Current committed forecast", "Saved forecast")
+                for label in card.findChildren(QLabel)
+            )
+            for chip in card.tags.chips:
+                assert chip.isVisible() and chip.width() > 0
+                assert chip.text() in tags
+                assert chip.textFormat() is Qt.TextFormat.PlainText
+                assert chip.height() >= chip.heightForWidth(chip.width())
+            assert journal.scroll.horizontalScrollBar().maximum() == 0
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("points", [9, 15])
+def test_journal_outcome_line_centers_chips_and_preserves_exact_facts(
+    workspace, qtbot, qapp, points
+):
+    from reckonsolve.ui.components import StatusBadge
+
+    window, operations, clock, database = workspace
+    fixtures = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixtures["_seed_detail_cases"](database, now=clock.now())
+    fixtures["_seed_finish_cases"](database, now=clock.now())
+    rows = operations.journal.query(JournalRequest()).rows
+    original_font = qapp.font()
+    try:
+        qapp.setFont(QFont("Segoe UI", points))
+        window.setFont(QFont("Segoe UI", points))
+        window.navigate_to("Journal")
+        journal = window._journal_screen
+        journal.refresh()
+        qtbot.waitUntil(
+            lambda: not journal.loading and len(journal.cards) == len(rows),
+            timeout=10000,
+        )
+        changes = database._require_connection().total_changes
+        for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+            window.appearance.select(appearance)
+            for width in (1600, 760):
+                window.resize(width, 850)
+                qtbot.wait(80)
+                for row, card in zip(rows, journal.cards, strict=True):
+                    assert row.prediction.prediction_id == card.prediction_id
+                    facts = card.findChild(
+                        QWidget, f"journalOutcomeFacts{card.prediction_id}"
+                    )
+                    badge = facts.findChild(StatusBadge)
+                    items = [
+                        facts.layout().itemAt(index).widget()
+                        for index in range(facts.layout().count())
+                    ]
+                    for first, second in pairwise(items):
+                        left, right = first.geometry(), second.geometry()
+                        if max(left.top(), right.top()) <= min(
+                            left.bottom(), right.bottom()
+                        ):
+                            assert abs(left.center().y() - right.center().y()) <= 1
+                    for label in facts.findChildren(QLabel):
+                        assert label.font().pointSizeF() == badge.font().pointSizeF()
+                        assert label.height() >= label.heightForWidth(label.width())
+                    metadata = card.findChild(
+                        QWidget, f"journalMetadata{card.prediction_id}"
+                    )
+                    assert (
+                        metadata.findChild(StatusBadge).font().pointSizeF()
+                        < badge.font().pointSizeF()
+                    )
+                    if row.actual is not None:
+                        actual = facts.findChild(
+                            QWidget, f"journalActual{card.prediction_id}"
+                        )
+                        caption, value = actual.findChildren(QLabel)
+                        assert caption.font().weight() < value.font().weight()
+                        assert str(row.actual).casefold() in value.text().casefold()
+                        if row.prediction.numeric_unit:
+                            assert value.text().endswith(row.prediction.numeric_unit)
+                        assert actual.accessibleName() == (
+                            caption.text() + " " + value.text()
+                        )
+                assert journal.scroll.horizontalScrollBar().maximum() == 0
+        assert database._require_connection().total_changes == changes
+    finally:
+        window.setFont(original_font)
+        qapp.setFont(original_font)
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_structural_rules_track_pane_motion_and_keep_drafts(workspace, qtbot, numeric):
+    from PySide6.QtGui import QAction
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    assert not window._toolbar.findChildren(QLabel)
+    window.navigate_to("Journal")
+    journal = window._journal_screen
+    journal.refresh()
+    qtbot.waitUntil(lambda: not journal.loading and bool(journal.cards))
+    assert journal.results_rule.y() > journal.filters_button.geometry().bottom()
+    assert journal.results_rule.y() < journal.cards[0].y()
+    actions = [
+        action
+        for action in journal.search_input.findChildren(QAction)
+        if action.objectName() == "lucideLeadingIcon"
+    ]
+    assert len(actions) == 1 and not actions[0].icon().isNull()
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    pane = screen.workspace
+    window.resize(1200, 850)
+    qtbot.wait(50)
+
+    def aligned():
+        return (
+            pane.pane_divider.x()
+            == pane.timeline_column.geometry().right() + 1 + pane.columns.spacing() // 2
+        )
+
+    qtbot.waitUntil(aligned)
+    assert pane.header_rule.geometry().bottom() < pane.panes.y()
+    assert pane.pane_divider.height() == pane.panes.height()
+    reading_x = pane.pane_divider.x()
+    screen.open_revise_forecast()
+    editor = pane.editor
+    editor.rationale_input.setPlainText("Preserve this uncommitted explanation.")
+    qtbot.waitUntil(lambda: pane._proportion == 400 and pane.timeline.widgetResizable())
+    qtbot.waitUntil(aligned)
+    assert pane.pane_divider.x() < reading_x
+    pane.tabs.setCurrentIndex(0)
+    qtbot.waitUntil(lambda: pane._proportion == 600 and pane.timeline.widgetResizable())
+    qtbot.waitUntil(aligned)
+    # The animation finishes before the nested native layouts have necessarily
+    # published their final geometry. Keep the same strict position check.
+    qtbot.waitUntil(lambda: abs(pane.pane_divider.x() - reading_x) <= 1)
+    assert abs(pane.pane_divider.x() - reading_x) <= 1
+    window.appearance.toggle()
+    assert pane.editor is editor
+    assert (
+        editor.rationale_input.toPlainText() == "Preserve this uncommitted explanation."
+    )
+    assert (
+        len(
+            [
+                action
+                for action in journal.search_input.findChildren(QAction)
+                if action.objectName() == "lucideLeadingIcon"
+            ]
+        )
+        == 1
+    )
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("status", ["open", "locked", "resolved", "invalid"])
+@pytest.mark.parametrize("points", [9, 12])
+def test_numeric_definition_stays_visible_below_criteria_without_duplicate_metadata(
+    workspace, qtbot, qapp, status, points
+):
+    window, operations, clock, _database = workspace
+    unit = "centimetres above reference level" if points == 12 else "items"
+    precision = 2 if points == 12 else 0
+    prediction = operations.create_numeric_prediction(
+        "A readable Numeric definition",
+        unit,
+        precision,
+        {5: -2, 25: -1, 50: 0, 75: 1, 95: 2},
+        value_constraint=NumericValueConstraint.CONTINUOUS,
+        forecast_deadline=clock.now() + timedelta(days=10),
+        resolution_criteria=None
+        if status == "resolved"
+        else "Use the published measurement.",
+        background="Supporting context stays in More Information."
+        if points == 12
+        else None,
+    )
+    clock.advance()
+    if status == "locked":
+        clock.instant += timedelta(days=11)
+    elif status == "resolved":
+        operations.resolve_numeric_prediction(
+            prediction.prediction_id,
+            1,
+            use_recorded_time=True,
+            **context(prediction, True),
+        )
+    elif status == "invalid":
+        operations.invalidate_numeric_prediction(
+            prediction.prediction_id,
+            reason="The source was withdrawn.",
+            **context(prediction, True),
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    original_font = QFont(qapp.font())
+    try:
+        qapp.setFont(QFont("Segoe UI", points))
+        window._open_prediction(prediction.prediction_id)
+        screen = window._numeric_prediction_detail_screen
+        for width in (1200, 760):
+            window.resize(width, 850)
+            qtbot.waitUntil(screen.workspace.timeline.widgetResizable)
+            qtbot.wait(30)
+            assert screen.unit.text() == unit
+            assert screen.precision.text() == str(precision)
+            assert screen.unit.isVisible() and screen.precision.isVisible()
+            assert not screen.metadata_disclosure.disclosure_button.isChecked()
+            assert not screen.metadata_panel.isAncestorOf(screen.unit)
+            assert not screen.metadata_panel.isAncestorOf(screen.precision)
+            assert screen.workspace.overview_body.isAncestorOf(
+                screen.definition_summary
+            )
+            assert (
+                screen.definition_summary.y()
+                >= screen.resolution_criteria_section.geometry().bottom()
+            )
+            assert (
+                screen.unit_row.mapTo(screen.definition_summary, QPoint()).x()
+                < screen.precision_row.mapTo(screen.definition_summary, QPoint()).x()
+            )
+            qtbot.waitUntil(
+                lambda: (
+                    screen.unit.height()
+                    >= screen.unit.heightForWidth(screen.unit.width())
+                )
+            )
+            assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        screen.metadata_disclosure.disclosure_button.setChecked(True)
+        assert screen.metadata_empty.isVisible() == (points == 9)
+        if points == 12:
+            assert screen.background.isVisible()
+        assert (
+            operations.get_prediction_for_navigation(prediction.prediction_id) == before
+        )
+    finally:
+        qapp.setFont(original_font)
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_more_information_does_not_call_unavailable_history_empty(
+    workspace, qtbot, monkeypatch, numeric
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+
+    def unavailable(_identifier):
+        raise ApplicationError("History could not be read.")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(operations, "list_definition_changes", unavailable)
+        window._open_prediction(prediction.prediction_id)
+        screen = (
+            window._numeric_prediction_detail_screen
+            if numeric
+            else window._prediction_detail_screen
+        )
+        screen.metadata_disclosure.disclosure_button.setChecked(True)
+        assert screen.metadata_empty.text() == "Definition history is unavailable."
+        if numeric:
+            assert screen.unit.isVisible()
+    screen.refresh()
+    qtbot.wait(20)
+    assert screen.metadata_empty.text() == "No additional information recorded."
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("status", ["open", "resolved", "invalid"])
+def test_adaptive_overview_reveals_use_compact_chevrons_and_keep_defaults(
+    workspace, qtbot, numeric, status
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    if status == "invalid":
+        operation = (
+            operations.invalidate_numeric_prediction
+            if numeric
+            else operations.invalidate_prediction
+        )
+        operation(
+            prediction.prediction_id,
+            reason="An archival example",
+            **context(prediction, numeric),
+        )
+    elif status == "resolved":
+        operation = (
+            operations.resolve_numeric_prediction
+            if numeric
+            else operations.resolve_prediction
+        )
+        operation(
+            prediction.prediction_id,
+            1 if numeric else BinaryOutcome.YES,
+            use_recorded_time=True,
+            **context(prediction, numeric),
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    history = screen.distribution_disclosure if numeric else screen.chart_disclosure
+    has_history_toggle = status != "open" if numeric else status == "invalid"
+    qtbot.wait(30)
+
+    assert history.disclosure_button.isVisible() == has_history_toggle
+    assert history.disclosure_body.isVisible() != has_history_toggle
+    controls = [screen.metadata_disclosure]
+    if has_history_toggle:
+        controls.append(history)
+    for mode in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(mode)
+        for control in controls:
+            toggle = control.disclosure_button
+            assert isinstance(toggle, QToolButton)
+            assert not toggle.isChecked()
+            screen.workspace.overview.ensureWidgetVisible(toggle)
+            toggle.setFocus()
+            qtbot.keyClick(toggle, Qt.Key.Key_Space)
+            assert control.disclosure_body.isVisible()
+            assert toggle.arrowType() is Qt.ArrowType.DownArrow
+            qtbot.keyClick(toggle, Qt.Key.Key_Space)
+            assert not control.disclosure_body.isVisible()
+        window.resize(760, 520)
+        qtbot.wait(30)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_control_enter_creates_and_writes_journal_through_existing_actions(
+    workspace, qtbot, numeric, one_shot
+):
+    from PySide6.QtCore import QDate, QTime
+
+    window, operations, _clock, _database = workspace
+    window.navigate_to("New Prediction")
+    if one_shot:
+        window._new_prediction_screen.one_shot_button.click()
+    form = window._creation_stack.currentWidget()
+    question = form.question if one_shot else form.question_input
+    question.setText("A complete keyboard creation and Journal journey")
+    if one_shot:
+        form.form.has_answer.setChecked(False)
+    else:
+        deadline = form.exact_deadline
+        deadline.choose_custom()
+        deadline.use_offset.setChecked(True)
+        deadline.offset.setText("+00:00")
+        deadline.editor.setDate(QDate(2099, 1, 1))
+        deadline.editor.setTime(QTime(23, 59))
+    if numeric:
+        picker = form.form.type_input if one_shot else form.prediction_type_input
+        picker.setCurrentIndex(picker.findData("numeric"))
+        (form.form.unit if one_shot else form.numeric_unit_input).setText("items")
+        constraint = form.form.constraint if one_shot else form.numeric_constraint_input
+        constraint.setCurrentIndex(
+            constraint.findData(NumericValueConstraint.WHOLE_NUMBER)
+        )
+        quantiles = form.form.quantiles if one_shot else form.quantile_input
+        for level, value in {5: 1, 25: 2, 50: 3, 75: 4, 95: 5}.items():
+            quantiles.inputs[level].setText(str(value))
+    question.setFocus()
+    qtbot.keyClick(question, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier)
+    rows = operations.journal.query(JournalRequest()).rows
+    assert len(rows) == 1
+    saved = rows[0].prediction
+    assert saved.question == "A complete keyboard creation and Journal journey"
+    assert saved.forecast_contract.is_one_shot == one_shot
+    window._open_prediction(saved.prediction_id)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    (screen.journal_button if one_shot else screen.add_journal_entry_button).click()
+    editor = screen.workspace.editor
+    editor.body_input.setPlainText("One keyboard-saved Journal entry.")
+    qtbot.keyClick(
+        editor.body_input, Qt.Key.Key_Enter, Qt.KeyboardModifier.ControlModifier
+    )
+    assert screen.workspace.editor is None
+    entries = (
+        operations.one_shots.get(saved.prediction_id).journals
+        if one_shot
+        else operations.list_numeric_timeline(saved.prediction_id)
+        if numeric
+        else operations.list_timeline(saved.prediction_id)
+    )
+    assert (
+        sum(
+            getattr(entry, "body", None) == "One keyboard-saved Journal entry."
+            for entry in entries
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_control_enter_commits_revision_from_its_rationale_field(
+    workspace, qtbot, numeric
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    screen.revise_forecast_button.click()
+    editor = screen.workspace.editor
+    if numeric:
+        editor.quantile_input.inputs[50].setText("1")
+    else:
+        editor.probability_input.setValue(75)
+    editor.rationale_input.setPlainText("An explicitly revised forecast.")
+    qtbot.keyClick(
+        editor.rationale_input, Qt.Key.Key_Return, Qt.KeyboardModifier.ControlModifier
+    )
+    assert screen.workspace.editor is None
+    revised = operations.get_prediction_for_navigation(prediction.prediction_id)
+    revision = (
+        revised.current_revision
+        if numeric
+        else operations.list_forecast_revisions(prediction.prediction_id)[-1]
+    )
+    assert revision.sequence == 2
+    assert revision.rationale == "An explicitly revised forecast."
+
+
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_journal_preview_spacing_and_shared_forecast_size(workspace, qtbot, one_shot):
+    from test_one_shot_persistence import request
+
+    from reckonsolve.ui.journal.rows import QuestionLabel
+    from reckonsolve.ui.visual_system import TextRole, apply_text_role
+
+    window, operations, clock, _database = workspace
+    if one_shot:
+        binary = operations.one_shots.create(request(False))
+        numeric = operations.one_shots.create(request(True))
+    else:
+        binary = create(operations, clock, False)
+        numeric = create(operations, clock, True)
+    originals = operations.journal.query(JournalRequest())
+    window.navigate_to("Journal")
+    journal = window._journal_screen
+    qtbot.waitUntil(lambda: not journal.loading, timeout=10000)
+    binary_card = next(
+        c for c in journal.cards if c.prediction_id == binary.prediction_id
+    )
+    numeric_card = next(
+        c for c in journal.cards if c.prediction_id == numeric.prediction_id
+    )
+    binary_value = next(
+        label
+        for label in binary_card.findChildren(QLabel)
+        if label.text().endswith("% Yes")
+    )
+    preview = numeric_card.findChild(
+        QWidget, f"journalNumericForecast{numeric.prediction_id}"
+    )
+    numbers = [
+        preview.findChild(QLabel, f"journalPercentile{numeric.prediction_id}_{level}")
+        for level in (5, 25, 50, 75, 95)
+    ]
+    assert "50th" in {label.text() for label in preview.findChildren(QLabel)}
+    assert not any("Median" in label.text() for label in preview.findChildren(QLabel))
+    detail_forecast = QLabel(window)
+    apply_text_role(detail_forecast, TextRole.FORECAST)
+    assert all(number.font() == binary_value.font() for number in numbers)
+    assert binary_value.font().pointSizeF() < detail_forecast.font().pointSizeF()
+    assert (
+        binary_value.font().pointSizeF()
+        < binary_card.findChild(QuestionLabel).font().pointSizeF()
+    )
+    spans = []
+    for width in (1600, 1100, 760):
+        window.resize(width, 850)
+        qtbot.wait(60)
+        cells = [
+            QRect(number.mapTo(preview, QPoint()), number.size()) for number in numbers
+        ]
+        gaps = [right.x() - left.right() - 1 for left, right in pairwise(cells)]
+        assert len(set(gaps)) == 1 and gaps[0] >= 12
+        assert cells[-1].right() < numeric_card.width() * 0.75
+        assert journal.scroll.horizontalScrollBar().maximum() == 0
+        spans.append(cells[-1].right() - cells[0].left())
+    assert max(spans) - min(spans) <= 2
+    assert operations.journal.query(JournalRequest()) == originals
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_resolved_body_reflection_actions_and_real_terminal_chronology(
+    workspace, qtbot, numeric
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    clock.instant += timedelta(microseconds=123456)
+    resolve = (
+        operations.resolve_numeric_prediction
+        if numeric
+        else operations.resolve_prediction
+    )
+    resolve(
+        prediction.prediction_id,
+        1 if numeric else BinaryOutcome.YES,
+        use_recorded_time=True,
+        resolution_notes="Observed factual evidence.",
+        **context(prediction, numeric),
+    )
+    before = operations.get_prediction_scorecard(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    card = screen.quantile_scorecard if numeric else screen.scorecard_section
+    disclosure = screen.terminal_summary.context
+    assert isinstance(disclosure.disclosure_button, QToolButton)
+    assert not disclosure.disclosure_button.isChecked()
+    disclosure.disclosure_button.setFocus()
+    qtbot.keyClick(disclosure.disclosure_button, Qt.Key.Key_Space)
+    assert disclosure.disclosure_body.isVisible()
+    assert disclosure.disclosure_button.arrowType() is Qt.ArrowType.DownArrow
+    qtbot.keyClick(disclosure.disclosure_button, Qt.Key.Key_Space)
+    assert not disclosure.disclosure_body.isVisible()
+    assert screen.workspace.overview_body.isAncestorOf(card)
+    assert screen.action_strip.isAncestorOf(screen.write_postmortem_button)
+    assert screen.action_strip.isAncestorOf(screen.skip_postmortem_button)
+    assert screen.skip_postmortem_button.isVisible()
+    assert not screen.resolution_section.isVisible()
+    assert screen.workspace.overview_body.isAncestorOf(screen.postmortem)
+    terminal = screen.findChild(QWidget, "terminalResolutionRecorded")
+    assert terminal is not None and terminal.isVisible()
+    assert clock.now().isoformat() in screen.terminal_summary.timing.toolTip()
+    assert any(
+        clock.now().isoformat() in label.toolTip()
+        for label in terminal.findChildren(QLabel)
+    )
+    marker = screen.findChild(QWidget, "currentCommittedRevisionMarker")
+    pane = screen.workspace.timeline_body
+    assert terminal.mapTo(pane, QPoint()).y() < marker.mapTo(pane, QPoint()).y()
+    screen.timeline_order.setCurrentIndex(1)
+    qtbot.wait(20)
+    terminal = screen.findChild(QWidget, "terminalResolutionRecorded")
+    marker = screen.findChild(QWidget, "currentCommittedRevisionMarker")
+    assert terminal.mapTo(pane, QPoint()).y() > marker.mapTo(pane, QPoint()).y()
+    screen.write_postmortem_button.click()
+    editor = screen.workspace.editor
+    editor.body_input.setPlainText(
+        "A later reflection preserves the outcome and score."
+    )
+    for mode in (AppearanceMode.DARK, AppearanceMode.LIGHT):
+        window.appearance.select(mode)
+        assert editor.body_input.toPlainText().startswith("A later reflection")
+    screen.workspace.tabs.setCurrentIndex(0)
+    screen.workspace.tabs.setCurrentIndex(1)
+    assert editor.body_input.toPlainText().startswith("A later reflection")
+    clock.advance()
+    editor.submit()
+    assert screen.workspace.editor is None
+    assert "later reflection" in screen.postmortem.text()
+    assert screen.postmortem.isVisible()
+    assert screen.skip_postmortem_button.isHidden()
+    assert screen.write_postmortem_button.text() == "Edit Postmortem"
+    assert operations.get_prediction_scorecard(prediction.prediction_id) == before
+    assert any(
+        widget.objectName().startswith("terminalReflectionUpdated")
+        for widget in screen.findChildren(QWidget)
+    )
+
+
+def test_current_numeric_distribution_is_distinct_from_earlier_scoring(
+    workspace, qtbot, monkeypatch
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, True)
+    initial_time = clock.now()
+    clock.advance()
+    latest = operations.revise_quantile_forecast(
+        prediction.prediction_id,
+        {5: 10, 25: 20, 50: 30, 75: 40, 95: 50},
+        **context(prediction, True),
+    )
+    clock.advance()
+    operations.resolve_numeric_prediction(
+        prediction.prediction_id,
+        1,
+        effective_resolution_at=initial_time + timedelta(minutes=30),
+        **context(latest, True),
+    )
+    window._open_prediction(prediction.prediction_id)
+    screen = window._numeric_prediction_detail_screen
+    disclosure = screen.distribution_disclosure
+    assert disclosure.disclosure_button.isVisible()
+    assert not disclosure.disclosure_button.isChecked()
+    disclosure.disclosure_button.click()
+    assert screen.numeric_history_label.isHidden()
+    assert "not the forecast used for scoring" in screen.quantile_cdf_summary.text()
+    assert screen.distribution_information.context_section.isVisible()
+    assert screen.distribution_information.values["Median"].text() == "30 items"
+    assert "median: 0" in screen.terminal_summary.facts.text()
+    assert screen.quantile_scorecard.findChild(
+        QLabel, "individualMedianErrorSummary"
+    ).isVisible()
+    window.resize(760, 520)
+    qtbot.wait(30)
+    assert screen.workspace.horizontalScrollBar().maximum() == 0
+    assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+    screen.refresh()
+    assert not disclosure.disclosure_button.isChecked()
+    assert screen.terminal_summary.isVisible()
+    with monkeypatch.context() as patch:
+
+        def unavailable(_identifier):
+            raise ApplicationError("A temporary history read failure.")
+
+        patch.setattr(operations, "list_numeric_forecast_revisions", unavailable)
+        screen._load_history(prediction.prediction_id)
+        disclosure.disclosure_button.setChecked(True)
+        assert screen.history_error.isVisible()
+        assert screen.quantile_cdf.isHidden()
+        assert screen.distribution_information.isHidden()
+    screen._load_history(prediction.prediction_id)
+    assert screen.history_error.isHidden()
+    assert screen.distribution_information.values["Median"].text() == "30 items"
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("terminal", [False, True])
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_adaptive_chart_reading_blends_with_canvas_and_keeps_context(
+    workspace, qtbot, numeric, terminal, appearance
+):
+    from PySide6.QtGui import QColor
+
+    from reckonsolve.ui.one_shot_reading import OneShotReadingSection
+    from reckonsolve.ui.visual_system import semantic_colors
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    if terminal:
+        action = (
+            operations.invalidate_numeric_prediction
+            if numeric
+            else operations.invalidate_prediction
+        )
+        action(
+            prediction.prediction_id,
+            reason="The source was withdrawn.",
+            **context(prediction, numeric),
+        )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    disclosure = screen.distribution_disclosure if numeric else screen.chart_disclosure
+    heading = (
+        screen.numeric_history_label if numeric else screen.probability_history_heading
+    )
+    assert heading.isHidden() == terminal
+    assert (
+        heading.font().pointSizeF()
+        == window._prediction_detail_screen.probability_history_heading.font().pointSizeF()
+    )
+    if terminal:
+        assert not disclosure.disclosure_button.isChecked()
+        screen.workspace.ensureWidgetVisible(disclosure.disclosure_button)
+        disclosure.disclosure_button.setFocus()
+        qtbot.keyClick(disclosure.disclosure_button, Qt.Key.Key_Space)
+    chart = screen.quantile_cdf if numeric else screen.probability_history_chart
+    qtbot.wait(250)
+    canvas = QColor(semantic_colors(window.palette()).canvas)
+    if not numeric:
+        assert chart.grab().toImage().pixelColor(3, 3) == canvas
+    titles = {
+        section.title_label.text()
+        for section in disclosure.disclosure_body.findChildren(OneShotReadingSection)
+    }
+    assert "How to Read" in titles
+    if numeric:
+        assert "Exact Forecast" in titles
+        assert screen.distribution_information.context_section.isHidden()
+        assert screen.distribution_information.values["Median"].text() == "0 items"
+        assert "outer tails are unspecified" in chart.accessibleDescription().lower()
+    for width in (1200, 760):
+        window.resize(width, 850)
+        qtbot.wait(100)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        for label in disclosure.disclosure_body.findChildren(QLabel):
+            if label.isVisible():
+                assert label.height() >= label.heightForWidth(label.width())
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("scored", [False, True])
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+@pytest.mark.parametrize("points", [9, 15])
+def test_numeric_scorecard_frame_and_keyboard_breakdown_preserve_facts(
+    workspace, qtbot, qapp, request, scored, appearance, points
+):
+    window, operations, clock, _database = workspace
+    original_font = QFont(qapp.font())
+    request.addfinalizer(lambda: qapp.setFont(original_font))
+    qapp.setFont(QFont("Segoe UI", points))
+    window.setFont(QFont("Segoe UI", points))
+    prediction = create(operations, clock, True)
+    start = clock.now()
+    clock.advance()
+    operations.resolve_numeric_prediction(
+        prediction.prediction_id,
+        4,
+        effective_resolution_at=clock.now() if scored else start,
+        **context(prediction, True),
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    score = operations.get_prediction_scorecard(prediction.prediction_id)
+    window.appearance.select(appearance)
+    window._open_prediction(prediction.prediction_id)
+    screen = window._numeric_prediction_detail_screen
+    panel = screen.quantile_scorecard
+    assert panel.isVisible()
+    assert panel.title_label.text() == "Numeric Scorecard"
+    assert panel.property("reckonsolveScorecard") == "true"
+    assert panel.layout().contentsMargins().left() > 0
+    details = panel.findChild(QWidget, "numericWISDetails")
+    if scored:
+        assert panel.findChild(QLabel, "individualMedianErrorSummary").text() == (
+            "4 items"
+        )
+        assert panel.findChild(QLabel, "individualInterval90Summary").text() == (
+            "Actual above"
+        )
+        assert isinstance(details.disclosure_button, QToolButton)
+        assert not details.disclosure_button.isChecked()
+        screen.workspace.ensureWidgetVisible(details.disclosure_button)
+        details.disclosure_button.setFocus()
+        qtbot.keyClick(details.disclosure_button, Qt.Key.Key_Space)
+        assert details.disclosure_button.arrowType() is Qt.ArrowType.DownArrow
+        assert details.disclosure_body.isVisible()
+        assert panel.findChild(QLabel, "scoredActual").text() == "4 items"
+    else:
+        assert score.final is None
+        assert details is None
+    for width in (1200, 760):
+        window.resize(width, 850)
+        qtbot.wait(100)
+        assert screen.workspace.overview.horizontalScrollBar().maximum() == 0
+        for label in panel.findChildren(QLabel):
+            if label.isVisible():
+                assert label.height() >= label.heightForWidth(label.width())
+    screen.refresh()
+    if scored:
+        assert not panel.findChild(
+            QWidget, "numericWISDetails"
+        ).disclosure_button.isChecked()
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+    assert operations.get_prediction_scorecard(prediction.prediction_id) == score
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_corrected_histories_reveal_exact_sources_and_reset_on_fresh_visit(
+    workspace, qtbot, numeric, one_shot
+):
+    window, operations, clock, database = workspace
+    fixture = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixture["_seed_finish_cases"](database, now=clock.now())
+    rows = operations.journal.query(JournalRequest()).rows
+    prefix = (
+        "Corrected exercise · One-Shot " if one_shot else "Long history · Adaptive "
+    ) + ("Numeric" if numeric else "Binary")
+    prediction = next(
+        row.prediction for row in rows if row.prediction.question.startswith(prefix)
+    )
+    identifier = prediction.prediction_id
+    before = operations.get_prediction_for_navigation(identifier)
+    if not one_shot:
+        revisions = (
+            operations.list_numeric_forecast_revisions(identifier)
+            if numeric
+            else operations.list_forecast_revisions(identifier)
+        )
+        assert len(revisions) == 25
+    assert not operations.search_predictions("birchbeacon").hits
+    journal_hit = next(
+        hit
+        for hit in operations.search_predictions(
+            "birchbeacon", include_superseded=True
+        ).hits
+        if hit.prediction.prediction_id == identifier
+    )
+    assert journal_hit.best_match.document.is_superseded
+    window._open_prediction(identifier)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    definition_name = (
+        "oneShotDefinitionHistoryDisclosure"
+        if one_shot
+        else "numericDefinitionHistoryGroup"
+        if numeric
+        else "definitionHistoryGroup"
+    )
+    definition = screen.findChild(QWidget, definition_name)
+    assert definition is not None
+    assert not definition.disclosure_button.isChecked()
+    assert definition.disclosure_button.font().underline()
+    definition.disclosure_button.click()
+    assert not definition.disclosure_body.isHidden()
+    definition.disclosure_button.click()
+    assert definition.disclosure_body.isHidden()
+    screen.focus_search_match(journal_hit.best_match.document)
+    original = screen.findChild(
+        QLabel,
+        f"journalEntryOriginalBody{journal_hit.best_match.document.source_record_id}",
+    )
+    assert original is not None
+    qtbot.waitUntil(original.isVisible)
+    assert "Birchbeacon" in original.text()
+    assert original.property("searchMatchEmphasis")
+    definition_hit = next(
+        hit
+        for hit in operations.search_predictions(
+            "copperbridge", include_superseded=True
+        ).hits
+        if hit.prediction.prediction_id == identifier
+    )
+    screen.focus_search_match(definition_hit.best_match.document)
+    qtbot.wait(20)
+    # One-Shot keeps its established exact Recorded Timeline target; Adaptive
+    # definitions are revealed within Definition History itself.
+    assert definition.disclosure_button.isChecked() == (not one_shot)
+    assert any(
+        widget.isVisible()
+        and widget.property("searchMatchEmphasis")
+        and "copperbridge"
+        in (
+            widget.text().lower()
+            if isinstance(widget, QLabel)
+            else " ".join(label.text().lower() for label in widget.findChildren(QLabel))
+        )
+        for widget in screen.findChildren(QWidget)
+    )
+    assert operations.get_prediction_for_navigation(identifier) == before
+    if one_shot:
+        assert [
+            correction.source_action.value for correction in before.record.corrections
+        ] == ["transcription", "postmortem"]
+        history_text = "\n".join(
+            label.text() for label in screen.recorded_timeline.findChildren(QLabel)
+        )
+        assert "Postmortem update 2" in history_text
+        assert "Transcription correction 2" not in history_text
+    screen.refresh()
+    qtbot.wait(20)
+    current_history = screen.findChild(
+        QWidget,
+        f"journalEntryEditHistory{journal_hit.best_match.document.source_record_id}",
+    )
+    assert (
+        current_history is not None
+        and not current_history.disclosure_button.isChecked()
+    )
+    assert not screen.findChild(QWidget, definition_name).disclosure_button.isChecked()
+    assert operations.get_prediction_for_navigation(identifier) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_terminal_repair_menu_and_keyboard_focus_keep_modal_boundaries(
+    workspace, qtbot, numeric
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    resolve = (
+        operations.resolve_numeric_prediction
+        if numeric
+        else operations.resolve_prediction
+    )
+    resolve(
+        prediction.prediction_id,
+        1 if numeric else BinaryOutcome.YES,
+        use_recorded_time=True,
+        **context(prediction, numeric),
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    screen.current_revision_button.setFocus()
+    qtbot.keyClick(screen.current_revision_button, Qt.Key.Key_Tab)
+    assert screen.timeline_order.hasFocus()
+    action = next(
+        action
+        for action in screen.more_menu.actions()
+        if action.text() == "Correct Resolution"
+    )
+    assert action.isVisible()
+    action.trigger()
+    qtbot.waitUntil(lambda: QApplication.activeModalWidget() is not None)
+    dialog = QApplication.activeModalWidget()
+    assert dialog.isVisible()
+    qtbot.keyClick(dialog, Qt.Key.Key_N, modifier=Qt.KeyboardModifier.ControlModifier)
+    assert window.current_screen_name == "Prediction Detail"
+    qtbot.keyClick(dialog, Qt.Key.Key_Escape)
+    qtbot.waitUntil(lambda: QApplication.activeModalWidget() is None)
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("points", [9, 12])
+def test_long_history_small_window_keeps_reading_and_revision_controls_reachable(
+    workspace, qtbot, qapp, numeric, points
+):
+    window, operations, clock, database = workspace
+    fixture = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixture["_seed_finish_cases"](database, now=clock.now())
+    question = "Long history · Adaptive " + ("Numeric" if numeric else "Binary")
+    row = next(
+        row
+        for row in operations.journal.query(JournalRequest()).rows
+        if row.prediction.question.startswith(question)
+    )
+    original_font = qapp.font()
+    try:
+        qapp.setFont(QFont("Segoe UI", points))
+        window.resize(760, 520)
+        window._open_prediction(row.prediction.prediction_id)
+        screen = (
+            window._numeric_prediction_detail_screen
+            if numeric
+            else window._prediction_detail_screen
+        )
+        qtbot.wait(30)
+        readable = (
+            screen.resolution_criteria,
+            *(
+                label
+                for label in screen.workspace.timeline_body.findChildren(QLabel)
+                if label.wordWrap() and label.isVisible() and len(label.text()) > 100
+            ),
+        )
+        for width in (760, 1240, 760):
+            window.resize(width, 520)
+            qtbot.waitUntil(
+                lambda: all(
+                    label.height() >= label.heightForWidth(label.width()) - 1
+                    for label in readable
+                )
+            )
+        for pane in (
+            screen.workspace,
+            screen.workspace.timeline,
+            screen.workspace.overview,
+        ):
+            assert pane.horizontalScrollBar().maximum() == 0
+        history = next(
+            group
+            for group in screen.findChildren(QWidget)
+            if group.objectName().startswith("journalEntryEditHistory")
+            and hasattr(group, "disclosure_button")
+        )
+        history.disclosure_button.setChecked(True)
+        qtbot.wait(20)
+        assert screen.workspace.timeline.horizontalScrollBar().maximum() == 0
+        screen.open_revise_forecast()
+        editor = screen.workspace.editor
+        qtbot.waitUntil(lambda: screen.workspace._proportion == 400)
+        # The proportion can round to 400 before the final animation frame.
+        # Inspect overflow after normal Timeline wrapping has resumed.
+        qtbot.waitUntil(screen.workspace.timeline.widgetResizable)
+        qtbot.wait(20)
+        for pane in (
+            screen.workspace,
+            screen.workspace.timeline,
+            screen.workspace.editor_scroll,
+        ):
+            assert pane.horizontalScrollBar().maximum() == 0, (
+                pane.objectName(),
+                screen.workspace.timeline.widgetResizable(),
+                screen.workspace._transition.state(),
+                screen.workspace._transition.currentTime(),
+                screen.workspace._transition.duration(),
+                screen.workspace.timeline.widget().minimumSizeHint(),
+            )
+        if numeric:
+            draft = editor.quantile_input.inputs[50]
+            draft.setText("17")
+            draft.setFocus()
+            for width in (1600, 760):
+                window.resize(width, 600)
+                qtbot.wait(50)
+                assert editor.quantile_input.inputs[50] is draft
+                assert draft.text() == "17" and draft.hasFocus()
+                saved = editor.findChild(QLabel, "revisionCommitted50")
+                assert saved.text() != draft.text()
+                if width == 760 and points > 9:
+                    assert saved.y() < draft.y()
+            for field in editor.quantile_input.inputs.values():
+                screen.workspace.ensureWidgetVisible(field)
+                qtbot.wait(10)
+                assert (
+                    screen.workspace.editor_scroll.viewport()
+                    .rect()
+                    .intersects(
+                        field.rect().translated(
+                            field.mapTo(
+                                screen.workspace.editor_scroll.viewport(), QPoint()
+                            )
+                        )
+                    )
+                )
+        else:
+            presets = editor.findChild(QWidget, "revisionProbabilityShortcuts")
+            for probability in range(10, 100, 10):
+                button = presets.findChild(
+                    QPushButton, f"revisionProbabilityShortcut{probability}"
+                )
+                assert presets.rect().contains(button.geometry())
+                button.click()
+                assert editor.probability_input.value() == probability
+        save = editor.buttons.button(QDialogButtonBox.StandardButton.Save)
+        screen.workspace.ensureWidgetVisible(save)
+        qtbot.wait(20)
+        assert (
+            screen.workspace.editor_scroll.viewport()
+            .rect()
+            .intersects(
+                save.rect().translated(
+                    save.mapTo(screen.workspace.editor_scroll.viewport(), QPoint())
+                )
+            )
+        )
+        if not numeric:
+            screen.workspace.clear_editor()
+            screen.resolve_button.click()
+            editor = screen.workspace.editor
+            assert editor is not None
+            forecast = editor.findChild(QLabel, "resolveScoringForecast")
+            assert forecast.text().startswith("Current forecast: 84% (revision 25).")
+            qtbot.waitUntil(screen.workspace.timeline.widgetResizable)
+            heights = []
+            for width in (1240, 760, 1240):
+                previous_width = forecast.width()
+                window.resize(width, 620)
+                qtbot.waitUntil(
+                    lambda previous_width=previous_width: (
+                        forecast.isVisible()
+                        and forecast.width() != previous_width
+                        and forecast.height()
+                        == forecast.heightForWidth(forecast.width())
+                    )
+                )
+                heights.append(forecast.height())
+            assert heights[0] == heights[2]
+            if points == 9:
+                assert heights[1] > heights[0]
+    finally:
+        screen.workspace.clear_editor()
+        qapp.setFont(original_font)
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("one_shot", [False, True])
+def test_invalid_current_reason_has_one_visible_home_and_exact_search_target(
+    workspace, qtbot, numeric, one_shot
+):
+    window, operations, clock, database = workspace
+    fixture = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixture["_seed_detail_cases"](database, now=clock.now())
+    prefix = (
+        "Corrected Invalid reason · "
+        + ("One-Shot " if one_shot else "Adaptive ")
+        + ("Numeric" if numeric else "Binary")
+    )
+    row = next(
+        row
+        for row in operations.journal.query(JournalRequest()).rows
+        if row.prediction.question.startswith(prefix)
+    )
+    identifier = row.prediction.prediction_id
+    before = operations.get_invalidation_history(identifier)
+    window._open_prediction(identifier)
+    screen = (
+        window._prediction_detail_host._one_shot_detail
+        if one_shot
+        else window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    assert (
+        len(
+            [
+                label
+                for label in screen.findChildren(QLabel)
+                if label.isVisible() and before.effective.reason in label.text()
+            ]
+        )
+        == 1
+    )
+    query = '"Two different answer keys"' if one_shot else '"two incompatible outcomes"'
+    hit = next(
+        hit
+        for hit in operations.search_predictions(query).hits
+        if hit.prediction.prediction_id == identifier
+    )
+    screen.focus_search_match(hit.best_match.document)
+    qtbot.waitUntil(
+        lambda: bool(screen.terminal_summary.note.property("searchMatchEmphasis"))
+    )
+    assert screen.terminal_summary.note.isVisible()
+    assert (
+        before.original.invalidated_at.isoformat()
+        in screen.terminal_summary.timing.toolTip()
+    )
+    assert (
+        before.corrections[-1].corrected_at.isoformat()
+        in screen.terminal_summary.timing.toolTip()
+    )
+    actions = screen.more_button.menu().actions()
+    assert any(
+        action.isVisible()
+        and ("Reason" in action.text() or "Invalid reason" in action.text())
+        for action in actions
+    )
+    assert operations.get_invalidation_history(identifier) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+@pytest.mark.parametrize("invalid", [False, True])
+def test_terminal_panes_are_equal_and_task_tabs_own_the_context_heading(
+    workspace, qtbot, numeric, invalid
+):
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    clock.advance()
+    if invalid:
+        operation = (
+            operations.invalidate_numeric_prediction
+            if numeric
+            else operations.invalidate_prediction
+        )
+        current = operation(
+            prediction.prediction_id,
+            reason="A clear Invalid reason",
+            **context(prediction, numeric),
+        )
+    else:
+        operation = (
+            operations.resolve_numeric_prediction
+            if numeric
+            else operations.resolve_prediction
+        )
+        current = operation(
+            prediction.prediction_id,
+            1 if numeric else BinaryOutcome.YES,
+            use_recorded_time=True,
+            **context(prediction, numeric),
+        )
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    pane = screen.workspace
+    qtbot.waitUntil(lambda: pane._proportion == 500)
+    qtbot.waitUntil(
+        lambda: (
+            pane.pane_divider.x()
+            == pane.timeline_column.geometry().right() + 1 + pane.columns.spacing() // 2
+        )
+    )
+    assert pane.pane_divider.height() == pane.panes.height()
+    assert pane.columns.stretch(0) == pane.columns.stretch(1)
+    assert screen.overview_heading.text() == (
+        "ARCHIVAL CONTEXT" if invalid else "OVERVIEW"
+    )
+    if not invalid:
+        screen.open_postmortem()
+        qtbot.waitUntil(lambda: pane._proportion == 400)
+        assert screen.overview_heading.isHidden()
+        pane.tabs.setCurrentIndex(0)
+        qtbot.waitUntil(lambda: pane._proportion == 500)
+        assert screen.overview_heading.isHidden()
+        pane.clear_editor()
+        assert not screen.overview_heading.isHidden()
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == current
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_one_shot_shows_effective_answer_once_and_keeps_numeric_marker(
+    workspace, qtbot, numeric
+):
+    from dataclasses import replace
+
+    from PySide6.QtGui import QPalette
+    from test_one_shot_persistence import request
+
+    from reckonsolve.domain.predictions import FixedPrecisionValue
+    from reckonsolve.ui.visual_system import contrast_ratio, semantic_colors
+
+    window, operations, _clock, _database = workspace
+    pending = operations.one_shots.create(request(numeric, answered=False))
+    window._open_prediction(pending.prediction_id)
+    screen = window._prediction_detail_host._one_shot_detail
+    if numeric:
+        assert screen.interval.actual is None
+    assert not hasattr(screen, "answer_panel")
+    answered = operations.one_shots.add_answer(
+        pending,
+        replace(
+            pending.record.effective,
+            answer=FixedPrecisionValue(700, 2) if numeric else BinaryOutcome.NO,
+        ),
+    )
+    corrected = operations.one_shots.correct(
+        answered,
+        replace(
+            answered.record.effective,
+            answer=FixedPrecisionValue(-500, 2) if numeric else BinaryOutcome.YES,
+        ),
+    )
+    before = operations.get_prediction_for_navigation(corrected.prediction_id)
+    window._open_prediction(corrected.prediction_id)
+    for name in ("binaryHeaderCheckedAnswer", "numericHeaderCheckedAnswer"):
+        assert screen.findChild(QLabel, name) is None
+    if numeric:
+        assert screen.interval.actual == corrected.record.effective.answer
+        assert screen.interval.quantiles == corrected.record.effective.quantiles
+        assert "checked answer -5.00 m" in screen.interval.accessibleDescription()
+        assert screen.answer_result.text() == "-5.00 m"
+    else:
+        assert screen.forecast.text() == "80% Yes"
+        assert screen.answer_result.text() == "Yes"
+    for appearance in (AppearanceMode.LIGHT, AppearanceMode.DARK):
+        window.appearance.select(appearance)
+        colors = semantic_colors(window.palette())
+        qtbot.waitUntil(
+            lambda colors=colors: all(
+                label.palette().color(QPalette.ColorRole.WindowText).name()
+                == colors.actual_text
+                for label in (screen.answer_panel.title_label, screen.answer_result)
+            )
+        )
+        assert contrast_ratio(colors.actual_text, colors.canvas) >= 4.5
+    assert operations.get_prediction_for_navigation(corrected.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_terminal_context_sits_under_score_and_reason_history_is_a_text_link(
+    workspace, qtbot, numeric
+):
+    from PySide6.QtWidgets import QGroupBox
+
+    from reckonsolve.ui.visual_system import BADGE_TONE_PROPERTY, StatusTone
+
+    window, operations, clock, database = workspace
+    fixtures = runpy.run_path(
+        str(Path(__file__).parents[1] / "tools/run_visual_review.py")
+    )
+    fixtures["_seed_detail_cases"](database, now=clock.now())
+    prediction = next(
+        row.prediction
+        for row in operations.journal.query(JournalRequest()).rows
+        if row.prediction.question.startswith(
+            "Corrected Invalid reason · Adaptive "
+            + ("Numeric" if numeric else "Binary")
+        )
+    )
+    before = operations.get_prediction_for_navigation(prediction.prediction_id)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    summary = screen.terminal_summary
+    window.resize(1600, 1000)
+    qtbot.waitUntil(lambda: summary.context.x() > summary.timing.x())
+    assert summary.context.y() > summary.score.y()
+    assert screen.status.property(BADGE_TONE_PROPERTY) == StatusTone.CAUTION.value
+    assert not any(
+        group.isCheckable()
+        for group in screen.workspace.overview_body.findChildren(QGroupBox)
+    )
+    link = screen.invalidation_history.disclosure_button
+    assert link.font().underline() and link.text() == "Show Reason History"
+    link.click()
+    assert screen.invalidation_history.disclosure_body.isVisible()
+    assert "Original Invalidation" in " ".join(
+        label.text() for label in screen.invalidation_history.findChildren(QLabel)
+    )
+    assert operations.get_prediction_for_navigation(prediction.prediction_id) == before
+
+
+@pytest.mark.parametrize("numeric", [False, True])
+def test_contextual_forms_keep_reading_labels_compact_and_resolution_symmetric(
+    workspace, qtbot, numeric
+):
+    from PySide6.QtWidgets import QDialogButtonBox, QToolButton
+
+    window, operations, clock, _database = workspace
+    prediction = create(operations, clock, numeric)
+    window.resize(1600, 1000)
+    window._open_prediction(prediction.prediction_id)
+    screen = (
+        window._numeric_prediction_detail_screen
+        if numeric
+        else window._prediction_detail_screen
+    )
+    for action in (
+        screen.add_journal_entry_button,
+        screen.review_forecast_button,
+        screen.resolve_button,
+    ):
+        action.click()
+        editor = screen.workspace.editor
+        assert editor is not None
+        labels = [
+            label
+            for label in editor.findChildren(QLabel)
+            if label.parentWidget() is editor and label.isVisible()
+        ]
+        qtbot.waitUntil(
+            lambda labels=labels: all(
+                label.height()
+                <= max(label.sizeHint().height(), label.heightForWidth(label.width()))
+                + 2
+                for label in labels
+            )
+        )
+        if hasattr(editor, "postmortem_input"):
+            disclosure = editor.postmortem_input.parentWidget()
+            assert isinstance(disclosure.disclosure_button, QToolButton)
+            assert not disclosure.disclosure_button.isChecked()
+            assert (
+                editor.postmortem_input.placeholderText()
+                == "Reflect on what your reasoning or updates got right or wrong."
+            )
+            for width in (760, 1600):
+                window.resize(width, 720)
+                qtbot.waitUntil(
+                    lambda editor=editor: all(
+                        label.height() >= label.heightForWidth(label.width())
+                        for label in editor.findChildren(QLabel)
+                        if label.wordWrap() and label.isVisible()
+                    )
+                )
+        editor.findChild(QDialogButtonBox).button(
+            QDialogButtonBox.StandardButton.Cancel
+        ).click()
+        assert screen.workspace.editor is None
+    assert (
+        operations.get_prediction_for_navigation(prediction.prediction_id) == prediction
+    )
+
+
+def test_nested_disclosure_owns_one_ending_rule_without_losing_history_text(qtbot):
+    from datetime import UTC, datetime
+
+    from reckonsolve.ui.components import SectionRule
+    from reckonsolve.ui.detail_reading import TimelineEntry
+    from reckonsolve.ui.detail_workspace import collapse_section
+    from reckonsolve.ui.one_shot_reading import OneShotReadingSection, finish_disclosure
+
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    body = OneShotReadingSection("Recorded facts", parent)
+    entry = TimelineEntry("Original", datetime(2026, 11, 24, tzinfo=UTC), body)
+    entry.column.addWidget(QLabel("Exact original text remains selectable.", entry))
+    body.body_layout.addWidget(entry)
+    disclosure = finish_disclosure(collapse_section(body, "History", compact=True))
+    finish_disclosure(disclosure)
+    assert entry.property("reckonsolveTimelineEntry") == "false"
+    assert (
+        len(
+            disclosure.findChildren(
+                SectionRule, options=Qt.FindChildOption.FindDirectChildrenOnly
+            )
+        )
+        == 1
+    )
+    assert all(rule.isHidden() for rule in body.findChildren(SectionRule))
+    disclosure.disclosure_button.click()
+    assert not body.isHidden()
+    assert any(
+        "Exact original text" in label.text() for label in body.findChildren(QLabel)
+    )

@@ -80,7 +80,7 @@ def test_binary_review_dialog_cancel_save_timeline_and_chart(qtbot, tmp_path) ->
     review = window.findChild(QLabel, "forecastReviewHeading1")
     chart = window.findChild(ProbabilityHistoryChart, "probabilityHistoryChart")
     assert review is not None
-    assert review.text() == "REVIEW  STILL AT 60%"
+    assert review.text() == "Forecast Review · Still 60%"
     assert chart is not None
     assert len(chart.samples) == 1
     delete = window.findChild(QPushButton, "deletePredictionButton")
@@ -116,7 +116,7 @@ def test_numeric_review_uses_quantile_context_and_locked_disables_action(
     action = window.findChild(QPushButton, "reviewNumericForecastButton")
     chart = window._prediction_detail_host._numeric_detail.quantile_cdf
     assert action is not None
-    assert action.text() == "Keep forecast"
+    assert action.text() == "Keep Forecast"
     assert not action.isEnabled()
     assert chart is not None
     assert chart.quantiles == prediction.current_revision.quantiles

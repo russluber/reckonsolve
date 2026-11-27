@@ -27,7 +27,6 @@ from reckonsolve.domain.search import (
 from .database import Database
 from .forecast_contracts import (
     binary_corrections_relation,
-    check_forecast_contract_integrity,
     select_supported_contract,
 )
 from .one_shot_archive import read_archive as read_one_shot_archive
@@ -38,6 +37,7 @@ from .search_index import (
     SearchIndexError,
     SearchIndexRepairRequiredError,
 )
+from .terminal_history import effective_postmortem_sql
 
 
 @dataclass(slots=True)
@@ -89,111 +89,11 @@ class SearchRepository:
         tuple[SearchFragmentCandidate, ...],
         tuple[str, ...],
     ]:
-
-        if parsed_text.is_blank:
-            return {}, (), ()
+        """Read through the shared caller-snapshot implementation."""
         with self._database.transaction() as connection:
-            check_forecast_contract_integrity(connection)
-            _require_ready_index(connection)
-            candidates: dict[int, _CandidateAccumulator] = {}
-            for clause_index, clause in enumerate(parsed_text.clauses):
-                for row in connection.execute(
-                    """
-                    SELECT
-                        rowid, prediction_id, source_kind, source_record_id,
-                        source_version_id, source_sequence, occurred_at,
-                        is_superseded, body,
-                        bm25(prediction_search) AS relevance
-                    FROM prediction_search
-                    WHERE prediction_search MATCH ?
-                        AND (? = 1 OR is_superseded = 0)
-                    ORDER BY relevance, rowid
-                    """,
-                    (_fts_query(clause), int(include_superseded)),
-                ).fetchall():
-                    _merge_candidate(candidates, row, clause_index=clause_index)
-
-            if parsed_text.clauses:
-                question_rows = connection.execute(
-                    """
-                    SELECT
-                        rowid, prediction_id, source_kind, source_record_id,
-                        source_version_id, source_sequence, occurred_at,
-                        is_superseded, body, 0.0 AS relevance
-                    FROM prediction_search
-                    WHERE source_kind = 'question' AND is_superseded = 0
-                    ORDER BY prediction_id, rowid
-                    """
-                ).fetchall()
-                all_clause_indexes = range(len(parsed_text.clauses))
-                for row in question_rows:
-                    if parsed_text.literal_text in normalize_search_literal(
-                        str(row["body"])
-                    ):
-                        for clause_index in all_clause_indexes:
-                            _merge_candidate(
-                                candidates,
-                                row,
-                                clause_index=clause_index,
-                            )
-            else:
-                # Punctuation-only text has no FTS tokens, so a bounded scan of
-                # derived documents preserves ordinary literal behavior.
-                rows = connection.execute(
-                    """
-                    SELECT
-                        rowid, prediction_id, source_kind, source_record_id,
-                        source_version_id, source_sequence, occurred_at,
-                        is_superseded, body, 0.0 AS relevance
-                    FROM prediction_search
-                    WHERE (? = 1 OR is_superseded = 0)
-                    ORDER BY prediction_id, rowid
-                    """,
-                    (int(include_superseded),),
-                ).fetchall()
-                for row in rows:
-                    if parsed_text.literal_text in normalize_search_literal(
-                        str(row["body"])
-                    ):
-                        _merge_candidate(candidates, row, clause_index=None)
-
-            prediction_ids = sorted(
-                {candidate.document.prediction_id for candidate in candidates.values()}
+            return read_search_candidates(
+                connection, parsed_text, include_superseded=include_superseded
             )
-            predictions = _select_predictions(connection, prediction_ids)
-            available_tags = tuple(
-                str(row[0])
-                for row in connection.execute(
-                    """
-                    SELECT display_name
-                    FROM tags
-                    WHERE EXISTS (
-                        SELECT 1 FROM prediction_tags
-                        WHERE prediction_tags.tag_id = tags.id
-                    )
-                    ORDER BY normalized_name, id
-                    """
-                ).fetchall()
-            )
-
-        fragment_candidates = tuple(
-            SearchFragmentCandidate(
-                row_id=candidate.row_id,
-                document=candidate.document,
-                matched_clause_indexes=frozenset(candidate.matched_clause_indexes),
-                relevance=candidate.relevance,
-                literal_match=(
-                    parsed_text.literal_text
-                    in normalize_search_literal(candidate.document.text)
-                ),
-                exact_text_match=(
-                    parsed_text.literal_text
-                    == normalize_search_literal(candidate.document.text)
-                ),
-            )
-            for candidate in candidates.values()
-        )
-        return predictions, fragment_candidates, available_tags
 
     def suggest_spelling(
         self,
@@ -222,41 +122,11 @@ class SearchRepository:
         *,
         include_superseded: bool,
     ) -> str | None:
-
-        if len(parsed_text.clauses) != 1:
-            return None
-        clause = parsed_text.clauses[0]
-        if clause.is_phrase or len(clause.tokens) != 1:
-            return None
-        query_word = clause.tokens[0]
-        if len(query_word) < 4:
-            return None
-
+        """Read through the shared caller-snapshot implementation."""
         with self._database.transaction() as connection:
-            _require_ready_index(connection)
-            rows = connection.execute(
-                """
-                SELECT body
-                FROM prediction_search
-                WHERE (? = 1 OR is_superseded = 0)
-                """,
-                (int(include_superseded),),
-            ).fetchall()
-        vocabulary = Counter(
-            token
-            for row in rows
-            for token in search_tokens(str(row["body"]))
-            if token != query_word
-        )
-        choices = [
-            token
-            for token in vocabulary
-            if abs(len(token) - len(query_word)) <= 1
-            and _edit_distance_at_most_one(query_word, token)
-        ]
-        if not choices:
-            return None
-        return min(choices, key=lambda token: (-vocabulary[token], token))
+            return read_spelling_suggestion(
+                connection, parsed_text, include_superseded=include_superseded
+            )
 
 
 def _fts_query(clause: SearchClause) -> str:
@@ -342,16 +212,7 @@ def _select_predictions(
                         WHERE completion.prediction_id = prediction.id
                     )
                     AND (
-                        SELECT COALESCE(
-                            (
-                                SELECT correction.new_postmortem
-                            FROM {binary_corrections_relation(connection)} AS correction
-                                WHERE correction.resolution_id = resolution.id
-                                ORDER BY correction.sequence DESC
-                                LIMIT 1
-                            ),
-                            resolution.postmortem
-                        )
+                        SELECT {effective_postmortem_sql(connection)}
                         FROM resolutions AS resolution
                         WHERE resolution.prediction_id = prediction.id
                     ) IS NULL
@@ -558,3 +419,156 @@ def _raise_if_search_busy(error: sqlite3.Error) -> None:
         raise SearchIndexBusyError(
             "The local database is temporarily busy with another connection."
         ) from error
+
+
+def read_search_candidates(
+    connection: sqlite3.Connection,
+    parsed_text: ParsedSearchText,
+    *,
+    include_superseded: bool,
+    prediction_snapshots: dict[int, SearchPrediction] | None = None,
+) -> tuple[
+    dict[int, SearchPrediction], tuple[SearchFragmentCandidate, ...], tuple[str, ...]
+]:
+    """Load facts in the existing checked snapshot; open no nested transaction."""
+    if parsed_text.is_blank:
+        return {}, (), ()
+    _require_ready_index(connection)
+    candidates: dict[int, _CandidateAccumulator] = {}
+    for clause_index, clause in enumerate(parsed_text.clauses):
+        for row in connection.execute(
+            """
+            SELECT
+                rowid, prediction_id, source_kind, source_record_id,
+                source_version_id, source_sequence, occurred_at,
+                is_superseded, body,
+                bm25(prediction_search) AS relevance
+            FROM prediction_search
+            WHERE prediction_search MATCH ?
+                AND (? = 1 OR is_superseded = 0)
+            ORDER BY relevance, rowid
+            """,
+            (_fts_query(clause), int(include_superseded)),
+        ).fetchall():
+            _merge_candidate(candidates, row, clause_index=clause_index)
+
+    if parsed_text.clauses:
+        question_rows = connection.execute(
+            """
+            SELECT
+                rowid, prediction_id, source_kind, source_record_id,
+                source_version_id, source_sequence, occurred_at,
+                is_superseded, body, 0.0 AS relevance
+            FROM prediction_search
+            WHERE source_kind = 'question' AND is_superseded = 0
+            ORDER BY prediction_id, rowid
+            """
+        ).fetchall()
+        all_clause_indexes = range(len(parsed_text.clauses))
+        for row in question_rows:
+            if parsed_text.literal_text in normalize_search_literal(str(row["body"])):
+                for clause_index in all_clause_indexes:
+                    _merge_candidate(
+                        candidates,
+                        row,
+                        clause_index=clause_index,
+                    )
+    else:
+        # Punctuation-only text has no FTS tokens, so a bounded scan of
+        # derived documents preserves ordinary literal behavior.
+        rows = connection.execute(
+            """
+            SELECT
+                rowid, prediction_id, source_kind, source_record_id,
+                source_version_id, source_sequence, occurred_at,
+                is_superseded, body, 0.0 AS relevance
+            FROM prediction_search
+            WHERE (? = 1 OR is_superseded = 0)
+            ORDER BY prediction_id, rowid
+            """,
+            (int(include_superseded),),
+        ).fetchall()
+        for row in rows:
+            if parsed_text.literal_text in normalize_search_literal(str(row["body"])):
+                _merge_candidate(candidates, row, clause_index=None)
+
+    prediction_ids = sorted(
+        {candidate.document.prediction_id for candidate in candidates.values()}
+    )
+    predictions = (
+        _select_predictions(connection, prediction_ids)
+        if prediction_snapshots is None
+        else {
+            identifier: prediction_snapshots[identifier]
+            for identifier in prediction_ids
+        }
+    )
+    available_tags = tuple(
+        str(row[0])
+        for row in connection.execute(
+            """
+            SELECT display_name
+            FROM tags
+            WHERE EXISTS (
+                SELECT 1 FROM prediction_tags
+                WHERE prediction_tags.tag_id = tags.id
+            )
+            ORDER BY normalized_name, id
+            """
+        ).fetchall()
+    )
+    fragment_candidates = []
+    for candidate in candidates.values():
+        normalized = normalize_search_literal(candidate.document.text)
+        fragment_candidates.append(
+            SearchFragmentCandidate(
+                row_id=candidate.row_id,
+                document=candidate.document,
+                matched_clause_indexes=frozenset(candidate.matched_clause_indexes),
+                relevance=candidate.relevance,
+                literal_match=(parsed_text.literal_text in normalized),
+                exact_text_match=(parsed_text.literal_text == normalized),
+            )
+        )
+    return predictions, tuple(fragment_candidates), available_tags
+
+
+def read_spelling_suggestion(
+    connection: sqlite3.Connection,
+    parsed_text: ParsedSearchText,
+    *,
+    include_superseded: bool,
+) -> str | None:
+    """Load facts in the existing checked snapshot; open no nested transaction."""
+    if len(parsed_text.clauses) != 1:
+        return None
+    clause = parsed_text.clauses[0]
+    if clause.is_phrase or len(clause.tokens) != 1:
+        return None
+    query_word = clause.tokens[0]
+    if len(query_word) < 4:
+        return None
+    _require_ready_index(connection)
+    rows = connection.execute(
+        """
+        SELECT body
+        FROM prediction_search
+        WHERE (? = 1 OR is_superseded = 0)
+        """,
+        (int(include_superseded),),
+    ).fetchall()
+    vocabulary = Counter(
+        token
+        for row in rows
+        for token in search_tokens(str(row["body"]))
+        if token != query_word
+    )
+    choices = [
+        token
+        for token in vocabulary
+        if abs(len(token) - len(query_word)) <= 1
+        and _edit_distance_at_most_one(query_word, token)
+    ]
+    if not choices:
+        return None
+    return min(choices, key=lambda token: (-vocabulary[token], token))

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from reckonsolve.application.errors import ValidationError
 from reckonsolve.clock import SystemClock
 from reckonsolve.domain.forecast_contracts import EffectiveResolutionTime
+from reckonsolve.ui.date_display import format_exact_datetime, input_date_format
 from reckonsolve.ui.visual_system import Spacing, TextRole, apply_text_role
 
 
@@ -38,7 +39,7 @@ class EffectiveTimeInput(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
         )
         self.editor.setTimeZone(QTimeZone.utc())
-        self.editor.setDisplayFormat("yyyy-MM-dd HH:mm")
+        self.editor.setDisplayFormat(input_date_format(self, " HH:mm"))
         self.editor.setCalendarPopup(True)
         self.editor.setAccessibleName("Effective resolution date and time")
         self.offset = QLineEdit(self)
@@ -63,7 +64,7 @@ class EffectiveTimeInput(QWidget):
         self._initial_controls = (self.editor.dateTime(), self.offset.text())
         if current is not None:
             self.editor.setToolTip(
-                "Saved exact instant: " + current.astimezone().isoformat(sep=" ")
+                "Saved exact instant: " + format_exact_datetime(current, self)
             )
         label = QLabel("Effective resolution time", self)
         apply_text_role(label, TextRole.LABEL)
@@ -89,7 +90,7 @@ class EffectiveTimeInput(QWidget):
         self.use_now.toggled.connect(self._set_now)
         self.precise.toggled.connect(
             lambda checked: self.editor.setDisplayFormat(
-                "yyyy-MM-dd HH:mm:ss.zzz" if checked else "yyyy-MM-dd HH:mm"
+                input_date_format(self, " HH:mm:ss.zzz" if checked else " HH:mm")
             )
         )
         self._set_now(self.use_now.isChecked())

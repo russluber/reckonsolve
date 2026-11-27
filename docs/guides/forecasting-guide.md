@@ -127,11 +127,12 @@ for examples, filters, uncertainty, and whole-number ties.
 ### Keep a recoverable copy
 
 Use **Settings → Back Up Now** or the CLI `backup` command for a complete SQLite
-recovery file. CSV format 5, available through Settings or `export-csv`, is for analysis.
+recovery file. CSV format 6, available through Settings or `export-csv`, is for analysis.
 It includes original and effective One-Shot facts, reported and app-recorded times, and
 every transcription correction with a data dictionary. A copied external note is still
 an external note; export does not turn its reported time into proof of commitment.
-CSV cannot restore the application or its Saved Views and settings.
+CSV cannot restore the application or its settings. Retired Saved View configurations
+remain only in a protected pre-upgrade SQLite recovery copy.
 
 ## Forecasting rulebook
 

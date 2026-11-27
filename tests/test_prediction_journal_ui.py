@@ -24,7 +24,6 @@ from main_window_helpers import (
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
-    QGroupBox,
     QLabel,
     QPlainTextEdit,
     QPushButton,
@@ -280,7 +279,7 @@ def test_unified_timeline_renders_forecasts_and_journals_as_plain_text(
     assert timestamp.text() == (
         datetime(2026, 8, 13, 19, 30, tzinfo=UTC)
         .astimezone()
-        .strftime("%b %d, %Y at %H:%M")
+        .strftime("%Y-%m-%d, %I:%M %p")
         .strip()
     )
 
@@ -575,11 +574,11 @@ def test_correction_displays_edited_marker_and_collapsed_plain_text_history(
         _required_child(window, QLabel, "journalEntryBody4").text()
         == "<i>Corrected body</i>"
     )
-    history = _required_child(window, QGroupBox, "journalEntryEditHistory4")
+    history = _required_child(window, QWidget, "journalEntryEditHistory4")
     content = _required_child(window, QWidget, "journalEntryEditHistoryContent4")
-    assert not history.isChecked()
+    assert not history.disclosure_button.isChecked()
     assert content.isHidden()
-    history.setChecked(True)
+    history.disclosure_button.setChecked(True)
     assert not content.isHidden()
     original = _required_child(window, QLabel, "journalEntryOriginalBody4")
     correction = _required_child(window, QLabel, "journalCorrectionBody1")
@@ -589,7 +588,6 @@ def test_correction_displays_edited_marker_and_collapsed_plain_text_history(
     assert correction.textFormat() is Qt.TextFormat.PlainText
     assert chart.revision_count == 1
     assert (
-        _required_child(window, QLabel, "journalCorrectionHeading1")
-        .text()
-        .startswith("Correction 1 ·")
+        _required_child(window, QLabel, "journalCorrectionHeading1").text()
+        == "Correction 1"
     )

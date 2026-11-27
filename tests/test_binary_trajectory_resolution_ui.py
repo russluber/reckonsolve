@@ -93,12 +93,12 @@ def test_resolve_now_and_scorecard_progressive_diagnostics(qtbot, active):
     screen.show()
     assert screen.scorecard_section.isVisible()
     assert "Trajectory Brier" in screen.scorecard_brier.text()
-    assert not screen.trajectory_diagnostics.isChecked()
+    assert not screen.trajectory_diagnostics.disclosure_button.isChecked()
     assert "Outcome became knowable" in screen.resolution_resolved_at.text()
     assert "Recorded at" in screen.resolution_resolved_at.text()
-    screen.trajectory_diagnostics.setChecked(True)
+    screen.trajectory_diagnostics.disclosure_button.setChecked(True)
     texts = "\n".join(
-        label.text() for label in screen.trajectory_diagnostics.findChildren(QLabel)
+        label.text() for label in screen.scorecard_section.findChildren(QLabel)
     )
     assert "Initial Brier" in texts
     assert "Final Brier" in texts
@@ -107,11 +107,6 @@ def test_resolve_now_and_scorecard_progressive_diagnostics(qtbot, active):
     assert "Neutral Weight" in texts
     assert "75.0%" in texts
     assert "25.0%" in texts
-    help_text = "\n".join(
-        label.toolTip() for label in screen.trajectory_diagnostics.findChildren(QLabel)
-    )
-    assert "Active Forecast Fraction" in help_text
-    assert "mechanical hindsight" in help_text
 
 
 @pytest.mark.parametrize("font_size", [9, 12])
@@ -128,7 +123,7 @@ def test_binary_score_details_resize_without_changing_scores(
         qtbot.addWidget(screen)
         install_visual_system(screen)
         screen.show_prediction(resolved)
-        screen.trajectory_diagnostics.setChecked(True)
+        screen.trajectory_diagnostics.disclosure_button.setChecked(True)
         screen.show()
         for width in (1300, 500, 1300):
             screen.resize(width, 900)

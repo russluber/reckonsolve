@@ -1,7 +1,7 @@
 # Reckonsolve architecture
 
-Current implementation: v0.8.0, schema 20, search projection 3, CSV format 5.
-Last reviewed: 2026-10-06.
+Unreleased 0.9.0 candidate: Journal/workspace, New Prediction/Prediction Detail and the comprehensive Performance/ordinary Settings implementation, schema 21, search projection 3, CSV format 6. Journal/Detail walkthroughs are [accepted with recorded limits](archive/releases/2026-11-11-prediction-detail-verification.md#reported-detail-completion-acceptance--2026-11-12); the third slice is [accepted with recorded limits](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12). Journal relocation is [accepted with recorded limits](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12). Released v0.8.0 remains the schema-20/format-5 baseline; prepared metadata is not publication.
+Last reviewed: 2026-11-24.
 
 The [product specification](product-spec.md) governs behavior. This document describes implemented boundaries. Detailed decisions are in [ADRs](decisions/README.md); the earlier chronological account is preserved in the [architecture archive](archive/architecture-through-v0.8.md).
 
@@ -32,7 +32,13 @@ Presentation collects and renders values. Application operations coordinate use 
 | reckonsolve; python -m reckonsolve; reckonsolve-cli / rsc | Stable | %LOCALAPPDATA%\Reckonsolve |
 | reckonsolve-dev; reckonsolve-cli-dev / rscd | Development | %LOCALAPPDATA%\Reckonsolve Dev |
 
-Identity is selected before path resolution. Each directory contains reckonsolve.sqlite3 and a separate presentation.ini. Tests and private smoke inject explicit temporary database paths. Normal commands do not offer arbitrary database selection, discover test paths, fall back to another identity, or copy data between identities. CLI help/version opens no database.
+Identity is selected before path resolution. Each fixed bootstrap initially contains reckonsolve.sqlite3. It retains presentation.ini plus format-1 identity/location/move records and the runtime lease after relocation. The active database may move to a reviewed unused local NTFS folder. Tests/private smoke inject explicit temporary files, bypassing user bootstrap entirely, or inject a complete disposable managed bootstrap. Normal commands do not offer arbitrary database selection, discover test paths, fall back to another identity, or copy data between identities. CLI help/version opens no database.
+
+`paths.open_runtime_location` supplies the same identity-first resolver to GUI/CLI. `data/journal_location.py` validates bootstrap identity, locator, move phase, ownership and generation; missing/unknown state does not initialize another journal. Managed existing paths pass `allow_create=False` to `Database.open`: SQLite `mode=rw` prevents creation races, and recognized migration-history preflight rejects empty/unrelated files before upgrade/initialization. Only a missing default in an uninitialized profile may be created. Valid supported older recovery copies keep ordinary upgrade/refusal rules.
+
+`data/location_native.py` owns narrow Win32 shared-runtime/exclusive-move leases, source/destination write fencing, file identity and fixed-NTFS/alias validation, persistent read-only protection and flushed same-directory metadata installation. `data/relocation_snapshot.py` owns checked read-only complete images and exact recovery/copy verification. `application/relocation.py` coordinates review, phase changes, source protection and explicit recovery; SQL stays in data modules. The [relocation ADR](decisions/0023-native-journal-relocation-and-recovery.md) records the ordering and limitations. No SQL schema, migration, dependency or scoring change is needed.
+
+The GUI drains read requests and closes its SQLite connection/shared lease before exclusive movement. A failed unprotected move reacquires the unchanged location and reconnects the same Database object, preserving repository references. A protected/uncertain failure blocks data actions. Completion re-resolves and verifies the installed journal before recording completion. `app.run` closes the old runtime and constructs a fresh window/database/workspace using the same QApplication/identity; it does not guess a shell launcher. Stored appearance/geometry remain in fixed bootstrap; retrieval/report/draft state is fresh. CLI startup refuses pending recovery and identifies its move record; the matching updated GUI provides recovery review. The GUI's explicit Keep current location / Verify and finish move actions never choose a copy on failed verification.
 
 An installed uv tool is a source snapshot independent of ongoing checkout edits. Matching GUI/CLI processes share local SQLite directly; normal refresh/navigation/restart observes another process's successful write. There is no watcher, daemon, synchronization ledger, API, or hosted service.
 
@@ -43,11 +49,17 @@ Paths below are relative to src/reckonsolve/.
 | Boundary | Main modules | Responsibility |
 | --- | --- | --- |
 | Composition | app.py, cli.py, identity.py, paths.py | Identity, lifetime, entry points, injected clock/paths. |
-| Application | application/predictions.py, application/quantiles.py, application/one_shot.py | Complete actions, reviewed-context checks, read models, expected-error translation. |
+| Application | application/predictions.py, application/quantiles.py, application/one_shot.py, application/reflection.py | Complete actions, reviewed-context checks, read models, expected-error translation and reflection-only delegation preserving terminal facts. |
 | Domain | domain/forecast_contracts.py, domain/predictions.py, domain/quantiles.py, domain/one_shot.py | Closed identities, lifecycle/time rules, exact values, complete statements and documentary times. |
 | Persistence | data/database.py, data/migrations.py, data/predictions.py, data/quantiles.py, data/one_shot.py | Connections, immutable schema history, model-aware transactions and reads. |
 | One-Shot replay | data/one_shot_facts.py, data/one_shot_archive.py | Independently checked original/correction replay and effective archive facts. |
-| Retrieval | data/search_index.py, data/search.py, data/saved_views.py, data/tags.py | Derived projection, grouped hits, dynamic preferences and tag transactions. |
+| Retrieval | application/journal.py, data/journal.py, domain/journal.py, data/search_index.py, data/search.py, data/tags.py | Checked Journal facts, faithful matching/order/counts, derived projection and tag transactions. |
+| Workspace | ui/main_window.py, ui/workspace_state.py, ui/workspace_toolbar.py, ui/creation_task.py, ui/appearance.py | Composition, task sources, eligible controls, retained creation and presentation preference. |
+| Journal widgets | ui/journal/ | Separate applied state, filter drafts, one-worker request coordination, controls and rows/excerpts. |
+| Creation and Detail | ui/creation_screen.py, ui/binary_detail.py, ui/numeric_detail.py, ui/one_shot_detail.py, ui/prediction_detail.py | Mode-specific composition and reading; the small host dispatches the four contracts. ui/screens.py retains imports for existing callers. |
+| Detail components/tasks | ui/prediction_contracts.py, ui/prediction_widgets.py, ui/detail_workspace.py, ui/detail_reading.py, ui/numeric_interval.py | Narrow view/operation contracts, committed presentation, Timeline helpers, exact interval labels, independent panes and one guarded writing task. |
+| Focused forms | ui/prediction_dialogs.py, ui/dialog_review.py, ui/contextual_forms.py, ui/reflection_editor.py, ui/editor_submit.py, ui/form_layout.py, ui/revision_fields.py, ui/editor_feedback.py | Existing operation-backed forms, compact reading labels, local primary-action submission, internal review, contextual embedding, current/draft alignment and retained-input failure feedback. |
+| Upgrade | data/upgrade.py, data/journal_migration.py, data/writer_contract.py | Protected recovery/review, ordered schema 21 and persistent stale-writer exclusion. |
 | Analytics | analytics/trajectory.py, analytics/quantiles.py, analytics/one_shot.py and aggregate modules | Exact selection/scoring and separate observation populations. |
 | Transfers | data/transfer.py | Verified online backup and snapshot-based CSV ZIP. |
 | Desktop | ui/ | Screens/dialogs, shared styles/icons, charts/text alternatives, notifications and preferences. |
@@ -70,13 +82,16 @@ Adaptive is presentation terminology; canonical mode deadline remains unchanged.
 
 Startup, migrations, ordinary reads/writes, repair, backup, and export enforce compatible identities. Any retired-only or mixed-with-retired archive, missing/unknown/mismatched pair, unsupported schema, or malformed history fails clearly without conversion, deletion, repair, or partial loading. Compatibility checks occur before mutation and surround shared transactions. No startup failure silently replaces an existing database. See [ADR 0019](decisions/0019-retire-legacy-runtime-without-rebuilding-history.md).
 
-Migrations are lightweight, ordered, history-validated, transactional, foreign-key checked, and covered by rollback tests. Already-applied migration SQL is never edited. Supported Binary schema-16/17 and supported schema-18/19 archives upgrade through schema 20 preserving canonical facts.
+Migrations are lightweight, ordered, history-validated, transactional, foreign-key checked, and covered by rollback tests. Already-applied migration SQL is never edited. Supported Binary schema-16/17 and supported schema-18/19 archives upgrade through schema 21 preserving forecasting history; deprecated Saved View configurations use the recovery/review boundary below.
 
 - Schema 16 stores immutable contracts and prospective exact times.
 - Schema 17 supports trajectory terminal correction/read integration.
 - Schema 18 adds immutable five-quantile definitions/revisions and explicit shared anchors.
 - Schema 19 adds two One-Shot pairs, documentary times, and transcription snapshots.
-- Schema 20 adds only nullable, constrained Saved View forecast_mode; null preserves All modes.
+- Schema 20 historically adds nullable, constrained Saved View forecast_mode.
+- Schema 21 retires those configurations after verified recovery/review and adds closed One-Shot correction source_action.
+
+[ADR 0022](decisions/0022-reviewed-journal-upgrades-and-writer-guards.md) records exclusive transition/recovery, persistent per-connection writer guards, cancellation and failure behavior. No personal upgrade or journal relocation is implied by the local implementation.
 
 Historical tables needed for supported storage/migration are not extra supported runtime contracts.
 
@@ -93,13 +108,13 @@ Atomic units include:
 - Journal: current forecast anchor plus one immutable entry; body correction appends a version without moving the entry.
 - Metadata: permitted current fields, protected Definition snapshot when required, tags/search, and concurrency token.
 - Resolution/Invalidation: one immutable terminal decision; correction appends before/after facts with reviewed-current checks.
-- One-Shot Add answer: first original answer and documentary report, without another forecast.
-- One-Shot Correct transcription: complete validated before/after snapshot and app timestamp.
+- One-Shot Add Answer: first original answer and documentary report, without another forecast.
+- One-Shot Correct Transcription: complete validated before/after snapshot and app timestamp.
 - Postmortem Skip: one immutable completion, with Resolved/blank/reflection-context checks.
 - Tag maintenance: confirmed relationships, stable references, metadata tokens, and all affected search documents.
 - Guarded Delete: revalidated untouched Open parent and its eligible child rows, without orphans.
 
-Expected errors are translated to clear application failures; unexpected exceptions are not suppressed. One-Shot writes return a complete OneShotDetail before commit, avoiding a second read that might fail after a successful save. Creation and correction forms never request scores before Save.
+Expected errors are translated to clear application failures; unexpected exceptions are not suppressed. One-Shot writes, metadata saves, Numeric Journal corrections and Numeric invalidation construct their complete responses before commit, avoiding a later read that could fail after a successful save. Creation and correction forms never request scores before Save.
 
 ## 6. Adaptive history and scoring
 
@@ -117,7 +132,7 @@ Continuous-style calibration uses inclusive frequencies and pointwise 95% Wilson
 
 One-Shot records one final guess before checking an existing answer. There is no Deadline, normal revision/Review, cutoff selection, trajectory, or updating metric. Reported forecast/reveal wall minutes, approximation flags, and optional offsets are documentary. System app-entry/correction instants are separate audit facts. Neither timing source selects score observations.
 
-Original forecasts reuse sequence one in supported revision tables. Original answers reuse type-specific Resolution tables with null effective time. one_shot_forecast_times and one_shot_answer_times store optional reports. one_shot_corrections stores full relational before/after snapshots with per-Prediction sequence, app time, and optional note.
+Original forecasts reuse sequence one in supported revision tables. Original answers reuse type-specific Resolution tables with null effective time. one_shot_forecast_times and one_shot_answer_times store optional reports. one_shot_corrections stores full relational before/after snapshots with per-Prediction sequence, app time, optional note and immutable source_action. Historical/default transcription repairs never create Journal recency. Only the dedicated reflection-only Postmortem operation can mark a blank-to-nonblank reflection as new work; edits and clears remain repairs.
 
 SQL/domain guards enforce immutable originals, single-forecast cardinality, no Reviews, current-before snapshots, and exact ordered/integral quantities. Checked read-only original/effective projections replay corrections, including a forecast corrected before a later first answer. A blank answer in an earlier correction cannot erase that later answer. [ADR 0021](decisions/0021-one-shot-originals-and-transcription-snapshots.md) records the layout.
 
@@ -129,31 +144,218 @@ Search projection 3 uses SQLite FTS5 fragments with stable source provenance. Ca
 
 The query boundary parses ordinary text, applies structured filters, evaluates same-Prediction word coverage, ranks explainably, and groups one row per Prediction. History-only matches are labeled and navigate to the correct source/version in Detail. Missing/stale/damaged derived state is a visible repair condition, never a false empty result. Repair changes no canonical history/time.
 
-Saved Views store dynamic query/filter/sort configurations, not result membership. Stable tag references survive explicit rename/merge. Schema-20 mode persistence is nullable and constrained. Search/mode/date/attention filters are read-only; One-Shot has no fabricated Deadline or updating attention.
+Saved Views have no runtime model, GUI, CLI or active tables after schema 21; the protected pre-upgrade copy retains earlier configurations. Tags remain reusable current relationships. Search/mode/date/attention filters are read-only; One-Shot has no fabricated Deadline or updating attention. The attention threshold remains configurable through CLI settings attention-days.
+
+Journal reads admit the whole archive before filtering, reuse the existing corpus/ranking and build scoring-eligible summaries with shared score functions. Last active is derived from qualifying committed events and explicit reflection provenance. The current request publishes bounded rows and its full matching-Prediction count together. Enter/Search submits text; one worker owns its read-only connection, coalesces requests and discards obsolete completions. Edited text makes prior results unavailable; temporary failure, projection failure, archive refusal and successful zero results stay distinct.
 
 Journals appear once at their original causal Timeline position, displaying current corrected text with collapsed edit history. Superseded matches open that history. Answered One-Shots share the Resolved-only Postmortem queue, Skip, and later reflection. All terminal originals and corrections stay inspectable.
 
 ## 9. Desktop presentation boundary
 
-ui/visual_system.py owns palette-relative typography, semantic colors, spacing, surfaces, badges, focus/disabled states, action roles, and restrained motion. No widget-local theme framework or domain/data dependency is introduced. Local Lucide assets and dropdown chevrons follow the packaged resource path; palette changes refresh colors and icons.
+The shared toolbar omits its duplicate in-content product label; native window titles retain stable/development identity. A palette-aware bottom rule separates it from the page. `components.py` supplies SectionRule and selectable, wrapping TagChips; Journal places a rule before result states/rows. `icons.py` remembers a decorative bundled Lucide leading action on its search field and refreshes its palette without duplicating actions or changing input commands.
 
-New Prediction is the prominent action; Dashboard, Predictions, and Analytics are permanent destinations; Settings is a bottom utility; Detail is contextual with source-aware Back. Return preserves Predictions query, filters, Saved View, results, selection, and scroll. Responsive controls/results panes and Analytics chart/table pairs stack when narrow. User/history text remains selectable, with explicit empty/error states.
+DetailWorkspace keeps one header rule across reading refreshes and an unmanaged, mouse-transparent vertical rule in the existing pane gap. Resize/move events follow the real Timeline column geometry, including animation frames, without changing stretch indexes, adding a splitter or forcing history reflow. Question precedes a wrapping type/status/tag row in both Adaptive types and One-Shot. TagChips retains exact names and the existing group search target; persistence and tag relationships remain outside the component. `numeric_interval.py` supplies the thin/thick/vertical IntervalLegend alongside text, reused by HeaderTiming and One-Shot Numeric without changing interval projection or exact values.
+
+MainWindow's `workspaceSurface` contains the toolbar and page stack within one quiet square-edged outline. Its parent `workspaceFrame` paints a slightly deeper outer canvas; shared palette-derived colors in `ui/visual_system.py` retain the interior palette. Both native widgets explicitly enable styled-background painting. Ordinary read-only surfaces use transparent backgrounds and bottom rules; semantic messages retain useful boundary/color distinctions with square corners. Journal preview and Detail header metadata containers carry `reckonsolvePredictionMetadata`; a scoped exception gives their type/status/tag labels the existing small corner radius. Journal uses FlowLayout, StatusBadge and TagChips to show existing canonical-summary tags beside mode/status with natural wrapping, exact plain-text/selectable labels and unchanged row identity/retrieval/navigation. Inputs, buttons and dropdowns retain control radii. The same surface boundary follows all routes, with layouts and notification parenting retained. No graphics effect, shadow, new wrapper hierarchy or frame animation is introduced.
+
+Journal presentation keeps a transient result-focus bookmark outside retrieval/canonical state. MainWindow asks for focus restoration on source-aware Journal returns; the Journal owner also detects replacement of a focused result during refresh. After layout/anchor restoration it focuses the originating visible Question or a current nearby target, with search/retry fallback. A different action during the asynchronous read owns focus; hidden pages cannot reclaim it. No newly reordered record is followed outside the restored browsing vicinity. Same-request reads retain readable rows and reuse unchanged widgets, including focused match disclosures; changed rows are replaced. New retrieval controls still mask the previous request, and failures clear retained success. Polling skips an already busy or hidden screen. Every refresh still performs checked archive admission and retrieval; this is presentation reuse, not a database-result cache. The [post-review record](archive/releases/2026-11-13-workspace-refinement-verification.md) records timing evidence and later reported refinement acceptance with its limits.
+
+`ui/date_display.py` owns GUI date order and ordinary/exact time rendering. The root window supplies an identity-scoped date-format preference through widget ancestry; no mutable global preference or lower-layer UI dependency is introduced. `presentation.ini` stores DD-MM-YYYY, MM-DD-YYYY or YYYY-MM-DD (default) separately from the journal, retaining it across restart/relocation. Windows supplies the local zone; Settings exposes its name/current offset without an override. Ordinary timestamps omit offsets, while exact entry and terminal confirmation retain offset/DST cues. Reported One-Shot wall times retain their documentary offsets. Date-input presentation changes preserve native values and precision. Journal/Timeline widget reuse includes date-format/Windows-zone context, so unchanged canonical facts can be rendered again after presentation changes. CLI/default shared text and analytical formats remain unchanged.
+
+`ui/numeric_interval.py` owns exact grouped labels, proportional marks and connector geometry. It coalesces font/style notifications from itself and its labels with a child-owned single-shot timer, then measures final metrics and updates the required height. Destroying the interval cancels pending metric work. Dynamic typography changes reflow labels even when interval width is unchanged; values and mark positions retain their original exact meaning.
+
+Answered One-Shot Numeric headers pass the effective Checked Answer to that interval as an optional display value. A gold diamond, legend and exact accessible description distinguish it from the five saved quantiles. An outside answer extends the display scale, with forecast bands ending at the saved percentiles and ties grouped. One-Shot Results owns the visible Checked Answer text and uses a gold text token with sufficient contrast in both palettes. TerminalSummary uses a two-column fact grid with outcome or reason opposite score, then effective and recorded times opposite the existing forecast disclosure. Invalid status uses the shared Caution tone in Journal and both Detail modes.
+
+Content disclosures use chevrons or underlined history links, including Reason History, creation's More Details and the optional resolution Postmortem. Value-setting time/answer options retain native checkboxes. Performance retains the four named forecasting sections without redundant mode headings. `ui/form_layout.py` keeps the height-for-width policy on wrapped form labels so native scroll containers can fit their text. Detail reading uses bottom spacers to keep short panes top-aligned and allow long rows their measured height. Numeric Revision reflows each committed/draft pair without replacing its draft field. `ui/one_shot_reading.py` lets an enclosing reading section own its trailing boundary, suppressing nested final rules or row borders while preserving separators between records. Disclosure finishing is idempotent.
+
+MainWindow centers the existing toolbar/page content inside a native horizontal layout. Shared `ContentWidth` tokens cap Journal, Detail, Settings and New Prediction at 1,320 and Performance at 1,440 logical pixels; narrower windows use their available width. Adaptive and One-Shot creation retain their centered 980-wide inner form columns and native scrolling inside the shared foreground surface. Both creation scroll areas use the shared transparent viewport treatment, exposing the same canvas and outline as other routes; source returns, draft ownership and validation are unchanged. Settings pairs a preferences column with an administration column. Native box layouts stack those columns and place tool actions below their guidance when measured font and control widths need more room. Its scroll area fits ordinary options at supported minimum geometry and scrolls vertically for taller content. Folder guidance and its chooser follow the same reflow; the chooser is the group's focus proxy and is placed between date preference and backup in the control tab order. Tool results, operations and navigation remain with their existing owners. Performance's paired/stacked layout and viewport-owned scope strip follow the bounded area without changing report state. The notification host stays inside that area. The native window itself, saved geometry, page identities and task/scroll state remain unchanged.
+
+The shared stylesheet keeps native QScrollBar behavior while giving each orientation a transparent track and an inset thumb. Canvas-colored borders leave a 4-pixel resting fill within the stable 14-logical-pixel slider hit lane; hover, focus and pressed states reduce the inset for an 8-pixel fill without resizing the lane or content. Palette-derived thumb colors retain contrast, with a distinct focus color. Native end-arrow boxes are omitted; track paging, wheel, dragging and keyboard actions remain Qt-owned. Scroll ranges/policies and Detail's independent panes are unchanged; there is no custom overlay, auto-hide timer or scrollbar widget.
+
+The shared dialog-presentation owner in `ui/prediction_widgets.py` renders repeated forecast context as unboxed, selectable body text instead of another headline. Labels accept their wrapped minimum height and shrinkable width, preserving complete exact text in contextual task scroll areas and standalone dialogs. Mouse and keyboard text selection remain available. This changes presentation only; reviewed snapshots, form values and operation guards remain with their existing owners.
+
+Journal has row-specific Question, body/secondary/label and forecast typography in `ui/visual_system.py`. Questions use semibold emphasis above the shared Binary/Numeric forecast value size, while supporting labels/dates are larger than ordinary base text. Detail roles remain unchanged. Numeric rows use the existing FlowLayout for content-sized percentile/value groups with fixed gaps; extra viewport width stays after the groups, while long values reflow with their labels in the original order. FlowLayout advertises measured height-for-width without claiming surplus vertical expansion; a compact heading row cannot absorb a tall Timeline's empty height between its label and prose. No proportional interval or value rounding is introduced. TerminalSummary uses the shared compact chevron disclosure for its unchanged supporting forecast context, including scored and archival variants.
+
+FlowLayout can center children within each measured wrapped line. Journal outcome
+facts opt into this alignment, keeping padded chips level with plain text.
+Actual/Outcome captions and emphasized values share a native horizontal group;
+complete facts retain their accessible text. Journal's metadata scope uses base
+text size and subdued mode chips below the larger outcome row. Other FlowLayout
+callers keep their existing top alignment.
+
+`TimelineEntry.add_action` scopes compact inline padding and a stable focus border to
+Journal correction actions in all four Detail contracts. Edited header timestamps
+share the natural-width Timeline label treatment, avoiding artificial wrapped height.
+Adaptive Numeric Journal rows render their body directly below the header while
+keeping their immutable forecast anchor in the application snapshot; actual forecast
+revision/Review rows retain their complete interval context. Binary retains the short
+anchored percentage below its body. Rendering changes no history, search target or
+correction operation.
+
+Journal's middle percentile label is simply 50th; Detail interval labels retain Median. WIS interval charts use dedicated actual-fill/outline colors so the diamond remains gold across appearances without changing warning-text contrast. One-Shot provenance disclosures use flat original/Before/After snapshot groups with separated headings, dates and complete values. Width-flexible labels retain height-for-width wrapping. Object identities and historical navigation remain unchanged.
+
+`ui/detail_reading.py` supplies TimelineEntry for shared ruled history rows: a natural-width wrapping event/date header, selectable body and optional controls. It is used by both Adaptive types, terminal events, One-Shot Journal/recorded history and definition changes. Current Revision keeps a quiet accent marker/left rule. Detail-only text roles distinguish pane headings, event/subsection names, prose and quieter times. Newly rendered reading labels receive their roles once; retained rows avoid repeated font repolishing. Changed hidden layouts invalidate their height-for-width caches before reflow. The two reading bodies scope flat panel/group styling and remove card insets; writing controls and other screens retain their shared surfaces. No history target, row-reuse identity, order, disclosure default or data operation changes.
+
+Adaptive Overview's Probability History, More Information, Latest Committed Distribution and supporting scored-forecast wrappers all opt into the same compact disclosure. The existing reading-refresh owner still controls lifecycle visibility, fresh-visit collapse, exact reveal and ongoing-task retention; directly displayed nonterminal charts are unchanged. Dialog/edit actions remain ordinary actions.
+
+Adaptive Numeric Detail places the supplied immutable Unit and Decimal Places in a wrapping two-field row below Resolution Criteria in every reading state. More Information owns only the remaining optional context/history; its empty state is distinct from unavailable definition history. This moves presentation widgets without changing application operations, canonical facts or precision.
+
+ui/components.py supplies the shared Binary ProbabilityPresets. Adaptive and One-Shot creation use the same direct-entry row, with separate widget identities and no save action; contextual revision opts into wrapping. Compact presets and the shared New button reserve their focused border width so keyboard focus does not clip labels or change geometry.
+
+The same module's ProbabilityInput retains QSpinBox editing/keyboard behavior,
+replacing its native arrow chrome with real minus/plus child tool buttons. Measured
+text margins reserve their width, glyphs follow font changes, and native stepping
+commits pending text before adjustment. Bound, disabled and read-only states apply
+to both controls without adding tab stops or save actions. This shared field is
+used by Adaptive creation and One-Shot's value form. Native arrows on precision
+and other spin inputs retain their existing style/behavior. Creation headings use
+SectionRule before untitled ContentPanels; empty panel titles hide the entire
+heading region. Type labels, the omitted One-Shot subtitle and the accent-colored
+Deadline required marker are presentation only. Required descriptions/tooltips and
+the exact Deadline validator retain their existing responsibility.
+
+ui/visual_system.py owns palette-relative typography, semantic colors, spacing, surfaces, badges, focus/disabled states, action roles, and restrained motion. Palette propagation may request several refreshes; unchanged stylesheet text is retained so each appearance change repolishes the workspace once. Semantic fonts still refresh for native font changes. No widget-local theme framework or domain/data dependency is introduced. Local Lucide assets and dropdown chevrons follow the packaged resource path; palette changes refresh colors and icons.
+
+The chart/table comparison in ui/analytics_components.py coalesces surface synchronization until Qt finishes palette propagation and stylesheet repolishing. Its graph and table then use the same resolved panel surface; explicit child backgrounds cannot retain the previous appearance while text changes.
+
+Page-title typography leads the Question role while preserving readable Question/forecast emphasis. Shared FlowLayout omits empty/hidden items from geometry and minimum sizing, so lifecycle-ineligible controls leave no stray spacing. Adaptive Timeline heading, Current Revision and order controls wrap together above the history scroll area; the independent pane proportions and jump target remain unchanged.
+
+ui/detail_reading.py supplies the shared terminal summary. Resolved Adaptive headers render effective outcome/actual and the existing analytical score, with eligible forecast context on request. Invalid headers across both modes lead with the effective reason and Not scored, preserve the original decision date and distinguish later reason corrections. Open/Locked retain committed forecast headers. The component receives display-ready facts; it performs no score calculation, canonical writes or SQL.
+
+ui/detail_sections.py owns Adaptive Resolution notes/Postmortem reading panels and terminal Timeline rows. Existing immutable recorded-at facts order Resolution, corrections, Skip and Invalidation alongside ordinary events; effective cutoff times never substitute for recording chronology. Current results have one prominent home, while complete original/corrected snapshots stay in collapsed history. Write/Edit Postmortem and eligible Skip share the action strip; factual repairs remain under More.
+
+Its TimelineRows presentation state compares freshly read immutable events and rendering context, retains unchanged widgets and native layout items, and replaces only changed rows. Incremental reconciliation preserves Qt's size caches on an append; changing order moves the existing items rather than recreating them. Current-revision/scoring-exclusion annotations participate in row identity checks. Order controls rearrange the loaded rows without database access; opening a writing task still refreshes canonical context and retains shared transaction/stale checks. Empty state clears the retained rows. Ordinary entry resets disclosures/search cues, while repeated exact reveals restart one cue timer per target.
+
+Adaptive score details live in Overview without repeating the terminal header. Numeric scorecards expose individual median/interval feedback and retain the existing WIS breakdown on request. The current CDF is labeled Latest committed distribution and starts collapsed on terminal records, explicitly separate from an earlier eligible scoring forecast. It never renders a historical CDF. Narrow charts reserve room for complete endpoint/unit labels; revision headings and Journal history wrap without changing values or anchors.
+
+Performance composition is owned by `application/performance.py`. `AnalyticsRepository.get_performance_sources` admits the complete archive and reads all three canonical source collections plus the full tag library in one read-only SQLite snapshot. The admission-produced One-Shot replay cache is reused. Existing pure trajectory, five-quantile and One-Shot aggregates compute four separate sections; no scoring algorithm, schema, migration or dependency changes. A selected stable tag resolves within that same snapshot. Verified deletion returns All tags with a notice; an unavailable exact unit remains a section error, never implicit broadening.
+
+`ui/read_requests.py` coalesces immutable requests onto one worker and discards obsolete generations. Journal's existing retrieval wrapper and Performance share this coordination. Each Performance worker opens/closes its own read-only connection, without upgrades/repairs/writes or use of the UI connection. Expected read failures are visible; unexpected failures are logged and surfaced. The UI never displays prior-scope values as a new report. Only an identified analytical section failure is isolated; archive refusal blocks the workspace globally.
+
+`ui/performance_state.py` holds session-only tag, independent Numeric units and reading position. `ui/performance_screen.py` coordinates refresh/reset, paired/stacked sections and one viewport-owned Tag/Reset strip pinned while the introduction scrolls away. `ui/performance_sections.py` renders the four existing analytical populations, primary Numeric interval/median balances, exact counts and uncertainty, with supporting percentile tables/diagnostics collapsed initially. These and Binary calibration tables reuse the shared compact chevron; their body identities, session retention and reset defaults remain. `analytics_screen.py` keeps the existing import name as an alias; migrated single-mode containers are removed. Settings tag operations emit confirmed stable-ID provenance; a known merge target replaces a selected source and expires an older background read.
+
+`ui/settings_tools.py` owns each selectable latest tool result. `ui/settings_screen.py` composes appearance, Dates and Time, data-location facts, backup, analytical export, tags, search repair and shortcut guidance. Navigation clears visit-local results; minimization/recoloring do not. A dated receipt retains a presentation callback for date-order changes without rerunning the operation; leaving or starting another operation for that tool clears it. Canonical last-successful-backup metadata remains separate. Tag maintenance preserves confirmations/stale guards, emits no committed-change event on failure/cancel, retains failures beside its tool and routes archive refusal globally. The source coordinator preserves Performance's independent origin through Settings. `ui/location_controls.py` adds native folder selection, a scrollable selectable current/new/recovery review and persistent failures. It invokes shared application operations and explicit startup recovery; no SQL/file protocol lives in signal handlers.
+
+Journal replaces Dashboard and the old browser. A compact shared toolbar offers prominent New, quiet Performance, appearance and Settings controls only on eligible pages. One task-source coordinator owns New/Performance/Settings origins; returning through Settings never overwrites Performance's independent origin. Detail returns to a refreshed Journal retrieval and a useful nearby anchor. No sidebar, peer tabs or general navigation stack remains.
+
+Creation retains all four contracts, whole-task discard/save guards, mode inputs and the Journal/answered-Detail success landings. Numeric validation uses authoritative field errors beside retained forecast inputs. Performance and Settings use the report/tool owners described above. Journal relocation uses the separately authorized, tested location boundary above; its requested walkthrough is accepted with recorded limits. Final integrated acceptance remains separate.
+
+Adaptive Detail keeps committed header/Deadline context above independent Timeline and Overview scroll areas. Open/Locked reading uses 60/40; Resolved/Invalid reading uses 50/50. Contextual writing uses 40/60, with Mark Invalid at 60/40. Main pane headings are TIMELINE and OVERVIEW or ARCHIVAL CONTEXT, with Title Case subsections. Task tabs suppress the duplicate inner Overview heading without discarding the saved context. A 180 ms pane transition follows Qt's animation preference and never gates input. During motion the real Timeline body keeps its current wrapping while its viewport boundary moves; normal wrapping and scrollbar policy resume once at completion. The editor stays live. Direction changes continue from the current proportion without an intermediate jump to an old animation endpoint. An outer fallback scroll preserves access with tall headers or short windows. Numeric intervals project exact scaled-integer ratios only for painting; grouped ties, selectable exact labels and connector leaders never alter canonical values. The Current Revision marker/jump targets the actual saved Timeline row; historical search opens the necessary disclosures and pane.
+
+One-Shot Detail shares the independent two-pane workspace with content suited to one immutable forecast. The left pane contains results, inline later reflection, visible Journal Entries and disclosed Recorded History; the right contains context and disclosed originals/corrections/recorded facts. Waiting uses 60/40 and Resolved/Invalid reading uses 50/50. Shared surfaces, semantic status badges, headings and disclosure controls replace the former single-column reading composition. Contextual Journal/Invalid forms use the same task guard. Existing dialogs are embedded as nonmodal contextual forms where selected; saved signals continue invoking the canonical operations. Temporary Overview consultation retains entered revision values. Raw input fingerprints exclude presentation-only state; no persistent draft is written. No Adaptive updating, Deadline or trajectory workflow is added to One-Shot.
+
+`ui/one_shot_reading.py` supplies OneShotReadingSection: a wrapping subsection heading, full-width body and quiet ending rule. One-Shot's checked answer and prominent full-width scorecard are stacked above distinct Postmortem and Journal Entries sections. Overview starts with available Resolution Criteria, then Background/Rationale and other context, without a label rail. Pane headings, subsection titles, prose and documentary labels use the existing Detail text roles. Section minimum heights follow wrapped content at the current width, preventing nested long notes from being compressed after resize. The helper also separates existing audit disclosures with rules and wraps their native button captions at narrow/enlarged geometry, preserving complete accessible names and body identities. Its event handling remains presentation-only and bounded to these sections.
+
+The shared `collapse_section` compact option uses a content-width, keyboard-focusable native chevron control with palette-relative hover/focus; other callers retain their existing default. Exact historical reveal still opens the same body identity. Skipped reflection displays its immutable completion date and moves later writing into More; written reflection restores Edit and retains any earlier Skip. These are presentation states derived from existing facts, not new storage or completion rules.
+
+`ui/one_shot_audit.py` owns grouped reported/app-recorded times and Numeric definition
+facts, plus original snapshots and correction comparisons. It compares supplied exact
+before/after objects to choose changed display fields, retaining complete snapshots
+under a compact native disclosure. Short facts use labeled comparison columns;
+notes/reflection use full-width reading. Shared date/forecast formatters retain
+canonical precision and documentary cues. The existing disclosure identities and
+Recorded History search targets remain; this module performs no queries, scoring,
+validation or writes.
+
+`ui/one_shot_score.py` renders the supplied Numeric WIS result as four supporting
+reading groups, with quiet labels and exact unit-bearing values. Contributions,
+median error and the two interval diagnostics retain their existing fields and
+meaning. One-Shot Detail uses score presence/type to compose the existing scorecard
+and its native disclosure; the shared CLI text formatter remains unchanged. No
+calculation, domain validation or persistence is added to the presentation helper.
+
+Nested One-Shot reading groups can omit an ending rule when the outer scorecard or
+audit disclosure already owns that boundary. Intermediate group/event separators
+remain; the common reading helpers keep their existing default rules.
+
+`ui/detail_history.py` organizes supplied Adaptive chart context and existing optional
+metadata into reading groups. It reuses the presentation-only ruled section helper,
+retains screen-owned labels/search targets and performs no queries, scoring or
+writes. Binary history paints with the Window/canvas palette role, including hollow
+markers. Detail hides an inner chart heading only when the visible chevron already
+names it; Numeric's exact accessible CDF description remains unchanged. A history
+read error hides the previous chart and supplied exact distribution facts.
+
+`ui/quantile_scorecard.py` presents the existing analytical result in a framed Numeric
+Scorecard, with grouped accuracy/coverage and a compact WIS Breakdown disclosure.
+The semantic scorecard property preserves this deliberate frame and its insets
+inside otherwise flat Detail reading panes. Shared comparison components still
+receive exact supplied scores; native disclosure state participates in the existing
+fresh-visit/draft-consultation rules. No lower-layer dependency or score changes.
+The shared `ReadingScoreGroup` helper in `ui/scorecard_components.py` measures wrapped row heights after
+layout settles, preserving complete captions and exact values at enlarged/narrow
+geometry for both individual scorecard types.
+
+`ui/binary_scorecard.py` renders the supplied TrajectoryScorecard in the shared
+framed surface. Probability scores and the final eligible forecast remain visible;
+Updating and Timing use the existing analytical fields behind an inline text link.
+Unscored context replaces those diagnostics. The screen's existing terminal-header
+facts remain separate; no query, score selection or calculation moves into the panel.
+
+`collapse_section` also supports underlined Show/Hide text controls, retaining the
+same disclosure body/button contract used by refresh, draft consultation and exact
+search reveal. Caption wrapping follows the current Show/Hide label. Corrected
+Journal, Adaptive Resolution and all four Definition histories use this option with visible counts;
+other disclosure styles retain their defaults. Existing source-label identities
+stay intact. `ui/history_disclosure.py` propagates expanded content heights through
+the retained outer row and releases that space on collapse. Nested historical
+rows fit exact wrapped text and header heights at their available width, avoiding
+clipping or surplus vertical spacing. Before remeasuring body text, rows release
+the previous fixed height: Qt's height-for-width result can otherwise inherit that
+minimum and retain blank space after widening. A per-child measurement cache keys
+width, font, text, local style and margins, allowing queued layout work to settle
+without repeatedly clearing/reapplying bounds. Each row uses that measured exact
+height, preventing an obsolete preferred height from turning into gaps between
+fields. Compact insets preserve actual paragraph breaks. History wrappers and
+bodies use maximum vertical size policies,
+keeping surplus reading-pane height below their records rather than stretching
+the expanded text area. Ordinary Timeline layout-item reuse remains.
+When Qt returns `-1` for an unavailable height-for-width measurement, the history
+disclosure uses the layout's natural nonnegative minimum instead. Empty/hidden
+startup panels and temporarily empty expanded bodies follow the same sizing path.
+
+`ui/analytics_charts.py` paints Binary calibration plots with the Window/canvas
+palette role in both Performance populations. This avoids inheriting the input/
+table Base fill supplied by the comparison container. The existing deferred table
+surface synchronization remains; bins, markers, uncertainty, axes, nonvisual
+summaries and report state are unchanged.
+
+Edit Details and Correct Transcription keep review and final consent inside one focused dialog, bound to the reviewed inputs and original concurrency token. Adaptive Resolution/Invalid preparation requires a separate explicit terminal confirmation. Nonblank reflection-only saves delegate unchanged effective terminal facts through shared operations; mixed factual corrections, clearing and Skip keep confirmation. One-Shot reflection uses the dedicated provenance operation. Failure retains inputs; Deadline rejection refreshes committed Locked context and provides a brief right-side notice plus a repeatable cue. User/history text remains selectable; charts remain committed-only.
 
 Creation modes share canvas/card placement and reciprocal top-right One-Shot/Adaptive actions with draft retention. One-Shot shows Background/Rationale/Tags in the main card and optional separate date/segmented time input. ui/time_input.py adapts native QTimeEdit section entry, Tab/Shift+Tab, A/P, and Up/Down. UTC is a neutral Qt carrier for documentary wall time, not normalization of a reported event.
 
 ui/exact_deadline_input.py resolves Adaptive local shortcuts/custom times using target-date zone rules. Repeated hours require an occurrence choice; gaps reject. Explicit-offset override remains. Required heading, selected summary, and validation remain; guidance expander, unset prompt, and explanatory footer are absent. [ADR 0020](decisions/0020-resolve-local-deadlines-explicitly.md) explains the time boundary.
 
-Waiting for answer uses warning yellow, Needs Postmortem informational blue, Resolved success green. Mark Invalid is orange Caution; Delete is red Destructive. Human-readable local-minute labels do not alter exact canonical instants.
+Desktop Answer Pending uses warning yellow for the unchanged One-Shot Open state; shared CLI text remains Waiting for answer. Needs Postmortem is informational blue, Resolved success green. Mark Invalid is orange Caution; Delete is red Destructive. Human-readable local-minute labels do not alter exact canonical instants.
 
-Identity-scoped presentation.ini stores safe geometry/maximized state and sidebar mode outside SQLite. Never restore a minimized/off-screen window. Notifications carry only already-verifiable routine success; errors/decisions remain persistent. Keyboard shortcuts are suppressed during editing/modal decisions. Icons and charts retain accessible names and text alternatives.
+The shared toolbar places an icon-only Journal action beside the right-hand utilities on Performance and Settings, with Journal tooltip/accessibility text. It invokes existing Journal navigation without resetting retrieval; the separate Back action still uses the workspace's independent source. It is hidden on Journal, Detail and creation and disabled by global archive refusal. Shared styling reserves the two-pixel focus border on both Reset View buttons, preserving full text and fixed geometry across focus changes.
+
+Settings also exposes the existing Performance chart icon. `ui/workspace_state.py` derives its return origin from Settings' underlying Journal/Prediction source; returning from a Performance detour retains that report's independent origin. This avoids a Settings/Performance Back cycle within the existing one-source model. The ordinary report owner refreshes current results while retaining session scope, disclosures and useful position; leaving Settings still clears visit-local tool results.
+
+Identity-scoped presentation.ini stores safe geometry/maximized state and Follow Windows / Light / Dark outside SQLite; obsolete sidebar preferences have no visible effect. Never restore a minimized/off-screen window. Notifications carry only already-verifiable routine success; errors/decisions remain persistent. Ctrl+N, Journal-only Ctrl+F and eligible Ctrl+, respect native modal decisions; creation hides unrelated destinations. Retired global navigation shortcuts are absent. Appearance updates the existing widget tree without rebuilding tasks or losing focus/selection; failed preference persistence is explicit. Icons and charts retain accessible names and text alternatives.
+
+`ui/editor_submit.py` installs form-owned key filters on existing editable text
+fields, including native date/spin line editors. Ctrl+Enter and Ctrl+keypad Enter
+focus and click the active form's enabled primary button, committing pending native
+input before the existing handler reads it. The shared dialog presentation binds
+its Save action on show; creation, BodyEditor, ReflectionEditor and One-Shot forms
+bind their own button. Rebinding is idempotent. The filter holds weak references
+back to its owning form and primary button, so a deleted-on-close dialog wrapper
+is released with its native widget. Read-only/hidden fields, background
+forms, unavailable actions and auto-repeat cannot submit or fall through to a
+dialog default button. Ordinary multiline Enter and Escape are unchanged. This
+replaces the earlier multiline-only direct-callback filter without introducing a
+global shortcut or bypassing validation, review or terminal confirmation. Button
+help and the compact Settings reference expose the convention; Settings uses plain
+key labels to retain its ordinary minimum-size fit.
 
 ## 10. Backup, export, and private packaging
 
-Online SQLite backup captures and verifies a temporary complete database before atomic installation, then records success metadata. It includes database settings, Saved Views, and derived search state; presentation.ini remains separate. Supported recovery verifies migration history and derived projection. Unsupported originals remain unchanged.
+Online SQLite backup captures and verifies a temporary complete database before atomic installation, then records success metadata. It includes current settings, history, provenance and derived search state; presentation.ini remains separate. Supported recovery verifies migration history and derived projection. Unsupported originals remain unchanged.
 
-CSV format 5 uses one checked read snapshot, fully quoted UTF-8 CSV, a verified temporary ZIP, and atomic replacement. It retains the 17 format-4 CSV layouts and adds one_shot_original_facts.csv, one_shot_effective_facts.csv, and one_shot_corrections.csv, plus the dictionary. Numeric values remain scaled integers. Optional wall minutes/offsets are documentary; effective facts are a labeled derived convenience, not another observation. Empty exports retain all headers.
+CSV format 6 uses one checked read snapshot, fully quoted UTF-8 CSV, a verified temporary ZIP, and atomic replacement. It retains the 17 format-4 CSV layouts and adds one_shot_original_facts.csv, one_shot_effective_facts.csv, and one_shot_corrections.csv, plus the dictionary. Format 6 extends one_shot_corrections.csv with source_action; other file meanings and exact quantities remain. Numeric values remain scaled integers. Optional wall minutes/offsets are documentary; effective facts are a labeled derived convenience, not another observation. Empty exports retain all headers.
 
-The dictionary explains relationships, nulls, exact quantities, model/scoring dispatch, correction replay, and later-answer handling. Scores, CDF points, Saved Views, settings, preferences, and search rows are excluded. CSV is analytical, not restorable. Failure cannot replace a prior destination. Desktop and CLI share data/transfer.py.
+The dictionary explains relationships, nulls, exact quantities, model/scoring dispatch, correction replay, and later-answer handling. Scores, CDF points, settings, preferences and search rows are excluded. CSV is analytical, not restorable. Failure cannot replace a prior destination. Desktop and CLI share data/transfer.py.
 
 Private Windows onedir builds include local styles/icons and run relocated disposable smoke checks with the bundled runtime. Public source releases ship no installer, signing, public executable, import API, or updater. Generated artifacts remain ignored.
 

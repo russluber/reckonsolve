@@ -9,13 +9,11 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
     QWidget,
 )
 
 from reckonsolve.analytics.quantile_aggregate import (
     Proportion,
-    QuantileAnalyticsSnapshot,
     QuantileCalibrationGroup,
 )
 from reckonsolve.domain.quantiles import QUANTILE_LEVELS, NumericValueConstraint
@@ -23,11 +21,16 @@ from reckonsolve.domain.quantiles import QUANTILE_LEVELS, NumericValueConstraint
 from .analytics_charts import _paint_percent_axes, _plot_rect
 from .analytics_components import (
     AnalyticsPanel,
-    _new_update_metric,
     _ResponsiveChartTable,
     _ResponsiveMetricRow,
 )
-from .visual_system import Spacing, TextRole, apply_text_role, semantic_colors
+from .visual_system import (
+    SurfaceRole,
+    TextRole,
+    apply_surface_role,
+    apply_text_role,
+    semantic_colors,
+)
 
 
 def proportion_text(value: Proportion) -> str:
@@ -240,6 +243,8 @@ class QuantileCalibrationPanel(AnalyticsPanel):
             ("Median Balance", "median"),
         ):
             panel = AnalyticsPanel(title, parent=self.body)
+            # The calibration section owns the ending rule for these tables.
+            apply_surface_role(panel, SurfaceRole.CANVAS)
             table = _table(
                 ("Outcome", "Count · %", "95% Wilson"),
                 3,
@@ -257,15 +262,12 @@ class QuantileCalibrationPanel(AnalyticsPanel):
         )
         self.body_layout.addWidget(self.balance_row)
         guidance = (
-            "The nominal percentile can lie anywhere within the tie band, allowing for sampling variation; the band shows ties, not uncertainty. "
-            "Whole-number ties can put closed-interval coverage above 50% or 90% without implying miscalibration. Median ties are retained."
+            "The band shows ties between the open and filled dots, not uncertainty. "
+            "Whole-number ties can raise interval coverage above 50% or 90%."
             if whole
             else "Reference below / inside / above: 25% / 50% / 25% for the 50% interval; 5% / 90% / 5% for the 90% interval. Median below / above is approximately 50% / 50% when ties are negligible."
         )
-        uncertainty_help = (
-            "Small samples are uncertain. Wilson intervals are descriptive, "
-            "pointwise 95% intervals, not proof of skill."
-        )
+        uncertainty_help = "Pointwise 95% Wilson confidence intervals."
         self.set_help_text(
             f"{self.accessibleDescription()} {guidance} {uncertainty_help}"
         )
@@ -316,89 +318,3 @@ class QuantileCalibrationPanel(AnalyticsPanel):
                 details.append(" · ".join(values))
             table.setAccessibleDescription("; ".join(details))
             _fit(table)
-
-
-class QuantileAnalyticsView(QWidget):
-    """Separate continuous and discrete calibration with scale-free update signs."""
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setObjectName("quantileNumericAnalytics")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(int(Spacing.SECTION))
-        summary = AnalyticsPanel(
-            "Five-Quantile Numeric Forecast",
-            "One final eligible forecast per resolved Prediction. Calibration can combine units; raw WIS cannot be averaged across unrelated questions.",
-            parent=self,
-        )
-        self.summary = _label("", summary.body)
-        summary.body_layout.addWidget(self.summary)
-        self.continuous = QuantileCalibrationPanel(whole=False, parent=self)
-        self.whole_number = QuantileCalibrationPanel(whole=True, parent=self)
-        updates = AnalyticsPanel(
-            "Five-Quantile Updates — Initial versus Final",
-            "One pair per eligible revised-and-resolved Prediction; direction only, "
-            "without averaging raw WIS or ΔWIS. This is mechanical hindsight, not "
-            "evidence that updating caused improvement. Counts lose magnitude and "
-            "are not a universal skill score.",
-            parent=self,
-        )
-        self.update_values = []
-        cards = []
-        for label, key in (
-            ("Better · lower final WIS", "better"),
-            ("Equal WIS", "equal"),
-            ("Worse · higher final WIS", "worse"),
-        ):
-            card, value = _new_update_metric(
-                label,
-                value_object_name=f"quantileUpdate{key.title()}",
-                parent=updates.body,
-            )
-            cards.append(card)
-            self.update_values.append(value)
-        updates.body_layout.addWidget(
-            _ResponsiveMetricRow(
-                tuple(cards),
-                stack_below=850,
-                object_name="quantileUpdateDirections",
-                parent=updates.body,
-            )
-        )
-        self.update_guidance = _label("", updates.body)
-        updates.body_layout.addWidget(self.update_guidance)
-        for widget in (summary, self.continuous, self.whole_number, updates):
-            layout.addWidget(widget)
-
-    def render(self, snapshot: QuantileAnalyticsSnapshot) -> None:
-        self.summary.setText(
-            f"{snapshot.scored_prediction_count} eligible · {snapshot.resolved_candidate_count} resolved · "
-            f"{snapshot.unscored_prediction_count} unscored"
-        )
-        summary_help = (
-            "Unscored: outcome fixed at or before the first forecast. "
-            "Invalid and unresolved forecasts are excluded."
-        )
-        self.summary.setToolTip(summary_help)
-        self.summary.setAccessibleDescription(summary_help)
-        self.continuous.render(snapshot.continuous)
-        self.whole_number.render(snapshot.whole_number)
-        for label, value in zip(
-            self.update_values,
-            (snapshot.better, snapshot.equal, snapshot.worse),
-            strict=True,
-        ):
-            label.setText(proportion_text(value))
-            label.setAccessibleDescription(
-                f"{proportion_text(value)}; 95% Wilson {uncertainty_text(value)}"
-            )
-        self.update_guidance.setText(
-            f"{snapshot.better.total} revised pairs · {snapshot.unrevised_count} unrevised"
-        )
-        update_help = (
-            "Unrevised: no eligible revision after the initial forecast; not counted as ties. "
-            "This is mechanical hindsight, not evidence that updating caused improvement. Counts lose magnitude and are not a universal skill score."
-        )
-        self.update_guidance.setToolTip(update_help)
-        self.update_guidance.setAccessibleDescription(update_help)

@@ -174,8 +174,7 @@ def test_revision_rationale_helper_explains_when_to_use_journal(
 
     helper = _required_child(dialog, QLabel, "revisionRationaleHelper")
     assert helper.text() == (
-        "This explanation stays attached to the new forecast. To record a thought "
-        "without changing probability, add a Journal entry."
+        "For notes without a forecast change, add a Journal Entry."
     )
     assert helper.textFormat() is Qt.TextFormat.PlainText
     assert helper.wordWrap()
@@ -238,7 +237,7 @@ def test_revision_appends_with_tokens_and_refreshes_forecast_history(
     )
     assert (
         _required_child(window, QLabel, "forecastRevisionProbability12").text()
-        == f"FORECAST  60% \N{RIGHTWARDS ARROW} {new_probability}%"
+        == f"60% \N{RIGHTWARDS ARROW} {new_probability}%"
     )
     rationale = _required_child(window, QLabel, "forecastRevisionRationale12")
     assert rationale.text() == "New <i>evidence</i>"
@@ -276,5 +275,5 @@ def test_forecast_history_uses_previous_revision_for_nonconsecutive_return(
             QLabel,
             "forecastRevisionProbability3",
         ).text()
-        == "FORECAST  40% \N{RIGHTWARDS ARROW} 60%"
+        == "40% \N{RIGHTWARDS ARROW} 60%"
     )

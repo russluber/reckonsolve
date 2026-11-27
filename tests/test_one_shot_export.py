@@ -1,8 +1,9 @@
+from supported_fixtures import connect_fixture
+
 """Format-5 portability preserves original and effective One-Shot history."""
 
 import csv
 import io
-import sqlite3
 from dataclasses import replace
 from datetime import UTC, timedelta
 from zipfile import ZipFile
@@ -82,7 +83,7 @@ def test_mixed_export_replays_later_answers_and_corrected_exact_values(tmp_path)
         with ZipFile(destination) as archive:
             assert tuple(archive.namelist()) == EXPORT_ARCHIVE_NAMES
             readme = archive.read("README.txt").decode()
-            assert "Format version: 5" in readme and "NOT UTC instants" in readme
+            assert "Format version: 6" in readme and "NOT UTC instants" in readme
             parents = rows(archive, "predictions.csv")
             assert len({p["forecast_model"] for p in parents}) == 4
             shots = [p for p in parents if "one-shot" in p["forecast_model"]]
@@ -168,7 +169,7 @@ def test_failed_one_shot_export_keeps_previous_artifact_and_source(
     destination.write_bytes(b"previous artifact")
     try:
         if failure == "contract":
-            with sqlite3.connect(database.path) as connection:
+            with connect_fixture(database.path) as connection:
                 connection.execute(
                     "DROP TRIGGER prediction_forecast_contracts_are_immutable"
                 )

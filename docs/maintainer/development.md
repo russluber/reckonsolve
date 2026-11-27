@@ -35,6 +35,10 @@ The [search evaluation procedure](search-evaluation.md) supplies a disposable re
 
 ### Main window tests
 
+Journal/workspace regressions use injected temporary journals in `test_journal_workspace.py`, `test_journal_controls.py`, `test_journal_retrieval.py` and the 2,000-record `test_journal_response_budget.py`. Recovery/writer exclusion lives in `test_upgrade_protocol.py`. Older browser/Dashboard UI assertions were replaced by these current journeys; historical migration tests still exercise their original schemas.
+
+On Windows, Qt's offscreen plugin may expose no fonts. `tests/conftest.py` then loads installed Segoe UI faces for genuine metrics; missing-glyph-box measurements are not UI evidence. This adds no bundled font or production dependency. Human Windows/scaling acceptance remains required.
+
 `tests/test_main_window.py` covers the application shell, navigation, keyboard shortcuts, and themes. Workflow tests live in separate `test_*_ui.py` modules for creation, browsing, search, Dashboard, Detail, metadata, revisions, Journals, terminal actions, Settings, and tag management.
 
 Shared application fakes live in `tests/main_window_fakes.py`; widget helpers and function-scoped fixtures live in `tests/main_window_helpers.py`. Import fixtures explicitly into the modules that use them, keeping their scope local to those tests.
@@ -55,13 +59,204 @@ Private design charters, workshop procedures, exploratory decisions, and validat
 uv run python tools/run_visual_review.py empty
 uv run python tools/run_visual_review.py representative
 uv run python tools/run_visual_review.py long-text
+uv run python tools/run_visual_review.py detail
 ```
 
-These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. The profiles cover their seeded records; exercise additional One-Shot scenarios with disposable paths or development records when a change affects them.
+These profiles create temporary database and presentation files without opening either personal database. Closing the app cleans up temporary directories. Representative and long-text profiles include all four forecasting contracts, a waiting One-Shot and already-Locked Adaptive examples. Use these injected profiles for Journal, creation and Detail review; no personal upgrade or installed-tool replacement is needed.
 
-Review affected screens in light/dark palettes, relevant Windows scaling settings, normal/narrow widths, and expanded/compact sidebar modes. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
+The explicit-database profiles, including `detail` and `performance`, show the
+database path in Settings. Use `integrated` or `relocation` to review the managed
+**Choose folder… → Move and restart** controls with disposable data. Ordinary
+identity-managed launches provide those folder-move controls as well.
+
+The `detail` profile has 28 examples: the ten representative records, ten controlled cutoff/unscored/corrected-Invalid/waiting cases, and eight finishing cases. Search for **Earlier forecast scored**, **No eligible forecast**, **Corrected Invalid reason**, **Waiting for answer**, **Long history**, **Reflection history**, **Corrected exercise**, **All equal**, or **Nearby percentiles**. Long histories have 25 complete Adaptive forecasts plus Journals, Reviews and protected Definition/Journal corrections. Corrected exercises expose One-Shot transcription and later reflection provenance. All facts are seeded through ordinary application operations with controlled clocks.
+
+Review affected screens in Follow Windows, Light and Dark, relevant Windows scaling settings and normal/minimum supported widths. There is no sidebar in the first Journal/workspace slice. Check wrapping, complete dates, badges, focus, keyboard navigation, dropdowns, errors, empty states, and long selectable text. Charts need text alternatives. Preserve browsing context on Detail return.
 
 Human visual acceptance is separate from offscreen Qt tests. Dated acceptance belongs in [the archive](../archive/README.md), not this repeatable procedure.
+
+### New Prediction and Detail review
+
+Use the `detail` profile for one combined completion review. Keep all new records in that disposable window; representative and long-text remain useful smaller profiles.
+
+1. **Read results and reflect.** Open Earlier forecast scored, No eligible forecast and Reflection history for both Adaptive types. Check the outcome/score, collapsed eligible forecast, Overview notes/reflection/score details, and Write/Edit Postmortem or Skip beside More. Write/edit reflection while consulting saved context; verify the saved version and actual terminal event order. Numeric Latest committed distribution must remain distinct from an earlier scored forecast. Check all four Corrected Invalid reason cases, last forecasts and More repairs.
+2. **Read and revise long histories.** Open Long history for each Adaptive type. Check the full Question, Current revision jump, both Timeline orders, expanded Journal text/history and long criteria reader. Revise, consult Overview, switch appearance and return to retained inputs; commit a change. Try Journal/New/Back with entered work, keeping it before testing explicit discard. All equal and Nearby percentiles exercise exact tie/connector labels and long units.
+3. **Inspect corrected exercise history.** Open Corrected exercise for both One-Shot types. Check effective forecast/answer/score, inline reflection, visible Journals, original facts and separately labeled transcription/reflection updates. Search **birchbeacon** or **copperbridge**: ordinary search must exclude the superseded-only word; Include superseded history must reveal its exact original Journal or Question version. Return to the preserved Journal retrieval. Try More → Correct transcription, review and Back without saving.
+4. **Complete remaining task routes.** On disposable Open/Locked examples, prepare Resolve or More → Mark Invalid, return from confirmation to retained inputs, then confirm. Add a later answer to Waiting for answer for each One-Shot type. Create each mode/type combination; test crossed Numeric inputs, source-aware cancellation and ordinary/answered save landings. Earlier accepted creation behavior remains a regression constraint.
+
+Repeat affected states at the supported minimum and 100%/150%/200% Windows scaling, using the fallback scroll when tall content exceeds a short window. Inspect keyboard focus, reachable Save/Cancel, modal boundaries and both appearances. Record the evaluated source and any limits; a passing automated capture does not substitute for these judgments.
+
+For a focused long-history responsiveness recheck, open the `detail` profile and search **Long history**. In both Adaptive types, alternate Newest first / Oldest first, open Resolve and Keep forecast, then cancel. Open Revise, enter a draft and alternate Overview / Revision: movement should be smooth in both directions and retain inputs. Save one Review and verify the appended event, retained forecast and prompt next task opening. Repeat in both appearances and a smaller window; normal wrapping and scrolling must return after movement. If Windows disables animations, the pane change is immediate by design. Carry the other combined-review feedback forward rather than repeating that whole checklist for this repair.
+
+### Performance and ordinary Settings review
+
+```powershell
+uv run python tools/run_visual_review.py performance
+```
+
+This disposable profile seeds 12 answered observations per contract, both Numeric value constraints and two exact units, tagged/untagged predictions, updating and corrected One-Shot facts. **No results yet** belongs only to an unresolved prediction. It opens the same isolated temporary application identity as the other profiles; no personal journal is used. Close the window to discard the fixture. The `empty` profile remains useful for whole-report emptiness.
+
+1. Open Performance and inspect both paired rows, scroll through One-Shot, expand calibration tables and Numeric supporting detail. Compare normal/minimum widths and Light/Dark. The introduction scrolls away while one Tag/Reset strip stays visible; charts have counts and text alternatives.
+2. Filter Work/Personal; set different units in the two Numeric sections. Visit Settings and use Back: selections, disclosures and useful report position remain while committed results refresh. Select No results yet to check truthful zero observations. Reset View restores All tags/both All units, collapsed details and the top without deleting data.
+3. In Settings, save a disposable backup/export under an ignored build folder or a temporary directory, repair search, and try confirmed tag maintenance. Each latest result stays beside its tool; paths/errors can be selected. Cancelled file dialogs change nothing. Leave/re-enter Settings to clear visit results while Last successful backup remains. Back returns through Performance to its independent origin. All changes stay in this temporary journal.
+
+Automated fault injection separately covers isolated/whole-report failure, retry, unit disappearance, failed tag reads, confirmed merge provenance, stale worker publication and global archive refusal. It never corrupts a personal database to manufacture an error. The native pass remains an acceptance input for actual Windows focus, scaling and perceived responsiveness.
+
+### Journal relocation review
+
+```powershell
+uv run python tools/run_visual_review.py relocation
+```
+
+This managed disposable profile contains 13 predictions: three answered per contract plus one unresolved-only case. It prints the temporary parent containing **New journal folder** and **Another journal folder**. Use only these precreated destinations; source, recovery, metadata and moved journals remain in that temporary tree and are discarded after the final window closes. Other explicit-file profiles intentionally bypass user bootstrap and do not expose relocation.
+
+1. In Settings, cancel folder selection and then cancel a review. Check unchanged current location and data. Review the current/new/recovery paths in both appearances and a smaller window; long paths remain selectable and Move and restart/Cancel remain reachable.
+2. Choose New journal folder and Move and restart. Check fresh Journal, all four contracts/history and Performance counts, the new Settings path, retained appearance/window size, and fresh transient browsing/report state.
+3. Select the current folder to check an explicit conflict without overwrite. Review Another journal folder and cancel, or complete a second move. Confirm failure remains readable beside location controls and that unrelated Settings tools still behave normally.
+
+Automated native tests separately cover shared/exclusive access, older GUI/CLI handles/entry points, committed WAL, refused archives, exact complete images and killed-process recovery at every phase. They never move a personal journal or force-close another process. Source smoke/restart/backup tests remain part of the full suite; no frozen bundle or installed tool is replaced by these source checks. Read [ADR 0023](../decisions/0023-native-journal-relocation-and-recovery.md) before changing ordering/ownership, and retain the evaluated source/device limits in the [dated record](../archive/releases/2026-11-12-journal-relocation-verification.md).
+
+### Final integrated review
+
+**Review-status note:** The requested combined journeys and latest refinements were
+subsequently checked and accepted with recorded limits. The dated recipes below
+retain their original checkpoint context, including then-pending wording. Reuse only
+the cases affected by a later change; they are not a fresh review queue. The current
+[readiness record](../archive/releases/2026-11-13-redesign-readiness.md) owns acceptance,
+source-package results and remaining environment limits.
+
+```powershell
+uv run python tools/run_visual_review.py integrated
+```
+
+This managed disposable profile combines the accepted Detail/history and four-cohort Performance fixtures: 41 Predictions initially. It includes temporary move destinations, with all data/preferences/recovery confined to the printed temporary tree. Close the final window to discard the profile. Do not run a normal stable/development CLI to inspect it; paired CLI behavior is checked through injected automated runtimes.
+
+Use one combined pass to review the remaining seams:
+
+1. Scroll Journal, focus a Question with the keyboard and press Enter. Visit Performance, choose a report scope/supporting disclosure, then visit Settings. Use Back to Performance (retained report state), Back to Prediction (the original Prediction), then Back to Journal. Keyboard focus should land on a current Question near the prior browsing position. Ctrl+F still focuses search. When a current query becomes empty, the return target is search rather than an old result.
+2. On an Open Prediction, enter an unfinished revision or Journal entry. Change appearance, choose + New and Keep editing, then deliberately discard and enter creation. Verify the retained editor before discard and the focused creation page after it; cancel creation back to its source. No cancelled writing should appear as history. Earlier accepted full creation/terminal/relocation walkthroughs need not be repeated.
+3. Check both palettes, a larger window and the supported 760 × 520 logical baseline with keyboard Tab/Shift+Tab and visible focus. Inspect long Numeric values and reach the page/dialog primary actions by scrolling. Record the Windows scale actually reviewed; offscreen 1×/1.5×/2× captures and larger-font probes supplement, rather than claim, a complete human Windows scaling/accessibility review.
+
+The [final integration evidence](../archive/releases/2026-11-13-final-integration-verification.md) maps existing slice evidence, new regressions and remaining limits. This review does not replace installed tools, open personal data or publish a release.
+
+### Post-review refinement recheck
+
+The user checked the combined journeys and requested the [workspace refinements](../product-spec.md#3815-authorized-post-review-workspace-refinements). Reuse the same `integrated` command above for this focused recheck; the accepted four-slice walkthroughs need not be repeated.
+
+1. Open a Prediction and return to Journal several times. Check prompt returns and retained browsing/focus. Leave Journal visible for over a minute, then scroll: an unchanged same-view background check should not flash Updating results or rebuild the listing. A deliberate new search/filter still masks the old retrieval until its results arrive.
+2. Inspect Binary and Numeric One-Shot Waiting, Resolved and Invalid examples in both appearances. Check the results/reflection/Journal and context/originals composition, familiar disclosures and distinct One-Shot actions. Terminal reading should be balanced 50/50; Open reading gives more room to history.
+3. In Settings choose each date order, inspect the Windows zone information, and revisit dated Journal/Detail content. Ordinary readouts omit offsets; exact entry/terminal confirmation retains them. Automated injected-runtime tests cover preference restart/relocation; the managed `integrated` profile deliberately starts fresh when relaunched. On Adaptive Detail, check Title Case actions, OVERVIEW/TIMELINE or ARCHIVAL CONTEXT, ordinary subsection headings and equal terminal panes. Start a contextual task, switch to Overview and back: there should be one Overview label, retained inputs and smooth pane movement. Inspect both palettes and the supported minimum size; record your actual Windows scale.
+
+The [dated refinement evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md) separates local timing/source checks from this pending human judgment. All data and preferences must remain disposable; do not use installed personal profiles to test restart or date changes.
+
+### One-Shot results and reflection follow-up
+
+The eight focused checks above were reported accepted at `7af51f5`; the user reopened
+One-Shot visual quality. Reuse `uv run python tools/run_visual_review.py integrated`
+for this narrower pass, carrying the other accepted checks forward:
+
+1. Inspect answered Binary and Numeric One-Shots in both appearances and at the supported minimum window. Checked Answer should sit above a full-width, prominent scorecard. Postmortem and Journal Entries should read as separate sections. Open/close the compact history/facts/originals chevrons with both mouse and keyboard; content should remain readable without the former full-width button bars.
+2. On each type, cancel Skip once, then confirm it. Check a dated Postmortem Skipped state without prominent Write/Skip. Open More → Write Postmortem, cancel, then reopen and save reflection. Check ordinary readable reflection/Edit and the preserved earlier Skip date. Neither the score nor Needs Postmortem membership should be changed by later reflection.
+
+The [same dated evidence record](../archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-results-and-reflection-follow-up)
+separates the earlier accepted package from this pending visual follow-up. Record
+actual window/Windows scale and any mismatch. No personal or installed profile is needed.
+
+### Journal preview and scoring disclosure recheck
+
+Carry the positive One-Shot layout/Skip feedback forward. Run
+`uv run python tools/run_visual_review.py integrated` for just the new presentation checks:
+
+1. At a wide window, read a Numeric Journal row: the five exact percentile/value groups should stay close together with comfortable consistent gaps. Resize toward the supported minimum and inspect long values; a label stays with its value when reflow is needed.
+2. Compare a Binary percentage and Numeric values in the same Journal. They should have the same smaller forecast size while the Question remains primary. Detail forecast headers retain their existing size.
+3. Open Resolved Adaptive Binary and Numeric Detail. Expand/collapse Forecast used for scoring with the compact chevron using mouse and keyboard Space. The same forecast facts/default and existing score should remain. Check both palettes and record the actual window/Windows scale reviewed.
+
+The [dated preview/disclosure evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#journal-preview-rhythm-and-scoring-disclosure)
+records source/capture limits. No repeated full journey review or personal data is needed.
+
+### Expanded facts and marker recheck
+
+The earlier Journal spacing/font and scoring-chevron candidate remains uncommitted;
+the latest feedback extends that same checkpoint. Run
+`uv run python tools/run_visual_review.py integrated` and check only the refinements:
+
+1. Journal shows 50th without Median, while Detail's interval retains its Median label. The earlier compact spacing and matching Binary/Numeric value size remain.
+2. Open Numeric WIS Breakdown, then switch light/dark/light. Actual diamonds should stay gold, distinct from the interval and median tick.
+3. On corrected One-Shot Binary and Numeric examples, expand Times & Recorded Facts and Originals & Corrections. Both bodies should have matching rounded frames and inset text. Scroll through original/Before/After/notes at a large and smaller window; check wrapping and access to the final line. Keep compact chevrons and exact history navigation. Record actual Windows scale and any mismatch.
+
+The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#further-labels-marker-and-expanded-facts-refinement)
+separates source/native checks from pending human acceptance. Carry other accepted
+journeys forward; the suggested checkpoint message covers all uncommitted refinements.
+
+### Adaptive Overview reveal recheck
+
+The label/marker/fact-panel fixes were reported accepted. Reuse
+`uv run python tools/run_visual_review.py integrated` for just the remaining reveals:
+
+- On an Invalid Adaptive Binary, expand/collapse Probability History.
+- On both Adaptive types, expand/collapse More Information. Binary should show context directly without a nested Prediction Details heading, or a clear message when no additional information is recorded.
+- On a Resolved or Invalid Adaptive Numeric, expand/collapse Latest Committed Distribution.
+
+These should be compact chevrons with the same content/defaults. Try keyboard Space,
+both palettes and a smaller window; nonterminal charts should retain their ordinary
+direct visibility. Carry accepted journeys forward and record any actual mismatch.
+The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-overview-reveal-consistency)
+records source/capture limits. The save point still includes the earlier uncommitted
+presentation tuning; no personal or installed profile is needed.
+
+### Adaptive Numeric definition visibility recheck
+
+Reuse `uv run python tools/run_visual_review.py integrated`. Open the Resolved
+Adaptive Numeric example, then an Open/Locked or Invalid Numeric record. Unit and
+Decimal Places should be visible as two fields immediately below Resolution
+Criteria, before optional notes/reflection and scores. More Information should
+contain no duplicate of those fields; absent optional context should be stated
+clearly. Try both palettes and a smaller window with a long unit, checking wrapping
+and selectable values. The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-numeric-definition-visibility)
+records source/native checks and limits. Carry earlier accepted journeys forward;
+the remaining compact-reveal check above can be combined with this short visit.
+
+### Final toolbar and presentation recheck
+
+Reuse `uv run python tools/run_visual_review.py integrated` on disposable data:
+
+1. Pending One-Shot Binary and Numeric badges should read Answer Pending,
+   retaining yellow status styling and Add Answer. Results leads directly into
+   Journal Entries; adding an answer reveals the Checked Answer and scorecard.
+2. Click Reset View on Journal; its final letter should remain complete. Check the
+   corresponding Performance button and a smaller window as well.
+3. Expand Performance's Binary calibration tables, timing/updating diagnostics and
+   Numeric percentile detail. They should be compact chevrons, work with Space and
+   retain the existing figures, session behavior and reset defaults.
+4. From Prediction Detail, open Performance then Settings. The right-side notebook
+   icon should have tooltip Journal and open Journal directly. Back should still
+   return to Prediction or Performance respectively. Also check the direct icon
+   when Back already leads to Journal. It stays absent on Journal, Detail and New.
+   From Settings, the Performance chart icon should return to the report with its
+   filters, expanded detail and useful position retained. Back from that report
+   should still reach the original Journal or Prediction without cycling to Settings.
+
+Try both palettes and record only a concrete mismatch. The [dated evidence](../archive/releases/2026-11-13-workspace-refinement-verification.md#final-toolbar-and-presentation-follow-up)
+keeps source/native limits. These checks extend the existing combined checkpoint;
+they do not reopen accepted journeys or authorize personal/installed-data operations.
+
+### Source-package readiness checks
+
+For an installed-tool candidate, build its source distribution and wheel with
+`uv build --out-dir build/package-review`. Inspect their member paths for accidental
+private notes, tests, caches or runtime data, and verify bundled resources/licenses.
+Generate runtime constraints using `uv export --locked --no-dev --no-emit-project`.
+Test installation only with explicit disposable `UV_TOOL_DIR` and `UV_TOOL_BIN_DIR`
+under ignored build output; verify those resolved locations before installing. Do
+not update the shell or use the normal installed-tool directory for this check.
+
+Exercise database-free version/help entry points and inject explicit temporary
+database/presentation paths for GUI/CLI workflow, recovery and restart checks. Qt
+scale-factor probes are supplemental evidence; identify them separately from human
+Windows scaling/accessibility review. A wheel check does not establish a fresh
+PyInstaller build. The [readiness record](../archive/releases/2026-11-13-redesign-readiness.md)
+retains candidate-specific artifacts, results and remaining limits. Ordinary-use
+adoption follows the [user guide](../guides/user-guide.md#adopt-the-redesigned-source).
 
 ## Documentation checks
 
@@ -86,7 +281,11 @@ In mathematics, set named scores/operators such as `\operatorname{WIS}` and `\op
 powershell -ExecutionPolicy Bypass -File .\tools\build_windows.ps1
 ```
 
-The script uses pinned PyInstaller in the separate `packaging` group and creates a private `onedir` GUI bundle. It verifies local styles/icons and runs disposable frozen smoke checks covering all four contracts, supported upgrades, unsupported refusal, search repair, mode-filtered Saved Views, analytics, format-5 export, backup, and restart.
+The script uses pinned PyInstaller in the separate `packaging` group and creates a private `onedir` GUI bundle. It verifies local styles/icons and runs disposable frozen smoke checks covering all four contracts, supported upgrades, unsupported refusal, search repair, mode-filtered retrieval, analytics, format-6 export, backup, and restart.
+
+During the build, Windows' system directory comes first in the process search path.
+This prevents unrelated development tools from supplying incompatible DLLs with
+Windows library names. The script restores the caller's search path on exit.
 
 Builds and smoke artifacts stay in ignored `build/` and `dist/`. Relocation checks run the copied bundle with its bundled runtime and explicit disposable data. Private artifacts are not public release assets, installers, or signed distributions.
 

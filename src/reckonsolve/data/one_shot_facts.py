@@ -9,6 +9,7 @@ from reckonsolve.domain.forecast_contracts import ForecastContract
 from reckonsolve.domain.one_shot import (
     OneShotCorrection,
     OneShotRecord,
+    OneShotSourceAction,
     OneShotValues,
     ReportedTime,
 )
@@ -135,6 +136,9 @@ def read_one_shot(
             _values(row, precision, "new_"),
             parse_utc(row["corrected_at"]),
             row["note"],
+            OneShotSourceAction(row["source_action"])
+            if "source_action" in row.keys()  # noqa: SIM118 - sqlite3.Row membership tests values.
+            else OneShotSourceAction.TRANSCRIPTION,
         )
         for row in connection.execute(
             "SELECT * FROM one_shot_corrections WHERE prediction_id = ? ORDER BY sequence",

@@ -13,7 +13,6 @@ from reckonsolve.domain.predictions import (
 from reckonsolve.domain.quantiles import FiveQuantiles
 
 from .forecast_contracts import (
-    check_forecast_contract_integrity,
     quantile_tables_exist,
     select_forecast_contract,
 )
@@ -21,7 +20,7 @@ from .terminal_history import _select_numeric_resolution_history
 
 
 def read_archive(connection: sqlite3.Connection) -> tuple[PredictionBrowserItem, ...]:
-    check_forecast_contract_integrity(connection)
+    """Read inside the caller's whole-archive-validated transaction."""
     if not quantile_tables_exist(connection):
         return ()
     rows = connection.execute("""

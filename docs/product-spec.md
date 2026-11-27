@@ -1,6 +1,6 @@
 # Reckonsolve product specification
 
-Current contract: v0.8.0; schema 20; relational CSV format 5.
+Current source checkout: unreleased 0.9.0 Journal-centered desktop candidate; schema 21; search projection 3; relational CSV format 6. Published v0.8.0 remains the schema-20/CSV-5 baseline. Prepared package metadata is separate from final visual acceptance, tagging and publication.
 
 This is the source of truth for product scope, terminology, invariants, and acceptance criteria. The current contract describes implemented behavior. Any explicitly labeled approved future requirements describe work at their stated status; they are not claims of implementation or permission to implement. Supporting guides explain the current product. Unpublished exploratory plans are maintained separately from this public contract. A conflict or unresolved product choice must be resolved explicitly before implementation.
 
@@ -14,7 +14,7 @@ Completed milestone plans and earlier contracts are preserved in the [historical
 - [Adaptive forecasting](#35-adaptive-forecasting-contract): exact Deadlines, trajectory Binary, five-quantile Numeric, and compatibility.
 - [One-Shot forecasting](#36-one-shot-prediction-contract): existing answers, external notes, documentary time, transcription corrections, and separate scoring.
 
-**Approved future target:** [Section 38](#38-journal-centered-redesign-approved-future-requirements) records the Journal-centered redesign and its implementation/compatibility gates. It is distinct from the current contract and grants no software authorization.
+**Current source applicability:** [Section 38](#38-journal-centered-redesign-approved-future-requirements) governs the implemented Journal-centered desktop, Saved View retirement, schema-21 provenance, CSV 6 and identity-scoped relocation under its explicit software authorizations. The four requested slice walkthroughs are accepted with recorded limits and combined journeys received positive functional feedback; the [post-review refinement recheck](#3815-authorized-post-review-workspace-refinements) remains open. Its established heading/anchor retains the origin as approved future requirements. Sections 33–36 retain the published v0.8.0 baseline and all protected shared/model/scoring rules; only the explicitly replaced interface, retirement and versioned storage/export provisions yield to Section 38. This distinction does not authorize additional software or publication.
 
 ## Proposed changes and authorization
 
@@ -765,7 +765,9 @@ attestation. Desktop New Prediction omits the "Choosing a forecasting commitment
 expander following the v0.8 closeout review. Admissibility and Deadline-selection
 advice remain in the forecasting guide; optional CLI guidance remains available.
 The [complete Rulebook](guides/forecasting-guide.md#forecasting-rulebook) remains the durable reference within that guide.
-Creation copy uses sentence case while retaining "Forecast Deadline · Required".
+Creation copy uses sentence case. The 2026-11-24 presentation refinement uses
+**Deadline** with an accent-colored required-field label, accessible required
+description and tooltip, retaining the existing validation.
 The unset shortcut prompt and explanatory Deadline footer are omitted; a chosen
 date/time summary and validation messages remain available.
 
@@ -1858,15 +1860,17 @@ The guiding rule is:
 
 ## 38. Journal-centered redesign: approved future requirements
 
-**Status:** Approved future target, not implemented. The current v0.8.0 contract remains recognizable above; only a separately authorized software slice may introduce the affected behavior. These requirements describe the target and its acceptance gates, not native validation or permission to change software, schema, commands, exports, personal data or supported artifacts. Resolve the relevant technical contract details before that slice; no implementation milestone is authorized by publication alone.
+**Status:** Approved target, four bounded software slices and requested refinements implemented. Earlier requested slice walkthroughs, combined journeys and refinements retain scoped acceptance. The current 0.9.0 candidate has fresh technical and representative native-screen review under Section 38.14. The user completed the final integrated visual review and approved it for v0.9.0 on 2026-11-27. Version 0.9.0 remains Unreleased; merge, tag and publication remain user-owned steps. The released v0.8.0 contract remains recognizable above. Only a separately authorized software slice may introduce affected behavior; publication of requirements alone grants no software, schema, personal-data or release permission.
 
-For this future desktop, the Journal-centered shell, filtering/rows, source-aware returns, creation completion, Detail writing/confirmation, comprehensive Performance, Settings results and manual appearance rules below deliberately replace the corresponding earlier desktop presentation/workflow requirements. The recovery-backed Saved View retirement and CLI-only threshold route are explicit future compatibility/interface changes. All other protected shared/Adaptive/One-Shot history, exactness, lifecycle, scoring, refusal and recovery requirements remain in force. Earlier interface requirements continue to describe current behavior until their affected slice is implemented and accepted; do not silently apply future rules to the current software.
+**Separately authorized work — updated 2026-11-13:** The user explicitly authorized the first slice in [Section 38.10](#3810-authorized-first-implementation-slice), New Prediction/Prediction Detail in [Section 38.11](#3811-authorized-second-implementation-slice), Performance/ordinary Settings in [Section 38.12](#3812-authorized-third-implementation-slice), journal relocation in [Section 38.13](#3813-authorized-fourth-implementation-slice-journal-relocation), final integration in [Section 38.14](#3814-authorized-final-integration-pass), and the feedback refinements in [Section 38.15](#3815-authorized-post-review-workspace-refinements). Software permission, native acceptance and release remain distinct. Protected personal-data and Git publication boundaries remain in force.
+
+For this source desktop, the Journal-centered shell, filtering/rows, source-aware returns, creation completion, Detail writing/confirmation, comprehensive Performance, Settings results and manual appearance rules below deliberately replace the corresponding earlier desktop presentation/workflow requirements. The recovery-backed Saved View retirement and CLI-only threshold route are implemented compatibility/interface changes under Section 38.10. All other protected shared/Adaptive/One-Shot history, exactness, lifecycle, scoring, refusal and recovery requirements remain in force. Earlier interface requirements describe the published v0.8.0 baseline where the accepted implemented slices replace them. Preserve their unaffected protected rules; final integrated acceptance and publication remain separate.
 
 ### 38.1 Scope, visual target and protected baseline
 
 Reckonsolve remains a single-user, local-first native Windows forecasting journal. Keep Python/uv, PySide6, standard-library SQLite, existing layers and local assets. The redesigned destinations are Journal, New Prediction, Prediction Detail, Performance and Settings. Illustrative examples do not select new field defaults or fixed native geometry. No web runtime, additional forecasting model, automated personal advice or production dependency is selected.
 
-Preserve the four closed mode/type/model/scoring contracts, exact quantities and instants, immutable originals and audited corrections, transaction-time eligibility/stale checks, terminal finality and atomic success/failure. Adaptive Deadline stays immutable after initial commitment; metadata editing never changes it. Expected Resolution remains optional date-only planning metadata. One-Shot gains no Deadline, ordinary revision/Review, updating attention, trajectory or cutoff. Never pool mode denominators or raw Numeric WIS/Delta. SQLite backup remains complete recovery and CSV format 5 analytical only. The baseline is schema 20/search projection 3; the separately reviewed retirement/provenance work below needs a new authorized migration rather than editing old migrations.
+Preserve the four closed mode/type/model/scoring contracts, exact quantities and instants, immutable originals and audited corrections, transaction-time eligibility/stale checks, terminal finality and atomic success/failure. Adaptive Deadline stays immutable after initial commitment; metadata editing never changes it. Expected Resolution remains optional date-only planning metadata. One-Shot gains no Deadline, ordinary revision/Review, updating attention, trajectory or cutoff. Never pool mode denominators or raw Numeric WIS/Delta. SQLite backup remains complete recovery and CSV remains analytical only. The original published baseline is schema 20/search projection 3/CSV 5; the implemented schema 21/CSV 6 retirement/provenance extension is authorized in Section 38.10 and leaves earlier migrations unchanged.
 
 ### 38.2 Shared shell, appearance and navigation
 
@@ -1874,9 +1878,9 @@ Preserve the four closed mode/type/model/scoring contracts, exact quantities and
 | --- | --- | --- | --- | --- | --- |
 | Journal | Yes | Yes | Yes | Yes | Journal is home; omit redundant home self-navigation. |
 | Prediction Detail | Yes | Yes | Yes | Yes | One Journal return restores its retrieval and useful browsing vicinity. |
-| Performance | Yes | No self-action | Yes | Yes | Return to its originating Prediction or Journal. Show separate Journal home only when it has a different destination. |
+| Performance | Yes | No self-action | Yes | Yes | Back returns to its originating Prediction or Journal. A separate Journal icon in the right-hand utilities always opens Journal. |
 | New Prediction | No | No | No | Yes | Untouched cancellation returns to its origin; entered work uses the selected discard guard. Successful landings are specified below. |
-| Settings | No | No | No self-action | Yes | Return to its recorded Journal/Detail/Performance source. Completed tools stay for inspection until a deliberate return. |
+| Settings | No | Yes | No self-action | Yes | Back returns to its recorded Journal/Detail/Performance source. Journal and Performance utility icons open those destinations directly. Completed tools stay for inspection until deliberate navigation. |
 
 Use a compact persistent shared app bar, no persistent sidebar or peer destination tabs, and one clear Journal page heading. Keep ordinary actions blue across both palettes while preserving semantic status/caution/destructive/analytical roles. Preserve existing brand assets and verify their legibility at representative sizes in both appearances.
 
@@ -1888,7 +1892,7 @@ Keep one current source per workspace rather than a general navigation stack. An
 
 ### 38.3 Journal retrieval, filters and ordering
 
-Default to All, blank search, default All words, no advanced/history constraints and automatic Recently active. All includes every supported lifecycle/mode/type; Unresolved includes Open/Locked Adaptive and One-Shot Waiting for answer; Needs postmortem includes Resolved with blank effective reflection and no explicit Skip. Waiting for answer is a One-Shot display label, not a new canonical lifecycle. Show the three quiet quick views without badges, persistent attention queues or catch-up prompts.
+Default to All, blank search, default All words, no advanced/history constraints and automatic Recently active. All includes every supported lifecycle/mode/type; Unresolved includes Open/Locked Adaptive and One-Shot Answer Pending; Needs postmortem includes Resolved with blank effective reflection and no explicit Skip. Answer Pending is the desktop One-Shot display label for the same nonterminal state, not a new canonical lifecycle; CLI wording remains Waiting for answer. Show the three quiet quick views without badges, persistent attention queues or catch-up prompts.
 
 Search is immediately available with the visible placeholder Search predictions and a stable accessible name. Preserve the current full corpus/ranking/matching meanings; remembered Question words are the main cue, not the only searchable content. Search, quick views, Filters and Sort scroll with the page; the shared bar remains. Search narrows the chosen view and applied constraints. Switching view or Mode retains query and applied constraints, including valid zero-result combinations. Do not introduce hidden per-view settings or silently remove constraints to manufacture results.
 
@@ -1898,13 +1902,20 @@ Only applied nondefault constraints appear as removable page chips. Tags have on
 
 Automatic sorting is Recently active for blank search and Relevance for active search. An applicable manual order persists across text/view changes until changed/reset. Clearing text discards manual Relevance; later search does not revive it. One grouped menu contains Automatic, Recently active, Created newest/oldest, Question A–Z/Z–A, Last considered newest/oldest, Expected Resolution soonest/latest, terminal decision newest/oldest, and Relevance when applicable. Preserve documented null/applicability semantics and deterministic ties; the event/tie requirements below complete that ordering contract.
 
-Use live search only with measured responsiveness. Coalesce requests and permit only the latest current retrieval to apply. Pending retrieval replaces prior rows/count with Updating results; no old row is actionable under new controls. Publish current rows and applicable full matching-Prediction count together. Show that count for text/advanced retrieval, not ordinary browsing, quick-view-only selection or manual sort alone. Count Predictions, not fragments or loaded rows. Successful zero results, first loading and definitive failure must be distinct. On failure retain controls and no false zero/stale listing; offer Try again for identified temporary reads, Repair search only for an identified rebuildable projection fault, and preserve archive-level refusals. An accepted narrow local spelling offer may change text after an eligible zero-result search; retain scope and omit the initial feature if meeting responsiveness requires substantial machinery. No silent correction, direct Any-word empty-state offer or redundant Search All action is selected.
+Use live search only with measured responsiveness; the adopted explicit submission refinement below governs current text entry. Coalesce requests and permit only the latest current retrieval to apply. A different pending retrieval replaces prior rows/count with Updating results; no old row is actionable under new controls. Under Section 38.15, a same-request background/return check retains readable rows and unchanged widgets until freshly checked publication. Publish current rows and applicable full matching-Prediction count together. Show that count for text/advanced retrieval, not ordinary browsing, quick-view-only selection or manual sort alone. Count Predictions, not fragments or loaded rows. Successful zero results, first loading and definitive failure must be distinct. On failure retain controls and no false zero/stale listing; offer Try again for identified temporary reads, Repair search only for an identified rebuildable projection fault, and preserve archive-level refusals. An accepted narrow local spelling offer may change text after an eligible zero-result search; retain scope and omit the initial feature if meeting responsiveness requires substantial machinery. No silent correction, direct Any-word empty-state offer or redundant Search All action is selected.
 
 Prefer practical continuous browsing with reliable anchors and bounded loading. Load more is an accepted fallback if seamless loading is costly. Do not make advanced virtualization a prerequisite. The separate lifecycle-status refinement and elapsed Last considered controls stay deferred; their old semantics are preserved history, not this build's queue. Existing CLI retrieval remains except explicitly reconciled changes.
 
 ### 38.4 Journal rows, recency and matched history
 
-Use one continuously sorted vertical list with full wrapped Questions, no fixed-height/ellipsis cards, and Question → forecast → actual when applicable → supporting facts/dates. Each Prediction opens its Detail. Numeric rows show five horizontal exact percentile/value groups, q05/q25/q50 median/q75/q95, with the unit once; preserve signs, precision, ties and readable reflow. Use no interval drawings or ordinary rationale/tag previews in Journal.
+Use one continuously sorted vertical list with full wrapped Questions and no fixed-height or ellipsis cards. Each row opens Prediction Detail. Place the forecast directly below the Question, with no routine committed/saved caption. Numeric rows show five exact percentile/value groups in order with the forecast unit beside them. Place scoring eligibility, exclusions, and transcription qualifiers under the forecast where applicable. Group the actual outcome, status and dates, then place mode/type and tags in a separate metadata row. Keep source-labeled search excerpts below that metadata and keep the Current wording cue attached to its Question when a superseded version matches. Preserve signs, precision, ties and readable reflow. Use no interval drawings or ordinary rationale previews in Journal.
+
+**Aligned line — selected 2026-11-26:** Within the outcome row, use the same text
+size and vertically align padded status chips with adjacent facts on each wrapped
+line. Emphasize the actual outcome/value, with quieter Actual/Outcome captions and
+dates. Keep type/tag text smaller and subdued, retaining rounded chips and exact
+selectable names. Preserve the existing fact order, date meanings and suppression
+of redundant Last active dates.
 
 Open/Locked Adaptive shows its committed forecast. Resolved Adaptive summarizes the scoring-eligible forecast strictly before the effective cutoff, with a quiet excluded-later-revision cue when needed; Binary's summary does not replace its trajectory score. When no forecast qualifies, show the actual and explicit Unscored / No eligible forecast, not an ineligible ordinary summary. Invalid shows Last forecast / Not scored. One-Shot uses effective corrected forecast/answer with an appropriate transcription-corrected cue and access to originals; changing only documentary time must not imply a repaired forecast.
 
@@ -1918,6 +1929,19 @@ If a previously current Journal passage changes after results load, verify the s
 
 ### 38.5 Focused creation and completion
 
+Both Binary creation modes provide the same 10%, 20%, through 90% probability presets in ten-point steps. A preset populates the editable probability input without saving a record. Manual whole-percentage entry from 0% through 100% remains available; these are entry shortcuts, not recommended forecasts.
+
+**Creation presentation — refined 2026-11-24:** A quiet horizontal rule separates
+each creation page's heading/mode action from its form. Question begins the form
+without a redundant Forecast heading. Both forms label Binary/Numeric selection
+**Type**. Adaptive labels its required exact closing time **Deadline**, using the
+blue accent with required status in tooltip/accessibility text and unchanged
+validation. Omit the New One-Shot purpose subtitle; this supersedes its retention
+in the earlier desktop-copy audit. Probability entry uses quiet side-by-side
+minus/plus controls instead of native stacked/beveled arrows, retaining native
+percentage input, keyboard adjustment, bounds and presets. Do not change mode/type
+drafts, saving, confirmation or forecasting contracts.
+
 Preserve the existing Adaptive/Binary defaults and four mode/type form capabilities in one dedicated creation workspace. Mode/type switches retain their entered work. Adaptive keeps its required Question/forecast/immutable exact Deadline, current presets/validation/Numeric preview and optional More details. One-Shot keeps visible Background/Rationale/Tags, optional reported times and optional included answer; no Deadline/Expected Resolution/criteria input, updating machinery or score preview is added. All five Numeric values remain exact and editable; preview only valid supported central interpolation, without fabricated tails or silent sorting/rounding.
 
 Untouched cancellation returns to the originating workspace. Leaving entered creation work offers Keep editing or explicit discard; confirmed discard clears the whole creation task across retained forms/modes. Ordinary Adaptive and unanswered One-Shot saves return to the preserved Journal with quiet Prediction created, even outside its query, with no reveal link or All switch. An answered One-Shot save opens its answered Detail with the established Journal return. Successful atomic save clears the whole creation task; when the other mode contains entered work, use the selected pre-save explanation/confirmation. Cancel or failed save retains both forms and creates no partial history. Ctrl+N on New never creates another task. Creation close has the selected keep/discard protection; no persistent unfinished-task restoration is introduced.
@@ -1928,9 +1952,9 @@ Numeric validation preserves every input, brings the conflicting fields into vie
 
 Keep the full Question and roomy persistent committed forecast/Deadline context while reading history. Adaptive Numeric uses a proportional horizontal interval with all five exact values, grouped ties, an all-equal collapsed mark and connector labels when distinct values crowd. Timing below the interval aligns legend/Forecast Deadline labels and last revised/last considered/deadline values; Binary follows the same timing rhythm. Do not mix draft or scored-earlier forecasts into a header labeled current committed. Numeric Timeline uses full 90% interval / median / 50% interval text; visualize the current committed distribution only, with the established central-CDF limits and text alternatives.
 
-Overview uses about 60/40 Timeline/context, changing automatically to about 40/60 for revision and ordinary contextual writing. Mark Invalid preparation is the selected 60/40 exception. Keep independent pane scrolling and ongoing-task positions; no initial manual divider. Evaluate light bidirectional motion without delaying work and honor reduced motion. Keep true chronology, newest/oldest reading, full Revisions/rationale, expandable Journal previews/readable Reviews, a marker at the actual current revision and its jump action. Fresh ordinary Detail visits reapply selected disclosure defaults, without per-Prediction expansion memory; exact historical reveal and ongoing-task state override that ordinary-entry presentation as required.
+Open/Locked Overview uses about 60/40 Timeline/context; Resolved/Invalid reading uses 50/50 under Section 38.15. Change automatically to about 40/60 for revision and ordinary contextual writing. Mark Invalid preparation is the selected 60/40 exception. Keep independent pane scrolling and ongoing-task positions; no initial manual divider. Main headings are TIMELINE and OVERVIEW or ARCHIVAL CONTEXT, with Title Case subsections; contextual tabs suppress the duplicate inner Overview heading. Evaluate light bidirectional motion without delaying work and honor reduced motion. Keep true chronology, newest/oldest reading, full Revisions/rationale, expandable Journal previews/readable Reviews, a marker at the actual Current Committed Revision and its Current Revision jump action with the persistent Timeline reading controls. Fresh ordinary Detail visits reapply selected disclosure defaults, without per-Prediction expansion memory; exact historical reveal and ongoing-task state override that ordinary-entry presentation as required.
 
-Revision keeps existing Binary elicitation and all five aligned Numeric Current committed / Draft revision values, outside-in 90% interval → median → 50% interval guidance with free editing, and rationale below. The header/graph/history remain committed-only. Temporary Overview / Revision · unsaved tabs retain the populated draft. Successful save updates the complete saved state and returns Overview; invalid/no-op/stale/locked failure retains inspection and creates no partial history. Deadline rejection uses the selected brief right-side notification near Commit plus a compact repeatable failure cue, not a permanent error section. Locked hides Revise/Review and explicitly explains the closed window while retaining eligible Journal/terminal actions.
+Revision keeps existing Binary elicitation and all five aligned Numeric Current committed / Draft revision values, outside-in 90% interval → median → 50% interval guidance with free editing, and rationale below. The header/graph/history remain committed-only. Temporary Overview / Revision · unsaved tabs retain the populated draft. Successful save updates the complete saved state and returns Overview; invalid/no-op/stale/locked failure retains inspection and creates no partial history. Deadline rejection uses the selected brief right-side notification near Commit plus a compact repeatable failure cue, not a permanent error section. In Locked Detail, the status and Deadline communicate closure. Revise/Review are hidden and eligible Journal and terminal actions remain available.
 
 New Journal and Journal body correction use the shared right-hand form, preserving criteria/Timeline and original body anchor/position/history. New entries require a nonterminal Prediction; eligible transparent body corrections remain possible after terminal decisions. Replacing an unfinished revision with Journal writing is explicitly guarded. Edit Details uses one focused dialog; Question/criteria review and final confirmation stay inside that dialog, with ordinary metadata-only saves direct. Long criteria reading from Overview uses the selected wider read-only dialog. No editor may silently overwrite current-context changes or discard failed inputs.
 
@@ -1950,11 +1974,11 @@ Settings centralizes complete backup, analytical CSV export, shared tag manageme
 
 ### 38.8 Compatibility, recovery and retained interfaces
 
-Retire Saved Views completely from the future GUI, CLI listing/execution, tag-management dependencies and active persistence. Do not replace them with another named-query feature. Before an older supported journal containing configurations is upgraded, validate its recognized migration/model/scoring contracts, preserve a verified complete SQLite recovery copy, explain the retirement and recovery location, and obtain confirmation before removing those configurations. Cancellation or protection/migration failure leaves the active configurations/schema unchanged. A completed protection copy may remain after cancellation. Preserve all Predictions, history, retained tags/Prediction associations and other settings; remove only feature-owned data/objects through a new ordered atomic migration. Never edit applied migrations or use CSV as recovery.
+Saved Views are retired from the source GUI, CLI listing/execution, tag-management dependencies and active persistence under Section 38.10. Do not replace them with another named-query feature. Before an older supported journal containing configurations is upgraded, validate its recognized migration/model/scoring contracts, preserve a verified complete SQLite recovery copy, explain the retirement and recovery location, and obtain confirmation before removing those configurations. Cancellation or protection/migration failure leaves the active configurations/schema unchanged. A completed protection copy may remain after cancellation. Preserve all Predictions, history, retained tags/Prediction associations and other settings; remove only feature-owned data/objects through a new ordered atomic migration. Never edit applied migrations or use CSV as recovery.
 
 Preserve input backup artifacts unchanged. A restored supported older copy follows the same protection/confirmation policy. Retired-only or mixed-with-retired records, missing/unknown/mismatched identities and unsupported/malformed history retain refusal before archive mutation, repair or backup. With no Saved View configurations, no legacy-management task is required, while supported upgrade integrity, rollback and recovery guarantees remain. The pre-upgrade copy restores its earlier state through a compatible build; it cannot include later writes and does not promise a lossless downgrade or automatic merging. Keep older/current active writers excluded through the transition, not only at subsequent startup. Retired CLI spellings must fail clearly before data access. Ordinary CLI invocations must not silently confirm retirement; when this upgrade decision is pending, direct the user to the desktop review. Help/version remain database-free.
 
-Keep the stored attention threshold and legacy CLI attention classification configurable through a small CLI-only route, with the GUI control absent. Preserve existing values, the default 14 complete 24-hour periods and whole-integer validation from 1 through 9999. The future commands are `settings attention-days` to read the stored value and `settings attention-days --set N` to validate, persist and show its new value. These are future interface requirements, not current executable commands. Use the shared application operation and matching stable/development identity/active-location resolver. Invalid input changes nothing. Changing this setting alters neither recency, forecast/Review history, Deadline, scores nor the redesigned Journal views.
+Keep the stored attention threshold and legacy CLI attention classification configurable through a small CLI-only route, with the GUI control absent. Preserve existing values, the default 14 complete 24-hour periods and whole-integer validation from 1 through 9999. The implemented commands are `settings attention-days` to read the stored value and `settings attention-days --set N` to validate, persist and show its new value, under Section 38.10. Use the shared application operation and matching stable/development identity/active-location resolver. Invalid input changes nothing. Changing this setting alters neither recency, forecast/Review history, Deadline, scores nor the redesigned Journal views.
 
 Journal relocation means moving the existing complete active supported database after Choose folder, a current/destination review and explicit Move and restart, then reopening a fresh Journal. Keep appearance/safe geometry as ordinary identity-scoped preferences. A visual-preference reset must not lose the active journal location. Both GUI and CLI must resolve one authoritative location per identity; preserve stable/development isolation, default-path compatibility and explicit disposable-test path injection. Do not add arbitrary journal switching, import or synchronization. Do not overwrite another journal, mix identities, move unrelated backup/export files, or modify unrelated destination files.
 
@@ -1962,13 +1986,13 @@ Validate real path/ownership, required storage semantics and source/destination 
 
 Derive substantive activity from actual committed facts with a creation fallback and deterministic ordering. Multiple qualifying facts in one atomic save use the same real commit instant, without fabricated microseconds. Use stable Prediction ID descending as the final Recently active tiebreaker; preserve explicit null/applicability rules for the other sorts. New standalone One-Shot reflection saves must have enough durable validated provenance to distinguish them from excluded transcription repairs. Preserve the existing complete-snapshot audit/replay path and do not infer legacy user intent from prose or the current form. Older unclassified correction rows remain repairs for this recency rule. Specify any required new metadata/migration explicitly; if canonical exportable audit facts are added, version the analytical export/dictionary extension rather than silently altering format 5. Complete SQLite recovery must retain the necessary provenance. Forecast/scoring contracts remain unchanged.
 
-Before shipping the corresponding Journal behavior, verify effective cleared reflection consistently across Detail, the reflection queue, archive and search using controlled-clock temporary fixtures for both types/modes. A blank effective reflection without Skip enters Needs postmortem; a retained Skip excludes it, and re-added text remains current with older versions inspectable. Exercise restart, separate connections, later corrections and exact historical search, preserving scores/originals. Investigate any demonstrated inconsistency before a narrow repair; these are future acceptance criteria, not claims of completed runtime verification.
+Before shipping the corresponding Journal behavior, verify effective cleared reflection consistently across Detail, the reflection queue, archive and search using controlled-clock temporary fixtures for both types/modes. A blank effective reflection without Skip enters Needs postmortem; a retained Skip excludes it, and re-added text remains current with older versions inspectable. Exercise restart, separate connections, later corrections and exact historical search, preserving scores/originals. The authorized first-slice repair and its dated evidence are recorded in Section 38.10; these invariants remain ongoing regression criteria, not blanket acceptance of untested conditions.
 
 Required software evidence includes supported schema-16/17 Binary and schema-18/19/20 upgrade/refusal fixtures, Saved View options/references, no-view/new-profile cases, backup/confirmation cancellation and failure, rollback, old-backup recovery and unchanged forecasting/history facts. Verify CLI parser/help/read/set bounds and isolation; native relocation with current/older active handles and interrupted phases; substantive-event/tie/provenance cases; and effective-reflection consistency. A future schema number, export version or technical mechanism is not authorized merely by publishing these target requirements. Obtain the relevant implementation scope and prove its gates before enabling the affected feature.
 
 ### 38.9 Acceptance and implementation gates
 
-The following are future acceptance criteria, not claims of completed software validation:
+The following criteria govern the combined desktop. The slice/readiness records identify the source, requested human walkthroughs and latest refinement acceptance actually evaluated; retain their environment and version limits instead of inferring a complete Windows/device matrix:
 
 - Exercise all four creation mode/type combinations and Detail Open/Locked/Resolved/Invalid/Waiting for answer, preserving exact facts, originals, anchors, and distinct current/draft/scoring-eligible context. Failed/no-op/stale/expired/cancelled writes append nothing; successful saves are complete and visible immediately.
 - Exercise these integrated journeys: historical retrieval/reflection/changed membership; retained revision/Overview → guarded Settings; Detail → Performance → Settings → retained Performance → original Detail; and creation cancellation versus ordinary/answered save landings. Include other editor/window-close, unavailable/current-target and failure cases as applicable.
@@ -1977,4 +2001,821 @@ The following are future acceptance criteria, not claims of completed software v
 - Verify both palettes, switching during entered New/revision/Journal/reflection work, correct next-action labels, same-page state retention, preference persistence/failure and modal focus. A fresh session resets retrieval/report state while retaining safe geometry and the chosen appearance preference.
 - Run relevant domain/data/UI regressions for the authorized slice, the required full milestone checks at closure, and human visual review on development/disposable data. Do not use stable personal data as a presentation fixture or carry old passing evidence forward as later runtime acceptance.
 
-Implement only an explicitly authorized coherent slice after resolving its relevant contract and compatibility prerequisites. Validate on disposable development data with focused regressions and human visual review, then reconcile the current specification, guides and architecture on acceptance. Publication of this future target does not authorize software, a prototype, personal-data movement, bulk removal, packaging or release.
+Implement only an explicitly authorized coherent slice after resolving its relevant contract and compatibility prerequisites. Validate on disposable development data with focused regressions and human visual review, then reconcile the current specification, guides and architecture on acceptance. Publication of requirements alone does not authorize software, a prototype, personal-data movement, bulk removal, packaging or release. Explicitly authorized work remains bounded by Sections 38.10–38.15.
+
+### 38.10 Authorized first implementation slice
+
+**Search submission refinement — adopted 2026-11-10:** The measured 2,000-Prediction fixture exceeded the local 750 ms warm live-retrieval budget. For this slice, text is submitted with **Enter or Search**, as explicitly adopted by the user. Editing text removes prior rows/count and presents a submission hint; polling never submits unfinished text. Clearing text, accepting an explicit spelling offer and deliberate retrieval controls may retrieve directly. Preserve full corpus/ranking, complete counts, checked snapshots, current-generation-only results and distinct pending/error/empty states. Automatic text submission remains deferred pending new responsiveness evidence; this refinement governs the conditional live-search direction above.
+
+**Authorized 2026-11-10; implemented locally with automated checks and the requested native walkthrough accepted.** The [2026-11-11 checkpoint record](archive/releases/2026-11-11-journal-workspace-review.md) identifies source, evidence and remaining integration limits. This slice delivers the shared native workspace/appearance controls and Journal home/retrieval described above. Integrate responsibility-based modularization, readable code, comments explaining non-obvious safeguards/tradeoffs and aligned documentation in this slice. Preserve functioning creation, Detail, analytical and Settings destinations through scoped adapters; their full body redesigns follow separately. Do not replace them with stubs or claim the whole redesign is complete.
+
+Begin with controlled-clock temporary fixtures and independent connections. Reproduce the affected paths before narrowly repairing effective-reflection classification, post-commit response-read failures or expected database-error translation. Prove required upgrade exclusion/recovery mechanisms before activating the dependent startup/Journal behavior. A failed proof blocks that path; it does not relax the requirement or authorize silent retirement. Normal GUI/CLI concurrency remains supported outside the protected transition.
+
+The authorized storage/interface scope is a new ordered schema-21 upgrade and analytical CSV format 6, subject to that proof. Preserve applied migrations 1–20 unchanged. Retire Saved Views under Section 38.8, preserving every supported Prediction/history/tag association and unrelated setting, with a verified complete recovery copy and confirmation where configurations exist. No artifact migration, purge or movement on personal data is authorized by this software instruction.
+
+Add an immutable `source_action` to complete One-Shot correction snapshots with the closed values `transcription` and `postmortem`. Existing rows and Correct transcription operations use `transcription`; never infer older intent. Only a dedicated, current-context-validated Postmortem operation on an eligible answered record may use `postmortem`, and it must preserve forecast, answer, documentary times and all other snapshot facts. That operation contributes to Last active only for a blank-to-nonblank reflection transition at its real commit instant. Edits/clears and all transcription repairs remain excluded. Preserve originals, full replay, atomicity and scoring. Provide the shared operation and its checks in this slice; the full dedicated Detail form follows its own slice. CSV format 6 retains existing files/meanings and extends `one_shot_corrections.csv` with `source_action`, documented explicitly; complete SQLite recovery retains it.
+
+Supply the CLI-only attention read/change route when removing its GUI control. Keep current identity-scoped database locations; relocation, location descriptors and Move and restart remain outside this slice. Choose and document exact upgrade guards/coordination only after disposable native proof. A materially different storage/export/provenance contract or additional destructive scope must be resolved explicitly before implementation.
+
+Journal widgets collect/render; shared application/data read models own faithful row/query facts and checked snapshots. Separate navigation/task origins, applied query state, filter drafts, request/result coordination and row rendering. Reuse existing exact inputs, domain/scoring functions, visual components and preference seams. Any background retrieval uses a connection created for that context, without auto-upgrading archives or sharing the UI connection across threads. No new production dependency/framework, general navigation history stack or persistent draft manager is selected.
+
+Measure request-to-display/count completeness and responsiveness on an initial mixed corpus of 2,000 Predictions, 500 per contract, including long histories and corrected/superseded text. Record a concrete local response budget before enabling live retrieval; preserve ranking/corpus semantics, current-generation-only publication, distinct pending/error/empty states and the accepted bounded-loading fallback. Native acceptance covers Section 38.9, integrated returns/guards and both appearances on explicitly injected disposable data, with a focused human visual review. Run the relevant regressions and full milestone checks; reconcile the implemented specification, architecture and affected guides on acceptance.
+
+This authorization covers the bounded software/verification work and necessary aligned documentation. It grants no access to either real user journal as a fixture and no live-data upgrade/move/purge, installed stable-tool replacement, packaging/release, staging, commit or push. Stop the affected path and surface evidence for a failed safety gate, protected-rule conflict or genuinely new consequential choice; routine module names and visual tuning within the approved behavior need no separate approval.
+
+### 38.11 Authorized second implementation slice
+
+**Authorized 2026-11-11; implemented and requested completion review accepted at `166686c` on 2026-11-12, with recorded evidence limits.** The [verification checkpoint](archive/releases/2026-11-11-prediction-detail-verification.md) records automated evidence, the qualified user review and later tuning separately. Implement
+the focused four-contract creation workspace and complete Prediction Detail
+requirements in Sections 38.5–38.6, preserving the accepted first-slice Journal,
+toolbar, appearance, presets and source returns. Deliver reading layouts and
+writing/confirmation flows as one scoped package, with bounded human checkpoints.
+
+Separate creation composition, shared view/operation contracts, committed header,
+Timeline/context layout, task/editor state and focused dialogs into straightforward
+modules. Remove migrated responsibilities from the monolith; retain compatibility
+exports where existing callers need them. Widgets collect/render; shared application
+operations retain eligibility, exact validation, transaction-time/stale checks and
+atomic saves. Reuse current scoring, charts and input components.
+
+Include exact Numeric header/tie/connector/all-equal presentation, independently
+scrolling panes, contextual writing and temporary Overview, guarded exits,
+lifecycle-appropriate reading, conditional review inside focused dialogs, deliberate
+terminal confirmation, One-Shot answer/transcription flows and the narrow nonblank
+reflection-only confirmation exception already specified above. Failure retains work;
+drafts never become committed history or charts before a successful save.
+
+Keep schema 21, projection 3, CSV 6 and applied migrations unchanged. Preserve CLI,
+backup/refusal, scoring and immutable-history rules. Use disposable data and controlled
+clocks, run focused and full checks, align current documentation with implementation,
+and review actual native output in both appearances. Earlier first-slice evidence
+does not accept later screen edits. Full Performance/Settings redesign, relocation,
+personal-data operations, installed-tool replacement, packaging/release, staging,
+commits and pushes remain outside this package.
+
+### 38.12 Authorized third implementation slice
+
+**Authorized and implemented; requested three-journey review accepted at `336abb5` on 2026-11-12, with recorded limits.** The [third-slice checkpoint](archive/releases/2026-11-12-performance-settings-verification.md#reported-slice-3-acceptance--2026-11-12) separates source verification, reported acceptance and publication. The user
+explicitly approved implementing the third slice: Performance and ordinary Settings
+under Section 38.7, preserving the accepted Journal/New/Detail and shared workspace.
+
+Deliver the four-section paired/stacked comprehensive report, report-wide tag and
+local Numeric units, initially collapsed supporting detail, Reset View and selected
+session/restart rules. Refresh truthful committed results without inheriting source
+filters. Preserve separate cohorts, exact scoring/calibration, uncertainty, text
+alternatives and explicit section/report empty/failure states. Verified tag deletion
+and successfully confirmed merge retain their selected scope behavior; failed reads
+never prove disappearance or silently broaden a unit selection. Keep archive refusal
+global. Retain source-aware returns through Settings.
+
+Organize existing Settings backup, analytical export, tag maintenance, search repair,
+data-location facts, appearance and shortcut guidance. Put each tool's latest result
+beside it for that Settings visit, preserving selectable failures/paths and canonical
+last-successful-backup metadata. Keep confirmations, shared operations, CLI-only
+attention configuration and retired Saved Views boundaries.
+
+Separate presentation state, query coordination, section rendering and tool results;
+remove migrated orchestration responsibilities and keep SQL/scoring out of widgets.
+Reuse existing exact analytics, charts, native inputs and identity-scoped preferences.
+Add only the read/application coordination needed for this report; keep domain and
+analytics independent of Qt. No production dependency or schema change is selected.
+Measure responsiveness on disposable representative/dense data and use current-only
+request publication if background reads are needed. Each worker owns a read-only
+connection and cannot upgrade, repair or mutate the archive.
+
+Use controlled disposable fixtures for all four cohorts, sparse/empty/failure,
+corrected history, tags/units, session/reset, navigation, palette, focus and responsive
+layouts. Run focused/full checks, align guides/architecture, and provide one bounded
+native review; implemented, manually accepted and published remain distinct.
+
+Relocation/Choose folder/Move and restart and active-location changes remain outside
+this slice pending their recovery/legacy-writer/interruption proof. Do not expose a
+chooser implying an implemented move. Personal data, installed-tool replacement,
+packaging/release, staging, commits and pushes remain excluded. The user owns Git
+publication; other protected history, scoring, compatibility and recovery rules stay.
+
+### 38.13 Authorized fourth implementation slice: journal relocation
+
+**Authorized and implemented; requested relocation walkthrough accepted at `961d202` on 2026-11-12, with recorded limits.** The [fourth-slice verification record](archive/releases/2026-11-12-journal-relocation-verification.md#reported-slice-4-acceptance--2026-11-12) separates final source checks, native safety evidence, reported acceptance and publication.
+The user instructed implementation of the next relocation slice. Implement the
+existing Sections 38.7–38.8 Choose folder → review → Move and restart → fresh
+Journal contract. Preserve the accepted first three slices and their recorded
+evidence limits. This grants software/test/documentation work, not an actual move
+of either personal journal, installed-tool replacement, packaging or Git publication.
+
+Keep one fixed bootstrap directory per existing identity, containing location/move
+state and presentation preferences. Both GUI and CLI resolve the same active journal
+before SQLite opens; explicit test database paths remain isolated from user bootstrap.
+Only a genuinely new uninitialized default profile may create a database. Existing
+managed locations require recognized migration history and open without create rights;
+an empty/unrelated existing file must not be initialized.
+Missing/unreadable/malformed configured targets, identity conflicts and interrupted
+moves fail visibly without initializing a replacement or selecting another copy.
+Ordinary concurrent GUI/CLI use remains supported; only relocation needs exclusivity.
+
+The bounded storage target is a local fixed NTFS volume on Windows, without reparse
+aliases, hard-linked journals or known cloud/synchronization roots. Reject network,
+removable, conflicting and unavailable targets; preserve unrelated files. Arbitrary
+third-party synchronization cannot be inferred reliably, so the chooser/review and
+guide must require an unsynchronized local folder. No existing journal or retired
+location notice is overwritten by folder selection. Moving to a new unused folder
+again is supported; arbitrary switching/import is not introduced.
+
+Before enabling the chooser, prove the mechanism against native current/older
+connections and process interruption. Use an identity-scoped shared-runtime / exclusive
+move lease plus a Windows source write fence that also excludes already-open writable
+SQLite handles. Capture a checked, complete SQLite image under quiescence, retain and
+verify a distinct recovery copy, and verify destination equivalence before retiring
+the source. Persist a companion move notice and native read-only protection before
+retiring the source header to a non-SQLite notice, without a missing-path window. This
+also blocks legacy writes when WAL can supply page one. If interruption precedes the
+header notice, explicit verified completion may retain the original read-only source
+with its companion notice; never temporarily unprotect it to finish a move. Older
+ordinary entry points cannot create a writable empty replacement there.
+This changes location/compatibility artifacts, not historical facts in either verified
+SQLite copy. Explain the retained recovery and notice in the move review and guide.
+
+A durable phase record precedes multi-file changes. Do not pretend filesystem writes
+and the locator form one database transaction. Verify identity, hashes, paths and
+phase before explicit interrupted-move recovery; ambiguous/tampered states block.
+No writes resume until a single authority is selected, verified and resolved through
+the shared boundary. Preserve recovery and identified staging artifacts; no automatic
+personal cleanup is authorized. Failed moves before source retirement retain its
+authority; later failure blocks with actionable recovery. Restart recreates the
+runtime with the same identity, preserved appearance/geometry and fresh transient
+workspace state. Complete only after reopening/verifying the intended journal.
+
+Keep schema 21, applied migrations, scoring, projection 3, CSV 6 and dependencies
+unchanged. Add meaningful native lease/legacy-handle, complete-data/WAL, refusal,
+alias/conflict/space/permission, restart and interruption tests using disposable roots.
+Run focused/full checks, align architecture/guides and give one bounded native review.
+If a required gate fails, keep relocation unavailable rather than weakening it.
+
+
+### 38.14 Authorized final integration pass
+
+**Authorized and implemented locally — 2026-11-13; source verification passed.** The user subsequently checked the combined journeys and latest refinements successfully. Their scoped acceptance and the technical readiness continuation are recorded separately below. The [final integration record](archive/releases/2026-11-13-final-integration-verification.md) identifies the evaluated changes, regression/capture evidence and remaining limits. Following
+acceptance of the four requested slice walkthroughs and the saved acceptance edits,
+the user explicitly instructed implementation of the final integrated review and
+readiness work. Audit the combined approved package against Sections 38.1–38.13,
+repair demonstrated integration/presentation defects within that behavior, and align
+current source documentation. Preserve prior acceptance and its evidence limits.
+This scope adds no forecasting model, new workflow or persistence/dependency change.
+
+Complete the cross-screen source/guard/failure and keyboard/focus checks using
+disposable databases. In particular, returning to a refreshed Journal must leave a
+usable keyboard target: restore the originating Question where it remains in the
+preserved browsing vicinity; otherwise use a nearby current result, or search when
+no result remains. Never restore a stale row, alter membership, jump to a reordered
+record outside that vicinity, or steal focus from work begun while retrieval runs.
+Background replacement of a focused result must likewise retain usable focus. Numeric interval labels must reflow after inherited/direct font or stylesheet metrics change, even at unchanged width; preserve all five exact values/percentile roles, tie groups and proportional anchors without clipping.
+
+Carry forward existing source/runtime and human evidence with its evaluated version.
+Check both palettes, baseline/larger geometry and scaled text/native scaling where
+available; state the difference between simulated scale and human Windows evidence.
+Add meaningful regressions for demonstrated repairs, run focused and full checks,
+and give one bounded combined walkthrough for remaining integration/review gaps.
+Human acceptance is recorded separately from technical checks. No personal-data operations,
+installed-tool replacement, packaging, version/tag change, commit, push or publication
+is authorized by this pass.
+
+
+**Readiness continuation — authorized 2026-11-13:** The user explicitly requested
+readiness implementation and checks, and subsequently reported the latest saved
+refinements checked with no remaining issues. Carry that scoped human acceptance
+forward without claiming an unreported Windows scaling/accessibility matrix.
+Audit the agreed implementation and existing delivery/recovery instructions; repair
+demonstrated defects within the selected behavior. Validate source distributions and
+wheels in disposable environments with locked runtime dependencies, complete recovery,
+supported upgrades/refusal and database-free help/version entry points. Prepare a
+reviewable everyday-use backup/update/recovery plan. This continuation authorizes
+isolated source-package checks, not an installed-tool replacement, personal-data
+operation, frozen executable release, version/tag change, merge, commit or push.
+
+**Final candidate readiness — authorized 2026-11-19:** After saving the requested
+presentation refinements, the user authorized a whole-app visual review, fresh full
+verification, packaging checks, correction of demonstrated defects within the
+selected behavior and release-handoff preparation. The user separately selected
+0.9.0 package metadata while keeping the changelog Unreleased. Verify disposable
+source/wheel/private-build delivery and retain evidence tied to the tested source
+and payload. Agent screen inspection does not grant final human visual acceptance.
+No normal installation, personal-data operation, commit, merge, tag or publication
+is authorized. The [current readiness record](archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26)
+owns results and limits.
+
+**Final human visual acceptance — 2026-11-27:** The user reports completing the
+latest integrated visual review and explicitly approves the candidate for v0.9.0.
+Remaining UI refinements may be handled in future patches. The
+[acceptance record](archive/releases/2026-11-13-redesign-readiness.md#final-visual-approval--2026-11-27)
+keeps this human judgment separate from the existing technical evidence and
+user-owned installation and release operations. No additional implementation is
+authorized by this acceptance.
+
+### 38.15 Authorized post-review workspace refinements
+
+**Authorized and implemented locally — 2026-11-13; source verification passed,
+focused human recheck accepted with recorded limits.** The [refinement record](archive/releases/2026-11-13-workspace-refinement-verification.md)
+identifies source/capture/timing evidence and limits. The user checked the combined
+journeys at `fe6a3df` and reported eight presentation/responsiveness refinements.
+Preserve that functional feedback, prior slice acceptance and the later refinement
+acceptance recorded below. Implement the following package without changing history,
+scoring, migration, analytical export or protected time-entry rules.
+
+- Same-retrieval refresh keeps current readable rows while a fresh checked read runs;
+  reuse unchanged row widgets and replace only changed display facts. Current-request
+  membership/counts remain coherent. New query/filter/view/sort controls still mask
+  previous-request rows until publication. Idle polling must not repeatedly blank an
+  unchanged Journal, restart overlapping work or disturb reading/focus. Recognized
+  failure and archive refusal remain visible/protected, never stale success. Measure
+  first paint and returns on the 41-Prediction profile; preserve large-corpus safeguards.
+- Give Binary/Numeric One-Shot Detail the shared surfaces, hierarchy, spacing and
+  contextual reading/writing vocabulary with content suited to one immutable forecast.
+  Keep checked answer/pure Brier or WIS, inline later Postmortem, a visible Journal
+  section, and disclosed originals/corrections/recorded facts. Add no Adaptive revision,
+  Review, Deadline or trajectory controls. Preserve exact historical navigation and
+  the established Add Answer/transcription/Invalid/metadata guards and eligibility.
+- In Settings offer DD-MM-YYYY, MM-DD-YYYY and YYYY-MM-DD, initially YYYY-MM-DD,
+  as an identity-scoped GUI presentation preference beside appearance. Apply throughout
+  desktop dates/readouts/pickers without changing canonical values, analytical export
+  or CLI contracts. Preserve the setting across restart/relocation and use a safe
+  default for missing/corrupt preference data. Windows remains the time-zone source;
+  Settings shows its zone/name/current offset with no zone override. Ordinary reading
+  omits repeated UTC offsets; exact time entry and consequential confirmation retain
+  offset/DST cues needed to distinguish instants. The user explicitly adopted this
+  clarification, preserving Windows-time policy while replacing fixed GUI date order.
+- Use deliberate Title Case for principal labels/actions, including Current Committed
+  Revision, Current Revision, Keep Forecast and Needs Postmortem. Main pane headings
+  are OVERVIEW / TIMELINE, or ARCHIVAL CONTEXT; subordinate sections such as Resolution
+  Criteria use ordinary section styling and Title Case rather than all capitals.
+- Resolved and Invalid reading uses equal 50/50 panes. Open/Locked Adaptive retains
+  60/40 reading and eligible contextual writing retains the existing 40/60/Mark Invalid
+  exceptions. One-Shot adopts the corresponding terminal balance for its own content.
+  Preserve smooth transitions and the minimum-window/scroll fallback contract.
+- When contextual tabs identify Overview and the current unsaved task, suppress the
+  duplicate inner Overview heading; restore the standalone main heading in ordinary
+  reading. Tabs/width changes preserve entered work and source/history position.
+
+Use disposable current-contract data, meaningful regressions, native captures and
+focused/full verification. Give a bounded recheck of the eight feedback points.
+Personal data, installed tools, packaging, version/tag changes, staging, commits,
+pushes and publication remain outside this refinement package.
+
+**One-Shot visual follow-up — authorized 2026-11-13:** After checking and saving the
+package above, the user reopened Binary/Numeric One-Shot presentation. Give the
+scorecard its own full pane width beneath a separate Checked Answer, with the score
+prominent and supporting interpretation/breakdown secondary. Results, Postmortem and
+Journal Entries have distinct reading hierarchy. Recorded History, reported/recorded
+facts and originals/corrections use compact chevron disclosures rather than full-width
+rounded action buttons; retain exact historical reveal and keyboard access.
+
+The user explicitly retained Skip's existing meaning: complete the Postmortem task
+while permitting later reflection. On One-Shot Detail show Postmortem Skipped and its
+date as a settled state, remove prominent Write/Skip controls, and offer later
+Write Postmortem through More. A later reflection preserves the original Skip fact;
+written reflection remains readable with Edit available. Keep the existing inline
+writer, exit/stale/save guards and immutable history/scoring. This is presentation
+refinement, not a permanent ban on later reflection or a new completion policy.
+
+This follow-up is implemented locally with passing source verification; its
+[narrow One-Shot visual recheck](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-results-and-reflection-follow-up)
+is included in the later reported acceptance below; publication remains separate.
+
+**Journal preview rhythm and Adaptive disclosure — authorized 2026-11-13:** After
+accepting the One-Shot follow-up, the user requested closer Numeric Journal groups,
+a slightly smaller Binary row forecast with matching Numeric value size, and compact
+Forecast used for scoring disclosure in Adaptive Detail. Keep Numeric values in
+q05/q25/q50/q75/q95 order with exact signs/precision and the unit once. Size the group
+to its content with consistent comfortable gaps instead of stretching five columns
+across a wide window. Both modes use the same Journal preview grammar. Use one smaller
+row-specific forecast text role for Binary percentages and Numeric values; retain
+secondary percentile labels and unchanged Detail forecast typography. Preserve small-
+window reflow and selectable values. Use the existing compact chevron disclosure for
+terminal forecast context, retaining its current facts/default and keyboard access.
+This is presentation tuning; retrieval, scoring eligibility, history and storage remain
+unchanged. Other accepted journeys/checks carry forward; recheck only these refinements.
+
+This tuning is implemented locally with passing source verification. The narrow
+three-point visual recheck is included in the later reported acceptance below; it grants
+no publication or additional scope.
+
+**Further presentation feedback — authorized 2026-11-13:** Journal percentile
+headings use 5th / 25th / 50th / 75th / 95th; omit Median only in Journal previews,
+retaining its role label on Detail's proportional intervals. The WIS Actual diamond
+uses a distinct gold chart fill/contrasting outline in both appearances rather than
+borrowing the warning-text color. Warning/readout contrast and exact geometry remain.
+One-Shot expanded Times & Recorded Facts and Originals & Corrections use consistent
+rounded content panels with inset padding and wrapping text. Group original, Before
+and After snapshots with clear spacing, preserving every value, note, reported time,
+immutable version and historical destination. Keep compact chevron controls and
+ordinary disclosure defaults. These refinements extend the uncommitted presentation
+checkpoint, without changing history, scoring, storage or the user-owned Git boundary.
+
+The combined candidate is implemented locally with passing source verification;
+the scoped label/marker/expanded-facts visual recheck is included in later reported
+acceptance below.
+
+**Adaptive Overview disclosure consistency — authorized 2026-11-13:** Following
+acceptance of the preceding fixes, the user requested compact chevron reveals for
+the other inline Overview disclosures: Probability History on Invalid Adaptive
+Binary, More Information on both types, and Latest Committed Distribution on
+terminal Adaptive Numeric. Apply the same treatment to supporting scored-forecast
+context. Preserve content, visibility, fresh-visit defaults, exact search reveal and
+ongoing-task retention; charts that were directly visible remain so. Editing and
+dialog actions keep their existing behavior. This extends the uncommitted presentation
+checkpoint and changes no history, scoring, data or dependency boundary.
+
+This reveal consistency pass is implemented locally with passing source verification;
+its short visual recheck is included in later reported acceptance below. Release
+remains separate.
+
+**Adaptive Numeric definition visibility — authorized 2026-11-13:** Unit and Decimal
+Places are essential interpretation facts. Show their existing immutable values as a
+compact two-field row directly below Resolution Criteria at the top of Overview or
+Archival Context, before notes/reflection/score details. Keep the values selectable
+and long units readable at supported widths, with no duplicate in More Information.
+That disclosure retains the remaining optional context and definition history; empty
+content is stated clearly and an unavailable history remains an error, not a false
+empty result. This presentation refinement adds no editing, conversion, precision
+change, new canonical fact or scoring/storage behavior and extends the same uncommitted
+candidate. Other accepted journeys/defaults carry forward.
+
+This placement is implemented locally with passing source verification. The preceding
+label/marker/expanded-facts fixes, new placement and remaining Adaptive reveal check
+are included in the scoped reported acceptance below, separately from publication.
+
+**Final utility/presentation follow-up — authorized 2026-11-13:** Use Answer Pending
+for the desktop One-Shot nonterminal status chip and matching Detail heading, retaining
+warning yellow and the existing Open lifecycle. This supersedes earlier desktop
+Waiting for answer wording; CLI, storage and eligibility are unchanged. Reserve full
+Reset View text space before/after focus and clicks in Journal and Performance.
+Performance's supporting diagnostics, percentile detail and Binary calibration tables
+use the existing compact chevrons, retaining content, keyboard access, session state
+and Reset View defaults. Actual actions such as retry and reset remain actions.
+
+Performance and Settings always offer a quiet notebook icon beside the right-hand
+utilities, with tooltip/accessibility label **Journal**, opening the current Journal
+view without resetting its retrieval. This explicitly replaces the earlier
+different-destination-only home rule. Back remains source-aware and independent,
+including when both actions lead to Journal. Omit the home self-action on Journal
+and do not add it to focused creation or Detail. Existing exit, archive refusal,
+Settings visit-result and Performance continuity safeguards remain. This extends the
+same uncommitted presentation checkpoint; the user retains staging/commits/pushes.
+
+This follow-up is implemented locally with passing full-source verification. Its
+four-point visual recheck was later reported accepted below; publication remains separate.
+
+**Settings Performance access — authorized 2026-11-13:** Settings also exposes the
+existing Performance chart icon beside Journal and appearance. Opening Performance
+from Settings retains the underlying Journal/Prediction origin. If Settings was a
+Performance detour, retain that report's existing independent origin, scope and useful
+position. Back must not form a Settings/Performance cycle; this extends the existing
+one-origin model without introducing a navigation stack. Settings visit-local results
+still clear on leaving. Creation restrictions, archive refusal, report refresh/reset
+and the direct Journal action remain unchanged. This extends the same uncommitted
+presentation checkpoint, with commits/pushes retained by the user.
+
+This Settings extension is implemented locally with passing full-source verification;
+its focused toolbar/return recheck is included in the reported acceptance below.
+
+**Latest reported acceptance — 2026-11-13:** During the separately authorized readiness
+pass, the user explicitly reported the latest saved refinements, including Settings →
+Performance, checked with no remaining issues. Earlier pending recheck descriptions
+above identify their pre-acceptance checkpoint states. Preserve prior accepted journeys
+and the actual review limits; no Windows scaling percentage or complete accessibility
+matrix was supplied. The [readiness record](archive/releases/2026-11-13-redesign-readiness.md)
+owns technical source-package checks and the controlled adoption handoff. No installed
+tool, personal data, version/tag, merge or publication is changed by this acceptance.
+
+**Focused Journal and Detail sizing — authorized 2026-11-13:** The user explicitly
+instructed implementation of the reviewed focused-width treatment on both screens,
+including Balanced Journal typography. Center the shared toolbar/page workspace at
+a comfortable maximum width: 1,024 logical pixels for Journal and 1,120 for Prediction
+Detail, shrinking to the available window width below those limits. These constrain
+content, not native window resizing. Preserve the existing safe initial geometry,
+remembered normal/maximized state and 760 × 520 minimum. Other destinations retain
+their existing sizing. No new display preference or outer-canvas palette is selected.
+
+Journal uses a calmer row-specific type scale: Question remains stronger/larger than
+forecast, forecast values share the same size across types/modes, and supporting
+labels/dates become more readable. Keep the page title above row Questions, full
+wrapping/selectability, compact exact Numeric groups and existing row facts/order.
+Retain Detail typography, committed-only forecast context, independent scrolling,
+60/40 nonterminal reading, 50/50 terminal reading and the existing contextual-writing
+ratios/motion. Notifications remain associated with the working area. Repair the
+demonstrated Binary Timeline heading-height gap without changing the Journal body,
+chronology or disclosure meaning. Verify both palettes, narrow/enlarged windows,
+all four Detail contracts and retained editing/focus. This is presentation work;
+history, scoring, storage, dependencies, installed tools and user-owned Git/release
+operations remain outside the change. Human review of the implemented result remains
+separate from the accepted comparison.
+
+**Focused Performance sizing — authorized 2026-11-13:** The user explicitly
+approved extending the focused-width treatment to Performance. Center its shared
+toolbar/report workspace at a maximum of 1,280 logical pixels, using available
+width in narrower windows. Retain the existing paired Adaptive and One-Shot sections,
+stacking at the current narrow-width breakpoint, and align the pinned Tag / Reset
+View strip with the report. Preserve typography, expanded supporting charts/tables,
+session tag/unit/disclosure state, useful reading position, source-aware returns,
+truthful loading/error/empty states and all score/population meanings. Use the same
+native layout constraint as Journal/Detail; native window geometry/preferences and
+the remaining screens keep their existing behavior. No new setting, schema,
+dependency, installed-tool/data operation or Git/release action is selected. Verify
+wide/narrow layouts and retained scope/disclosures in both palettes; human visual
+review remains separate from source checks.
+
+**Scrollbar and Detail width tuning — authorized 2026-11-14:** The user requested
+less intrusive scrollbars across the redesigned screens and slightly more Detail
+width while retaining side margins. Increase Detail's maximum working width from
+1,120 to 1,200 logical pixels; Journal and Performance retain their existing limits.
+Preserve native window sizing/preferences and the existing reading/writing pane
+proportions, exact forecast context, source returns and retained drafts/scroll state.
+
+Use a shared quiet scrollbar treatment in both palettes: transparent tracks, rounded
+neutral thumbs, clearer hover/pressed/focus feedback and no end-arrow boxes. Keep a
+usable native hit area around the narrower painted thumb, visible position feedback
+when scrolling is available, and readable nontext contrast. Retain native wheel,
+keyboard, track paging and dragging; keep existing scrollbar visibility policies and
+independent Detail panes. Add no custom scrolling engine, auto-hide behavior, setting,
+dependency or canonical data change. Verify both orientations/palettes and native
+styles, screen overflow, draft retention and supported scaled/narrow geometry.
+Technical evidence and human visual acceptance remain separate.
+
+**Journal width and narrative Detail — authorized 2026-11-14:** The user accepted
+the preceding scrollbar/Detail-width review, then requested a wider Journal and
+Detail reading that follows the reviewed narrative references. Journal now shares
+Detail's 1,200-logical-pixel cap; Performance keeps its 1,280-wide chart workspace.
+All retain centered margins in larger windows and available width below their caps.
+
+Replace enclosing rounded reading cards in Prediction Detail with flat sections.
+Timeline forecasts, Reviews, Journal entries and recorded terminal/correction events
+use thin separators and a shared event heading with its recorded date/time beside
+it. Wrap naturally when a narrow pane or larger font cannot fit the complete header.
+Keep event names stronger than body prose, timestamps quieter, and pane headings
+above subsection/event headings. Preserve prominent forecast/score values, the
+current-revision marker/jump, selectable text, complete exact facts, correction and
+search anchors, disclosure defaults, retained row identities and useful scroll state.
+Apply the same reading treatment to One-Shot results, Journal entries, recorded
+history and original/corrected facts. This supersedes earlier rounded reading-panel
+directions; it adds no new workflow or fact. Inputs, native actions, dialogs and
+semantic status/error/focus feedback retain their established controls. Preserve
+task proportions/motion, draft guards and history/scoring/storage boundaries. Verify
+both palettes, all four contracts, narrow/scaled geometry, long-history reuse and
+historical search navigation; human visual acceptance remains separate.
+
+**Framed workspace surfaces — authorized 2026-11-14:** The user accepted the
+narrative Detail and wider Journal, then requested a visible boundary and tonal
+separation between centered content and the side margins, referring to the reviewed
+screen outlines. Give the shared toolbar/page workspace one quiet outline with
+restrained outer corners. Keep its accepted interior palette and flat reading
+sections; use a slightly deeper, related outer canvas in both appearances to lift
+the working surface. Apply the common boundary on other routes without changing
+their sizing. Preserve the 1,200 Journal/Detail and 1,280 Performance caps, native
+geometry, content spacing/type, pane proportions/motion, focus/scroll and drafts.
+This is shared shell presentation only, with no new setting, shadow/animation
+effect, dependency, workflow or data change. Check actual border/background paint,
+all routes, both palettes and narrow/scaled geometry. Human visual acceptance of
+the new framing remains separate from the accepted interior composition.
+
+**Structural rules and Detail headers — authorized 2026-11-14:** The user accepted
+the framed workspaces, then requested closer alignment with the Journal/Detail
+references. Omit the duplicate product/development name from the shared toolbar;
+retain the native window's stable/development identity and all toolbar action scopes.
+New stays above Journal in the toolbar. Add a quiet toolbar/content rule and a
+Journal rule between search/filter controls and results. Use the bundled Lucide
+search symbol at the leading edge of Search predictions, retaining explicit
+Enter/Search submission, clear behavior, keyboard focus and palette refresh.
+
+Detail adds a rule below its question/forecast/actions block and a noninteractive
+vertical rule between Timeline and Overview/task content. Follow actual automatic
+60/40, 40/60 and 50/50 pane geometry through resize and motion without a manual
+splitter or history rebuild. Place the full Question first, followed by mode/type,
+status and tags in a wrapping metadata row. Show exact selectable tag names as
+quiet outlined chips without a generated hashtag prefix, distinct from filled
+type/status chips. Preserve original names, search/history targets and all tag
+relationships. Numeric Detail's interval legend uses an actual thin 90% line,
+thick 50% line and vertical Median mark alongside readable text, matching the
+committed interval's palette and leaving exact values, ties and units unchanged.
+Apply the shared presentation consistently across supported Detail contracts,
+retaining guards, focus, draft/source/scroll state, disclosure defaults and scoring/
+storage boundaries. Verify rules, metadata/legend wrapping, pane motion, both
+palettes and narrow/scaled geometry; human visual review remains separate.
+
+**Flat surfaces, expanding scroll thumbs and focused Settings — authorized 2026-11-19:**
+The user requests removing rounded rectangles from noninteractive content throughout
+the desktop, especially clipped forecast context in Detail tasks. Use flat sections
+and rules for ordinary read-only panels and unboxed, selectable, naturally wrapping
+forecast context. The outer workspace outline, metadata/status labels and semantic
+messages keep their boundaries/colors where useful, with square corners. Inputs,
+buttons, dropdowns and native interactive controls retain their control treatment.
+This supersedes earlier rounded noninteractive surface directions; preserve exact
+facts, task guards, focus and historical targets.
+
+Shared scrollbars paint a thin resting thumb that expands on hover, keyboard focus
+or dragging within the existing stable native hit lane. Keep visible position,
+contrast, native dragging/track paging/wheel/keyboard behavior, scrollbar policies
+and independent Detail scroll areas; expansion must not resize or reflow content.
+Center Settings and its toolbar at a 1,200-logical-pixel maximum, using available
+width in narrower windows, preserving administration actions, results, navigation
+and geometry preferences. Journal/Detail remain 1,200 and Performance 1,280. Broader
+proposals about margins, criteria visibility, pane ratios or document scrolling are
+not adopted by this presentation refinement. Verify both palettes/orientations,
+native styles, narrow/scaled geometry, complete wrapped context and retained drafts;
+human review remains separate from automated/offscreen evidence.
+
+**Wider focused workspaces and compact Settings — authorized 2026-11-19:** The user
+accepted the flat-surface/scrollbar refinement, retains proportional scroll-thumb
+lengths after explanation, and requests wider focused workspaces plus Settings with
+all ordinary options visible without scrolling. Increase Journal/Detail/Settings
+caps from 1,200 to 1,320 logical pixels and Performance from 1,280 to 1,440, retaining
+centering, available narrow width, native geometry, exact content and pane behavior.
+
+Settings uses compact paired sections, reduced redundant margins/gaps and a concise
+header, preserving readable text and existing controls, labels, shortcuts, results
+and source-aware navigation. Include the actual folder chooser controls in fit
+verification. Ordinary Settings must fit at supported minimum geometry and normal
+fonts without page scrolling. Retain safe overflow for unusually long paths/results
+or enlarged native fonts rather than clipping, hiding settings or reducing text
+below the shared readable scale. This is presentation only; no administration,
+relocation, data/history/scoring, preference, dependency or navigation-model change
+is authorized. Check both palettes, narrow/wide/scaled geometry, keyboard order,
+expanded tool results and retained Detail/Performance state. Human visual acceptance
+of the new widths/composition remains separate.
+
+**Rounded Detail metadata exception — authorized 2026-11-19:** Restore restrained
+rounded corners to mode/type, lifecycle/status and tag chips below the Question in
+all four Prediction Detail contracts. Scope this exception to the header metadata
+row, preserving filled identity/status and quieter outlined literal tag names.
+Other flat/square surfaces, controls, text, spacing, pane behavior and widths retain
+their existing presentation. Detail remains capped at 1,320 logical pixels;
+discussion of 1,440 is not adoption or implementation authorization. Verify both
+palettes, narrow/wide geometry, complete selectable names and unchanged canonical
+facts; human review remains separate from focused source/native checks.
+
+**Journal preview metadata extension — authorized 2026-11-19:** Apply the same
+rounded mode/type, lifecycle/status and tag chip grammar to Journal preview rows.
+Use the current canonical-summary tag names as quiet outlined, selectable labels,
+without generated hashtags; keep mode/status distinct and retain status meanings.
+The metadata row wraps naturally, preserving Question/forecast hierarchy, complete
+Numeric summaries, dates, result navigation, match excerpts and browsing/return
+state. Extend the scoped metadata exception shared with Detail; retain other flat
+surfaces, current widths and all retrieval/history/scoring/storage rules. Verify
+all four contracts, exact/long tag names, both palettes and narrow/wide geometry.
+
+**Focused New Prediction presentation — authorized 2026-11-19:** Align Adaptive
+and One-Shot creation with the shared centered workspace: cap the toolbar/page
+surface at 1,320 logical pixels and expose the existing deeper side canvas in
+wider windows. Keep the current 980-wide inner form columns, square outer outline,
+shared palette, flat reading surfaces and readable input/action hierarchy. Narrow
+windows use their available width; creation retains native scrolling when needed.
+Both creation modes share the same surface/viewport treatment. Preserve every field,
+default, disclosure, mode/type switch, validation/confirmation, save/cancel/source
+return, keyboard flow and draft guard. Toolbar creation restrictions remain. This
+is presentation only, with no data/history/scoring, preference, dependency or
+workflow change. Check all four contracts, both palettes, wide/minimum/scaled
+geometry, visible canvas separation, complete inputs and retained drafts; human
+visual review remains separate from focused source/native evidence.
+
+**Compact Journal reading — authorized 2026-11-19:** Keep Journal Entry, its original
+date/time and Correct Entry as a compact wrapping header, with a visible native
+keyboard-focus treatment. Header actions use inline spacing rather than form-button
+padding; edited-date labels use their natural reading height when space permits.
+Show the Journal body immediately below that header. Adaptive Numeric Journal rows
+omit the repeated 90% interval/Median/50% interval block, with no replacement forecast
+disclosure. The committed header and actual forecast revision rows retain full exact
+values. Adaptive Binary retains its brief Forecast at the time percentage below the
+body; One-Shot reading remains distinct. Preserve every stored Journal anchor,
+timestamp, original/corrected body, causal position, search/history target, correction
+action and eligibility rule. Numeric Forecast Reviews retain their existing context.
+This changes presentation only. Check corrected/uncorrected entries across all four
+contracts, both palettes, narrow/wide/scaled geometry, enlarged fonts, focus and
+unchanged canonical history; human visual acceptance remains separate.
+
+**Detail save responsiveness — authorized 2026-11-20:** Saving from an Adaptive
+Detail writing pane must reconcile newly read Timeline facts incrementally,
+retaining unchanged row widgets and native layout items instead of discarding
+their layout caches. Append or replace only affected rows, including changed
+current-revision/scoring annotations; sorting retains the loaded items in true
+chronological order. Preserve fresh canonical reads, shared validation/transactions,
+stale/error draft retention, exact history, independent pane state and existing
+bidirectional motion/reduced motion. Check real Journal, Review and revision saves
+on long Binary/Numeric histories, corrections, order and external changes using
+disposable data. Record save-handler and deferred redraw timing separately; human
+responsiveness review remains separate from controlled measurements. This is a
+presentation optimisation, with no change to data, lifecycle, scoring or persistence.
+
+**One-Shot Reading layout — authorized 2026-11-20:** Implement the selected stacked
+reading composition for Binary/Numeric Detail within its existing sections and
+workflows. Keep the separate Checked Answer above a full-pane-width prominent
+Brier/WIS score; use ruled Postmortem and Journal Entries sections with consistent
+subsection/body/documentary text hierarchy. Overview leads with Resolution Criteria,
+then available Background/Rationale and other existing context, using the full prose
+width without a permanent label rail. Keep compact audit chevrons, exact original/
+effective and reported/recorded distinctions, inline optional reflection and the
+settled Skip/later Write through More behavior. Preserve the Question-first header,
+exact forecast/interval, metadata chips, pending/Invalid content and eligible actions,
+pane proportions, guards and historical targets. This changes presentation only;
+verify both types/palettes, pending/answered/Invalid and corrected records, long prose,
+narrow/scaled geometry, keyboard disclosures and unchanged canonical facts. Native
+human visual acceptance remains separate from the selected illustration.
+
+This presentation is implemented locally. The [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-reading-layout--2026-11-20)
+separates final source/native checks from pending human visual acceptance and
+earlier package artifacts.
+
+**One-Shot audit reading — authorized 2026-11-20:** Group Times & Recorded Facts
+into Reported by You, Recorded by Reckonsolve and the existing Numeric definition.
+Retain documentary approximation/offset cues and immutable recording times. Within
+Originals & Corrections, keep the complete original facts and lead each correction
+with its action/date, exactly changed fields and labeled Before/After values. Short
+facts compare beside one another; prose uses the pane width. Keep the correction
+note and complete Before/After snapshots available through a compact disclosure.
+Unchanged fields need not repeat in the initial comparison. Preserve source-action
+distinctions, all original/snapshot facts, historical targets, scores and workflows;
+this is presentation only. Verify Binary/Numeric, sparse/terminal/corrected records,
+long prose, both palettes, narrow/scaled/enlarged text and unchanged saved history.
+
+This audit refinement is implemented locally with [focused/native verification](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-audit-reading--2026-11-20);
+its narrow human visual recheck remains pending.
+
+**One-Shot Score Breakdown — authorized 2026-11-20:** Organize the existing Numeric
+supporting readouts into Contributions to WIS, Median Error, 50% Interval and
+90% Interval. Distinguish weighted contributions from raw interval scores and keep
+the main exact WIS score above the disclosure. Preserve all existing terms, signs,
+units, actual-location meaning and closed scoring/eligibility rules. Use the shared
+ruled section/text hierarchy, selectable values, native keyboard disclosure and
+safe narrow/enlarged wrapping. This is presentation only; no score is recalculated,
+rounded, pooled or written by the renderer. Verify exact below/inside/above readouts,
+both appearances, geometry and unchanged saved records/scores.
+
+The score presentation is implemented locally with [focused/native evidence](archive/releases/2026-11-13-workspace-refinement-verification.md#one-shot-score-breakdown--2026-11-20);
+its narrow human visual review remains pending.
+
+**Adaptive Overview reading — authorized 2026-11-20:** Probability History uses the
+surrounding workspace canvas color in both appearances, including hollow historical
+markers. Latest Committed Distribution omits its repeated inner heading when the
+chevron already names it; directly visible charts retain a matching subsection
+heading. Organize supporting content into chart-reading guidance, exact Numeric
+forecast values and history/scoring context. Keep the latest-versus-scored warning
+prominent when those forecasts differ. Preserve exact values, chronology, supported
+interpolation/ties, unspecified tails and chart text alternatives. Failed history
+reads show their error without displaying stale distribution values.
+
+More Information uses clearly separated optional fact/prose groups, retaining its
+empty/unavailable states and exact historical targets. Numeric Overview keeps Unit
+and Decimal Places below criteria, followed by a framed **Numeric Scorecard** with
+grouped median accuracy and interval coverage. **WIS Breakdown** becomes a compact
+keyboard-operable chevron, initially collapsed, retaining all existing diagnostics,
+comparison terms, units and meanings. Keep ordinary reading flat elsewhere and
+preserve existing draft consultation, fresh-visit defaults and terminal eligibility.
+These changes affect presentation only, with no new score, persistence or workflow
+rule. Verify both types, lifecycle states, palettes, narrow/scaled/enlarged geometry,
+read failures and unchanged canonical facts/scores. Current source evidence and
+pending human review are recorded in the [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#adaptive-overview-reading--2026-11-20).
+
+**Binary Scorecard and inline history — adopted and authorized 2026-11-20:** Give
+Adaptive Binary the same deliberate scorecard frame as Numeric. Show Initial/Final
+Brier and the Final Eligible Forecast directly, distinguishing any later excluded
+revision. Put the existing Updating/Timing diagnostics behind an underlined
+**Show Timing & Updating Details** control. Keep unscored results explicit and
+without fabricated diagnostics; retain existing precision, meanings and caveats.
+
+**Desktop guide-text refinement — authorized and implemented locally 2026-11-20:**
+Use concise, factual helpers instead of repeated generic cautions and instructions.
+The following accepted presentation changes explicitly refine the preceding
+caveat-presentation requirement without changing mathematical interpretation,
+history, lifecycle, uncertainty calculations or any user-authored text:
+
+- Binary Scorecard omits the generic hindsight/forecast-weight paragraph without
+  replacement. Keep short score-direction cues, metric definitions and notices
+  identifying corrected facts or excluded revisions.
+- Performance omits generic page/mode introductions, Binary timing/weight and
+  selective-entry paragraphs, and Numeric calibration/updating cautions. Retain
+  headings and all four populations, metric/count/uncertainty results and empty
+  states. Binary calibration uses “Bars: 95% Wilson intervals for observed Yes.”;
+  applicable Adaptive Binary guidance retains only “N unscored”. Removed helpers
+  leave no empty layout rows.
+- Adaptive chart context omits Binary's generic Scoring Context paragraph and both
+  types' repeated Timeline pointers. Keep symbol keys, exact Numeric values and
+  latest-versus-scored/no-eligible notices. Hide empty context sections/headings.
+- Empty Postmortem sections say “Not written.” One-Shot's skipped hint says “Write
+  Postmortem is in More.” Adaptive completion uses “Postmortem Skipped · date”, or
+  “Previously Skipped · date” when later reflection is present, matching One-Shot.
+  Preserve the original completion date and later-writing behavior.
+- Adaptive creation omits its page subtitle and repeated field inventories; type
+  switching must not restore them. Retain actual fields, labels, validation,
+  deadline controls. The later creation presentation refinement in Section 38.5
+  removes the One-Shot purpose subtitle under the user's explicit request.
+- Hover help defines Updating Gain as hold-initial minus actual Trajectory Brier,
+  Delta WIS as Initial minus Final WIS with its positive direction, and weights as
+  shares of the original window, including neutral loss 0.25 after early resolution.
+  Numeric uncertainty help is “Pointwise 95% Wilson confidence intervals.” The
+  whole-number band explanation identifies ties between open/filled dots and their
+  possible effect on interval coverage. Keep specific chart keys, strict/inclusive
+  meaning, exact observations and complete nonvisual alternatives.
+- Binary revision help directs notes without a forecast change to a Journal Entry.
+  Journal body corrections say “Earlier versions remain in Edit History.” Keep
+  Forecast says “Record a Review without changing the forecast.” One-Shot rationale
+  asks “Why did you make this forecast?”; the existing New Journal Entry placeholder
+  says “Evidence, reasoning, or other notes.” Accessible descriptions remain aligned.
+- Historical events keep names, immutable dates, original outcome/value and actual
+  correction explanations. Omit generic fallback paragraphs about preserved history,
+  before/after access or later writing. Skip events use “Postmortem Skipped”; Invalid
+  events retain “Marked Invalid · Not scored”. Complete originals/corrections remain
+  available through their existing disclosures and exact search targets.
+
+Retain useful error/empty states, time ambiguity, recovery and consequential-action
+instructions. The user guide continues to explain mathematical interpretation;
+CLI wording is outside this desktop-copy refinement. The [copy verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#binary-scorecard-copy-refinement--2026-11-20)
+separates current checks from older source/package evidence and human visual review.
+
+Replace corrected Journal **Edit History** and Adaptive **Resolution History**
+checkboxes with underlined **Show…** / **Hide…** text controls and readable counts.
+Expand in place, preserving selectable originals/prior versions, complete terminal
+corrections, immutable dates and exact search targets. Keep the current Journal
+body once, dated prior versions below it, quiet internal rules and complete wrapped
+text at enlarged/narrow geometry. Preserve fresh-visit collapse, ongoing-task
+consultation state and automatic exact-version reveal. This presentation introduces
+no navigation, setting, score/history write, correction or lifecycle rule. Both
+palettes, keyboard operation, all four Journal contracts and scored/unscored Binary
+require source/native checks and a focused human visual recheck.
+
+The adopted presentation is implemented with [current verification evidence](archive/releases/2026-11-13-workspace-refinement-verification.md#binary-scorecard-and-inline-history--2026-11-20);
+human visual acceptance remains separate.
+
+**History reading and editor submission — authorized 2026-11-20:** Expanded Edit,
+Resolution and Definition histories use compact natural text heights, retaining
+full original/corrected wording, meaningful line breaks, exact facts/dates and
+selectability. Resizing or changing font must release an obsolete larger height.
+Definition History uses the shared underlined Show/Hide link in all four contracts,
+with fresh-visit collapse, draft consultation and exact historical search reveal.
+
+Ctrl+Enter (including keypad Enter) activates the existing enabled primary action
+while typing in an active Prediction editor, including creation, revision, Journal,
+reflection, metadata and correction forms. Ordinary Enter remains a newline in
+multiline editors. Hidden/background/read-only editors and disabled actions cannot
+submit; held-key repeats must not create multiple saves. This is a local form
+convention, not global navigation. Existing validation, stale/lock handling,
+confirmation/review stages and Escape cancellation remain. Expose the shortcut in
+button help and the compact Settings reference without compromising safe geometry.
+
+These refinements are implemented. The [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#compact-histories-and-editor-submission--2026-11-20)
+separates source/layout evidence from the pending focused human review.
+
+**Terminal headers and disclosure consistency — authorized 2026-11-24:** Answered
+One-Shot headers retain their effective saved forecast and also show the effective
+Checked Answer. Numeric overlays a gold diamond and exact answer on the same
+proportional interval; extend the display scale when necessary to include an
+outside answer, without extending forecast bands or inventing tails. Binary keeps
+its recorded Yes probability and labels the checked Yes/No answer separately.
+Pending/Invalid headers must not imply a scored or checked outcome. The 2026-11-26
+refinement below supersedes the separate header answer caption.
+
+Terminal forecast-context disclosure belongs to the right of the effective/
+recorded times, below the score or Not scored, with readable narrow reflow.
+Use orange Caution for Invalid status consistently in Journal and Detail; case
+does not create a separate lifecycle. Retire checkbox-style content disclosures
+in Detail, including Reason History, and use a chevron for Adaptive creation's
+More Details and Resolution's optional Postmortem. Both resolution types use the
+same reflection placeholder. Retain existing value-setting date/time, offset,
+Expected Resolution and included-answer options and all validation/confirmation.
+
+Performance retains its four named sections and paired layout, omitting redundant
+Adaptive/One-Shot umbrella headings. Shared Prediction form layouts keep headings,
+forecast context and field labels at natural height instead of distributing spare
+space between them. Nested reading/disclosure boundaries draw one ending rule,
+retaining meaningful internal separators, keyboard/search access and content.
+These are presentation refinements only: no canonical facts, precision, score,
+eligibility, default draft, persistence, schema or dependency changes. Verify all
+contracts, corrected/terminal states, outside/tied Numeric answers, both palettes,
+narrow/enlarged geometry, disclosures, retained inputs and unchanged histories.
+
+The presentation refinement is implemented. Its [verification record](archive/releases/2026-11-13-workspace-refinement-verification.md#terminal-headers-and-disclosure-consistency--2026-11-24)
+separates current automated/layout evidence from pending focused human review.
+
+**Presentation cleanup — authorized 2026-11-26:** One-Shot Results owns the
+visible Checked Answer text and presents it in readable gold tones. The Numeric
+header retains the gold diamond, legend, exact accessible description and
+proportional mapping. Adaptive Locked headers use the Locked state, existing
+Deadline and eligible actions in place of the additional explanatory sentence.
+Binary Resolve omits the introductory paragraph. Its effective-time guidance,
+reviewed forecast and final confirmation remain. Wrapped form labels must fit
+their content at the current width. Match the creation heading divider to the
+existing forecast-form bottom rule in each appearance. Broader copy and Journal
+layout proposals were approved for implementation on 2026-11-26. Settings groups
+preferences and administrative tools into a single column when the paired layout
+cannot fit comfortably. Tool actions may move below their descriptions. Detail
+keeps full selectable criteria, Timeline text and exact numeric values readable
+after resizing. Numeric Revision keeps each current value beside its draft field
+when the pane fits, and stacks each pair when space is limited. Numeric Resolve
+puts one WIS cutoff sentence by the effective-time controls. One-Shot uses the
+standard Results heading when an answer is pending and keeps the correction cue
+in the header and the recorded history after transcription repair.
+
+**Pending Results and consistent status chips — authorized 2026-11-26:** A
+pending One-Shot leads from the Results heading directly into Journal Entries,
+without an empty answer/score block or reserved divider. Saving an answer reveals
+the Checked Answer and scorecard. Journal and all Detail headers use Title Case
+lifecycle chips with matching semantic tones. Open uses blue, Locked and Answer
+Pending yellow, Resolved green and Invalid orange. Answer Pending remains the One-Shot
+presentation of its Open lifecycle. Numeric Performance tables share the enclosing
+calibration/report ending rules rather than repeating nested panel borders.

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from reckonsolve.application.errors import ValidationError
 from reckonsolve.clock import Clock, SystemClock
 from reckonsolve.domain.forecast_contracts import ForecastDeadline
+from reckonsolve.ui.date_display import input_date_format
 from reckonsolve.ui.visual_system import (
     ActionRole,
     Spacing,
@@ -54,7 +55,11 @@ class ExactDeadlineInput(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(int(Spacing.CONTROL))
-        title = QLabel("Forecast Deadline · Required", self)
+        title = QLabel("Deadline", self)
+        title.setObjectName("deadlineLabel")
+        title.setProperty("reckonsolveRequiredField", "true")
+        title.setToolTip("Required. Choose when forecasting closes.")
+        title.setAccessibleDescription("Required field")
         apply_text_role(title, TextRole.LABEL)
         layout.addWidget(title)
 
@@ -95,8 +100,10 @@ class ExactDeadlineInput(QWidget):
         # Resolve against the local zone explicitly, never silently normalize it.
         self.editor.setTimeZone(QTimeZone.utc())
         self.editor.setObjectName("exactDeadlineInput")
-        self.editor.setAccessibleName("Forecast Deadline date and time")
-        self.editor.setDisplayFormat("yyyy-MM-dd HH:mm")
+        self.editor.setAccessibleName("Deadline date and time")
+        self.editor.setAccessibleDescription("Required field")
+        title.setBuddy(self.editor)
+        self.editor.setDisplayFormat(input_date_format(self, " HH:mm"))
         self.editor.setCalendarPopup(True)
         self.editor.setKeyboardTracking(False)
         fields.addWidget(self.editor, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -263,7 +270,9 @@ class ExactDeadlineInput(QWidget):
             return
         try:
             instant, zone_label = self._resolve()
-            wall = self.editor.dateTime().toString("dddd, MMMM d, yyyy 'at' h:mm AP")
+            wall = self.editor.dateTime().toString(
+                input_date_format(self, " 'at' h:mm AP")
+            )
             text = f"{wall}\n{zone_label}"
             if instant <= self._clock.now():
                 text += "\nChoose a future deadline before creating this prediction."

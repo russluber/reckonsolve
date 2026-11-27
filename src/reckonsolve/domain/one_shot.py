@@ -1,7 +1,8 @@
 """One committed forecast and documentary times, independent of UI and SQLite."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
+from enum import StrEnum
 
 from .forecast_contracts import ForecastCohort, ForecastContract
 from .predictions import (
@@ -143,6 +144,30 @@ class NewOneShotPrediction:
         object.__setattr__(self, "tags", _normalize_tags(self.tags))
 
 
+class OneShotSourceAction(StrEnum):
+    """Explicit future action provenance; legacy snapshots remain repairs."""
+
+    TRANSCRIPTION = "transcription"
+    POSTMORTEM = "postmortem"
+
+
+def validate_source_action(
+    before: OneShotValues, after: OneShotValues, source_action: OneShotSourceAction
+) -> None:
+    """A reflection task cannot be used to disguise a transcription repair."""
+    if not isinstance(source_action, OneShotSourceAction):
+        raise PredictionValidationError(
+            "Unknown correction source action.", field="source_action"
+        )
+    if source_action is OneShotSourceAction.POSTMORTEM and (
+        before.answer is None or replace(before, postmortem=after.postmortem) != after
+    ):
+        raise PredictionValidationError(
+            "A Postmortem action may change reflection alone on an answered One-Shot.",
+            field="postmortem",
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class OneShotCorrection:
     correction_id: int
@@ -151,6 +176,12 @@ class OneShotCorrection:
     after: OneShotValues
     corrected_at: datetime
     note: str | None
+    source_action: OneShotSourceAction = OneShotSourceAction.TRANSCRIPTION
+
+    def __post_init__(self) -> None:
+        # Defaulted old constructor calls and historical schemas are repairs;
+        # prose content is never used to infer the user's past action intent.
+        validate_source_action(self.before, self.after, self.source_action)
 
 
 @dataclass(frozen=True, slots=True)

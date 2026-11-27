@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from main_window_fakes import (
     FakePredictionOperations,
 )
@@ -13,12 +14,12 @@ from main_window_helpers import (
     _required_child,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QPushButton,
-    QSpinBox,
-    QStackedWidget,
+    QStyleFactory,
     QWidget,
 )
 from pytestqt.qtbot import QtBot
@@ -28,7 +29,11 @@ from reckonsolve.application.errors import (
 )
 from reckonsolve.ui import MainWindow
 from reckonsolve.ui.components import ContentPanel
-from reckonsolve.ui.notifications import NotificationHost
+from reckonsolve.ui.location_controls import LocationControls
+from reckonsolve.ui.presentation_settings import (
+    AppearanceMode,
+    MemoryPresentationSettings,
+)
 from reckonsolve.ui.visual_system import (
     ACTION_ROLE_PROPERTY,
     MESSAGE_TONE_PROPERTY,
@@ -39,35 +44,119 @@ from reckonsolve.ui.visual_system import (
 )
 
 
-def test_settings_persists_threshold_and_refreshes_dashboard(qtbot: QtBot) -> None:
-    operations = FakePredictionOperations()
-    window = MainWindow(operations)
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+@pytest.mark.parametrize("style_name", ["windows11", "Fusion"])
+def test_compact_settings_fits_all_ordinary_options_and_preserves_keyboard_order(
+    qtbot, qapp, appearance, style_name
+):
+    available_styles = QStyleFactory.keys()
+    assert style_name in available_styles
+    original_style = qapp.style().objectName()
+    original_font = qapp.font()
+    qapp.setStyle(style_name)
+    try:
+        operations = FakePredictionOperations()
+        operations.data_management_status = replace(
+            operations.data_management_status,
+            database_path=Path(
+                "C:/Users/visual/AppData/Local/Reckonsolve/reckonsolve.sqlite3"
+            ),
+        )
+        window = MainWindow(
+            operations, presentation_settings=MemoryPresentationSettings()
+        )
+        qtbot.addWidget(window)
+        screen = window._settings_screen
+
+        def unused(*_args):
+            pytest.fail("Layout and keyboard navigation must not move a journal")
+
+        controls = LocationControls(unused, unused, screen)
+        screen.add_location_controls(controls)
+        window.appearance.select(appearance)
+        window.show()
+        window.navigate_to("Settings")
+        fields = (
+            screen.appearance_mode,
+            screen.date_format_input,
+            controls.choose,
+            screen.backup_button,
+            screen.export_button,
+            screen.manage_tags_button,
+            screen.repair_search_button,
+        )
+        for width, height in ((1600, 1000), (1000, 700), (760, 520)):
+            window.resize(width, height)
+            qtbot.wait(70)
+            assert window._workspace_content.width() == min(width, 1320)
+            assert screen.scroll_area.verticalScrollBar().maximum() == 0
+            assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+            viewport = screen.scroll_area.viewport()
+            for field in fields:
+                assert field.isVisible()
+                top_left = field.mapTo(viewport, field.rect().topLeft())
+                bottom_right = field.mapTo(viewport, field.rect().bottomRight())
+                assert viewport.rect().contains(top_left)
+                assert viewport.rect().contains(bottom_right)
+            for label in screen.findChildren(QLabel):
+                if label.isVisible() and label.wordWrap():
+                    assert label.height() >= label.heightForWidth(label.width())
+        screen.appearance_mode.setFocus()
+        for expected in fields[1:]:
+            for _ in range(20):
+                qtbot.keyClick(window.focusWidget(), Qt.Key.Key_Tab)
+                if window.focusWidget() in fields:
+                    break
+            assert window.focusWidget() is expected
+        assert operations.backup_calls == []
+        assert operations.export_calls == []
+        assert operations.search_repair_calls == 0
+
+        qapp.setFont(QFont("Segoe UI", 15))
+        qtbot.waitUntil(
+            lambda: (
+                screen.backup_button.mapTo(
+                    screen, screen.backup_button.rect().topLeft()
+                ).y()
+                > controls.choose.mapTo(screen, controls.choose.rect().bottomLeft()).y()
+                and screen.scroll_area.verticalScrollBar().maximum() > 0
+                and screen.scroll_area.horizontalScrollBar().maximum() == 0
+            )
+        )
+        assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+        assert operations.backup_calls == []
+    finally:
+        qapp.setFont(original_font)
+        qapp.setStyle(original_style)
+        # Flush restyle work while registered widgets still own their timers.
+        qapp.processEvents()
+
+
+@pytest.mark.parametrize("appearance", [AppearanceMode.LIGHT, AppearanceMode.DARK])
+def test_compact_settings_preserves_long_results_with_safe_overflow(qtbot, appearance):
+    window = MainWindow(
+        FakePredictionOperations(), presentation_settings=MemoryPresentationSettings()
+    )
     qtbot.addWidget(window)
-    dashboard_calls = operations.dashboard_calls
-
+    window.appearance.select(appearance)
+    window.resize(760, 520)
+    window.show()
     window.navigate_to("Settings")
-    threshold = _required_child(window, QSpinBox, "staleThresholdInput")
-    save = _required_child(window, QPushButton, "saveStaleThresholdButton")
-    assert threshold.value() == 14
-    assert threshold.minimum() == 1
-    assert threshold.maximum() == 9999
-
-    threshold.setValue(30)
-    qtbot.mouseClick(save, Qt.MouseButton.LeftButton)
-
-    assert operations.threshold_set_calls == [30]
-    assert operations.stale_threshold_days == 30
-    assert operations.dashboard_calls == dashboard_calls + 1
-    assert _required_child(window, QLabel, "staleThresholdStatus").isHidden()
-    notification = _required_child(window, NotificationHost, "notificationHost")
-    assert notification.current_message == (
-        "Needs Attention threshold saved at 30 days."
-    )
-    assert not notification.isHidden()
-    window.navigate_to("Dashboard")
-    assert _required_child(window, QLabel, "dashboardThreshold").text() == (
-        "Needs Attention threshold: 30 days"
-    )
+    screen = window._settings_screen
+    message = "The backup destination could not be opened. " * 40
+    screen.backup_tool.show_result(message, StatusTone.ERROR)
+    qtbot.wait(60)
+    result = screen.backup_tool.result
+    assert result.text() == message
+    assert result.height() >= result.heightForWidth(result.width())
+    assert screen.scroll_area.horizontalScrollBar().maximum() == 0
+    screen.scroll_area.ensureWidgetVisible(result)
+    assert result.isVisible()
+    window.navigate_to("Journal")
+    window.navigate_to("Settings")
+    qtbot.wait(60)
+    assert result.isHidden()
+    assert screen.scroll_area.verticalScrollBar().maximum() == 0
 
 
 def test_settings_displays_database_and_persisted_backup_status(qtbot: QtBot) -> None:
@@ -87,23 +176,15 @@ def test_settings_displays_database_and_persisted_backup_status(qtbot: QtBot) ->
     expected_local = (
         datetime(2026, 8, 20, 19, 30, tzinfo=UTC)
         .astimezone()
-        .strftime("%b %d, %Y, %I:%M %p")
-        .replace(" 0", " ")
+        .strftime("%Y-%m-%d, %I:%M %p")
     )
     assert _required_child(window, QLabel, "lastSuccessfulBackup").text() == (
         f"Last successful backup: {expected_local}"
     )
-    for panel_name in ("attentionSettingsPanel", "dataManagementPanel"):
+    for panel_name in ("dataManagementPanel",):
         panel = _required_child(window, ContentPanel, panel_name)
-        assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.RAISED.value
-    assert (
-        _required_child(
-            window,
-            QPushButton,
-            "saveStaleThresholdButton",
-        ).property(ACTION_ROLE_PROPERTY)
-        == ActionRole.PRIMARY.value
-    )
+        assert panel.property(SURFACE_ROLE_PROPERTY) == SurfaceRole.CANVAS.value
+    assert window.findChild(QWidget, "attentionSettingsPanel") is None
     assert (
         _required_child(
             window,
@@ -164,14 +245,16 @@ def test_settings_creates_backup_and_csv_bundle_from_selected_destinations(
 
     expected_backup = tmp_path / "chosen-backup.sqlite3"
     assert operations.backup_calls == [expected_backup]
-    assert _required_child(window, QLabel, "dataManagementStatus").text() == (
-        f"Backup created: {expected_backup}"
+    assert (
+        _required_child(window, QLabel, "backUpNowResult")
+        .text()
+        .startswith(f"Backup created: {expected_backup}\nComplete SQLite backup")
     )
     assert (
         _required_child(
             window,
             QLabel,
-            "dataManagementStatus",
+            "backUpNowResult",
         ).property(MESSAGE_TONE_PROPERTY)
         == StatusTone.SUCCESS.value
     )
@@ -191,8 +274,10 @@ def test_settings_creates_backup_and_csv_bundle_from_selected_destinations(
 
     expected_export = tmp_path / "chosen-export.zip"
     assert operations.export_calls == [expected_export]
-    assert _required_child(window, QLabel, "dataManagementStatus").text() == (
-        f"Exported 16 CSV files: {expected_export}"
+    assert (
+        _required_child(window, QLabel, "exportCsvBundleResult")
+        .text()
+        .startswith(f"Exported 16 CSV files: {expected_export}\nAnalytical export")
     )
     assert suggested_paths[0].endswith("reckonsolve-backup-20260820-123000.sqlite3")
     assert suggested_paths[1].endswith("reckonsolve-export-20260820-123000.zip")
@@ -234,7 +319,7 @@ def test_settings_repairs_search_index_and_reports_expected_failure(
     qtbot.addWidget(window)
     window.navigate_to("Settings")
     button = _required_child(window, QPushButton, "repairSearchIndexButton")
-    status = _required_child(window, QLabel, "dataManagementStatus")
+    status = _required_child(window, QLabel, "repairSearchIndexResult")
 
     qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
@@ -279,101 +364,21 @@ def test_settings_shows_expected_backup_export_and_status_errors(
         _required_child(window, QPushButton, "backUpNowButton"),
         Qt.MouseButton.LeftButton,
     )
-    assert status.text() == "Backup destination is locked."
+    status = _required_child(window, QLabel, "backUpNowResult")
+    assert (
+        status.text()
+        == f"Backup destination is locked.\nSelected destination: {tmp_path / 'backup.sqlite3'}"
+    )
     assert status.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
     qtbot.mouseClick(
         _required_child(window, QPushButton, "exportCsvBundleButton"),
         Qt.MouseButton.LeftButton,
     )
-    assert status.text() == "Export destination is locked."
+    backup_message = status.text()
+    status = _required_child(window, QLabel, "exportCsvBundleResult")
+    assert (
+        status.text()
+        == f"Export destination is locked.\nSelected destination: {tmp_path / 'export.zip'}"
+    )
+    assert _required_child(window, QLabel, "backUpNowResult").text() == backup_message
     assert status.property(MESSAGE_TONE_PROPERTY) == StatusTone.ERROR.value
-
-
-def test_routine_notification_survives_navigation_without_reflow(qtbot: QtBot) -> None:
-    operations = FakePredictionOperations()
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-    window.show()
-    window.navigate_to("Settings")
-    stack = _required_child(window, QStackedWidget, "screenStack")
-    geometry_before = stack.geometry()
-    threshold = _required_child(window, QSpinBox, "staleThresholdInput")
-    threshold.setValue(21)
-
-    qtbot.mouseClick(
-        _required_child(window, QPushButton, "saveStaleThresholdButton"),
-        Qt.MouseButton.LeftButton,
-    )
-    notification = _required_child(window, NotificationHost, "notificationHost")
-    window.navigate_to("Dashboard")
-
-    assert notification.isVisible()
-    assert notification.current_message == (
-        "Needs Attention threshold saved at 21 days."
-    )
-    assert stack.geometry() == geometry_before
-
-
-def test_notification_failure_cannot_roll_back_a_saved_setting(
-    qtbot: QtBot,
-    monkeypatch,
-) -> None:
-    operations = FakePredictionOperations()
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-    window.navigate_to("Settings")
-    threshold = _required_child(window, QSpinBox, "staleThresholdInput")
-    threshold.setValue(22)
-    notification = _required_child(window, NotificationHost, "notificationHost")
-    monkeypatch.setattr(
-        notification,
-        "show_message",
-        lambda _message: (_ for _ in ()).throw(RuntimeError("paint failed")),
-    )
-
-    qtbot.mouseClick(
-        _required_child(window, QPushButton, "saveStaleThresholdButton"),
-        Qt.MouseButton.LeftButton,
-    )
-
-    assert operations.threshold_set_calls == [22]
-    assert operations.stale_threshold_days == 22
-    assert _required_child(window, QLabel, "staleThresholdStatus").isHidden()
-
-
-def test_dashboard_and_settings_show_expected_read_errors(qtbot: QtBot) -> None:
-    operations = FakePredictionOperations()
-    operations.dashboard_error = ApplicationError("Dashboard could not be loaded.")
-    window = MainWindow(operations)
-    qtbot.addWidget(window)
-    assert _required_child(window, QLabel, "dashboardError").text() == (
-        "Dashboard unavailable. Dashboard could not be loaded."
-    )
-    assert _required_child(window, QWidget, "dashboardScrollArea").isHidden()
-
-    operations.dashboard_error = None
-    window.navigate_to("New Prediction")
-    window.navigate_to("Dashboard")
-    operations.dashboard_error = ApplicationError("Refresh failed.")
-    window.navigate_to("New Prediction")
-    window.navigate_to("Dashboard")
-    assert _required_child(window, QLabel, "dashboardError").text() == (
-        "Dashboard could not refresh; showing the last loaded results. Refresh failed."
-    )
-    assert not _required_child(window, QWidget, "dashboardScrollArea").isHidden()
-
-    operations.threshold_error = ApplicationError("Setting could not be loaded.")
-    window.navigate_to("Settings")
-    assert _required_child(window, QLabel, "staleThresholdStatus").text() == (
-        "Setting could not be loaded."
-    )
-    assert not _required_child(window, QSpinBox, "staleThresholdInput").isEnabled()
-    assert not _required_child(
-        window,
-        QPushButton,
-        "saveStaleThresholdButton",
-    ).isEnabled()
-    assert operations.data_management_calls > 0
-    assert _required_child(window, QLabel, "databaseLocation").text() == (
-        f"Database: {Path('test-data/reckonsolve.sqlite3')}"
-    )

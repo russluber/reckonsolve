@@ -394,7 +394,8 @@ def test_complete_quantile_form_and_detail_layout(qtbot, tmp_path, width):
     assert not form.quantile_input.preview.isHidden()
     assert window.grab().save(str(tmp_path / "quantile-create.png"))
     form.submit()
-    assert window.current_screen_name == "Prediction Detail"
+    assert window.current_screen_name == "Journal"
+    window.navigate_to("Prediction Detail")
     clock_ops = PredictionOperations(runtime.database)
     created = clock_ops.get_numeric_prediction(1)
     clock_ops.add_numeric_journal_entry(
@@ -426,7 +427,7 @@ def test_cli_quantile_cancellation_leaves_no_partial_forecast(app_ops, input_tex
 
 
 def test_search_reveals_quantile_journal_original_version(qtbot, app_ops):
-    from PySide6.QtWidgets import QGroupBox, QLabel
+    from PySide6.QtWidgets import QLabel, QWidget
 
     _db, clock, ops = app_ops
     first = create(ops)
@@ -447,10 +448,10 @@ def test_search_reveals_quantile_journal_original_version(qtbot, app_ops):
     qtbot.addWidget(detail)
     detail.show_prediction(first)
     detail.show()
-    history = detail.findChild(QGroupBox, f"journalEntryEditHistory{note.entry_id}")
-    assert not history.isChecked()
+    history = detail.findChild(QWidget, f"journalEntryEditHistory{note.entry_id}")
+    assert not history.disclosure_button.isChecked()
     detail.focus_search_match(hit.best_match.document)
-    assert history.isChecked()
+    assert history.disclosure_button.isChecked()
     assert detail.findChild(
         QLabel, f"journalEntryOriginalBody{note.entry_id}"
     ).isVisible()

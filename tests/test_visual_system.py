@@ -4,15 +4,17 @@ import ast
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QColor, QPalette, QWheelEvent
 from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollBar,
     QSpinBox,
     QStyle,
     QStyleFactory,
+    QStyleOptionSlider,
     QStyleOptionSpinBox,
     QVBoxLayout,
     QWidget,
@@ -71,6 +73,7 @@ def test_visual_tokens_form_small_shared_scales() -> None:
         Spacing.COMPACT,
         Spacing.CONTROL,
         Spacing.ORDINARY,
+        Spacing.GROUP,
         Spacing.SECTION,
         Spacing.PAGE,
     )
@@ -138,6 +141,96 @@ def test_native_spin_buttons_receive_clicks_without_editor_overlap(
         qapp.setStyle(original_style)
 
 
+@pytest.mark.parametrize("style_name", ["windows11", "Fusion"])
+@pytest.mark.parametrize("points", [9, 15])
+@pytest.mark.parametrize("dark", [False, True])
+def test_probability_steps_keep_native_entry_and_real_click_targets(
+    qtbot, qapp, style_name, points, dark
+):
+    from PySide6.QtGui import QFont
+
+    from reckonsolve.ui.components import ProbabilityInput
+
+    available_styles = QStyleFactory.keys()
+    if style_name not in available_styles:
+        pytest.skip(f"{style_name} is unavailable on this platform")
+    original_style = qapp.style().objectName()
+    root = QWidget()
+    qtbot.addWidget(root)
+    try:
+        qapp.setStyle(style_name)
+        root.setFont(QFont("Segoe UI", points))
+        palette = _test_palette(
+            "#171a18" if dark else "#f4f5f4",
+            "#202421" if dark else "#ffffff",
+            "#edf3ef" if dark else "#1c211f",
+            "#505456" if dark else "#c7ceca",
+        )
+        root.setPalette(palette)
+        layout = QVBoxLayout(root)
+        spin = ProbabilityInput(root)
+        spin.setRange(0, 100)
+        spin.setSuffix("% Yes")
+        spin.setValue(50)
+        other = QLineEdit(root)
+        layout.addWidget(other)
+        layout.addWidget(spin)
+        install_visual_system(root)
+        root.resize(360, root.sizeHint().height())
+        root.show()
+        for width in (360, 240):
+            root.resize(width, root.height())
+            qtbot.wait(30)
+            assert not spin.decrease_button.geometry().intersects(
+                spin.increase_button.geometry()
+            )
+            for button, expected in (
+                (spin.decrease_button, 49),
+                (spin.increase_button, 50),
+            ):
+                assert spin.rect().contains(button.geometry())
+                point = button.geometry().center()
+                assert spin.childAt(point) is button
+                editor = spin.lineEdit()
+                text_right = (
+                    editor.x() + editor.width() - editor.textMargins().right() - 1
+                )
+                assert text_right < spin.decrease_button.x()
+                other.setFocus()
+                qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+                assert spin.value() == expected
+                assert spin.hasFocus()
+        spin.setFocus()
+        qtbot.keyClick(spin, Qt.Key.Key_Up)
+        assert spin.value() == 51
+        qtbot.keyClick(spin, Qt.Key.Key_Down)
+        assert spin.value() == 50
+        # A click must commit pending native input before applying its step.
+        spin.setKeyboardTracking(False)
+        spin.lineEdit().selectAll()
+        qtbot.keyClicks(spin.lineEdit(), "42")
+        qtbot.mouseClick(spin.increase_button, Qt.MouseButton.LeftButton)
+        assert spin.value() == 43
+        spin.setReadOnly(True)
+        assert not spin.decrease_button.isEnabled()
+        assert not spin.increase_button.isEnabled()
+        spin.setReadOnly(False)
+        spin.setEnabled(False)
+        assert not spin.increase_button.isEnabled()
+        spin.setEnabled(True)
+        spin.setValue(0)
+        assert not spin.decrease_button.isEnabled()
+        qtbot.mouseClick(spin.increase_button, Qt.MouseButton.LeftButton)
+        assert spin.value() == 1
+        spin.setValue(100)
+        assert not spin.increase_button.isEnabled()
+        qtbot.mouseClick(spin.decrease_button, Qt.MouseButton.LeftButton)
+        assert spin.value() == 99
+    finally:
+        root.close()
+        qapp.setStyle(original_style)
+
+
 @pytest.mark.parametrize(
     ("palette", "expected_dark"),
     [
@@ -159,6 +252,10 @@ def test_semantic_colors_are_palette_aware_and_contrast_safe(
     assert colors.caution != colors.destructive
     assert contrast_ratio(colors.error, colors.error_surface) >= 4.5
     assert contrast_ratio(colors.secondary_text, colors.canvas) >= 4.5
+    assert all(
+        contrast_ratio(colors.scroll_thumb, background) >= 3.0
+        for background in (colors.canvas, colors.surface, colors.raised, colors.input)
+    )
     assert contrast_ratio(colors.text, colors.surface) >= 4.5
     assert contrast_ratio(colors.text, colors.raised) >= 4.5
     assert contrast_ratio(colors.text, colors.input) >= 4.5
@@ -175,6 +272,133 @@ def test_dark_palette_rejects_white_native_alternate_surface() -> None:
     assert QColor(colors.raised).lightnessF() < 0.5
     assert contrast_ratio(colors.text, colors.raised) >= 4.5
     assert f"background-color: {colors.raised};" in build_stylesheet(palette)
+
+
+@pytest.mark.parametrize("style_name", ["windows11", "Fusion"])
+@pytest.mark.parametrize("dark", [False, True])
+@pytest.mark.parametrize(
+    "orientation", [Qt.Orientation.Vertical, Qt.Orientation.Horizontal]
+)
+def test_quiet_scrollbars_retain_full_hit_lane_and_native_navigation(
+    qtbot, qapp, style_name, dark, orientation
+):
+    original_style = qapp.style().objectName()
+    root = QWidget()
+    qtbot.addWidget(root)
+    palette = (
+        _test_palette("#171a18", "#202421", "#edf3ef", "#505852")
+        if dark
+        else _test_palette("#f4f5f4", "#ffffff", "#1c211f", "#c7ceca")
+    )
+    try:
+        qapp.setStyle(style_name)
+        root.setPalette(palette)
+        root.setAutoFillBackground(True)
+        bar = QScrollBar(orientation, root)
+        bar.setRange(0, 1000)
+        bar.setPageStep(100)
+        if orientation is Qt.Orientation.Vertical:
+            bar.setGeometry(0, 0, 14, 240)
+        else:
+            bar.setGeometry(0, 0, 240, 14)
+        root.resize(260, 260)
+        install_visual_system(root, palette=palette)
+        root.show()
+        root.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # Earlier UI cases may leave another top-level window active.
+        root.activateWindow()
+        root.setFocus()
+        qtbot.mouseMove(root, QPoint(200, 200))
+        qtbot.wait(30)
+        option = QStyleOptionSlider()
+        bar.initStyleOption(option)
+        slider = bar.style().subControlRect(
+            QStyle.ComplexControl.CC_ScrollBar,
+            option,
+            QStyle.SubControl.SC_ScrollBarSlider,
+            bar,
+        )
+        point = (
+            QPoint(1, slider.center().y())
+            if orientation is Qt.Orientation.Vertical
+            else QPoint(slider.center().x(), 1)
+        )
+        assert (
+            bar.style().hitTestComplexControl(
+                QStyle.ComplexControl.CC_ScrollBar, option, point, bar
+            )
+            is QStyle.SubControl.SC_ScrollBarSlider
+        )
+        image = bar.grab().toImage()
+        canvas = QColor(semantic_colors(palette).canvas)
+        assert image.pixelColor(point) == canvas
+        assert image.pixelColor(slider.center()) != canvas
+
+        def painted_width():
+            image = bar.grab().toImage()
+            center = slider.center()
+            return sum(
+                image.pixelColor(
+                    QPoint(index, center.y())
+                    if orientation is Qt.Orientation.Vertical
+                    else QPoint(center.x(), index)
+                )
+                != canvas
+                for index in range(14)
+            )
+
+        geometry = bar.geometry()
+        assert painted_width() == 4
+        qtbot.mouseMove(bar, slider.center())
+        qtbot.wait(20)
+        assert painted_width() == 8
+        assert bar.geometry() == geometry
+        qtbot.mouseMove(root, QPoint(200, 200))
+        qtbot.wait(20)
+        assert painted_width() == 4
+        bar.setFocus()
+        qtbot.wait(20)
+        assert painted_width() == 8
+        qtbot.mousePress(bar, Qt.MouseButton.LeftButton, pos=point)
+        destination = point + (
+            QPoint(0, 100) if orientation is Qt.Orientation.Vertical else QPoint(100, 0)
+        )
+        qtbot.mouseMove(bar, destination)
+        qtbot.mouseRelease(bar, Qt.MouseButton.LeftButton, pos=destination)
+        assert bar.value() > 0
+        bar.setFocus()
+        qtbot.keyClick(bar, Qt.Key.Key_End)
+        assert bar.value() == 1000
+        qtbot.keyClick(bar, Qt.Key.Key_Home)
+        assert bar.value() == 0
+        qtbot.keyClick(bar, Qt.Key.Key_PageDown)
+        assert bar.value() == 100
+        bar.setValue(0)
+        bar.initStyleOption(option)
+        page = bar.style().subControlRect(
+            QStyle.ComplexControl.CC_ScrollBar,
+            option,
+            QStyle.SubControl.SC_ScrollBarAddPage,
+            bar,
+        )
+        qtbot.mouseClick(bar, Qt.MouseButton.LeftButton, pos=page.center())
+        assert bar.value() == 100
+        bar.setValue(0)
+        wheel = QWheelEvent(
+            QPointF(slider.center()),
+            QPointF(bar.mapToGlobal(slider.center())),
+            QPoint(),
+            QPoint(0, -120),
+            Qt.MouseButton.NoButton,
+            Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase,
+            False,
+        )
+        qapp.sendEvent(bar, wheel)
+        assert bar.value() > 0
+    finally:
+        root.close()
+        qapp.setStyle(original_style)
 
 
 def test_stylesheet_covers_semantic_roles_and_interaction_states() -> None:

@@ -65,7 +65,9 @@ def reject_retired_forecasts(connection: sqlite3.Connection) -> None:
         )
 
 
-def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
+def check_forecast_contract_integrity(
+    connection: sqlite3.Connection, *, one_shots: dict | None = None
+) -> None:
     """Reject unsupported contracts before cohort-filtered reads can omit them.
 
     Empty historical schemas can migrate. Every retained Prediction must have a
@@ -188,11 +190,13 @@ def check_forecast_contract_integrity(connection: sqlite3.Connection) -> None:
             "('binary-one-shot-v1', 'numeric-one-shot-5-v1')"
         ).fetchall():
             try:
-                read_one_shot(
+                record = read_one_shot(
                     connection,
                     identifier,
                     select_forecast_contract(connection, identifier),
                 )
+                if one_shots is not None:
+                    one_shots[identifier] = record
             except (ValueError, TypeError, IndexError) as error:
                 raise ForecastContractIntegrityError(
                     f"Prediction {identifier} has inconsistent One-Shot history."

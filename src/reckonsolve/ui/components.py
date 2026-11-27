@@ -2,26 +2,219 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
+    QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from reckonsolve.ui.layouts import FlowLayout
 from reckonsolve.ui.visual_system import (
+    ActionRole,
     Spacing,
     StatusTone,
     SurfaceRole,
     TextRole,
+    apply_action_role,
     apply_badge_role,
     apply_message_role,
     apply_surface_role,
     apply_text_role,
 )
+
+
+class SectionRule(QFrame):
+    """A palette-aware structural separator with no interactive behavior."""
+
+    def __init__(self, parent: QWidget, *, vertical: bool = False) -> None:
+        super().__init__(parent)
+        self.setProperty("reckonsolveRule", "vertical" if vertical else "horizontal")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        if vertical:
+            self.setFixedWidth(1)
+        else:
+            self.setFixedHeight(1)
+
+
+class _TagChip(QLabel):
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        # Long tag names may wrap without forcing a wider metadata row.
+        hint.setWidth(0)
+        return hint
+
+
+class TagChips(QWidget):
+    """Selectable, noninteractive tag names in a naturally wrapping group."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.names: tuple[str, ...] = ()
+        self.chips: list[QLabel] = []
+        self.flow = FlowLayout(self)
+        self.setMinimumWidth(0)
+        self.hide()
+
+    def set_tags(self, names: tuple[str, ...]) -> None:
+        if names == self.names:
+            return
+        self.flow.clear_widgets()
+        self.names, self.chips = tuple(names), []
+        for name in self.names:
+            chip = _TagChip(name, self)
+            chip.setTextFormat(Qt.TextFormat.PlainText)
+            chip.setWordWrap(True)
+            chip.setMinimumWidth(0)
+            chip.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+                | Qt.TextInteractionFlag.TextSelectableByKeyboard
+            )
+            chip.setProperty("reckonsolveTagChip", "true")
+            apply_text_role(chip, TextRole.SECONDARY)
+            self.chips.append(chip)
+            self.flow.addWidget(chip)
+        self.setAccessibleName("Tags: " + ", ".join(self.names))
+        self.setVisible(bool(self.names))
+        self.updateGeometry()
+
+    def clear(self) -> None:
+        self.set_tags(())
+
+    def sizeHint(self) -> QSize:
+        sizes = [chip.sizeHint() for chip in self.chips]
+        return QSize(
+            sum(size.width() for size in sizes)
+            + max(0, len(sizes) - 1) * self.flow.spacing(),
+            max((size.height() for size in sizes), default=0),
+        )
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, self.flow.minimumSize().height())
+
+
+class ProbabilityInput(QSpinBox):
+    """Native percentage entry with quiet, separately clickable minus/plus steps."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setProperty("reckonsolveProbabilityInput", "true")
+        self.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.decrease_button = self._step_button("−", "Decrease", -1)
+        self.increase_button = self._step_button("+", "Increase", 1)
+        self.valueChanged.connect(self._sync_steps)
+        self._sync_steps()
+        self._place_steps()
+
+    def _step_button(self, symbol: str, name: str, step: int) -> QToolButton:
+        button = QToolButton(self)
+        button.setObjectName("probability" + name)
+        button.setText(symbol)
+        button.setAccessibleName(name + " probability")
+        button.setToolTip(name + " probability by 1 percentage point")
+        button.setProperty("reckonsolveProbabilityStep", "true")
+        button.setAutoRaise(True)
+        button.setAutoRepeat(True)
+        # Up/Down already provides the keyboard path on the native editor.
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda: self._step(step))
+        return button
+
+    def _step(self, amount: int) -> None:
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        self.stepBy(amount)
+
+    def _step_width(self) -> int:
+        return max(28, self.fontMetrics().height() + 8)
+
+    def _reserved_width(self) -> int:
+        return 2 * self._step_width() + 10
+
+    def _place_steps(self) -> None:
+        width = self._step_width()
+        x = self.width() - width - 4
+        height = max(1, self.height() - 8)
+        self.increase_button.setGeometry(x, 4, width, height)
+        self.decrease_button.setGeometry(x - width - 2, 4, width, height)
+        self.lineEdit().setTextMargins(0, 0, self._reserved_width(), 0)
+        glyph_font = QFont(self.font())
+        glyph_font.setPointSizeF(max(1, self.font().pointSizeF()) + 3)
+        glyph_font.setWeight(QFont.Weight.DemiBold)
+        for button in (self.decrease_button, self.increase_button):
+            if button.font() != glyph_font:
+                button.setFont(glyph_font)
+        self.decrease_button.raise_()
+        self.increase_button.raise_()
+
+    def _sync_steps(self) -> None:
+        enabled = self.isEnabled() and not self.isReadOnly()
+        self.decrease_button.setEnabled(enabled and self.value() > self.minimum())
+        self.increase_button.setEnabled(enabled and self.value() < self.maximum())
+
+    def setReadOnly(self, read_only: bool) -> None:
+        super().setReadOnly(read_only)
+        self._sync_steps()
+
+    def sizeHint(self) -> QSize:
+        return super().sizeHint() + QSize(self._reserved_width(), 0)
+
+    def minimumSizeHint(self) -> QSize:
+        return super().minimumSizeHint() + QSize(self._reserved_width(), 0)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "increase_button"):
+            self._place_steps()
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if hasattr(self, "increase_button") and event.type() in (
+            QEvent.Type.FontChange,
+            QEvent.Type.ApplicationFontChange,
+            QEvent.Type.StyleChange,
+            QEvent.Type.EnabledChange,
+        ):
+            self._place_steps()
+            self._sync_steps()
+            self.updateGeometry()
+
+
+class ProbabilityPresets(QWidget):
+    """Direct-entry Binary shortcuts, optionally wrapping in a contextual editor."""
+
+    def __init__(
+        self,
+        editor: QSpinBox,
+        parent: QWidget,
+        *,
+        name_prefix: str = "probability",
+        wrap: bool = False,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName(f"{name_prefix}Shortcuts")
+        layout = FlowLayout(self) if wrap else QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(int(Spacing.COMPACT))
+        for value in range(10, 100, 10):
+            button = QPushButton(str(value), self)
+            button.setObjectName(f"{name_prefix}Shortcut{value}")
+            button.setProperty("reckonsolveProbabilityPreset", "true")
+            button.setAccessibleName(f"Set probability to {value}%")
+            apply_action_role(button, ActionRole.QUIET)
+            button.clicked.connect(
+                lambda _checked=False, probability=value: editor.setValue(probability)
+            )
+            layout.addWidget(button)
+        if isinstance(layout, QHBoxLayout):
+            layout.addStretch()
 
 
 class PageHeader(QWidget):
@@ -116,6 +309,7 @@ class ContentPanel(QFrame):
         self.count_badge = StatusBadge("0", StatusTone.NEUTRAL, parent=heading)
         self.count_badge.setHidden(True)
         heading_layout.addWidget(self.count_badge)
+        heading.setHidden(not bool(title))
         self._root_layout.addWidget(heading)
 
         self.supporting_label = QLabel(supporting_text or "", self)
@@ -201,5 +395,7 @@ __all__ = [
     "EmptyStateLabel",
     "PageHeader",
     "PersistentMessageLabel",
+    "ProbabilityInput",
+    "ProbabilityPresets",
     "StatusBadge",
 ]

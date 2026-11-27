@@ -170,8 +170,8 @@ class ScoredIntervalsChart(QWidget):
             painter.setPen(QPen(QColor(colors.text), 2))
             painter.drawLine(QPointF(points[2], y - 12), QPointF(points[2], y + 12))
             x = points[5]
-            painter.setPen(QPen(QColor(colors.warning), 2))
-            painter.setBrush(QColor(colors.warning))
+            painter.setPen(QPen(QColor(colors.actual_outline), 1.25))
+            painter.setBrush(QColor(colors.actual_fill))
             # The diamond sits above the band so ties never hide the median tick.
             center = y - 17
             painter.drawPolygon(

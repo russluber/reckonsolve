@@ -7,6 +7,10 @@ class ApplicationError(Exception):
     """Base class for expected, user-presentable application failures."""
 
 
+class DatabaseBusyError(ApplicationError):
+    """An identified temporary database lock prevented the requested action."""
+
+
 class BackupError(ApplicationError):
     """A complete recovery artifact could not be created safely."""
 

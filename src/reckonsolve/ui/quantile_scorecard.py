@@ -2,22 +2,33 @@
 
 from fractions import Fraction
 
-from PySide6.QtWidgets import QGroupBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from reckonsolve.analytics.quantiles import QuantileScorecard
 from reckonsolve.quantile_display import exact_score_text, quantile_scorecard_lines
 from reckonsolve.ui.components import ContentPanel
+from reckonsolve.ui.detail_workspace import collapse_section
+from reckonsolve.ui.one_shot_reading import finish_disclosure
 from reckonsolve.ui.scorecard_chart import ScoredIntervalsChart
-from reckonsolve.ui.scorecard_components import ScoreGroup, ScoreGroups, score_label
+from reckonsolve.ui.scorecard_components import (
+    ReadingScoreGroup,
+    ScoreGroups,
+    score_label,
+)
 from reckonsolve.ui.visual_system import Spacing, TextRole
 
 
 class QuantileScorecardPanel(ContentPanel):
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__("Numeric WIS scorecard", parent=parent)
+        super().__init__("Numeric Scorecard", parent=parent)
         self.setObjectName("numericQuantileScorecard")
+        self.setProperty("reckonsolveScorecard", "true")
+        self.title_label.setWordWrap(True)
+        self.title_label.setMinimumWidth(0)
 
-    def set_scorecard(self, card: QuantileScorecard) -> None:
+    def set_scorecard(
+        self, card: QuantileScorecard, *, primary_facts: bool = True
+    ) -> None:
         while self.body_layout.count():
             widget = self.body_layout.takeAt(0).widget()
             if widget is not None:
@@ -37,23 +48,53 @@ class QuantileScorecardPanel(ContentPanel):
                 )
                 label.setObjectName(f"numericWISFact{index}")
                 self.body_layout.addWidget(label)
+                label.setVisible(primary_facts)
         if card.final is None:
+            if not primary_facts:
+                self.body_layout.addWidget(
+                    score_label(
+                        "No interval or median diagnostics are produced for an unscored result.",
+                        self,
+                    )
+                )
             return
 
         assert card.initial is not None and card.delta_wis is not None
         assert card.definition is not None and card.scoring_revision is not None
-        details = QGroupBox("WIS Breakdown", self)
+        if not primary_facts:
+            unit = card.definition.unit
+            accuracy = ReadingScoreGroup("Median Accuracy", self)
+            accuracy.add_fact(
+                "Absolute error",
+                f"{exact_score_text(card.final.median_absolute_error)} {unit}",
+                name="individualMedianErrorSummary",
+            )
+            accuracy.add_fact(
+                "Signed miss",
+                f"{exact_score_text(card.final.signed_median_miss)} {unit}",
+                name="individualMedianMissSummary",
+                help_text="Actual minus median: positive means above the estimate; negative means below.",
+            )
+            coverage = ReadingScoreGroup("Interval Coverage", self)
+            for level, interval in (
+                (50, card.final.interval_50),
+                (90, card.final.interval_90),
+            ):
+                coverage.add_fact(
+                    f"{level}% interval",
+                    "Actual " + interval.outcome_location,
+                    name=f"individualInterval{level}Summary",
+                )
+            self.body_layout.addWidget(ScoreGroups((accuracy, coverage), self))
+        contents = QWidget(self)
+        contents.setObjectName("numericWISContents")
+        details = collapse_section(contents, "WIS Breakdown", compact=True)
         details.setAccessibleName("WIS breakdown and initial/final comparison")
         details.setObjectName("numericWISDetails")
-        details.setCheckable(True)
-        details.setChecked(False)
-        contents = QWidget(details)
         detail_layout = QVBoxLayout(contents)
+        detail_layout.setContentsMargins(0, 0, 0, 0)
         detail_layout.setSpacing(int(Spacing.SECTION))
-        group_layout = QVBoxLayout(details)
-        group_layout.addWidget(contents)
-        details.toggled.connect(contents.setVisible)
-        contents.hide()
+        finish_disclosure(details, end_rule=False)
         detail_layout.addWidget(
             score_label(
                 "Final Forecast and Outcome", contents, role=TextRole.SECTION_TITLE
@@ -72,7 +113,7 @@ class QuantileScorecardPanel(ContentPanel):
         def quantity(value: Fraction) -> str:
             return f"{exact_score_text(value)} {unit}"
 
-        comparison = ScoreGroup("Initial vs Final", contents)
+        comparison = ReadingScoreGroup("Initial vs Final", contents)
         comparison.add_fact(
             "Initial WIS", quantity(card.initial.wis), name="individualInitialWIS"
         )
@@ -90,9 +131,9 @@ class QuantileScorecardPanel(ContentPanel):
             "Delta WIS",
             f"{quantity(card.delta_wis)} · {direction}",
             name="individualDeltaWIS",
-            help_text="Initial minus final: positive means the final forecast scored better. This is hindsight within one Prediction, not causal skill or a cross-question score.",
+            help_text="Initial WIS minus Final WIS; positive means the final forecast scored better.",
         )
-        median = ScoreGroup("Median", contents)
+        median = ReadingScoreGroup("Median", contents)
         median.add_fact(
             "Estimate",
             f"{card.scoring_revision.quantiles.q50} {unit}",
@@ -136,7 +177,7 @@ class QuantileScorecardPanel(ContentPanel):
                 card.final.interval_90_contribution,
             ),
         ):
-            group = ScoreGroup(f"{level}% Interval", contents)
+            group = ReadingScoreGroup(f"{level}% Interval", contents)
             group.add_fact(
                 "Range", f"{low} to {high} {unit}", name=f"scoredInterval{level}Range"
             )

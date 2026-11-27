@@ -129,20 +129,7 @@ class TagRepository:
                 (target_id, *source_ids),
             )
             connection.execute(
-                f"""
-                INSERT OR IGNORE INTO saved_view_tags (saved_view_id, tag_id)
-                SELECT saved_view_id, ?
-                FROM saved_view_tags
-                WHERE tag_id IN ({placeholders})
-                """,
-                (target_id, *source_ids),
-            )
-            connection.execute(
                 f"DELETE FROM prediction_tags WHERE tag_id IN ({placeholders})",
-                source_ids,
-            )
-            connection.execute(
-                f"DELETE FROM saved_view_tags WHERE tag_id IN ({placeholders})",
                 source_ids,
             )
             connection.execute(
@@ -174,10 +161,6 @@ class TagRepository:
                 "DELETE FROM prediction_tags WHERE tag_id = ?",
                 (preview.tag.tag_id,),
             )
-            connection.execute(
-                "DELETE FROM saved_view_tags WHERE tag_id = ?",
-                (preview.tag.tag_id,),
-            )
             connection.execute("DELETE FROM tags WHERE id = ?", (preview.tag.tag_id,))
             if connection.execute("SELECT changes()").fetchone()[0] != 1:
                 raise TagLibraryContextChangedError
@@ -196,9 +179,7 @@ def _list_tags(connection: sqlite3.Connection) -> tuple[TagLibraryItem, ...]:
             tag.display_name,
             tag.normalized_name,
             (SELECT COUNT(*) FROM prediction_tags
-             WHERE prediction_tags.tag_id = tag.id) AS prediction_count,
-            (SELECT COUNT(*) FROM saved_view_tags
-             WHERE saved_view_tags.tag_id = tag.id) AS saved_view_count
+             WHERE prediction_tags.tag_id = tag.id) AS prediction_count
         FROM tags AS tag
         ORDER BY tag.normalized_name, tag.id
         """
@@ -232,28 +213,14 @@ def _load_context(
             (tag_id,),
         ).fetchall()
     )
-    saved_view_ids = tuple(
-        int(candidate[0])
-        for candidate in connection.execute(
-            """
-            SELECT saved_view_id
-            FROM saved_view_tags
-            WHERE tag_id = ?
-            ORDER BY saved_view_id
-            """,
-            (tag_id,),
-        ).fetchall()
-    )
     return TagManagementContext(
         item=TagLibraryItem(
             tag_id=int(row["id"]),
             display_name=str(row["display_name"]),
             normalized_name=str(row["normalized_name"]),
             prediction_count=len(prediction_ids),
-            saved_view_count=len(saved_view_ids),
         ),
         prediction_ids=prediction_ids,
-        saved_view_ids=saved_view_ids,
     )
 
 
@@ -303,20 +270,10 @@ def _preview_merge(
             }
         )
     )
-    affected_saved_view_ids = tuple(
-        sorted(
-            {
-                saved_view_id
-                for context in source_contexts
-                for saved_view_id in context.saved_view_ids
-            }
-        )
-    )
     return TagMergePreview(
         source_contexts=source_contexts,
         target_context=target_context,
         affected_prediction_ids=affected_prediction_ids,
-        affected_saved_view_ids=affected_saved_view_ids,
     )
 
 
@@ -353,7 +310,6 @@ def _map_tag(row: sqlite3.Row) -> TagLibraryItem:
         display_name=str(row["display_name"]),
         normalized_name=str(row["normalized_name"]),
         prediction_count=int(row["prediction_count"]),
-        saved_view_count=int(row["saved_view_count"]),
     )
 
 

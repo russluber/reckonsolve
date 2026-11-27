@@ -7,13 +7,13 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
-    QGroupBox,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QRadioButton,
+    QWidget,
 )
 from supported_fixtures import create_binary, create_numeric
 
@@ -154,12 +154,12 @@ def test_binary_correction_and_later_postmortem_survive_restart(
     assert _child(window, QLabel, "predictionScorecardBrier").text() == (
         f"Trajectory Brier: {float(scorecard.trajectory_brier):.4f}"
     )
-    assert not _child(window, QGroupBox, "predictionScorecard").isHidden()
-    assert not _child(
-        window,
-        QLabel,
-        "predictionScorecardCorrectionNotice",
-    ).isHidden()
+    assert not _child(window, QWidget, "predictionScorecard").isHidden()
+    assert window._prediction_detail_screen.terminal_summary.note.isVisible()
+    assert (
+        "corrected facts"
+        in window._prediction_detail_screen.terminal_summary.note.text()
+    )
 
     reflection_operations = PredictionOperations(database, FixedClock(REFLECTED), UTC)
     reflection_window = MainWindow(reflection_operations)
@@ -194,12 +194,12 @@ def test_binary_correction_and_later_postmortem_survive_restart(
 
     history_group = _child(
         reflection_window,
-        QGroupBox,
+        QWidget,
         "resolutionCorrectionHistory",
     )
     assert not history_group.isHidden()
-    assert "2 corrections" in history_group.title()
-    history_group.setChecked(True)
+    assert "2 corrections" in history_group.accessibleName()
+    history_group.disclosure_button.setChecked(True)
     assert (
         _child(
             history_group,
@@ -302,7 +302,9 @@ def test_numeric_actual_correction_is_exact_and_score_affecting(
     assert _child(window, QLabel, "scoredActual").text() == "4.25 hours"
     assert _child(window, QLabel, "scoredMedian").text() == "2.00 hours"
     assert _child(window, QLabel, "individualMedianError").text() == "2.25 hours"
-    assert _child(window, QGroupBox, "numericWISDetails").isVisible()
+    details = _child(window, QWidget, "numericWISDetails")
+    assert details.isVisible()
+    assert not details.disclosure_button.isChecked()
     scorecard = operations.get_prediction_scorecard(created.prediction_id)
     assert scorecard.scoring_facts_corrected
     assert scorecard.final_revision_id == created.current_revision.revision_id

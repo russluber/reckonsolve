@@ -10,7 +10,9 @@ from .forecast_contracts import select_forecast_contract
 from .one_shot_facts import read_one_shot
 
 
-def read_archive(connection: sqlite3.Connection) -> tuple[PredictionBrowserItem, ...]:
+def read_archive(
+    connection: sqlite3.Connection, *, one_shots: dict | None = None
+) -> tuple[PredictionBrowserItem, ...]:
     if (
         connection.execute(
             "SELECT 1 FROM sqlite_schema WHERE name = 'one_shot_forecast_times'"
@@ -23,7 +25,11 @@ def read_archive(connection: sqlite3.Connection) -> tuple[PredictionBrowserItem,
         JOIN one_shot_forecast_times t ON t.prediction_id = p.id ORDER BY p.id""").fetchall():
         identifier = row["id"]
         contract = select_forecast_contract(connection, identifier)
-        record = read_one_shot(connection, identifier, contract)
+        record = (
+            one_shots[identifier]
+            if one_shots is not None and identifier in one_shots
+            else read_one_shot(connection, identifier, contract)
+        )
         invalid = connection.execute(
             "SELECT invalidated_at FROM prediction_invalidations WHERE prediction_id = ?",
             (identifier,),

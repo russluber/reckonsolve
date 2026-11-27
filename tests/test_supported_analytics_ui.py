@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from PySide6.QtWidgets import QLabel
+from performance_helpers import adaptive_binary, adaptive_numeric, loaded
 
 from reckonsolve.app import create_runtime
 from reckonsolve.application.errors import ApplicationError
 from reckonsolve.application.predictions import PredictionOperations
-from reckonsolve.domain.predictions import BinaryOutcome, PredictionType
+from reckonsolve.domain.predictions import BinaryOutcome
 from reckonsolve.domain.quantiles import NumericValueConstraint
 from reckonsolve.ui.analytics_screen import AnalyticsScreen
 
@@ -44,21 +44,21 @@ def test_both_models_render_filter_and_keep_exact_scores_after_gui_restart(
     deadline = clock.instant + timedelta(hours=2)
     binaries = [
         operations.create_prediction(
-            "Will it happen?", probability, forecast_deadline=deadline, tags=(tag,)
+            "Will it happen?", p, forecast_deadline=deadline, tags=(t,)
         )
-        for probability, tag in ((70, "Work"), (20, "Personal"))
+        for p, t in ((70, "Work"), (20, "Personal"))
     ]
     numerics = [
         operations.create_numeric_prediction(
             "How many?",
-            unit,
+            u,
             0,
             {5: 1, 25: 2, 50: 3, 75: 4, 95: 5},
-            value_constraint=constraint,
+            value_constraint=c,
             forecast_deadline=deadline,
-            tags=(tag,),
+            tags=(t,),
         )
-        for unit, tag, constraint in (
+        for u, t, c in (
             ("days", "Work", NumericValueConstraint.CONTINUOUS),
             ("items", "Personal", NumericValueConstraint.WHOLE_NUMBER),
         )
@@ -79,33 +79,32 @@ def test_both_models_render_filter_and_keep_exact_scores_after_gui_restart(
         )
     expected = operations.get_forecast_analytics()
     runtime.close()
-
     reopened = create_runtime(database_path=path)
     qtbot.addWidget(reopened.window)
     reopened.window.show()
-    reopened.window.navigate_to("Analytics")
-    screen = reopened.window.findChild(AnalyticsScreen)
-    assert screen is not None
-    assert screen._loaded_snapshot == expected
-    assert screen.findChild(QLabel, "trajectoryAnalyticsScoredCount").text() == "2"
-    assert screen.findChild(QLabel, "analyticsMeanTrajectoryBrier").text() == "0.065"
-    assert "2 eligible" in screen.quantile_content.summary.text()
-    assert sum(item.count for item in screen.trajectory_calibration_chart.bins) == 2
-    screen.tag_filter.setCurrentIndex(screen.tag_filter.findData("Work"))
-    assert screen.findChild(QLabel, "analyticsMeanTrajectoryBrier").text() == "0.090"
-    assert "1 eligible" in screen.quantile_content.summary.text()
-    screen.type_filter.setCurrentIndex(
-        screen.type_filter.findData(PredictionType.NUMERIC.value)
-    )
-    assert screen.unit_filter.isEnabled()
-    screen.unit_filter.setCurrentIndex(screen.unit_filter.findData("days"))
-    assert screen._loaded_snapshot.quantile_numeric.scored_prediction_count == 1
-    assert screen.trajectory_summary.isHidden()
+    reopened.window.navigate_to("Performance")
+    screen = reopened.window._analytics_screen
+    report = loaded(screen, qtbot, refresh=False)
+    binary, numeric = adaptive_binary(screen), adaptive_numeric(screen)
+    assert report.sections[0].data == expected.trajectory_binary
+    assert report.sections[1].data == expected.quantile_numeric
+    assert binary.count.text() == "2" and binary.score.text() == "0.065"
+    assert "2 eligible" in numeric.summary.text()
+    assert sum(b.count for b in binary.chart.bins) == 2
+    work = next(t.tag_id for t in report.tags if t.display_name == "Work")
+    screen.tag_filter.setCurrentIndex(screen.tag_filter.findData(work))
+    loaded(screen, qtbot, refresh=False)
+    assert binary.score.text() == "0.090"
+    assert "1 eligible" in numeric.summary.text()
+    numeric.unit_filter.setCurrentIndex(numeric.unit_filter.findData("days"))
+    report = loaded(screen, qtbot, refresh=False)
+    assert report.sections[1].data.scored_prediction_count == 1
+    assert binary.isVisible() and numeric.isVisible()
     reopened.close()
 
 
 @pytest.mark.parametrize("after_load", [False, True])
-def test_current_analytics_errors_never_replace_a_loaded_snapshot(
+def test_current_analytics_errors_clear_stale_results(
     qtbot, tmp_path, monkeypatch, after_load
 ):
     runtime = create_runtime(database_path=tmp_path / "errors.sqlite3")
@@ -114,14 +113,16 @@ def test_current_analytics_errors_never_replace_a_loaded_snapshot(
     screen = AnalyticsScreen(operations)
     qtbot.addWidget(screen)
     if after_load:
-        screen.refresh()
-    before = screen._loaded_snapshot
+        loaded(screen, qtbot)
 
-    def fail(**kwargs):
+    def fail(request):
         raise ApplicationError("Injected read failure")
 
-    monkeypatch.setattr(operations, "get_forecast_analytics", fail)
+    monkeypatch.setattr(operations.performance, "query_independently", fail)
     screen.refresh()
-    assert "Injected read failure" in screen.error_label.text()
-    assert screen._loaded_snapshot is before
+    qtbot.waitUntil(lambda: not screen.loading)
+    assert "Injected read failure" in screen.message.text()
+    assert screen.report is None
+    assert all(s.results.isHidden() for s in screen.sections.values())
+    screen.close_retrieval()
     runtime.close()

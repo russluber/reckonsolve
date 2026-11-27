@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from supported_fixtures import connect_fixture
 
 from reckonsolve.application.predictions import PredictionOperations
 from reckonsolve.data.database import Database
@@ -236,7 +237,7 @@ def test_schema16_reopen_rejects_prediction_without_contract(tmp_path) -> None:
     database = Database.open(path)
     database.close()
     # Simulate a corrupting external writer; supported transactions refuse this.
-    with sqlite3.connect(path) as connection:
+    with connect_fixture(path) as connection:
         connection.execute(
             """
             INSERT INTO predictions (

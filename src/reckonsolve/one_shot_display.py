@@ -1,5 +1,6 @@
 """Shared text for already saved One-Shot facts and calculated scores."""
 
+from collections.abc import Callable
 from fractions import Fraction
 
 from reckonsolve.analytics.quantiles import WISScore
@@ -33,10 +34,15 @@ def forecast_text(values: OneShotValues, unit: str = "") -> str:
     return f"{values.probability_percent}% Yes"
 
 
-def values_lines(values: OneShotValues, unit: str = "") -> tuple[str, ...]:
+def values_lines(
+    values: OneShotValues,
+    unit: str = "",
+    *,
+    reported_formatter: Callable[[ReportedTime | None], str] = reported_time_text,
+) -> tuple[str, ...]:
     lines = [
         f"Forecast: {forecast_text(values, unit)}",
-        f"Forecast finalized (user-reported): {reported_time_text(values.forecast_reported)}",
+        f"Forecast finalized (user-reported): {reported_formatter(values.forecast_reported)}",
     ]
     if values.answer is not None:
         answer = (
@@ -46,7 +52,7 @@ def values_lines(values: OneShotValues, unit: str = "") -> tuple[str, ...]:
         )
         lines += [
             f"Answer: {answer}",
-            f"Answer checked (user-reported): {reported_time_text(values.reveal_reported)}",
+            f"Answer checked (user-reported): {reported_formatter(values.reveal_reported)}",
         ]
         if values.resolution_notes:
             lines.append(f"Resolution notes: {values.resolution_notes}")

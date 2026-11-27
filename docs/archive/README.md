@@ -18,6 +18,17 @@ These excerpts retain original section numbers and historical wording. Legacy-co
 
 ## Release evidence
 
+- [Redesign readiness](releases/2026-11-13-redesign-readiness.md) — original adoption/recovery evidence and the final 0.9.0 candidate continuation, with fresh source/delivery checks and separate pending human visual approval; unreleased.
+
+- [Post-review workspace refinement verification](releases/2026-11-13-workspace-refinement-verification.md) — Journal/Detail/Performance/toolbar refinements and later reported acceptance, with version/environment limits retained; unreleased.
+
+- [Final integration verification](releases/2026-11-13-final-integration-verification.md) — combined contract/evidence reconciliation, Journal keyboard-focus repair and pending integrated review; unreleased.
+
+- [Journal relocation verification](releases/2026-11-12-journal-relocation-verification.md) — fourth-slice native storage/process-interruption evidence and reported walkthrough acceptance; unreleased.
+
+- [Journal/workspace checkpoint review](releases/2026-11-11-journal-workspace-review.md) — accepted first-slice walkthrough, source/test evidence and remaining integration limits; unreleased.
+- [Performance/Settings verification](releases/2026-11-12-performance-settings-verification.md) — third-slice source evidence, responsiveness measurements and reported three-journey acceptance; unreleased.
+- [New Prediction/Detail verification](releases/2026-11-11-prediction-detail-verification.md) — second-slice automated/capture evidence and pending native acceptance; unreleased.
 - [v0.6 visual verification](releases/v0.6-visual-verification.md) — dated palette, scaling, layout, and interaction acceptance.
 - [v0.8 manual acceptance](releases/v0.8-acceptance.md) — accepted M59 and M60 checklists.
 - [v0.8 validation](releases/v0.8-validation.md) — automated/frozen checks and their limits, including checks performed before final UI refinements.

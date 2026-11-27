@@ -2,6 +2,74 @@
 
 All notable changes to Reckonsolve are documented here.
 
+## Unreleased
+
+The Journal-centered redesign is prepared as **0.9.0**. The user approved the
+final integrated visual review on 2026-11-27. It remains unpublished; commits,
+merge, tag and publication remain user-owned steps.
+[Candidate readiness](docs/archive/releases/2026-11-13-redesign-readiness.md#final-candidate-review--2026-11-26)
+records current checks and their limits. Published v0.8.0 remains unchanged.
+
+### Added
+
+- Ctrl+Enter submits the active Prediction form through its existing primary button, including creation, revisions, Journal entries, reflection and corrections. Validation, review, confirmation and Escape behavior remain; Settings and button help list the shortcut.
+- Journal home with explicit Enter/Search submission, quick views, modal Apply/Cancel filters, Reset View, complete result counts where appropriate and matched-version history navigation.
+- A shared toolbar with source-aware returns, focused New Prediction, persistent Follow Windows / Light / Dark appearance and context-appropriate navigation. Performance and Settings also offer a direct Journal destination.
+- A comprehensive Performance hub with four separate forecasting populations, paired sections, independent Numeric unit choices, uncertainty, compact supporting disclosures and a pinned Tag / Reset View strip. Report scope and reading position persist during the session.
+- Settings with three date orders, Windows time-zone context, local backup/export/tag/search tools, visit-local results and reviewed journal relocation. Moving a journal preserves complete verified recovery/destination copies and matching GUI/CLI identity resolution.
+
+### Changed
+
+- Adaptive and One-Shot creation retain their four forecasting contracts, familiar inputs and mode/type drafts in a focused page. Source-aware cancellation and whole-task discard/save guards protect entered work; ordinary creation returns to Journal and answered One-Shot creation opens Detail.
+- Prediction Detail uses lifecycle-specific headers, exact Numeric intervals with readable ties/connector labels, ruled Timeline entries, independent reading panes and contextual writing. Terminal reading is balanced; task transitions preserve inputs and honor reduced motion.
+- Journal Entry headings use compact inline correction actions and natural-height edited dates. Numeric entries lead with their text and omit repeated forecast summaries; full forecasts remain in the header/revision history, and immutable anchors remain stored. Binary retains its short anchored percentage below the entry.
+- One-Shot results use ruled reading blocks: Checked Answer and a prominent full-width score, followed by distinct reflection and Journal sections. Overview leads with Resolution Criteria and clearly separated context. Original/corrected facts remain available through compact disclosures, with complete captions and wrapped prose at enlarged text sizes. Confirmed Skip completes reflection while permitting deliberate later writing through More.
+- Journal, Detail, New Prediction and Settings share centered workspaces up to 1,320 logical pixels; Performance uses 1,440. Quiet outlines, contrasting side margins, flat reading surfaces and rounded metadata chips create a consistent light/dark presentation. Creation retains narrower inner forms; compact ordinary Settings fits without scrolling, with safe exceptional overflow.
+- Journal rows prioritize Question, keep Numeric values close together and wrap complete mode/status/tag metadata. Thin scroll thumbs expand within stable grab areas, and text/charts adapt to palette and font changes.
+- Schema 21 retires Saved View configurations only after verified recovery and explicit review where needed, and records immutable One-Shot transcription/reflection provenance. Forecasting history remains intact; original recovery artifacts retain their configurations. CSV format 6 adds that provenance and remains analytical, not restorable.
+- The attention threshold remains configurable through CLI-only `settings attention-days [--set N]`. Retired Saved View commands fail before data access. Ordinary desktop timestamps omit repeated offsets; exact entry/confirmation retains ambiguity cues.
+
+### Fixed
+
+- Journal outcome rows align padded status chips with neighboring text on every wrapped line. Actual values receive the emphasis, while captions, dates and smaller type/tag metadata stay quieter.
+- Pending One-Shot Results flows directly into Journal Entries until an answer supplies its result and score. Numeric Performance calibration sections share ending rules. Journal and all Detail status chips use matching Title Case labels and lifecycle colors, including blue Open.
+- Journal rows lead with forecast values and group outcome, status and dates. Preserve scoring and correction cues beside the forecast and place mode, type and tags below. Long Detail prose wraps within the reading panes, Numeric Revision stacks committed/draft pairs when needed, and Settings uses one column in tighter layouts.
+- Remove the extra Locked header sentence, simplify Binary Resolve, give wrapped editor labels room to reflow, and match the creation divider colors.
+- Creation forms separate their heading from Question with a quiet rule, omit the redundant Forecast heading, use Type, and show required Deadline in the blue accent. New One-Shot omits its introductory sentence. Probability entry uses quiet side-by-side minus/plus controls with native typing, keyboard stepping and bounds.
+- One-Shot Results shows the effective Checked Answer in gold. Numeric headers mark its position with a gold diamond and legend. Outside answers and tied percentiles retain the saved forecast's meaning.
+- Terminal forecast disclosures align below the score beside recorded/effective times. Invalid status uses consistent orange chips in Journal and Detail; redundant Performance mode headings are removed.
+- Detail uses consistent Resolution Notes headings and Correct Reason actions across forecasting types.
+- Reason History uses a Show/Hide link; Adaptive creation More Details and resolution Postmortem use chevrons. Contextual form labels keep compact natural heights, and nested reading disclosures share one ending rule.
+- Expanded original/corrected histories release stale heights after resizing, removing surplus blank space while retaining complete selectable text. Definition History joins the underlined Show/Hide controls in all four forecasting contracts.
+- Streamline desktop helper text: remove repeated cautions and instructions, shorten metric definitions and editor prompts, and keep historical events focused on dated facts. Useful chart keys, action consequences, score direction and complete original/corrected records remain.
+
+- Empty or hidden history panels use their natural minimum height until Qt can measure wrapped content, avoiding negative-size warnings when Detail starts or an empty history expands.
+
+- Adaptive Binary has a framed scorecard with visible probability scores and eligible forecast context. Underlined Show/Hide controls reveal timing/updating details, corrected Journal versions and Adaptive Resolution history, retaining exact facts, keyboard access and readable expanded prose.
+
+- Adaptive and One-Shot Binary calibration plots in Performance use the surrounding workspace canvas color in both appearances, including repeated theme changes. Calibration data and chart geometry are unchanged.
+
+- Adaptive Overview charts blend into both workspace palettes and avoid repeated disclosure headings. Supporting context and optional information use clearer reading groups; Numeric Scorecard has a distinct frame and compact WIS Breakdown chevron.
+
+- One-Shot Numeric Score Breakdown uses grouped contributions, median error and interval diagnostics with clear labels, exact values and consistent ruled reading hierarchy. Nested score/audit sections share one ending boundary without stacked trailing lines.
+
+- One-Shot audit disclosures group reported times separately from app timestamps and Numeric definition facts. Corrections lead with changed fields, clear Before/After comparisons and full-width prose; complete immutable snapshots remain available without repeating every unchanged field up front.
+
+- Unchanged Journal background checks and returns retain readable rows and useful focus, avoiding repeated loading flashes and full row rebuilds. New requests, changed membership and read failures remain explicit.
+- Long Adaptive histories reuse unchanged Timeline widgets and native layout items when saving entries, Reviews or revisions and switching order, avoiding a full-history redraw pause. Smooth pane changes retain their existing motion and reduced-motion behavior.
+- Calibration surfaces, Actual markers, Numeric labels, action widths and expanded historical text retain readable palette/font/geometry treatment. Pending Numeric metric work is cancelled when its widget is destroyed.
+- Effective reflection classification and save-response reads preserve immutable history and scoring. Shared application operations keep lifecycle, validation, transactions and storage outside renderers and signal handlers.
+- Private Windows builds prefer system libraries during dependency discovery, preventing an unrelated tool's incompatible ICU DLL from breaking packaged startup. The caller's search path is restored on exit.
+
+### Compatibility
+
+Supported history, the four closed model/scoring contracts and exact immutable facts
+are preserved. Retired or mismatched records refuse the entire archive before
+migration, repair or partial loading. Use complete SQLite backups for recovery;
+CSV is analytical. Source adoption and rollback follow the
+[controlled update procedure](docs/guides/user-guide.md#adopt-the-redesigned-source).
+No installer, updater or public executable distribution is introduced.
+
 ## 0.8.0 - 2026-10-07
 
 [Published source release](https://github.com/russluber/reckonsolve/releases/tag/v0.8.0). Release dates use UTC; this publication was October 6 in Pacific time.

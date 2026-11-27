@@ -1,6 +1,6 @@
 """Shared presentation-only metric rows and responsive plot/table pairs."""
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QColor, QPalette, QResizeEvent
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from .components import ContentPanel
+from .detail_workspace import collapse_section
 from .visual_system import (
     Spacing,
     SurfaceRole,
@@ -184,11 +185,15 @@ class _ResponsiveChartTable(QWidget):
         *,
         object_name: str,
         parent: QWidget,
+        collapsible_table: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setObjectName(object_name)
         self._chart = chart
         self._table = table
+        self._surface_refresh = QTimer(self)
+        self._surface_refresh.setSingleShot(True)
+        self._surface_refresh.timeout.connect(self._synchronize_surfaces)
         for widget in (chart, table):
             policy = widget.sizePolicy()
             policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
@@ -197,7 +202,15 @@ class _ResponsiveChartTable(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(int(Spacing.SECTION))
         self._layout.addWidget(chart)
-        self._layout.addWidget(table)
+        self.table_toggle = None
+        if collapsible_table:
+            self.table_disclosure = collapse_section(
+                table, "Calibration table", compact=True
+            )
+            self.table_toggle = self.table_disclosure.disclosure_button
+            self._layout.addWidget(self.table_disclosure)
+        else:
+            self._layout.addWidget(table)
         self._synchronize_surfaces()
         self._fit_table_height()
 
@@ -210,12 +223,15 @@ class _ResponsiveChartTable(QWidget):
             QEvent.Type.ApplicationFontChange,
             QEvent.Type.StyleChange,
         ):
-            self._synchronize_surfaces()
+            # Qt propagates palette/style changes through the parent before
+            # repolishing its children. Read the resolved surface after that
+            # pass; reading it here can pin the previous theme's background.
+            self._surface_refresh.start(0)
             self._fit_table_height()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        side_by_side = event.size().width() >= 1100
+        side_by_side = self.table_toggle is None and event.size().width() >= 1100
         direction = (
             QBoxLayout.Direction.LeftToRight
             if side_by_side

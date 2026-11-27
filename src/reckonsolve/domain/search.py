@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -263,6 +264,10 @@ def parse_search_text(text: str) -> ParsedSearchText:
 def search_tokens(text: str) -> tuple[str, ...]:
     """Approximate unicode61 words for safe FTS queries and suggestions."""
 
+    if text.isascii():
+        # The ASCII subset has only Latin letters and digits in the accepted
+        # Unicode categories. Keep the complete Unicode path for every other text.
+        return tuple(re.findall(r"[a-z0-9]+", text.casefold()))
     normalized = unicodedata.normalize("NFKD", text).casefold()
     tokens: list[str] = []
     current: list[str] = []
@@ -283,6 +288,11 @@ def search_tokens(text: str) -> tuple[str, ...]:
 def normalize_search_literal(text: str) -> str:
     """Normalize case, common Latin diacritics, and whitespace for literals."""
 
+    # ASCII has no combining marks or compatibility expansions. This common
+    # path is identical to the Unicode rule and avoids per-character work on
+    # long retained prose during live retrieval.
+    if text.isascii():
+        return " ".join(text.casefold().split())
     normalized = unicodedata.normalize("NFKD", text).casefold()
     without_marks = "".join(
         character
